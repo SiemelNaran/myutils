@@ -1,5 +1,8 @@
 package myutils.util;
 
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.Collections;
@@ -17,11 +20,12 @@ import javax.annotation.concurrent.NotThreadSafe;
  * 
  * Fetching an element by index via a call to {@code get(int index)} is O(lg(N) + pageSize).<p>
  * 
+ * This class implements java.io.Serializable.<p>
+ * 
  * @author snaran
  */
 @NotThreadSafe
 public class LinkedListPageList<E> extends AbstractPageList<E> implements PageList<E>, RandomAccess, Serializable {
-
     private static final long serialVersionUID = 1L;
 
     LinkedListPageList() {
@@ -60,7 +64,17 @@ public class LinkedListPageList<E> extends AbstractPageList<E> implements PageLi
         return (LinkedListPageList<E>) super.splice(startInclusive, endExclusive);
     }
     
-    protected static class LinkedListPage<E> extends Page<E> {
+    private void writeObject(ObjectOutputStream output) throws IOException {
+        output.defaultWriteObject();
+        super.finalWriteAbstractPageList(output);
+    }
+
+    private void readObject(ObjectInputStream input) throws IOException, ClassNotFoundException{
+        input.defaultReadObject();
+        super.finalReadAbstractPageList(input);
+    }
+
+    protected static class LinkedListPage<E> extends Page<E> implements Serializable {
         private static final long serialVersionUID = 1L;
         
         private LinkedListPage(int startIndex) {

@@ -1,5 +1,8 @@
 package myutils.util;
 
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -16,12 +19,13 @@ import javax.annotation.concurrent.NotThreadSafe;
  * Class representing an array as an array of pages, where is page is an ArrayList.<p>
  * 
  * Fetching an element by index via a call to {@code get(int index)} is O(lg(N)).<p>
+ *  
+ * This class implements java.io.Serializable.<p>
  * 
  * @author snaran
  */
 @NotThreadSafe
 public class ArrayListPageList<E> extends AbstractPageList<E> implements PageList<E>, RandomAccess, Serializable {
-
     private static final long serialVersionUID = 1L;
 
     ArrayListPageList() {
@@ -60,7 +64,17 @@ public class ArrayListPageList<E> extends AbstractPageList<E> implements PageLis
         return (ArrayListPageList<E>) super.splice(startInclusive, endExclusive);
     }
     
-    protected static class ArrayListPage<E> extends Page<E> {
+    private void writeObject(ObjectOutputStream output) throws IOException {
+        output.defaultWriteObject();
+        super.finalWriteAbstractPageList(output);
+    }
+
+    private void readObject(ObjectInputStream input) throws IOException, ClassNotFoundException{
+        input.defaultReadObject();
+        super.finalReadAbstractPageList(input);
+    }
+
+    protected static class ArrayListPage<E> extends Page<E> implements Serializable {
         private static final long serialVersionUID = 1L;
         
         private ArrayListPage(int startIndex) {

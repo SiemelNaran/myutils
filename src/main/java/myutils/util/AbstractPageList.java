@@ -20,7 +20,11 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import static java.lang.Math.min;
 
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.lang.reflect.Field;
 
 
 /**
@@ -34,8 +38,7 @@ import java.io.Serializable;
  * does not get split.<p>
  */
 @NotThreadSafe
-public abstract class AbstractPageList<E> extends AbstractList<E> implements PageList<E>, RandomAccess, Serializable {
-    private static final long serialVersionUID = 1L;
+public abstract class AbstractPageList<E> extends AbstractList<E> implements PageList<E>, RandomAccess {
     private static final int DEFAULT_PREFERRED_MAX_PAGE_SIZE = 50;
     private static final int DEFAULT_MAX_PAGE_SIZE = 100;
 
@@ -480,6 +483,44 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
         modCount++;
     }
 
+    final void finalWriteAbstractPageList(ObjectOutputStream output) throws IOException {
+        int flags = 0;
+        output.writeInt(flags);
+        
+        output.writeInt(preferredMaxPageSize);
+        output.writeInt(maxPageSize);
+        output.writeInt(size);
+        output.writeObject(pages);
+    }
+
+    @SuppressWarnings("unchecked")
+    final void finalReadAbstractPageList(ObjectInputStream input) throws IOException, ClassNotFoundException{
+        try {
+            Field preferredMaxPageSizeField = AbstractPageList.class.getDeclaredField("preferredMaxPageSize");
+            Field maxPageSizeField = AbstractPageList.class.getDeclaredField("maxPageSize");
+            Field pageField = AbstractPageList.class.getDeclaredField("pages");
+            
+            preferredMaxPageSizeField.setAccessible(true);
+            maxPageSizeField.setAccessible(true);
+            pageField.setAccessible(true);
+    
+            @SuppressWarnings("unused")
+            int flags = input.readInt();
+    
+            int preferredMaxPageSize = input.readInt();
+            int maxPageSize = input.readInt();
+            int size = input.readInt();
+            ArrayList<Page<E>> pages = (ArrayList<Page<E>>) input.readObject();
+            
+            preferredMaxPageSizeField.set(this, preferredMaxPageSize);
+            maxPageSizeField.set(this, maxPageSize);
+            this.size = size;
+            pageField.set(this, pages);
+        } catch (NoSuchFieldException | IllegalArgumentException | IllegalAccessException e) {
+            throw new IOException(e);
+        }
+    }
+
     /**
      * This implementation uses the default sort algorithm,
      * which copies the elements to a temp array, sorts the array,
@@ -529,8 +570,6 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
     }
     
     protected static class Page<E> implements Serializable {
-        private static final long serialVersionUID = 1L;
-        
         private int startIndex;
         private final List<E> list;
         
