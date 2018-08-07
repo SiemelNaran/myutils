@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.NoSuchElementException;
 import java.util.RandomAccess;
+import java.util.Spliterator;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
@@ -24,7 +26,7 @@ import java.io.Serializable;
 /**
  * {@inheritDoc}
  * 
- * This class implements RandomAccess even though looking up an element is O(lg(N)).<p>
+ * This class implements RandomAccess even though looking up an element is at least O(lg(N)).<p>
  * 
  * This class implements java.io.Serializable.<p>
  */
@@ -435,6 +437,12 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
     }
     
     @Override
+    public Spliterator<E> spliterator() {
+    	int averagePageSize = pages.size() > 0 ? size / pages.size() : 1; 
+        return new PageListSpliterator<E>(modCount, averagePageSize, pages.spliterator());
+    }
+
+    @Override
     public boolean removeIf(Predicate<? super E> filter) {
         int delta = 0;
         for (Page<E> page: pages) {
@@ -453,6 +461,14 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
         return true;
     }
     
+    @Override
+    public void forEach(Consumer<? super E> operator) {
+    	for (Page<E> page: pages) {
+            page.list.forEach(operator);
+        }
+        modCount++;
+    }
+
     @Override
     public void replaceAll(UnaryOperator<E> operator) {
         for (Page<E> page: pages) {
@@ -664,7 +680,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
         /**
          * {@inheritDoc}
          * 
-         * @throws ConcurrentModificationException if array changed outside this iterator.
+         * @throws ConcurrentModificationException if array changed outside this iterator, whereas ArrayList's nextIndex does not throw.
          */
         @Override
         public int nextIndex() {
@@ -680,7 +696,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
         /**
          * {@inheritDoc}
          * 
-         * @throws ConcurrentModificationException if array changed outside this iterator
+         * @throws ConcurrentModificationException if array changed outside this iterator, whereas ArrayList's nextIndex does not throw.
          */
         @Override
         public int previousIndex() {
@@ -723,5 +739,62 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
             }
             expectedModCount = AbstractPageList.this.modCount;
         }
+    }
+
+    private static final class PageListSpliterator<E> implements Spliterator<E> {
+        private final int expectedModCount;
+        private final int averagePageSize;
+        private final Spliterator<Page<E>> pageSpliterator;
+        private Spliterator<E> innerSpliterator;
+
+        private PageListSpliterator(int modCount, int averagePageSize, Spliterator<Page<E>> pageSpliterator) {
+            this.expectedModCount = modCount;
+            this.averagePageSize = averagePageSize;
+            this.pageSpliterator = pageSpliterator;
+            pageSpliterator.tryAdvance(page -> innerSpliterator = page.list.spliterator());
+        }
+
+        @Override
+        public PageListSpliterator<E> trySplit() {
+            Spliterator<Page<E>> split = pageSpliterator.trySplit();
+            if (split == null)
+                return null;
+            return new PageListSpliterator<E>(expectedModCount, averagePageSize, split);
+        }
+
+        @Override
+        public boolean tryAdvance(Consumer<? super E> action) {
+            if (innerSpliterator == null)
+                return false;
+            boolean done = innerSpliterator.tryAdvance(action);
+            if (!done) {
+                boolean hasNextPage = pageSpliterator.tryAdvance(page -> innerSpliterator = page.list.spliterator());
+                if (hasNextPage) {
+                    done = innerSpliterator.tryAdvance(action);
+                } else {
+                    innerSpliterator = null;
+                }
+            }
+            return done;
+        }
+
+        @Override
+        public void forEachRemaining(Consumer<? super E> action) {
+            if (innerSpliterator == null)
+                return;
+            do {
+                innerSpliterator.forEachRemaining(action);
+            } while (pageSpliterator.tryAdvance(page -> innerSpliterator = page.list.spliterator()));
+            innerSpliterator = null;
+        }
+
+        @Override
+        public long estimateSize() {
+            return (pageSpliterator.estimateSize() + 1) * averagePageSize;
+        }
+
+        public int characteristics() {
+            return ORDERED | SIZED | SUBSIZED;
+        }        
     }
 }

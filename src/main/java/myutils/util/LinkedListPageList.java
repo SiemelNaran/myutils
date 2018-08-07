@@ -15,6 +15,8 @@ import javax.annotation.concurrent.NotThreadSafe;
  * 
  * Fetching an element by index via a call to {@code get(int index)} is O(lg(N) + pageSize).<p>
  * 
+ * This class implements java.io.Serializable.<p>
+ * 
  * @author snaran
  */
 @NotThreadSafe
