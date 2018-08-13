@@ -66,12 +66,12 @@ public class LinkedListPageList<E> extends AbstractPageList<E> implements PageLi
     
     private void writeObject(ObjectOutputStream output) throws IOException {
         output.defaultWriteObject();
-        super.finalWriteAbstractPageList(output);
+        super.finalDefaultWriteAbstractPageList(output);
     }
 
     private void readObject(ObjectInputStream input) throws IOException, ClassNotFoundException{
         input.defaultReadObject();
-        super.finalReadAbstractPageList(input);
+        super.finalDefaultReadAbstractPageList(input);
     }
 
     protected static class LinkedListPage<E> extends Page<E> implements Serializable {

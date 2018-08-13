@@ -483,7 +483,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
         modCount++;
     }
 
-    final void finalWriteAbstractPageList(ObjectOutputStream output) throws IOException {
+    protected final void finalDefaultWriteAbstractPageList(ObjectOutputStream output) throws IOException {
         int flags = 0;
         output.writeInt(flags);
         
@@ -494,7 +494,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
     }
 
     @SuppressWarnings("unchecked")
-    final void finalReadAbstractPageList(ObjectInputStream input) throws IOException, ClassNotFoundException{
+    protected final void finalDefaultReadAbstractPageList(ObjectInputStream input) throws IOException, ClassNotFoundException {
         try {
             Field preferredMaxPageSizeField = AbstractPageList.class.getDeclaredField("preferredMaxPageSize");
             Field maxPageSizeField = AbstractPageList.class.getDeclaredField("maxPageSize");
@@ -570,6 +570,8 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
     }
     
     protected static class Page<E> implements Serializable {
+        private static final long serialVersionUID = 1L;
+        
         private int startIndex;
         private final List<E> list;
         
