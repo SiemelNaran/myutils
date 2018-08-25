@@ -28,10 +28,13 @@ import java.io.Serializable;
  * 
  * This class implements RandomAccess even though looking up an element is at least O(lg(N)).<p>
  * 
- * This class implements java.io.Serializable.<p>
+ * This class implements RandomAccess and java.io.Serializable.<p>
+ * 
+ * The spliterator splits by pages. If a page has too many elements in it, the page itself
+ * does not get split.<p>
  */
 @NotThreadSafe
-public abstract class AbstractPageList<E> extends AbstractList<E> implements PageList<E>, Serializable, RandomAccess {
+public abstract class AbstractPageList<E> extends AbstractList<E> implements PageList<E>, RandomAccess, Serializable {
     private static final long serialVersionUID = 1L;
     private static final int DEFAULT_PREFERRED_MAX_PAGE_SIZE = 50;
     private static final int DEFAULT_MAX_PAGE_SIZE = 100;

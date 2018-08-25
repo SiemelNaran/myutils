@@ -1,9 +1,11 @@
 package myutils.util;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.RandomAccess;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -15,12 +17,10 @@ import javax.annotation.concurrent.NotThreadSafe;
  * 
  * Fetching an element by index via a call to {@code get(int index)} is O(lg(N)).<p>
  * 
- * This class implements java.io.Serializable.<p>
- * 
  * @author snaran
  */
 @NotThreadSafe
-public class ArrayListPageList<E> extends AbstractPageList<E> {
+public class ArrayListPageList<E> extends AbstractPageList<E> implements PageList<E>, RandomAccess, Serializable {
 
     private static final long serialVersionUID = 1L;
 
