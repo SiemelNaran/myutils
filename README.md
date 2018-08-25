@@ -1,7 +1,7 @@
 myutils
 =======
 
-Utilities for Java.
+Utilities for Java. Shell script utilities.
 
 
 License
@@ -9,11 +9,19 @@ License
 This code is under the [Apache Licence v2](https://www.apache.org/licenses/LICENSE-2.0).
 
 
-Classes
--------
+Java Classes
+------------
 
 - *PageList*: Class representing an array as an array of pages.
 
 - *SerializableScheduledExecutorService*: Interface extending ScheduledExecutorService that allows the scheduled executions to be serialized.
 
 - *StackTraceCompletableFuture*: Replacement for CompletableFuture that adds a layer to remember the call stack of the place that created the completed future. This is useful for debugging.
+
+
+Shell scripts
+-------------
+
+- *findTokens.sh*: 
+
+- *multicopy.sh*:
