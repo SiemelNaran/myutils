@@ -8,7 +8,7 @@
     <artifactId>myutils-root</artifactId>
     <version>1.0.0</version>
     <packaging>pom</packaging>
-    <name>org.sn.myutils: root-node</name>
+    <name>org.sn.myutils: myutils-root</name>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -137,6 +137,7 @@
         <module>org.sn.myutils.pubsub</module>
 
         <module>org.sn.myutils.jsontestutils</module>
+        <module>org.sn.myutils.pythonscripts</module>
     </modules>
 
 </project>

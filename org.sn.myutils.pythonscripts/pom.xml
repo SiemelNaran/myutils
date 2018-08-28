@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="https://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.sn.myutils</groupId>
+    <artifactId>myutils-pythonscripts</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+    <name>org.sn.myutils: myutils-pythonscripts</name>
+
+    <properties>
+    </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.0.0</version>
+                <executions>
+                    <execution>
+                        <id>python-test</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <executable>python3</executable>
+                    <workingDirectory>${project.basedir}/src/test/python</workingDirectory>
+                    <arguments>
+                        <argument>-m</argument>
+                        <argument>unittest</argument>
+                        <argument>discover</argument>
+                        <argument>-v</argument>
+                    </arguments>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>3.3.0</version>
+                <configuration>
+                  <descriptors>
+                    <descriptorRef>src/main/assembly/src_main_python.xml</descriptorRef>
+                  </descriptors>
+                </configuration>
+                <executions>
+                  <execution>
+                    <id>make-assembly</id> <!-- this is used for inheritance merges -->
+                    <phase>package</phase> <!-- bind to the packaging phase -->
+                    <goals>
+                      <goal>single</goal>
+                    </goals>
+                  </execution>
+                </executions>
+              </plugin>
+        </plugins>
+    </build>
+
+</project>
