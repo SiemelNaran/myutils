@@ -21,3 +21,6 @@ site-content
 
 # vi files
 *.swp
+
+# python files
+__pycache__
