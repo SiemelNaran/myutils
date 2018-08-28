@@ -22,6 +22,7 @@ Java Classes
 Shell scripts
 -------------
 
-- *findTokens.sh*: 
+- *findTokens.sh*: Find tokens (or words) in a file starting with or containing text.
 
-- *multicopy.sh*:
+- *multifile.sh*: Copy files that contain <sourceSubstring> to a similar filename where <sourceSubstring> is replaced by <dest>.
+
