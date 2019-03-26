@@ -1,9 +1,9 @@
 package myutils.util;
 
 import static myutils.TestUtil.assertException;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -11,11 +11,12 @@ import java.util.ListIterator;
 import java.util.NoSuchElementException;
 import java.util.stream.IntStream;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+
 
 public class ArrayListIteratorTest {
     @Test
-    public void testListIteratorRemoveAdd() throws Exception {
+    void testListIteratorRemoveAdd() throws Exception {
         List<Integer> list = new ArrayList<>();
         IntStream.range(1, 7).forEach(list::add);
         assertEquals("[1, 2, 3, 4, 5, 6]", list.toString());

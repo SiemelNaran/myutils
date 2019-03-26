@@ -1,10 +1,10 @@
 package myutils.util;
 
 import static myutils.TestUtil.assertException;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -28,8 +28,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 
 public class PageListTest {
@@ -86,7 +85,7 @@ public class PageListTest {
     // tests
 
     @Test
-    public void testOutOfBounds1() {
+    void testOutOfBounds1() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             for (int index: new int[] { -1, 1 }) {
@@ -98,7 +97,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testOutOfBounds2() {
+    void testOutOfBounds2() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             list.add(91);
@@ -114,7 +113,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testEmpty() {
+    void testEmpty() {
         testAllLists(() -> {
 	        PageList<Integer> list = constructPageList(3, 5);
 	        assertEquals(0, list.size());
@@ -127,7 +126,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testOutOfBounds3() {
+    void testOutOfBounds3() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             list.add(91);
@@ -143,7 +142,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testAdd() {
+    void testAdd() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -162,7 +161,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testSet() {
+    void testSet() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -176,7 +175,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testAddAll1() {
+    void testAddAll1() {
         testAllLists(() -> {
             List<Integer> normalList = new ArrayList<>();
             IntStream.range(1, 16).forEach(normalList::add);
@@ -196,7 +195,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testAddAll2() {
+    void testAddAll2() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -214,7 +213,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testRemove() {
+    void testRemove() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -238,7 +237,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testSplice_removeEntireLastPage() {
+    void testSplice_removeEntireLastPage() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -250,7 +249,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testSplice_removeEntireFirstPage() {
+    void testSplice_removeEntireFirstPage() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -262,7 +261,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testSplice_removeEntireFirstLastPage() {
+    void testSplice_removeEntireFirstLastPage() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -274,7 +273,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testSplice_removePartialFirstLastPage() {
+    void testSplice_removePartialFirstLastPage() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -286,7 +285,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testRemoveRange_removePartialFirstLastPage() {
+    void testRemoveRange_removePartialFirstLastPage() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -297,7 +296,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testSplice_removeElementsInOnePage() {
+    void testSplice_removeElementsInOnePage() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -309,7 +308,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testSplice_removeOnePage() {
+    void testSplice_removeOnePage() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -321,7 +320,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testSplice_nothing() {
+    void testSplice_nothing() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -333,7 +332,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testSplice_error() {
+    void testSplice_error() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -344,7 +343,7 @@ public class PageListTest {
     }
         
     @Test
-    public void testConstructors() {
+    void testConstructors() {
         testAllLists(() -> {
             assertException(() -> constructPageList(3, 3), IllegalArgumentException.class, "preferredMaxPageSize(3) should be < maxPageSize(3)");
             assertException(() -> constructPageList(2, 5), IllegalArgumentException.class, "preferredMaxPageSize(2) should be >= 3");
@@ -356,7 +355,7 @@ public class PageListTest {
     }
         
     @Test
-    public void testListIterator() {
+    void testListIterator() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -395,7 +394,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testListIteratorSet() {
+    void testListIteratorSet() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -412,7 +411,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testListIteratorRemove() {
+    void testListIteratorRemove() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -465,7 +464,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testListIteratorRemoveAdd() {
+    void testListIteratorRemoveAdd() {
         testAllLists(() -> {
             List<Integer> normalList = new ArrayList<>();
             IntStream.range(1, 7).forEach(normalList::add);
@@ -570,7 +569,7 @@ public class PageListTest {
     }
         
     @Test
-    public void testListIteratorAdd() {
+    void testListIteratorAdd() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -589,7 +588,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testConcurrentModification() {
+    void testConcurrentModification() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 3).forEach(list::add);
@@ -611,7 +610,7 @@ public class PageListTest {
     }
         
     @Test
-    public void testRemoveIf() {
+    void testRemoveIf() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -626,7 +625,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testForEach() {
+    void testForEach() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -639,7 +638,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testReplaceAll() {
+    void testReplaceAll() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -651,7 +650,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testSort() {
+    void testSort() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -663,7 +662,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testSplitIterator() {
+    void testSplitIterator() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -702,7 +701,7 @@ public class PageListTest {
     }
 
     @Test
-    public void testBinarySearch() {
+    void testBinarySearch() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
@@ -721,7 +720,7 @@ public class PageListTest {
     }
     
     @Test
-    public void testPerformance_BinarySearch() {
+    void testPerformance_BinarySearch() {
         System.out.println("\ntestPerformance_BinarySearch");
         
         List<Integer> arrayList = Collections.unmodifiableList(generateHugeSortedArrayList());
@@ -768,7 +767,7 @@ public class PageListTest {
     }
 
     @Test
-    public void testPerformance_Remove() {
+    void testPerformance_Remove() {
         System.out.println("\ntestPerformance_Remove");
         Random random = new Random();
         ArrayList<Integer> normalList = generateHugeSortedArrayList();
@@ -798,7 +797,7 @@ public class PageListTest {
     }
             
     @Test
-    public void testSerialization() {
+    void testSerialization() {
         testAllLists(() -> {
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             
@@ -865,11 +864,11 @@ public class PageListTest {
             int size = 0;
             for (Object page: pages) {
                 List<Object> list = (List<Object>) listField.get(page);
-                assertTrue("page must not be empty", !list.isEmpty());
+                assertTrue(!list.isEmpty(), "page must not be empty");
                 size += list.size();
                 result.add(page.toString().replaceAll(" ",  ""));
             }
-            assertEquals("comparing size", size, arrayPageList.size());
+            assertEquals(size, arrayPageList.size(), "comparing size");
             return result.toString();
         } catch (IllegalArgumentException | IllegalAccessException e) {
             throw new RuntimeException(e);
@@ -877,9 +876,9 @@ public class PageListTest {
     }
     
     private static void assertEqualsByGetAndIterAndStream(String expected, PageList<Integer> list) {
-        Assert.assertEquals(expected, listToStringByGet(list));
-        Assert.assertEquals(expected, listToStringByIter(list));
-        Assert.assertEquals(expected, listToStringByStream(list));
+        assertEquals(expected, listToStringByGet(list));
+        assertEquals(expected, listToStringByIter(list));
+        assertEquals(expected, listToStringByStream(list));
     }
     
     private static String listToStringByGet(List<Integer> list) {

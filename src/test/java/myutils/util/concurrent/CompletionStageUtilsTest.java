@@ -1,8 +1,8 @@
 package myutils.util.concurrent;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -13,12 +13,12 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 
 public class CompletionStageUtilsTest {
     @Test
-    public void testAwaitAllWithoutError() {
+    void testAwaitAllWithoutError() {
         CompletionStage<Integer> first = CompletableFuture.supplyAsync(() -> sleepAndReturn(3, 1));
         CompletionStage<Integer> second = CompletableFuture.supplyAsync(() -> sleepAndReturn(1, 2));
         CompletionStage<Integer> third = CompletableFuture.supplyAsync(() -> sleepAndReturn(2, 3));
@@ -35,7 +35,7 @@ public class CompletionStageUtilsTest {
     }
 
     @Test
-    public void testAwaitAllWithError() {
+    void testAwaitAllWithError() {
         CompletionStage<Integer> first = CompletableFuture.supplyAsync(() -> sleepAndThrow(3));
         CompletionStage<Integer> second = CompletableFuture.supplyAsync(() -> sleepAndReturn(1, 2));
         CompletionStage<Integer> third = CompletableFuture.supplyAsync(() -> sleepAndReturn(2, 3));
@@ -52,7 +52,7 @@ public class CompletionStageUtilsTest {
     }
     
     @Test
-    public void testAwaitAllWithError2() {
+    void testAwaitAllWithError2() {
         CompletionStage<Integer> first = CompletableFuture.supplyAsync(() -> sleepAndThrow(3));
         CompletionStage<Integer> second = CompletableFuture.supplyAsync(() -> sleepAndReturn(1, 2));
         CompletionStage<Integer> third = CompletableFuture.supplyAsync(() -> sleepAndReturn(2, 3));

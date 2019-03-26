@@ -1,6 +1,6 @@
 package myutils.util.concurrent;
 
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -13,7 +13,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 
 public class StackTraceCompletableFutureOverrideTest {
@@ -24,7 +24,7 @@ public class StackTraceCompletableFutureOverrideTest {
      * but because StackTraceCompletableFuture derives from CompletableFuture, there won't be any compile time errors.
      */
     @Test
-    public void testThatWeOverrideAllFunctions() {
+    void testThatWeOverrideAllFunctions() {
         MethodSet stackTraceCompletionStageMethods = new MethodSet(StackTraceCompletableFuture.class);
         List<String> errors = new ArrayList<>();
         for (Class<?> clazz: Arrays.asList(CompletionStage.class, Future.class, CompletableFuture.class)) {

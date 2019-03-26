@@ -1,6 +1,6 @@
 package myutils.util.concurrent;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import myutils.TestUtil;
 import myutils.util.concurrent.SerializableScheduledExecutorService.RecreateRunnableFailedException;
@@ -59,7 +59,7 @@ public class SerializableScheduledExecutorServiceTest {
     };
 
     @Test
-    public void testBasicRunnable() throws InstantiationException, IllegalAccessException {
+    void testBasicRunnable() throws InstantiationException, IllegalAccessException {
         Runnable runnableZero = new TestBasicRunnable();
         runnableZero.run();
         assertEquals(1, TestBasicRunnable.number.get());
@@ -109,7 +109,7 @@ public class SerializableScheduledExecutorServiceTest {
     };
 
     @Test
-    public void testNormalRunnable() throws InterruptedException, IOException, ClassNotFoundException, RecreateRunnableFailedException {
+    void testNormalRunnable() throws InterruptedException, IOException, ClassNotFoundException, RecreateRunnableFailedException {
         Runnable runnableOne = new TestRunnablesWithDefaultConstructor.FirstRunnable();
         Runnable runnableTwo = new TestRunnablesWithDefaultConstructor.SecondRunnable();
         Runnable runnableThree = new TestRunnablesWithDefaultConstructor.ThirdRunnable();
@@ -211,7 +211,7 @@ public class SerializableScheduledExecutorServiceTest {
     };
 
     @Test
-    public void testSerializableRunnable() throws InterruptedException, IOException, ClassNotFoundException, RecreateRunnableFailedException {
+    void testSerializableRunnable() throws InterruptedException, IOException, ClassNotFoundException, RecreateRunnableFailedException {
         Runnable runnableOne = new TestSerializableRunnable(1);
         Runnable runnableTwo = new TestSerializableRunnable(2);
         Runnable runnableThree = new TestSerializableRunnable(3);
@@ -328,7 +328,7 @@ public class SerializableScheduledExecutorServiceTest {
     };
     
     @Test
-    public void testCallable() throws InterruptedException, IOException, ClassNotFoundException, RecreateRunnableFailedException, ExecutionException, TimeoutException {
+    void testCallable() throws InterruptedException, IOException, ClassNotFoundException, RecreateRunnableFailedException, ExecutionException, TimeoutException {
         Callable<Integer> callableOne = new TestStandardCallable();
         Callable<Integer> callableTwo = new TestSerializableCallable(5);
 
@@ -467,7 +467,7 @@ public class SerializableScheduledExecutorServiceTest {
     };
 
     @Test
-    public void testNonSerializable() throws InterruptedException, IOException, ClassNotFoundException, RecreateRunnableFailedException {
+    void testNonSerializable() throws InterruptedException, IOException, ClassNotFoundException, RecreateRunnableFailedException {
         class LocalClassRunnable implements Runnable {
             public LocalClassRunnable() { }
 
@@ -580,7 +580,7 @@ public class SerializableScheduledExecutorServiceTest {
     };
 
     @Test
-    public void testExceptionDeserialize() throws InterruptedException, IOException, ClassNotFoundException  {
+    void testExceptionDeserialize() throws InterruptedException, IOException, ClassNotFoundException  {
         Runnable runnableOne = new TestRuntimeExceptionRunnable();
         Runnable runnableTwo;
         try {
@@ -659,7 +659,7 @@ public class SerializableScheduledExecutorServiceTest {
     }
     
     @Test
-    public void testSerializeTaskThatExceptionedOut() throws InterruptedException, IOException, ClassNotFoundException, RecreateRunnableFailedException  {
+    void testSerializeTaskThatExceptionedOut() throws InterruptedException, IOException, ClassNotFoundException, RecreateRunnableFailedException  {
         final ByteArrayOutputStream bos = new ByteArrayOutputStream();
 
         {

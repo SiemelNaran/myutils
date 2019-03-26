@@ -1,8 +1,8 @@
 package myutils;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.concurrent.Callable;
 
@@ -16,9 +16,10 @@ public class TestUtil {
             fail("Expected exception " + expectedException.getSimpleName() + ", but got no exception");
             throw new AssertionError();
         } catch (Exception e) {
-            assertTrue("Expected " + expectedException.getSimpleName() + " or an exception derived from it, "
-                           + "but got " + e.getClass().getSimpleName(),
-                       expectedException.isInstance(e));;
+            assertTrue(expectedException.isInstance(e),
+            		   "Expected " + expectedException.getSimpleName() + " or an exception derived from it, "
+                           + "but got " + e.getClass().getSimpleName()
+                       );
             return (U) e;
         }
     }
@@ -28,9 +29,9 @@ public class TestUtil {
             callable.call();
             fail("Expected exception " + expectedException.getSimpleName() + ", but got no exception");
         } catch (Exception e) {
-            assertTrue("Expected " + expectedException.getSimpleName() + " or an exception derived from it, "
-                           + "but got " + e.getClass().getSimpleName(),
-                       expectedException.isInstance(e));;
+            assertTrue(expectedException.isInstance(e),
+            		   "Expected " + expectedException.getSimpleName() + " or an exception derived from it, "
+                           + "but got " + e.getClass().getSimpleName());
             assertEquals(expectedMessage, e.getMessage());
         }
     }
@@ -42,9 +43,9 @@ public class TestUtil {
             fail("Expected exception " + expectedException.getSimpleName() + ", but got no exception");
             throw new AssertionError();
         } catch (RuntimeException e) {
-            assertTrue("Expected " + expectedException.getSimpleName() + " or an exception derived from it, "
-                           + "but got " + e.getClass().getSimpleName(),
-                       expectedException.isInstance(e));
+            assertTrue(expectedException.isInstance(e),
+            		   "Expected " + expectedException.getSimpleName() + " or an exception derived from it, "
+                           + "but got " + e.getClass().getSimpleName());
             return (U) e;
         }
     }
@@ -54,9 +55,9 @@ public class TestUtil {
             runnable.run();
             fail("Expected exception " + expectedException.getSimpleName() + ", but got no exception");
         } catch (RuntimeException e) {
-            assertTrue("Expected " + expectedException.getSimpleName() + " or an exception derived from it, "
-                           + "but got " + e.getClass().getSimpleName(),
-                       expectedException.isInstance(e));;
+            assertTrue(expectedException.isInstance(e),
+            		   "Expected " + expectedException.getSimpleName() + " or an exception derived from it, "
+                           + "but got " + e.getClass().getSimpleName());
             assertEquals(expectedMessage, e.getMessage());
         }
     }
