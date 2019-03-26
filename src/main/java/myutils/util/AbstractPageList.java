@@ -26,9 +26,9 @@ import java.io.Serializable;
 /**
  * {@inheritDoc}
  * 
- * This class implements RandomAccess even though looking up an element is at least O(lg(N)).<p>
+ * This class implements RandomAccess even though looking up an element is O(lg(N)).<p>
  * 
- * This class implements RandomAccess and java.io.Serializable.<p>
+ * This class implements java.io.Serializable.<p>
  * 
  * The spliterator splits by pages. If a page has too many elements in it, the page itself
  * does not get split.<p>
@@ -42,8 +42,8 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
     protected final int preferredMaxPageSize;
     protected final int maxPageSize;
     private transient int modCount = 0;
-    private final ArrayList<Page<E>> pages = new ArrayList<>(); // sorted by Page.startIndex
     private int size;
+    private final ArrayList<Page<E>> pages = new ArrayList<>(); // sorted by Page.startIndex
     
     AbstractPageList() {
         this(Collections.emptyList(), DEFAULT_PREFERRED_MAX_PAGE_SIZE, DEFAULT_MAX_PAGE_SIZE);
