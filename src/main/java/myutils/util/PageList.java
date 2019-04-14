@@ -14,7 +14,7 @@ import java.util.List;
  * in ArrayList because we have to first look up the page that contains the element
  * at that index, then look up the element in that page.
  * 
- * <p>This class implements PageList, which extends List but adds a splice function.
+ * <p>This class extends List but adds a splice function.
  * 
  * @author snaran
  *
