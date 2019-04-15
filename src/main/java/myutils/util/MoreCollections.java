@@ -10,13 +10,17 @@ import java.util.function.ToLongFunction;
 import myutils.util.AbstractPageList.Page;
 
 
+@SuppressWarnings("checkstyle:NeedBraces")
 public class MoreCollections {
     
     // binary search handling PageList
     
+    /**
+     * Binary search that provides a more efficient implementation for PageList.
+     */
     public static <U extends Comparable<? super U>>
     int binarySearch(List<U> list,
-                     U key) {
+                     U key){
         if (list instanceof AbstractPageList)
             return pageListBinarySearch((AbstractPageList<U>) list, key);
         else
