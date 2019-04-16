@@ -142,7 +142,10 @@ public class StackTraceCompletableFutureTest {
         }
         
         System.out.println(stage.toString());
-        assertStringContainsInOrder(Arrays.asList("StackTraceCompletableFuture", "java.util.concurrent.CompletableFuture", "[Completed exceptionally]"), stage.toString()); // TODO: java11: FAILURE
+        assertStringContainsInOrder(Arrays.asList("StackTraceCompletableFuture",
+                                                  "java.util.concurrent.CompletableFuture",
+                                                  "[Completed exceptionally: java.util.concurrent.CompletionException: java.lang.IllegalStateException: failed]"),
+                                    stage.toString());
     }
     
     @Test()
@@ -164,7 +167,10 @@ public class StackTraceCompletableFutureTest {
         }
         
         System.out.println(stage.toString());
-        assertStringContainsInOrder(Arrays.asList("StackTraceCompletableFuture", "java.util.concurrent.CompletableFuture", "[Completed exceptionally]"), stage.toString()); // TODO: java11: FAILURE
+        assertStringContainsInOrder(Arrays.asList("StackTraceCompletableFuture",
+                                                  "java.util.concurrent.CompletableFuture",
+                                                  "[Completed exceptionally: java.util.concurrent.CompletionException: java.lang.IllegalStateException: failed]"),
+                                    stage.toString());
     }
     
     private static void sleep(long millis)  {

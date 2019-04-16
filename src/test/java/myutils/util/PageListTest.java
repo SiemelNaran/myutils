@@ -116,7 +116,7 @@ public class PageListTest {
     void testEmpty() {
         testAllLists(() -> {
 	        PageList<Integer> list = constructPageList(3, 5);
-	        assertEquals(0, list.size()); // TODO: java11: FAILURE
+	        assertEquals(0, list.size());
 	        assertTrue(list.isEmpty());
 	        assertEquals(0, list.stream().count());
 	        assertNull(list.spliterator().trySplit());

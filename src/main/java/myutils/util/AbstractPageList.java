@@ -796,8 +796,9 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
             return (pageSpliterator.estimateSize() + 1) * averagePageSize;
         }
 
+        @Override
         public int characteristics() {
-            return ORDERED | SIZED | SUBSIZED;
+            return ORDERED;
         }        
     }
 }
