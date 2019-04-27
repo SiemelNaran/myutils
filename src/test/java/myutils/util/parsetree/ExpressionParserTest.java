@@ -78,6 +78,13 @@ public class ExpressionParserTest {
         assertNull(tree);
     }
     
+    @Test
+    void testEvaluateUnits() throws ParseException {
+        Map<String, Object> scope = new HashMap<>();
+        scope.put("x", 1_000_000);
+        assertEquals(new Integer(1_003_002), evaluate("2m+3km+x", scope));
+    }
+    
     private static int evaluate(String expression, Map<String, Object> scope) throws ParseException {
         ParseNode tree = PARSER.parse(expression);
         Map<String, Class<?>> scopeTypes = scope.entrySet()
@@ -95,8 +102,20 @@ public class ExpressionParserTest {
     
     /////
     /////
-        
+    
+    private static final NumberFactory NUMBER_FACTORY = UnitNumberFactory.builder()
+                                                                         .addUnit("m", val -> val)
+                                                                         .addUnit("km", val -> val * 1000)
+                                                                         .setDefaultUnit("m")
+                                                                         .setUnitAfter(true)
+                                                                         .build();
+    
+    private static Integer multiplyTimesOneThousand(Number number) {
+        return ((Integer) number).intValue * 1000;
+    }
+    
     private static final ExpressionParser PARSER = ExpressionParser.builder()
+                                                                   .setNumberFactory(NUMBER_FACTORY)
                                                                    .addBinaryOperator(PLUS.class)
                                                                    .addBinaryOperator(MINUS.class)
                                                                    .addBinaryOperator(TIMES.class)
