@@ -156,6 +156,19 @@ public class SimpleStringTokenizerFactoryTest {
         assertFalse(tokenizer.hasNext());
     }
     
+    @Test
+    void testInvalidStringTokenizer() {
+        try {
+            SimpleStringTokenizerFactory(SKIP_CHARACTERS,
+                                         new QuoteStrategy(true, true),
+                                         Arrays.asList("+++", "***", "+", "*"),
+                                         Collections.singletonList(LITERAL_CLASS));
+            fail("expected exception because symbols are invalid");
+        } catch (IllegalArgumentException e) {
+            assertEquals("expected to find ** in dictionary");
+        }
+    }
+    
     private static final IntPredicate SKIP_CHARACTERS
         = codePoint -> Character.isWhitespace(codePoint);
     
@@ -167,10 +180,9 @@ public class SimpleStringTokenizerFactoryTest {
 
     private Iterator<Token> createSimpleStringTokenizer(String expression) {
         return new SimpleStringTokenizerFactory(SKIP_CHARACTERS,
-                                         new QuoteStrategy(true, true),
-                                         SYMBOLS,
-                                         Collections.singletonList(LITERAL_CLASS))
+                                                new QuoteStrategy(true, true),
+                                                SYMBOLS,
+                                                Collections.singletonList(LITERAL_CLASS))
                 .tokenizer(expression);
     }
-
 }

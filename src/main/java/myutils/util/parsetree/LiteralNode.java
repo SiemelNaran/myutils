@@ -24,7 +24,7 @@ public class LiteralNode implements ParseNode {
 	}
 	
 	@Override
-	public Class<?> checkEval(Map<String, Object> scope) {
+	public Class<?> checkEval(Map<String, Class<?>> scopeTypes) {
 		return value.getClass();
 	}
 	
@@ -33,11 +33,6 @@ public class LiteralNode implements ParseNode {
 		return value;
 	}
     
-    @Override
-    public final boolean isAtomic() {
-        return true;
-    }
-
     private static class StringLiteralNodeImpl extends LiteralNode {
         private StringLiteralNodeImpl(String value) {
             super(value);

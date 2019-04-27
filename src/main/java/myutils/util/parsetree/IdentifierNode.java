@@ -43,17 +43,12 @@ public class IdentifierNode implements ParseNode {
     }
     
     @Override
-    public final boolean isAtomic() {
-        return true;
-    }
-
-    @Override
-    public Class<?> checkEval(Map<String, Object> scope) {
-        Object result = scope.get(identifier);
+    public Class<?> checkEval(Map<String, Class<?>> scopeTypes) {
+        Object result = scopeTypes.get(identifier);
         if (result == null) {
             throw new VariableNotFoundTypeException(identifier);
         }
-        return result.getClass();
+        return result;
     }
 
     @Override

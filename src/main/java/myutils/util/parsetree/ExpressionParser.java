@@ -31,22 +31,22 @@ public class ExpressionParser {
         return new Builder();
     }
     
-	private final Map<String, Constructor<? extends BinaryOperatorNode>> binaryOperators;
+    private final Map<String, Constructor<? extends BinaryOperatorNode>> binaryOperators;
     private final Map<String, Constructor<? extends UnaryOperatorNode>> unaryOperators;
     private final Map<String, Constructor<? extends FunctionNode>> functions;
     private final NumberFactory numberFactory;
     private final SimpleStringTokenizerFactory tokenizerFactory;
     
     private ExpressionParser(Map<String, Constructor<? extends BinaryOperatorNode>> binaryOperators,
-    		                 Map<String, Constructor<? extends UnaryOperatorNode>> unaryOperators,
-    		                 Map<String, Constructor<? extends FunctionNode>> functions,
-    		                 NumberFactory numberFactory) {
-    	this.binaryOperators = binaryOperators;
-    	this.unaryOperators = unaryOperators;
-    	this.functions = functions;
-    	this.numberFactory = numberFactory;
+        	                 Map<String, Constructor<? extends UnaryOperatorNode>> unaryOperators,
+        	                 Map<String, Constructor<? extends FunctionNode>> functions,
+        	                 NumberFactory numberFactory) {
+        this.binaryOperators = binaryOperators;
+        this.unaryOperators = unaryOperators;
+        this.functions = functions;
+        this.numberFactory = numberFactory;
         
-    	List<String> symbols = new ArrayList<>(binaryOperators.size() + unaryOperators.size() + BASIC_SYMBOLS.size());
+        List<String> symbols = new ArrayList<>(binaryOperators.size() + unaryOperators.size() + BASIC_SYMBOLS.size());
         symbols.addAll(binaryOperators.keySet());
         symbols.addAll(unaryOperators.keySet());
         symbols.addAll(BASIC_SYMBOLS);
@@ -63,54 +63,60 @@ public class ExpressionParser {
      * @return root of the parse tree
      * @throws java.text.ParseException if there is an error in the input text, such as unknown operators.
      */
-	public ParseNode parse(String expression) throws ParseException {
+    public ParseNode parse(String expression) throws ParseException {
         Helper helper = new Helper(expression);
         ParseNode tree = helper.innerParse();
         if (helper.parenthesisLevel > 0) {
-            throw new ParseException("missing close parenthesis", expression.length());
+            throw new ParseException("missing close parenthesis", expression.length()); // handles case: (2 + 3
         }
         return tree;
     }
-	
-	private class Helper {
-	    private final RewindableIterator<Token> tokenizer;
-	    private int endOfLastToken;
+    
+    private class Helper {
+        private final RewindableIterator<Token> tokenizer;
+        private int endOfLastToken;
         private int parenthesisLevel;        
         
         private Helper(String expression) {
             this.tokenizer = RewindableIterator.from(tokenizerFactory.tokenizer(expression));
         }
     
-	    private ParseNode innerParse() throws ParseException {
+        private ParseNode innerParse() throws ParseException {
             ParseNode tree = null;
             OperatorNode incomplete = null;
-	        while (tokenizer.hasNext()) {
-	            Token token = tokenizer.next();
-	            endOfLastToken = token.getEnd();
-	            if (token.getText().equals(")")) {
-	                if (--parenthesisLevel < 0) {
-	                    throw new ParseException("too many close parenthesis", token.getStart()); // handles case: )
-	                }
+            while (tokenizer.hasNext()) {
+                Token token = tokenizer.next();
+                endOfLastToken = token.getEnd();
+                
+                if (token.getText().equals(")")) {
+                    if (--parenthesisLevel < 0) {
+                        throw new ParseException("too many close parenthesis", token.getStart()); // handles case: (2 + 3))
+                    }
                     if (incomplete != null) {
                         throw new ParseException("unexpected close parenthesis", token.getStart()); // handles case: (2 + )
                     }
-	                break;
-	            } else if (token.getText().equals(",")) {
+                    break;
+                    
+                } else if (token.getText().equals(",")) {
+                    
                     if (incomplete != null) {
                         throw new ParseException("unexpected comma", token.getStart()); // handles case: max(2 + , )
                     }
                     break;
-	            } else {
-	                final OperatorNode newIncomplete;
-	                if (tree == null) {
-	                    assert(incomplete == null);
-	                    tree = readExpression(token);
-	                    newIncomplete = isIncomplete(tree);
-	                } else if (incomplete != null) {
+                    
+                } else {
+                    final OperatorNode newIncomplete;
+                    
+                    if (tree == null) {
+                        assert(incomplete == null);
+                        tree = readExpression(token);
+                        newIncomplete = isIncomplete(tree);
+                        
+                    } else if (incomplete != null) {
                         ParseNode node = readExpression(token);
-	                    if (incomplete instanceof UnaryOperatorNode) {
-	                        UnaryOperatorNode incompleteAsUnaryOperator = (UnaryOperatorNode) incomplete;
-	                        incompleteAsUnaryOperator.setNode(node);
+                        if (incomplete instanceof UnaryOperatorNode) {
+                            UnaryOperatorNode incompleteAsUnaryOperator = (UnaryOperatorNode) incomplete;
+                            incompleteAsUnaryOperator.setNode(node);
                         } else if (incomplete instanceof BinaryOperatorNode) {
                             BinaryOperatorNode incompleteAsBinaryOperator = (BinaryOperatorNode) incomplete;
                             incompleteAsBinaryOperator.setRight(node);
@@ -118,10 +124,11 @@ public class ExpressionParser {
                             throw new UnsupportedOperationException(incomplete.getClass().getName());
                         }
                         newIncomplete = isIncomplete(node);
+                        
                     } else {
                         BinaryOperatorNode nodeAsBinaryOperator = (BinaryOperatorNode) constructNodeFromToken(token, ParseMode.ONLY_BINARY_OPERATORS);
                         if (tree instanceof BinaryOperatorNode
-                                && !tree.isAtomic()
+                                && !((BinaryOperatorNode) tree).isAtomic()
                                 && ((BinaryOperatorNode) tree).getPrecedence() < nodeAsBinaryOperator.getPrecedence()) {
                             // we just read an operator that has higher precedence
                             // so rearrange the nodes such that the right node of the current tree (say a PLUS node)
@@ -130,36 +137,37 @@ public class ExpressionParser {
                             ParseNode oldRight = treeAsBinaryNode.getRight();
                             nodeAsBinaryOperator.setLeft(oldRight);
                             treeAsBinaryNode.setRight(nodeAsBinaryOperator);
-                            
                         } else {
                             nodeAsBinaryOperator.setLeft(tree);
                             tree = nodeAsBinaryOperator;
                         }
                         newIncomplete = nodeAsBinaryOperator;
+                        
                     }
-	                incomplete = newIncomplete;
-	            }
-	        } // end while
-	        
+                    
+                    incomplete = newIncomplete;
+                }
+            } // end while
+            
             if (!tokenizer.hasNext() && incomplete != null) {
                 throw new ParseException("unexpected end of expression", endOfLastToken - 1); // handles case: 2 +
             }
 
             return tree;
-	    }
-	    
-	    /**
-	     * Read a new expression.  This reads everything besides binary operators.
-	     * If `token` is ( then call innerParse to read everything till the closing ) as one parse node.
-	     * Otherwise return the literal node, identifier node, or unary operator represented by token.
-	     * If the token is an identifier node that is followed by an open parenthesis,
-	     * then call innerParse to read the function arguments as well.<p>
-	     * 
-	     * @param token
-	     * @return the ParseNode represented by token
-	     * @throws ParseException
-	     */
-	    private ParseNode readExpression(Token token) throws ParseException {
+        }
+        
+        /**
+         * Read a new expression.  This reads everything besides binary operators.
+         * If `token` is ( then call innerParse to read everything till the closing ) as one parse node.
+         * Otherwise return the literal node, identifier node, or unary operator represented by token.
+         * If the token is an identifier node that is followed by an open parenthesis,
+         * then call innerParse to read the function arguments as well.<p>
+         * 
+         * @param token
+         * @return the ParseNode represented by token
+         * @throws ParseException
+         */
+        private ParseNode readExpression(Token token) throws ParseException {
             if (token.getText().equals("(")) {
                 int oldLevel= parenthesisLevel++;
                 ParseNode tree = innerParse();
@@ -197,8 +205,8 @@ public class ExpressionParser {
                 }
                 return result;
             }
-	    }
-	}
+        }
+    }
     
     
     private static OperatorNode isIncomplete(ParseNode node) {
@@ -211,35 +219,35 @@ public class ExpressionParser {
         return null;
     }
     
-	private enum ParseMode {
-	    /**
-	     * Only read binary operators
-	     */
-	    ONLY_BINARY_OPERATORS,
+    private enum ParseMode {
+        /**
+         * Only read binary operators
+         */
+        ONLY_BINARY_OPERATORS,
         
-	    /**
-	     * Read string literals, numbers, identifiers, unary operators.
-	     * Does not read functions.
-	     */
-	    EVERYTHING_ELSE
-	}
-	
-	/**
-	 * Parse token into string/number literal, identifier, unary operator, function, or binary operator.
-	 * 
-	 * @param token the string to parse
-	 * @param parseMode what types of nodes to return
-	 */
-	private ParseNode constructNodeFromToken(Token token, ParseMode parseMode) throws ParseException {
-		switch (parseMode) {
-		    case ONLY_BINARY_OPERATORS:
-	            try {
-	                return BinaryOperatorNode.tryConstruct(token.getText(), binaryOperators);
-	            } catch (ConstructException ignored) {
-	            }
-	            break;
+        /**
+         * Read string literals, numbers, identifiers, unary operators.
+         * Does not read functions.
+         */
+        EVERYTHING_ELSE
+    }
+    
+    /**
+     * Parse token into string/number literal, identifier, unary operator, function, or binary operator.
+     * 
+     * @param token the string to parse
+     * @param parseMode what types of nodes to return
+     */
+    private ParseNode constructNodeFromToken(Token token, ParseMode parseMode) throws ParseException {
+    	switch (parseMode) {
+    	    case ONLY_BINARY_OPERATORS:
+                try {
+                    return BinaryOperatorNode.tryConstruct(token.getText(), binaryOperators);
+                } catch (ConstructException ignored) {
+                }
+                break;
             
-		    case EVERYTHING_ELSE:
+    	    case EVERYTHING_ELSE:
                 try {
                     return LiteralNode.tryConstruct(token.getText(), numberFactory);
                 } catch (ConstructException ignored) {
@@ -255,11 +263,11 @@ public class ExpressionParser {
                 } catch (ConstructException ignored) {
                 }
                 break;
-		}
-		
-		throw new ParseException("invalid token " + token.getText(), token.getStart());
-	}
-	
+    	}
+    	
+    	throw new ParseException("invalid token " + token.getText(), token.getStart());
+    }
+    
     public static class InvalidTokenException extends RuntimeException {
         private static final long serialVersionUID = 1L;
         
@@ -355,7 +363,7 @@ public class ExpressionParser {
                         || c == '.'
                         || c == ','
                         || c == ';') {
-                    throw new InvalidOperatorException(Character.toString(c));
+                    throw new InvalidOperatorException(oper, c);
                 }
             }
             return true;
@@ -363,11 +371,13 @@ public class ExpressionParser {
         
         private static boolean verifyFunctionNameValid(String oper) {
             int N = oper.length();
+            if (!Character.isLetter(oper.charAt(0))) {
+                throw new InvalidOperatorException(oper, c);                
+            }
             for (int i = 0; i < N; i++) {
                 char c = oper.charAt(i);
-                if (Character.isWhitespace(c)
-                        || !Character.isLetterOrDigit(c)) {
-                    throw new InvalidOperatorException(Character.toString(c));
+                if (!Character.isLetterOrDigit(c)) {
+                    throw new InvalidOperatorException(oper, c);
                 }
             }
             return true;
@@ -378,6 +388,11 @@ public class ExpressionParser {
             return this;
         }
         
+        /**
+         * @throws IllegalArgumentException if the substrings of all operators are not operators.
+         *                                  For example, if there is a binary operator * and a binary operator ***
+         *                                  then this functions throws IllegalArgumentException because ** is not an operator.
+         */
         public ExpressionParser build() {
             return new ExpressionParser(binaryOperators,
                                         unaryOperators,
@@ -401,8 +416,8 @@ public class ExpressionParser {
         public static class InvalidOperatorException extends BuilderException {
             private static final long serialVersionUID = 1L;
 
-            private InvalidOperatorException(String message) {
-                super(message);
+            private InvalidOperatorException(String oper, char invalidChar) {
+                super("Invalid character " + invalidChar + " in operator " + oper);
             }
         }        
     }

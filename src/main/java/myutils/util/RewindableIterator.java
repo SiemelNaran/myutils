@@ -35,12 +35,12 @@ public class RewindableIterator<E> implements Iterator<E> {
         E next;
         if (!isRewind) {
             next = iter.next();
+            last = next;
         } else {
             next = last;
             isRewind = false;
         }
         nextIndex++;
-        last = next;
         return next;
     }
     

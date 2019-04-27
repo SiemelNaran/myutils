@@ -56,10 +56,34 @@ public class ExpressionParserTest {
         assertEquals(14, evaluate("2+x*max(---5,y)", scope)); // 2 + 3 * 4
     }
     
+    @Test
+    void testInvalidExpressions() {
+        assertParseError("(2 + 3", "");
+        assertParseError("(2 + 3))", "");
+        assertParseError("(2 + )", "");
+        assertParseError("max(2 + , )", "");
+        assertParseError("2 +", "");
+        assertParseError("(2 + 3", "");
+        assertParseError("max(3, 4", "");
+        assertParseError("unknown(3, 4"), "");
+        assertParseError("max(3, 4", "");
+        assertParseError("2 ^ 3", "");
+        assertParseError("2 * * 3", "");
+    }
+    
     private static int evaluate(String expression, Map<String, Object> scope) throws ParseException {
         ParseNode tree = PARSER.parse(expression);
         assertEquals(Integer.class, tree.checkEval(scope));
         return (int) tree.eval(scope);
+    }
+    
+    private static void assertParseError(String expression, String expectedErrorMsg) {
+        try {
+            ParseNode tree = PARSER.parse(expression);
+            fail("expected ParseException in expression " + expression);
+        } catch (ParseException e) {
+            assertEquals(expectedErrorMsg, e.getMessage(), "unexpected ParseException in expression " + expression);
+        }        
     }
     
     /////

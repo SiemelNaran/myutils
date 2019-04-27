@@ -21,36 +21,46 @@ import javax.annotation.concurrent.NotThreadSafe;
  * </ul>
  * <p>
  *
- * Skip characters are skipped and never returned.<p>
+ * <p>Skip characters are skipped and never returned.
  * 
- * If the quote strategy says to support single/double quotes, then everything within the quotes,
- * including the quote characters, will be treated as one token
- * Characters are escaped, so if you want a double quote inside a double quoted string, enter <code>\"</code>,
- * and if you want a backslash then enter <code>\\</code>.
- * The tokenizer also transforms \n \r \t \f \b.
- * <p>
+ * <p>If the quote strategy says to support single/double quotes, then everything within the quotes,
+ * including the quote characters, will be treated as one token.
+ * See QuoteStrategy for more details.
  * 
- * You can also pass in a dictionary of known symbols.
+ * <p>You can also pass in a dictionary of known symbols.
  * If the dictionary contains <code>*<code> and <code>**</code>, then in "2 ** 3", after reading the token "2",
  * the <code>**</code> will be treated as one token.
  * But if the dictionary contains only <code>*</code>, then the first <code>*</code> will be treated as one token,
- * and the second <code>*</code> will be treated as the next token.<p>
+ * and the second <code>*</code> will be treated as the next token.
  * 
- * If the dictionary contains <code>*</code> and <code>***</code>, but not <code>**</code>,
+ * <p>If the dictionary contains <code>*</code> and <code>***</code>, but not <code>**</code>,
  * and if string is "2 ** 3" and you've read the token "2",
- * the <code>**</code> is treated as one token even though it is not in the dictionary.<p> 
+ * the <code>**</code> is treated as one token even though it is not in the dictionary.
+ * For this reason, the constructor throws an exception if each sub-word in the dictionary is not also in the dictionary. 
  * 
- * You can also specify the list of predicates describing the skip characters.
+ * <p>You can also specify the list of predicates describing the skip characters.
  * If a character is not the start of a symbol, then we determine what character class describes it.
  * All characters in this character class will be considered to be part of the token.
- * For example, if the predicate is Character.isLetterOrDigit, then all letters and digits will constitute on token.<p>
+ * For example, if the predicate is Character.isLetterOrDigit, then all letters and digits will constitute on token.
  * 
- * This class parses unicode strings.<p>
+ * <p>This class parses unicode strings.
  * 
  * @author snaran
  */
 public class SimpleStringTokenizerFactory {
     
+    /**
+     *  Class describing the quote strategy.
+     *  
+     *  <p>You can choose to treat text within single quotes, within double quotes, or both as a token.
+     *  
+     *  <p>At present, characters are escaped, so if you want a double quote inside a double quoted string,
+     *  enter <code>\"</code>, and if you want a backslash then enter <code>\\</code>.
+     *  The tokenizer also transforms \n \r \t \f \b.
+     *  
+     *  <p>In the future, QuoteStrategy will support double-quoting, so if you want a double quote inside a double quoted string,
+     *  enter <code>""<code>.
+     */
     public static class QuoteStrategy {
         private final boolean singleQuotes;
         private final boolean doubleQuotes;
@@ -69,17 +79,17 @@ public class SimpleStringTokenizerFactory {
     private final IntPredicate otherChars;
     
     /**
-     * @param str the string to parse
      * @param skipChars the characters that split one token from another, and which should not be returned
-     * @param handleSingleQuotes if true then parse everything in single quotes as one token, escape characters, return the quotes
-     * @param handleDoubleQuotes if true then parse everything in double quotes as one token, escape characters, return the quotes
+     * @param quoteStrategy the quote strategy
      * @param symbols if the token matches a symbol in this list (the longest symbol), return it
-     * @param multipleCharacterClasses a list of predicates, where each predicate describes the multiple characters in this character class
+     * @param characterClasses a list of predicates, where each predicate describes the multiple characters in this character class
+     * 
+     * @throws IllegalArgumentException if every subword in symbols is not also in symbols
      */
-    public SimpleStringTokenizerFactory(IntPredicate skipChars,
-                                 QuoteStrategy quoteStrategy,
-                                 List<String> symbols,
-                                 List<IntPredicate> characterClasses) {
+    public SimpleStringTokenizerFactory(@Nonnull IntPredicate skipChars,
+                                        @Nonnull QuoteStrategy quoteStrategy,
+                                        @Nonnull List<String> symbols,
+                                        @Nonnull List<IntPredicate> characterClasses) {
         this.skipChars = skipChars;
         this.quoteStrategy = quoteStrategy;
         this.symbols = buildTrie(symbols);
@@ -98,7 +108,17 @@ public class SimpleStringTokenizerFactory {
         for (String symbol : symbols) {
             trie.add(symbol.codePoints().boxed());
         }
+        checkTrie(trie);
         return trie;
+    }
+    
+    private static void checkTrie(SimpleTrie<Integer> trie) throws IllegaArgumentException {
+        trie.visit((word, trie) -> {
+            if (!trie.isWord()) {
+                String str = new String(word.toArray(new Integer[0]), 0, word.size());
+                throw new IllegaArgumentException("expected to find " + str + " in dictionary");
+            }
+        })
     }
     
     public Iterator<Token> tokenizer(CharSequence str) {
@@ -173,11 +193,11 @@ public class SimpleStringTokenizerFactory {
             
             return new Token(token, tokenStart);
         }
-    	
-    	private CharSequence readQuotedEscapedString(final char expect) {
-    	    StringBuilder token = new StringBuilder(32);
-    	    token.append(expect);
-    	    boolean escapeMode = false;
+        
+        private CharSequence readQuotedEscapedString(final char expect) {
+            StringBuilder token = new StringBuilder(32);
+            token.append(expect);
+            boolean escapeMode = false;
             while (iterCodePoints.hasNext()) {
                 int c = iterCodePoints.next();
                 if (!escapeMode) {
@@ -196,15 +216,15 @@ public class SimpleStringTokenizerFactory {
                         case 't': token.append('\t'); break;
                         case 'f': token.append('\f'); break;
                         case 'b': token.append('\b'); break;
-                        default: token.appendCodePoint(c);
+                        default: token.append('\\').appendCodePoint(c);
                     }
                     escapeMode = false;
                 }
             }
             return token;
-    	}
+        }
     
-    	private CharSequence readRegularToken(int tokenStart, int first) {
+        private CharSequence readRegularToken(int tokenStart, int first) {
             SimpleTrie<Integer> trie = symbols.find(first);
             if (trie != null) {
                 trie = readSymbol(trie);
@@ -213,9 +233,9 @@ public class SimpleStringTokenizerFactory {
                 readCharacterClass(characterClass);
             }
             return str.subSequence(tokenStart, iterCodePoints.getNextIndex());
-    	}
-    	
-        private SimpleTrie<Integer> readSymbol(@Nonnull SimpleTrie<Integer> trie) {
+        }
+        
+        private @Nonnull SimpleTrie<Integer> readSymbol(@Nonnull SimpleTrie<Integer> trie) {
             while (iterCodePoints.hasNext()) {
                 int c = iterCodePoints.next();
                 SimpleTrie<Integer> newTrie = trie.find(c);
@@ -228,6 +248,15 @@ public class SimpleStringTokenizerFactory {
             return trie;
         }
         
+        private @Nonnull IntPredicate determineCharacterClass(int c) {
+            for (IntPredicate predicate : characterClasses) {
+                if (predicate.test(c)) {
+                    return predicate;
+                }
+            }
+            return otherChars; 
+        }
+
         private void readCharacterClass(IntPredicate characterClass) {
             while (iterCodePoints.hasNext()) {
                 int c = iterCodePoints.next();
@@ -236,15 +265,6 @@ public class SimpleStringTokenizerFactory {
                     break;
                 }
             }
-        }
-        
-        private @Nonnull IntPredicate determineCharacterClass(int c) {
-            for (IntPredicate predicate : characterClasses) {
-                if (predicate.test(c)) {
-                    return predicate;
-                }
-            }
-            return otherChars; 
         }
     }
 }

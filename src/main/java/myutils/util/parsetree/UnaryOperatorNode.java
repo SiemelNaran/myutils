@@ -32,18 +32,13 @@ public abstract class UnaryOperatorNode implements OperatorNode {
     }
     
     @Override
-    public final boolean isAtomic() {
-        return true;
-    }
-
-    @Override
     public boolean isComplete() {
         return node != null;
     }
     
 	@Override
-	public Class<?> checkEval(Map<String, Object> scope) throws TypeException {
-		return checkApply(node.checkEval(scope));
+	public Class<?> checkEval(Map<String, Class<?>> scopeTypes) throws TypeException {
+		return checkApply(node.checkEval(scopeTypes));
 	}
 	
 	@Override

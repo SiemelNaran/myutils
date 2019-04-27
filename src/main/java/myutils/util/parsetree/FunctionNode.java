@@ -31,11 +31,6 @@ public abstract class FunctionNode implements ParseNode {
 	protected FunctionNode() {
 	}
 	
-    @Override
-    public final boolean isAtomic() {
-        return true;
-    }
-
 	void add(ParseNode child) {
 	    args.add(child);
 	}
@@ -50,8 +45,8 @@ public abstract class FunctionNode implements ParseNode {
 	}
 	
 	@Override
-	public Class<?> checkEval(Map<String, Object> scope) throws TypeException {
-		return checkCombine(args.stream().map(node -> node.checkEval(scope)).collect(Collectors.toList()));
+	public Class<?> checkEval(Map<String, Class<?>> scopeTypes) throws TypeException {
+		return checkCombine(args.stream().map(node -> node.checkEval(scopeTypes)).collect(Collectors.toList()));
 	}
 	
 	@Override
