@@ -24,26 +24,38 @@ public class LiteralNode implements ParseNode {
     private LiteralNode(Object value) {
         this.value = value;
     }
-
+    
     @Override
-    public Class<?> checkEval(Map<String, Class<?>> scopeTypes) {
+    public final Class<?> checkEval(Map<String, Class<?>> scopeTypes) {
         return value.getClass();
     }
-
+    
     @Override
-    public Object eval(Map<String, Object> scope) {
+    public final Object eval(Map<String, Object> scope) {
         return value;
     }
+    
+    @Override
+    public void reduce(Listener listener) {
+        listener.startLiteral(this);
+        listener.accepLiteral(this);
+        listener.endLiteral(this);
+    }
 
-    private static class StringLiteralNodeImpl extends LiteralNode {
+    private static final class StringLiteralNodeImpl extends LiteralNode {
         private StringLiteralNodeImpl(String value) {
             super(value);
         }
     }
 
-    private static class NumberLiteralNodeImpl extends LiteralNode {
+    private static final class NumberLiteralNodeImpl extends LiteralNode {
         private NumberLiteralNodeImpl(Number value) {
             super(value);
         }
+    }
+    
+    @Override
+    public String toString() {
+        return Objecs.toString(value);
     }
 }

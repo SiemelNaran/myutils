@@ -14,6 +14,12 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import myutils.util.parsetree.ParseNode.Listener;
+import myutils.util.parsetree.ParseNode.Listener.Characteristics;
+import myutils.util.parsetree.ParseNode.Listener.Characteristics.BinaryOperatorPosition;
+import myutils.util.parsetree.ParseNode.Listener.Characteristics.FunctionPosition;
+import myutils.util.parsetree.ParseNode.Listener.Characteristics.UnaryOperatorPosition;
+
 import org.junit.jupiter.api.Test;
 
 
@@ -77,7 +83,70 @@ public class ExpressionParserTest {
         ParseNode tree = PARSER.parse("    ");
         assertNull(tree);
     }
-    
+
+    @Test
+    void testReduce() {
+        ParseNode tree = PARSER.parse("2+x*-y");
+        
+        Listener listener = new Listener() {
+            private final StringBuilder str = new StringBuilder();
+            
+            @Override
+            public Characteristics characteristics() {
+                return new Characteristics() {
+                    @Override
+                    public UnaryOperatorPosition unaryOperatorPosition() {
+                        return UnaryOperatorPosition.OPERATOR_FIRST;
+                    }
+                    
+                    @Override
+                    public BinaryOperatorPosition binaryOperatorPosition() {
+                        return BinaryOperatorPosition.OPERATOR_FIRST;
+                    }
+                    
+                    @Override
+                    public FunctionPosition functionPosition() {
+                        return FunctionPosition.FUNCTION_FIRST;
+                    }
+                }
+            }
+            
+            @Override public void startBinaryOperator(BinaryOperatorNode operator) { }
+            @Override public void acceptBinaryOperator(BinaryOperatorNode operator) { str.append(operator.getClass().getSimpleName().append('('));
+            @Override public void endBinaryOperator(BinaryOperatorNode operator) { str.append(')'); }
+            
+            @Override public void startUnaryOperator(UnaryOperatorNode operator) { }
+            @Override public void acceptUnaryOperator(UnaryOperatorNode operator) { str.append(operator.getToken()); }
+            @Override public void endUnaryOperator(UnaryOperatorNode operator) { }
+            
+            @Override public void startFunction(FunctionNode function) { }
+            @Override public void acceptFunction(FunctionNode function) { str.append(function.getName()).append('('); }
+            @Override public void endFunction(FunctionNode function) { str.append(')'); }
+                    
+            @Override public void startLiteral(LiteralNode literal) { }
+            @Override public void acceptLiteral(LiteralNode literal) { str.append(literal.toString()); }
+            @Override public void endLiteral(LiteralNode literal) { }
+                    
+            @Override public void startidentifier(IdentifierNode identifier) { }
+            @Override public void acceptIdentifier(IdentifierNode identifier) {  str.append("table.").append(map(identifier.getIdentifier())); }
+            @Override public void endIdentifier(IdentifierNode identifier) { }
+            
+            private void map(String identifier) {
+                if ("x".equals(identifier)) return "a";
+                if ("y".equals(identifier)) return "b";
+                throw new UnsupportedOperationException(identifier);
+            }
+            
+            @Override
+            public String toString() {
+                return str.toString();
+            }
+        };
+        
+        String summary = tree.reduce(listener);
+        assertEquals("PLUS(2, TIMES(table.a, -table.b))", summary);
+    }
+
     private static int evaluate(String expression, Map<String, Object> scope) throws ParseException {
         ParseNode tree = PARSER.parse(expression);
         Map<String, Class<?>> scopeTypes = scope.entrySet()
