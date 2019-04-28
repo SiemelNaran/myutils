@@ -1,5 +1,7 @@
 package myutils.util;
 
+import static java.lang.Math.min;
+
 import java.io.Serializable;
 
 import java.util.AbstractList;
@@ -18,10 +20,7 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
-import static java.lang.Math.min;
-
 import javax.annotation.concurrent.NotThreadSafe;
-
 
 /**
  * {@inheritDoc}
@@ -83,9 +82,11 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
         return element;
     }
     
+    // CHECKSTYLE:OFF SummaryJavadoc
     /**
      * @return true if page was removed
      */
+    // CHECKSTYLE:ON
     private boolean doRemove(int pageIndex, Page<E> page, ListIterator<E> elementIter) {
         elementIter.remove();
         modCount++;
@@ -174,24 +175,86 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
         rangeCheckAllowEnd(index);
         
         int numElementsToCopy = elements.size();
-        
-        if (numElementsToCopy == 0)
+        if (numElementsToCopy == 0) {
             return false;
+        }
         
         if (index == size) {
-            Page<E> page;
-            if (size == 0) {
-                page = createNewEmptyPage(0);
-                pages.add(page);
-            } else {
-                page = pages.get(pages.size() - 1);
-            }
-                
-            Iterator<? extends E> elementsIter = elements.iterator();
+            addAllAtEnd(numElementsToCopy, elements);
+        } else {
+            addAllInMiddle(index, numElementsToCopy, elements);
+        }
+        
+        modCount++;
+        size += elements.size();
+        return true;
+    }
+    
+    private void addAllAtEnd(int numElementsToCopy, Collection<? extends E> elements) {
+        Page<E> page;
+        if (size == 0) {
+            page = createNewEmptyPage(0);
+            pages.add(page);
+        } else {
+            page = pages.get(pages.size() - 1);
+        }
+            
+        Iterator<? extends E> elementsIter = elements.iterator();
 
-            int numPagesToCreate = divideUp(numElementsToCopy, preferredMaxPageSize);
-            List<Page<E>> newPages = new ArrayList<>(numPagesToCreate);
+        int numPagesToCreate = divideUp(numElementsToCopy, preferredMaxPageSize);
+        List<Page<E>> newPages = new ArrayList<>(numPagesToCreate);
+        int currentStart = page.startIndex;
+    
+        while (elementsIter.hasNext()) {
+            if (page.list.size() >= preferredMaxPageSize) {
+                currentStart += page.list.size();
+                page = createNewEmptyPage(currentStart);
+                newPages.add(page);
+            }
+            page.list.add(elementsIter.next());
+        }
+        
+        pages.addAll(pages.size(), newPages);
+    }
+    
+    private void addAllInMiddle(int index, int numElementsToCopy, Collection<? extends E> elements) {
+        final int firstPageToUpdateIndices;
+
+        final int originalPageIndex = findPage(index);
+        Page<E> page = pages.get(originalPageIndex);
+        int elementInPageIndex = index - page.startIndex;
+        
+        if (numElementsToCopy <= maxPageSize - page.list.size()) {
+            // we are inserting a few elements and they can all be added to the current page
+            firstPageToUpdateIndices = originalPageIndex + 1;
+            page.list.addAll(elementInPageIndex, elements);
+        } else {
+            Iterator<? extends E> elementsIter = elements.iterator();
             int currentStart = page.startIndex;
+
+            // we are inserting many elements, and need to create one or more pages 
+            
+            // if inserting the new elements in the middle of page, then
+            //     copy all elements from preferredMaxPageSize to the end of the list to a remainder page
+            // otherwise, there is no remainder page
+            final Page<E> remainderPage;
+            if (elementInPageIndex > 0) {
+                remainderPage = createNewPageByCopyingSublist(page.startIndex + elementInPageIndex,
+                                                              page.list.subList(elementInPageIndex, page.list.size()));
+                page.list.subList(elementInPageIndex, page.list.size()).clear();
+                
+                // copy elements to bring the size of the page to preferredMaxPageSize
+                while (elementsIter.hasNext() && page.list.size() < preferredMaxPageSize) {
+                    page.list.add(elementsIter.next());
+                    numElementsToCopy--;
+                }
+            } else {
+                remainderPage = null;
+                currentStart -= preferredMaxPageSize;
+            }
+            
+            int numPagesToCreate = divideUp(numElementsToCopy, preferredMaxPageSize);
+            List<Page<E>> newPages = new ArrayList<>(numPagesToCreate + 1); // +1 for remainder page
         
             while (elementsIter.hasNext()) {
                 if (page.list.size() >= preferredMaxPageSize) {
@@ -202,75 +265,22 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
                 page.list.add(elementsIter.next());
             }
             
-            pages.addAll(pages.size(), newPages);
-        } else {
-            final int firstPageToUpdateIndices;
-
-            final int originalPageIndex = findPage(index);
-            Page<E> page = pages.get(originalPageIndex);
-            int elementInPageIndex = index - page.startIndex;
+            final int indexWhereToInsertPages;
             
-            if (numElementsToCopy <= maxPageSize - page.list.size()) {
-                // we are inserting a few elements and they can all be added to the current page
-                firstPageToUpdateIndices = originalPageIndex + 1;
-                page.list.addAll(elementInPageIndex, elements);
+            // add remainder page to newPages
+            if (remainderPage != null) {
+                newPages.add(remainderPage);
+                indexWhereToInsertPages = originalPageIndex + 1;
             } else {
-                Iterator<? extends E> elementsIter = elements.iterator();
-                int currentStart = page.startIndex;
-
-                // we are inserting many elements, and need to create one or more pages 
-                
-                // if inserting the new elements in the middle of page, then
-                //     copy all elements from preferredMaxPageSize to the end of the list to a remainder page
-                // otherwise, there is no remainder page
-                final Page<E> remainderPage;
-                if (elementInPageIndex > 0) {
-                    remainderPage = createNewPageByCopyingSublist(page.startIndex + elementInPageIndex,
-                                                                  page.list.subList(elementInPageIndex, page.list.size()));
-                    page.list.subList(elementInPageIndex, page.list.size()).clear();
-                    
-                    // copy elements to bring the size of the page to preferredMaxPageSize
-                    while (elementsIter.hasNext() && page.list.size() < preferredMaxPageSize) {
-                        page.list.add(elementsIter.next());
-                        numElementsToCopy--;
-                    }
-                } else {
-                    remainderPage = null;
-                    currentStart -= preferredMaxPageSize;
-                }
-                
-                int numPagesToCreate = divideUp(numElementsToCopy, preferredMaxPageSize);
-                List<Page<E>> newPages = new ArrayList<>(numPagesToCreate + 1); // +1 for remainder page
-            
-                while (elementsIter.hasNext()) {
-                    if (page.list.size() >= preferredMaxPageSize) {
-                        currentStart += page.list.size();
-                        page = createNewEmptyPage(currentStart);
-                        newPages.add(page);
-                    }
-                    page.list.add(elementsIter.next());
-                }
-                
-                final int indexWhereToInsertPages;
-                
-                // add remainder page to newPages
-                if (remainderPage != null) {
-                    newPages.add(remainderPage);
-                    indexWhereToInsertPages = originalPageIndex + 1;
-                } else {
-                    indexWhereToInsertPages = originalPageIndex;
-                }
-                
-                // add all the new pages to this.pages
-                pages.addAll(indexWhereToInsertPages, newPages);
-                firstPageToUpdateIndices = originalPageIndex + newPages.size();
+                indexWhereToInsertPages = originalPageIndex;
             }
-                
-            updateIndices(firstPageToUpdateIndices, elements.size());
+            
+            // add all the new pages to this.pages
+            pages.addAll(indexWhereToInsertPages, newPages);
+            firstPageToUpdateIndices = originalPageIndex + newPages.size();
         }
-        modCount++;
-        size += elements.size();
-        return true;
+            
+        updateIndices(firstPageToUpdateIndices, elements.size());
     }
     
     private abstract class SpliceHandler {
@@ -335,13 +345,15 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
     }
     
     private void doSplice(int startInclusive, int endExclusive, SpliceHandler spliceHandler) {
-        if (startInclusive > endExclusive)
+        if (startInclusive > endExclusive) {
             throw new IllegalArgumentException("startInclusive(" + startInclusive + ") should be less than endExclusive(" + endExclusive + ")");
+        }
         rangeCheckAllowEnd(startInclusive);
         rangeCheckAllowEnd(endExclusive);
         
-        if (startInclusive == endExclusive)
+        if (startInclusive == endExclusive) {
             return;
+        }
         
         int firstPageIndex = findPage(startInclusive);
         int lastPageIndex = findPage(endExclusive - 1);
@@ -413,9 +425,9 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
     /**
      * {@inheritDoc}
      * 
-     * Get an element from the list.
+     * <p>Get an element from the list.
      * Running time O(lg(N) + ?).
-     * Prefer iterators when iterating over the list.<p>
+     * Prefer iterators when iterating over the list.
      */
     @Override
     public E get(int index) {
@@ -443,7 +455,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
     
     @Override
     public Spliterator<E> spliterator() {
-    	int averagePageSize = pages.size() > 0 ? size / pages.size() : 1; 
+        int averagePageSize = pages.size() > 0 ? size / pages.size() : 1; 
         return new PageListSpliterator<E>(modCount, averagePageSize, pages.spliterator());
     }
 

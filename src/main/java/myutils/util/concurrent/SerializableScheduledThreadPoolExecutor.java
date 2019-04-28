@@ -70,12 +70,14 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
             Runnable runnable = iter.next();
             if (runnable instanceof RunnableScheduledFuture) {
                 RunnableScheduledFuture<?> standardRunnable = (RunnableScheduledFuture<?>) runnable;
-                if (standardRunnable.isCancelled())
+                if (standardRunnable.isCancelled()) {
                     continue;
+                }
             }
                 
-            if (!(runnable instanceof DecoratedRunnableScheduledFuture))
+            if (!(runnable instanceof DecoratedRunnableScheduledFuture)) {
                 continue;
+            }
             
             DecoratedRunnableScheduledFuture<?> decoratedRunnable = (DecoratedRunnableScheduledFuture<?>) runnable;
             RunnableInfo runnableInfo = decoratedRunnable.getRunnableInfo();
@@ -123,8 +125,9 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
             }
         }
         
-        if (!errors.isEmpty())
+        if (!errors.isEmpty()) {
             throw new RecreateRunnableFailedException(errors);
+        }
         
         return result;
     }
@@ -137,7 +140,7 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
         } finally {
             threadLocalRunnableInfo.remove();
         }
-   }
+    }
 
     @Override
     public <V> ScheduledFuture<V> schedule(Callable<V> callable, long delay, TimeUnit unit) {
@@ -251,7 +254,7 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
         @Override
         public void run() {
             try {
-                Callable callable = clazz.newInstance();
+                Callable callable = clazz.getDeclaredConstructor().newInstance();
                 callable.call();
             } catch (Exception e) {
                 throw new CompletionException(e);
@@ -323,8 +326,9 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
         }
         
         /**
-         * positive means scheduleAtFixedRate
-         * negative means scheduleWithFixedDelay
+         * Return the period.
+         * A positive value means scheduleAtFixedRate.
+         * A negative value means scheduleWithFixedDelay.
          */
         protected long getPeriod() {
             return period;
@@ -398,7 +402,7 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
                 return serializableRunnable;
             } else {
                 try {
-                    return runnableClass.newInstance();
+                    return runnableClass.getDeclaredConstructor().newInstance();
                 } catch (Exception e) {
                     throw new RecreateRunnableFailedException(runnableClass);
                 }
@@ -412,7 +416,7 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
             } else if (serializableRunnable instanceof AdaptSerializableCallableClass) {
                 Class<? extends Callable> callableClass = ((AdaptSerializableCallableClass) serializableRunnable).clazz;
                 try {
-                    return callableClass.newInstance();
+                    return callableClass.getDeclaredConstructor().newInstance();
                 } catch (Exception e) {
                     throw new RecreateRunnableFailedException(callableClass);
                 }
@@ -426,12 +430,13 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
                 @Override
                 public Class<?> getUnderlyingClass() {
                     if (serializableRunnable != null) {
-                        if (serializableRunnable instanceof AdaptSerializableCallable)
+                        if (serializableRunnable instanceof AdaptSerializableCallable) {
                             return ((AdaptSerializableCallable) serializableRunnable).callable.getClass();
-                        else if (serializableRunnable instanceof AdaptSerializableCallableClass)
+                        } else if (serializableRunnable instanceof AdaptSerializableCallableClass) {
                             return ((AdaptSerializableCallableClass) serializableRunnable).clazz;
-                        else
+                        } else {
                             return serializableRunnable.getClass();
+                        }
                     } else {
                         return runnableClass;
                     }
@@ -445,8 +450,9 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
                 @Override
                 public SerializableCallable<?> getSerializableCallable() {
                     if (serializableRunnable != null) {
-                        if (serializableRunnable instanceof AdaptSerializableCallable)
+                        if (serializableRunnable instanceof AdaptSerializableCallable) {
                             return ((AdaptSerializableCallable) serializableRunnable).callable;
+                        }
                     }
                     return null;
                 }

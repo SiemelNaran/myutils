@@ -26,7 +26,7 @@ class StackTraces {
      * Add ignore class or package names.  Call stack lines whose class starts with one of these will be removed from the call stack.
      * An example list would be : ["org.eclipse", "org.junit", "sun.reflect"]
      * 
-     * @param ignores
+     * @param ignores the list of package names to ignore
      */
     public static synchronized void addIgnoreClassOrPackageName(List<String> ignores) {
         List<String> newList = new ArrayList<>(_ignoreClassOrPackageNameList);
@@ -37,11 +37,13 @@ class StackTraces {
     
     private static boolean shouldIgnore(List<String> ignoreList, String text) {
         int index = Collections.binarySearch(ignoreList, text);
-        if (index >= 0)
+        if (index >= 0) {
             return true;
+        }
         index = -index - 2;
-        if (index < 0)
+        if (index < 0) {
             return false;
+        }
         String token = ignoreList.get(index);
         if (text.startsWith(token)) {
             char c = text.charAt(token.length());
@@ -66,18 +68,20 @@ class StackTraces {
         List<String> ignoreList = _ignoreClassOrPackageNameList;
         
         boolean done = false;
-        for (int i=4; i<currentStackTrace.length; i++) {
+        for (int i = 4; i < currentStackTrace.length; i++) {
             StackTraceElement currentElem = currentStackTrace[i];
-            if (currentElem.getLineNumber() == 1 || shouldIgnore(ignoreList, currentElem.getClassName()))
+            if (currentElem.getLineNumber() == 1 || shouldIgnore(ignoreList, currentElem.getClassName())) {
                 continue;
+            }
             for (StackTraceElement parentElem: parentStackTrace) {
                 if (currentElem.equals(parentElem)) {
                     done = true;
                 }
             }
             currentFiltered.add(currentElem);
-            if (done)
+            if (done) {
                 break;
+            }
         }
         
         return currentFiltered;

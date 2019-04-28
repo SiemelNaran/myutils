@@ -49,6 +49,7 @@
                             <suppressionsLocation>${project.basedir}/checkstyle/suppressions.xml</suppressionsLocation>
                             <encoding>UTF-8</encoding>
                             <consoleOutput>true</consoleOutput>
+                            <violationSeverity>warning</violationSeverity>
                             <failsOnError>true</failsOnError>
                         </configuration>
                         <goals>

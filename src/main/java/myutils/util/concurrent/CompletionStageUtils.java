@@ -16,10 +16,10 @@ public class CompletionStageUtils {
      * and if the error handler returns a result then add it to the list,
      * otherwise the error handler throws an exception so don't add it to the list.
      * 
-     * If any or all of the original completion stages fail, the completion stage
+     * <p>If any or all of the original completion stages fail, the completion stage
      * returned by this function does not complete exceptionally.
      * 
-     * The elements in the returned list will be in the same order as 'original'.
+     * <p>The elements in the returned list will be in the same order as 'original'.
      * 
      * @param original list of completion stages
      * @param errorHandler what to do if any of the completion stages fail,
@@ -36,7 +36,7 @@ public class CompletionStageUtils {
         CompletionStage<Void> all = CompletableFuture.allOf(originalAsFutures);
         return all.handle((ignore, throwable) -> {
             List<T> results = new ArrayList<>(originalAsFutures.length);
-            for (int i=0; i<originalAsFutures.length; i++) {
+            for (int i = 0; i < originalAsFutures.length; i++) {
                 CompletableFuture<T> future = originalAsFutures[i];
                 try {
                     T result = getResult(i, future, errorHandler);

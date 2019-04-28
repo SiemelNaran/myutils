@@ -49,7 +49,7 @@
             <property name="ignorePattern" value="^package.*|^import.*|a href|href|http://|https://|ftp://"/>
         </module>
         <module name="MethodLength">
-            <property name="max" value="60"/>
+            <property name="max" value="75"/>
             <property name="countEmpty" value="true"/>
         </module>
         <module name="AvoidStarImport"/>
@@ -189,7 +189,7 @@
             <property name="braceAdjustment" value="0"/>
             <property name="caseIndent" value="4"/>
             <property name="throwsIndent" value="4"/>
-            <property name="lineWrappingIndentation" value="4"/>
+            <property name="lineWrappingIndentation" value="0"/>
             <property name="arrayInitIndent" value="2"/>
         </module>
         <module name="AbbreviationAsWordInName">

@@ -9,11 +9,11 @@ import java.util.function.Supplier;
 /**
  * Replacement for the static functions in java.util.concurrent.CompletableFuture to call either
  * the corresponding function in java.util.concurrent.CompletableFuture, or
- * the corresponding function in myutils.util.concurrent.StackTraceCompletableFuture.<p>
+ * the corresponding function in myutils.util.concurrent.StackTraceCompletableFuture.
  * 
- * By default, this class calls the functions in coding.util.concurrent.CompletableFuture.
+ * <p>By default, this class calls the functions in java.util.concurrent.CompletableFuture.
  * To use StackTraceCompletableFuture instead, set the system property
- * "coding.util.concurrent.CompletableFutureFactory" to "StackTraceCompletableFuture".
+ * "java.util.concurrent.CompletableFutureFactory" to "StackTraceCompletableFuture".
  * 
  * @author snaran
  *
@@ -21,8 +21,9 @@ import java.util.function.Supplier;
  */
 public class CompletableFutureFactory<T> {
     
-    public static final String COMPLETABLE_FUTURE_FACTORY = "coding.util.concurrent.CompletableFutureFactory";
+    public static final String COMPLETABLE_FUTURE_FACTORY = "java.util.concurrent.CompletableFutureFactory";
 
+    @SuppressWarnings("checkstyle:EmptyLineSeparator")
     public interface Registration {
         <T> CompletableFuture<T> supplyAsync(Supplier<T> supplier);
         <T> CompletableFuture<T> supplyAsync(Supplier<T> supplier, Executor executor);
@@ -71,11 +72,18 @@ public class CompletableFutureFactory<T> {
     
     private static Registration find() {
         String property = System.getProperty(COMPLETABLE_FUTURE_FACTORY);
-        if (property == null)
+        if (property == null) {
             return DEFAULT_REGISTRATION;
+        }
         return registry.getOrDefault(property, DEFAULT_REGISTRATION);
     }
     
+    /**
+     * Register a type of CompletableFuture.
+     * 
+     * @param key corresponds to the value of the system property "java.util.concurrent.CompletableFutureFactory"
+     * @param registration a class that calls that static functions of the specified completable future
+     */
     public static synchronized void register(String key, Registration registration) {
         if (registry.containsKey(key)) {
             throw new IllegalArgumentException("duplicate registration");

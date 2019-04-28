@@ -19,9 +19,9 @@ import javax.annotation.Nonnull;
 
 /**
  * Replacement for CompletableFuture that adds a layer to remember the call stack of the place
- * that created the completed future. This is useful for debugging.<p>
+ * that created the completed future. This is useful for debugging.
  * 
- * If the future fails, then e.printStackTrace() will print something like:
+ * <p>If the future fails, then e.printStackTrace() will print something like:
  * <blockquote><pre><code>
  * coding.util.concurrent.StackTraces$StackTracesCompletionException: <i>failure message</i>
  *    call stack lines
@@ -43,6 +43,7 @@ import javax.annotation.Nonnull;
  * 
  * @param <T> the type returned by the future
  */
+@SuppressWarnings("checkstyle:LineLength")
 class StackTraceCompletableFuture<T> extends CompletableFuture<T> {
 
     private final @Nonnull StackTraces stackTraces;
@@ -138,7 +139,7 @@ class StackTraceCompletableFuture<T> extends CompletableFuture<T> {
 
     @Override
     public StackTraceCompletableFuture<Void> thenAcceptAsync(Consumer<? super T> action) {
-       return new StackTraceCompletableFuture<Void>(stackTraces, future.thenAcceptAsync(action));
+        return new StackTraceCompletableFuture<Void>(stackTraces, future.thenAcceptAsync(action));
     }
 
     @Override
