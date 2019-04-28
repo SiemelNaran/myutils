@@ -29,6 +29,7 @@ public class CompletableFutureFactory<T> {
         CompletableFuture<Void> runAsync(Runnable runnable);
         CompletableFuture<Void> runAsync(Runnable runnable, Executor executor);
         <U> CompletableFuture<U> completedFuture(U value);
+        <U> CompletableFuture<U> failedFuture(Throwable ex);
         CompletableFuture<Void> allOf(CompletableFuture<?>... cfs);
         CompletableFuture<Object> anyOf(CompletableFuture<?>... cfs);
     }
@@ -54,6 +55,10 @@ public class CompletableFutureFactory<T> {
     
     public static <U> CompletableFuture<U> completedFuture(U value) {
         return find().completedFuture(value);
+    }
+    
+    public <U> CompletableFuture<U> failedFuture(Throwable ex) {
+        return find().failedFuture(ex);
     }
     
     public static CompletableFuture<Void> allOf(CompletableFuture<?>... cfs) {
@@ -100,6 +105,10 @@ public class CompletableFutureFactory<T> {
                 return CompletableFuture.completedFuture(value);
             }
             
+            public <U> CompletableFuture<U> failedFuture(Throwable ex) {
+                return CompletableFuture.failedFuture(ex);
+            }
+            
             public CompletableFuture<Void> allOf(CompletableFuture<?>... cfs) {
                 return CompletableFuture.allOf(cfs);
             }
@@ -128,6 +137,10 @@ public class CompletableFutureFactory<T> {
             
             public <U> StackTraceCompletableFuture<U> completedFuture(U value) {
                 return StackTraceCompletableFuture.completedFuture(value);
+            }
+            
+            public <U> CompletableFuture<U> failedFuture(Throwable ex) {
+                return StackTraceCompletableFuture.failedFuture(ex);
             }
             
             public StackTraceCompletableFuture<Void> allOf(CompletableFuture<?>... cfs) {
