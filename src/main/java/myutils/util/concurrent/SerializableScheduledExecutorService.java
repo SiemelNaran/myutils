@@ -14,10 +14,10 @@ import java.util.stream.Stream;
  * Interface extending ScheduledExecutorService that allows the scheduled executions
  * to be serialized.
  * For example, you may add a shutdown hook that saves the executions to disk.
- * Upon startup, import the saved executions from disk.<p>
+ * Upon startup, import the saved executions from disk.
  * 
- * A task is serializable if it implements SerializableRunnable/SerializableCallable or
- * if the runnable/callable class has a public default constructor.<p>
+ * <p>A task is serializable if it implements SerializableRunnable/SerializableCallable or
+ * if the runnable/callable class has a public default constructor.
  * 
  * @author snaran
  */
@@ -30,13 +30,13 @@ public interface SerializableScheduledExecutorService extends ScheduledExecutorS
     
     /**
      * When called before shutdownNow is called, returns null.
-     * When called after shutdownNow is called, return a list of unfinished tasks that are serializable.<p>
+     * When called after shutdownNow is called, return a list of unfinished tasks that are serializable.
      * 
-     * shutdownNow is modified to return the tasks that are not returned by exportUnfinishedTasks
-     * -- i.e. should return the tasks that are not serializable.<p>
+     * <p>shutdownNow is modified to return the tasks that are not returned by exportUnfinishedTasks
+     * -- i.e. should return the tasks that are not serializable.
      * 
-     * Cancelled tasks will be returned by shutdownNow if the remove on cancel policy is false (the default),
-     * but cancelled tasks are not exported.<p> 
+     * <p>Cancelled tasks will be returned by shutdownNow if the remove on cancel policy is false (the default),
+     * but cancelled tasks are not exported. 
      * 
      * @param includeExceptions include periodic tasks that ended with an exception
      * 
@@ -46,8 +46,10 @@ public interface SerializableScheduledExecutorService extends ScheduledExecutorS
     
 
     /**
-     * @return list of tasks that never commenced execution,
-     *         but not those that would be returned by exportUnfinishedTasks.
+     * Return the list of tasks that never commenced execution,
+     * but not those that would be returned by exportUnfinishedTasks.
+     * 
+     * @return list of tasks
      */
     @Override
     List<Runnable> shutdownNow();
@@ -61,15 +63,16 @@ public interface SerializableScheduledExecutorService extends ScheduledExecutorS
     /**
      * Import the UnfinishedTasks returned by the export function.
      * 
-     * @param tasks the tasks to import
+     * @param unfinishedTasks the tasks to import
      * @param returnFutures Return the ScheduledFuture's for these classes.
      * @return map of classes in returnFutures to a collection of futures of that type, in no sorted order
      */
     Map<Class<?>, List<ScheduledFuture<?>>> importUnfinishedTasks(UnfinishedTasks unfinishedTasks,
                                                                   Collection<Class<?>> returnFutures)
-            throws RecreateRunnableFailedException ;
+            throws RecreateRunnableFailedException;
 
     
+    @SuppressWarnings("checkstyle:SummaryJavadoc")
     public interface UnfinishedTasks extends Serializable {
         Stream<TaskInfo> stream();
         
@@ -115,6 +118,7 @@ public interface SerializableScheduledExecutorService extends ScheduledExecutorS
     /**
      * Checked exception that is thrown when import fails.
      */
+    @SuppressWarnings("checkstyle:SummaryJavadoc")
     public static class RecreateRunnableFailedException extends Exception {
         private static final long serialVersionUID = 1L;
         private static final String UNABLE_TO_RECREATE = "Unable to recreate ";

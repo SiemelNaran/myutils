@@ -16,7 +16,7 @@ public class CompletableFutureFactoryTest {
     @BeforeEach
     @AfterEach
     void removeProperty() {
-        System.getProperties().remove("coding.util.concurrent.CompletableFutureFactory");
+        System.getProperties().remove("java.util.concurrent.CompletableFutureFactory");
     }
     
     @Test
@@ -28,7 +28,7 @@ public class CompletableFutureFactoryTest {
 
     @Test
     void testStackTrace() throws InterruptedException, ExecutionException {
-        System.setProperty("coding.util.concurrent.CompletableFutureFactory", "StackTraceCompletableFuture");
+        System.setProperty("java.util.concurrent.CompletableFutureFactory", "StackTraceCompletableFuture");
         CompletionStage<Integer> future = CompletableFutureFactory.supplyAsync(() -> 1);
         assertTrue(future instanceof StackTraceCompletableFuture);
         assertEquals(1, future.toCompletableFuture().get().intValue());

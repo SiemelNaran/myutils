@@ -13,9 +13,9 @@ import javax.annotation.concurrent.NotThreadSafe;
 /**
  * {@inheritDoc}
  * 
- * Class representing an array as an array of pages, where is page is an ArrayList.<p>
+ * <p>Class representing an array as an array of pages, where is page is an ArrayList.
  * 
- * Fetching an element by index via a call to {@code get(int index)} is O(lg(N)).<p>
+ * <p>Fetching an element by index via a call to {@code get(int index)} is O(lg(N)).
  * 
  * @author snaran
  */
