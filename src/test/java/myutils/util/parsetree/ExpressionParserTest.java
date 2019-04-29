@@ -3,6 +3,7 @@ package myutils.util.parsetree;
 import static myutils.TestUtil.assertExceptionFromCallable;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.text.ParseException;
 import java.util.Collections;
@@ -60,17 +61,21 @@ public class ExpressionParserTest {
     
     @Test
     void testInvalidExpressions() {
-        assertParseError("(2 + 3", "");
-        assertParseError("(2 + 3))", "");
-        assertParseError("(2 + )", "");
-        assertParseError("max(2 + , )", "");
-        assertParseError("2 +", "");
-        assertParseError("(2 + 3", "");
-        assertParseError("max(3, 4", "");
-        assertParseError("unknown(3, 4)", "");
-        assertParseError("max(3, 4", "");
-        assertParseError("2 ^ 3", "");
-        assertParseError("2 * * 3", "");
+        assertParseError("(2 + 3))", "too many close parenthesis", 7); // index of last )
+        assertParseError("(2 + )", "unexpected close parenthesis", 5); // index of )
+        assertParseError("max(2 + , )", "unexpected comma", 8); // index of comma
+        assertParseError("2 +", "unexpected end of expression", 3); // one past end of expression
+        assertParseError("(2 + 3", "missing close parenthesis", 6); // one past end of expression
+        assertParseError("max(3, 4", "missing close parenthesis in function call", 8); // one past end of of expression
+        assertParseError("unknown(3, 4)", "unrecognized function 'unknown'", 0); // index of start of expression
+        assertParseError("2 * * 3", "unrecognized token '*'", 4); // index of second *
+        assertParseError("2 ^ 3", "unrecognized token '^'", 2); // index of ^
+    }
+    
+    @Test
+    void testNoExpression() throws ParseException {
+        ParseNode tree = PARSER.parse("    ");
+        assertNull(tree);
     }
     
     private static int evaluate(String expression, Map<String, Object> scope) throws ParseException {
@@ -83,8 +88,9 @@ public class ExpressionParserTest {
         return (int) tree.eval(scope);
     }
     
-    private static void assertParseError(String expression, String expectedErrorMsg) {
-        assertExceptionFromCallable(() -> PARSER.parse(expression), ParseException.class, expectedErrorMsg);
+    private static void assertParseError(String expression, String expectedErrorMsg, int expectedOffset) {
+        ParseException pe = assertExceptionFromCallable(() -> PARSER.parse(expression), ParseException.class, expectedErrorMsg);
+        assertEquals(expectedOffset, pe.getErrorOffset());
     }
     
     /////

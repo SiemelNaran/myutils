@@ -3,6 +3,8 @@ package myutils.util.parsetree;
 
 public interface OperatorNode extends ParseNode {
     /**
+     * Return the operator of this token.
+     * 
      * @return the string describing this operator such as * or **
      */
     String getToken();

@@ -47,6 +47,7 @@ public class DefaultNumberFactoryTest {
         NumberFactory factory = DefaultNumberFactory.builder()
                                                     .setIntegerPolicy(null)
                                                     .setFloatPolicy(DefaultNumberFactory.FloatPolicy.PREFER_BIG_DECIMAL)
+                                                    .setBigDecimalScale(2)
                                                     .build();
         
         assertEquals(new BigDecimal("33.00"), factory.fromString("33"));

@@ -9,7 +9,8 @@ import java.util.logging.Logger;
 public abstract class BinaryOperatorNode implements OperatorNode {
     private static final Logger LOGGER = Logger.getLogger(BinaryOperatorNode.class.getName());
 
-    static BinaryOperatorNode tryConstruct(String token, Map<String, Constructor<? extends BinaryOperatorNode>> binaryOperators) throws ConstructException {
+    static BinaryOperatorNode tryConstruct(String token,
+                                           Map<String, Constructor<? extends BinaryOperatorNode>> binaryOperators) throws ConstructException {
         Constructor<? extends BinaryOperatorNode> constructor = binaryOperators.get(token);
         if (constructor != null) {
             try {
@@ -45,6 +46,8 @@ public abstract class BinaryOperatorNode implements OperatorNode {
     }
 
     /**
+     * Tell if this binary operator atomic.
+     * 
      * @return true if this node is surrounded by parenthesis, meaning that it cannot be split up for operator precedence rules.
      */
     public boolean isAtomic() {
@@ -71,8 +74,10 @@ public abstract class BinaryOperatorNode implements OperatorNode {
     }
 
     /**
+     * Return the precedence of this binary operator.
+     * 
      * @return the precedence, higher number means higher precedence (so TIMES would
-     *         have a higher nunber than ADD)
+     *         have a higher number than ADD)
      */
     public abstract int getPrecedence();
 

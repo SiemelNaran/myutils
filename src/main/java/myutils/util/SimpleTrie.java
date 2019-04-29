@@ -46,9 +46,11 @@ public class SimpleTrie<T> {
     
     private void doVisit(LinkedList<T> list, BiConsumer<List<T>, SimpleTrie<T>> consumer) {
         for (Map.Entry<T, SimpleTrie<T>> entry : children.entrySet()) {
-            list.add(entry.getKey());
-            consumer.accept(list, entry.getValue());
-            doVisit(list, consumer);
+            T val = entry.getKey();
+            SimpleTrie<T> subTrie = entry.getValue();
+            list.add(val);
+            consumer.accept(list, subTrie);
+            subTrie.doVisit(list, consumer);
             list.removeLast();
         }
     }

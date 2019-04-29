@@ -9,8 +9,10 @@ import java.util.logging.Logger;
 
 public abstract class UnaryOperatorNode implements OperatorNode {
     private static final Logger LOGGER = Logger.getLogger(UnaryOperatorNode.class.getName());
-    
-    static UnaryOperatorNode tryConstruct(String token, Map<String, Constructor<? extends UnaryOperatorNode>> map) throws ConstructException {
+
+    static UnaryOperatorNode tryConstruct(String token,
+                                          Map<String, Constructor<? extends UnaryOperatorNode>> map)
+            throws ConstructException {
         Constructor<? extends UnaryOperatorNode> constructor = map.get(token);
         if (constructor != null) {
             try {
@@ -21,32 +23,32 @@ public abstract class UnaryOperatorNode implements OperatorNode {
         }
         throw new ConstructException();
     }
-    
-	private ParseNode node;
-	
+
+    private ParseNode node;
+
     protected UnaryOperatorNode() {
     }
-    
+
     void setNode(ParseNode node) {
         this.node = node;
     }
-    
+
     @Override
     public boolean isComplete() {
         return node != null;
     }
-    
-	@Override
-	public Class<?> checkEval(Map<String, Class<?>> scopeTypes) throws TypeException {
-		return checkApply(node.checkEval(scopeTypes));
-	}
-	
-	@Override
-	public Object eval(Map<String, Object> scope) throws EvalException {
-		return apply(node.eval(scope));
-	}
-	
-	protected abstract Class<?> checkApply(Class<?> type) throws TypeException;
-	
-	protected abstract Object apply(Object value) throws EvalException;
+
+    @Override
+    public Class<?> checkEval(Map<String, Class<?>> scopeTypes) throws TypeException {
+        return checkApply(node.checkEval(scopeTypes));
+    }
+
+    @Override
+    public Object eval(Map<String, Object> scope) throws EvalException {
+        return apply(node.eval(scope));
+    }
+
+    protected abstract Class<?> checkApply(Class<?> type) throws TypeException;
+
+    protected abstract Object apply(Object value) throws EvalException;
 }

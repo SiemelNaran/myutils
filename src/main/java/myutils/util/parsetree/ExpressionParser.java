@@ -22,7 +22,7 @@ public class ExpressionParser {
     = codePoint -> Character.isWhitespace(codePoint);
 
     private static final List<String> BASIC_SYMBOLS
-        = Arrays.asList("(", ")", "[", "]", "{", "}");
+        = Arrays.asList("(", ")", "[", "]", "{", "}", ",", ";");
     
     private static final IntPredicate LITERAL_CLASS
         = codePoint -> Character.isLetterOrDigit(codePoint) || codePoint == '.';
@@ -38,9 +38,9 @@ public class ExpressionParser {
     private final SimpleStringTokenizerFactory tokenizerFactory;
     
     private ExpressionParser(Map<String, Constructor<? extends BinaryOperatorNode>> binaryOperators,
-        	                 Map<String, Constructor<? extends UnaryOperatorNode>> unaryOperators,
-        	                 Map<String, Constructor<? extends FunctionNode>> functions,
-        	                 NumberFactory numberFactory) {
+                             Map<String, Constructor<? extends UnaryOperatorNode>> unaryOperators,
+                             Map<String, Constructor<? extends FunctionNode>> functions,
+                             NumberFactory numberFactory) {
         this.binaryOperators = binaryOperators;
         this.unaryOperators = unaryOperators;
         this.functions = functions;
@@ -66,9 +66,7 @@ public class ExpressionParser {
     public ParseNode parse(String expression) throws ParseException {
         Helper helper = new Helper(expression);
         ParseNode tree = helper.innerParse();
-        if (helper.parenthesisLevel > 0) {
-            throw new ParseException("missing close parenthesis", expression.length()); // handles case: (2 + 3
-        }
+        assert helper.parenthesisLevel == 0;
         return tree;
     }
     
@@ -108,7 +106,7 @@ public class ExpressionParser {
                     final OperatorNode newIncomplete;
                     
                     if (tree == null) {
-                        assert(incomplete == null);
+                        assert incomplete == null;
                         tree = readExpression(token);
                         newIncomplete = isIncomplete(tree);
                         
@@ -150,7 +148,7 @@ public class ExpressionParser {
             } // end while
             
             if (!tokenizer.hasNext() && incomplete != null) {
-                throw new ParseException("unexpected end of expression", endOfLastToken - 1); // handles case: 2 +
+                throw new ParseException("unexpected end of expression", endOfLastToken); // handles case: 2 +
             }
 
             return tree;
@@ -161,18 +159,18 @@ public class ExpressionParser {
          * If `token` is ( then call innerParse to read everything till the closing ) as one parse node.
          * Otherwise return the literal node, identifier node, or unary operator represented by token.
          * If the token is an identifier node that is followed by an open parenthesis,
-         * then call innerParse to read the function arguments as well.<p>
+         * then call innerParse to read the function arguments as well.
          * 
-         * @param token
+         * @param token the token to parse, though note that this function may read additional tokens
          * @return the ParseNode represented by token
-         * @throws ParseException
+         * @throws ParseException if there was a parse error
          */
         private ParseNode readExpression(Token token) throws ParseException {
             if (token.getText().equals("(")) {
-                int oldLevel= parenthesisLevel++;
+                int oldLevel = parenthesisLevel++;
                 ParseNode tree = innerParse();
                 if (parenthesisLevel > oldLevel) {
-                    throw new ParseException("missing close parenthesis", endOfLastToken - 1); // handles case: (2 + 3
+                    throw new ParseException("missing close parenthesis", endOfLastToken); // handles case: (2 + 3
                 }
                 if (tree instanceof BinaryOperatorNode) {
                     ((BinaryOperatorNode) tree).setAtomic();
@@ -187,17 +185,21 @@ public class ExpressionParser {
                         try {
                             result = FunctionNode.tryConstruct(functionName.getIdentifier(), functions);
                             FunctionNode resultAsFunction = (FunctionNode) result;
-                            int oldLevel= parenthesisLevel++;
+                            int oldLevel = parenthesisLevel++;
                             while (parenthesisLevel > oldLevel) {
                                 ParseNode arg = innerParse();
+                                if (arg == null) {
+                                    break;
+                                }
                                 resultAsFunction.add(arg);
                             }
                             if (parenthesisLevel > oldLevel) {
-                                throw new ParseException("missing close parenthesis", endOfLastToken - 1); // handles case: max(3, 4
+                                throw new ParseException("missing close parenthesis in function call", endOfLastToken); // handles case: max(3, 4
                             }
                             resultAsFunction.checkNumArgs(endOfLastToken - 1);
                         } catch (ConstructException ignored) {
-                            throw new ParseException("unrecognized function " + functionName.getIdentifier(), token.getStart());
+                            throw new ParseException("unrecognized function '" + functionName.getIdentifier() + "'",
+                                                     token.getStart()); // handles case: unknown(3, 4)
                         }
                     } else {
                         tokenizer.rewind();
@@ -221,7 +223,7 @@ public class ExpressionParser {
     
     private enum ParseMode {
         /**
-         * Only read binary operators
+         * Only read binary operators.
          */
         ONLY_BINARY_OPERATORS,
         
@@ -239,33 +241,36 @@ public class ExpressionParser {
      * @param parseMode what types of nodes to return
      */
     private ParseNode constructNodeFromToken(Token token, ParseMode parseMode) throws ParseException {
-    	switch (parseMode) {
-    	    case ONLY_BINARY_OPERATORS:
+        switch (parseMode) {
+            case ONLY_BINARY_OPERATORS:
                 try {
                     return BinaryOperatorNode.tryConstruct(token.getText(), binaryOperators);
                 } catch (ConstructException ignored) {
                 }
                 break;
-            
-    	    case EVERYTHING_ELSE:
+    
+            case EVERYTHING_ELSE:
                 try {
                     return LiteralNode.tryConstruct(token.getText(), numberFactory);
                 } catch (ConstructException ignored) {
                 }
-                
+    
                 try {
                     return IdentifierNode.tryConstruct(token.getText());
                 } catch (ConstructException ignored) {
                 }
-
+    
                 try {
                     return UnaryOperatorNode.tryConstruct(token.getText(), unaryOperators);
                 } catch (ConstructException ignored) {
                 }
                 break;
-    	}
-    	
-    	throw new ParseException("invalid token " + token.getText(), token.getStart());
+                
+            default:
+                throw new UnsupportedOperationException();
+        }
+
+        throw new ParseException("unrecognized token '" + token.getText() + "'", token.getStart()); // handles case: 2 ?
     }
     
     public static class InvalidTokenException extends RuntimeException {
@@ -327,7 +332,7 @@ public class ExpressionParser {
         /**
          * Add unary operator.
          * 
-         * @param operator the operator class
+         * @param function the function
          * @return this
          * @throws BuilderException with cause NoSuchMethodException or IllegalAccessException or InstantiationException or InvocationTargetException 
          *         if there is no public default constructor
@@ -346,8 +351,8 @@ public class ExpressionParser {
         }
         
         private static boolean verifyOperatorValid(String oper) {
-            int N = oper.length();
-            for (int i = 0; i < N; i++) {
+            int len = oper.length();
+            for (int i = 0; i < len; i++) {
                 char c = oper.charAt(i);
                 if (Character.isWhitespace(c)
                         || Character.isLetterOrDigit(c)
@@ -370,11 +375,11 @@ public class ExpressionParser {
         }
         
         private static boolean verifyFunctionNameValid(String oper) {
-            int N = oper.length();
+            int len = oper.length();
             if (!Character.isLetter(oper.charAt(0))) {
                 throw new InvalidOperatorException(oper, oper.charAt(0));                
             }
-            for (int i = 0; i < N; i++) {
+            for (int i = 0; i < len; i++) {
                 char c = oper.charAt(i);
                 if (!Character.isLetterOrDigit(c)) {
                     throw new InvalidOperatorException(oper, c);
@@ -389,6 +394,8 @@ public class ExpressionParser {
         }
         
         /**
+         * Build the parser.
+         * 
          * @throws IllegalArgumentException if the substrings of all operators are not operators.
          *                                  For example, if there is a binary operator * and a binary operator ***
          *                                  then this functions throws IllegalArgumentException because ** is not an operator.

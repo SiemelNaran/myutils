@@ -131,13 +131,28 @@ public class SimpleStringTokenizerFactoryTest {
     }
 
     @Test
+    void test2() {
+        Token token;
+        Iterator<Token> tokenizer = createSimpleStringTokenizer("  2 ^ 3");
+                                                              // 012    7     3    8 0  3    6 8
+        
+        token = tokenizer.next();
+        assertEquals("2", token.getText());
+        assertEquals(2, token.getStart());
+        
+        token = tokenizer.next();
+        assertEquals("^", token.getText());
+        assertEquals(4, token.getStart());
+    }
+    
+    @Test
     void testSingleQuotedStrings() {
         Iterator<Token> tokenizer = createSimpleStringTokenizer("  'hello \\'abc\\' world' stuff ");
 
         Token token = tokenizer.next();
-        assertEquals(19, token.getText().length());
+        assertEquals(2, token.getStart());
         assertEquals("'hello 'abc' world'", token.getText());
-        assertEquals(3, token.getStart());
+        assertEquals(19, token.getText().length());
         
         token = tokenizer.next();
         assertEquals("stuff", token.getText());
@@ -149,9 +164,9 @@ public class SimpleStringTokenizerFactoryTest {
         Iterator<Token> tokenizer = createSimpleStringTokenizer("  \"hello \\\"abc\\\" world\" stuff ");
         
         Token token = tokenizer.next();
-        assertEquals(19, token.getText().length());
+        assertEquals(2, token.getStart());
         assertEquals("\"hello \"abc\" world\"", token.getText());
-        assertEquals(3, token.getStart());
+        assertEquals(19, token.getText().length());
         
         token = tokenizer.next();
         assertEquals("stuff", token.getText());

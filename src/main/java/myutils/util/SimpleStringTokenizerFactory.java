@@ -19,7 +19,6 @@ import javax.annotation.concurrent.NotThreadSafe;
  *   <li>a dictionary of known symbols</li>
  *   <li>a list of predicates which describe all characters in each character class</li>
  * </ul>
- * <p>
  *
  * <p>Skip characters are skipped and never returned.
  * 
@@ -28,7 +27,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  * See QuoteStrategy for more details.
  * 
  * <p>You can also pass in a dictionary of known symbols.
- * If the dictionary contains <code>*<code> and <code>**</code>, then in "2 ** 3", after reading the token "2",
+ * If the dictionary contains <code>*</code> and <code>**</code>, then in "2 ** 3", after reading the token "2",
  * the <code>**</code> will be treated as one token.
  * But if the dictionary contains only <code>*</code>, then the first <code>*</code> will be treated as one token,
  * and the second <code>*</code> will be treated as the next token.
@@ -59,7 +58,7 @@ public class SimpleStringTokenizerFactory {
      *  The tokenizer also transforms \n \r \t \f \b.
      *  
      *  <p>In the future, QuoteStrategy will support double-quoting, so if you want a double quote inside a double quoted string,
-     *  enter <code>""<code>.
+     *  enter <code>""</code>.
      */
     public static class QuoteStrategy {
         private final boolean singleQuotes;
@@ -79,6 +78,9 @@ public class SimpleStringTokenizerFactory {
     private final IntPredicate otherChars;
     
     /**
+     * Create a string tokenizer factory.
+     * Call the function tokenizer(String) to create a tokenizer using this factory.
+     * 
      * @param skipChars the characters that split one token from another, and which should not be returned
      * @param quoteStrategy the quote strategy
      * @param symbols if the token matches a symbol in this list (the longest symbol), return it
@@ -96,8 +98,12 @@ public class SimpleStringTokenizerFactory {
         this.characterClasses = characterClasses;
         this.otherChars = c -> {
             for (IntPredicate predicate : characterClasses) {
-                if (predicate.test(c))
+                if (predicate.test(c)) {
                     return false;
+                }
+            }
+            if (skipChars.test(c)) {
+                return false;
             }
             return true;
         };
@@ -195,6 +201,7 @@ public class SimpleStringTokenizerFactory {
             return new Token(token, tokenStart);
         }
         
+        @SuppressWarnings("checkstyle:OneStatementPerLine")
         private CharSequence readQuotedEscapedString(final char expect) {
             StringBuilder token = new StringBuilder(32);
             token.append(expect);
@@ -217,7 +224,7 @@ public class SimpleStringTokenizerFactory {
                         case 't': token.append('\t'); break;
                         case 'f': token.append('\f'); break;
                         case 'b': token.append('\b'); break;
-                        default: token.append('\\').appendCodePoint(c);
+                        default: token.appendCodePoint(c);
                     }
                     escapeMode = false;
                 }

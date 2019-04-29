@@ -14,13 +14,13 @@ public class DefaultNumberFactory implements NumberFactory {
         PREFER_INTEGER,
         PREFER_LONG,
         PREFER_BIG_INTEGER
-    };
+    }
     
     public enum FloatPolicy {
         PREFER_FLOAT,
         PREFER_DOUBLE,
         PREFER_BIG_DECIMAL
-    };
+    }
     
     static final NumberFactory DEFAULT_NUMBER_FACTORY = DefaultNumberFactory.builder().build();
     
@@ -67,6 +67,7 @@ public class DefaultNumberFactory implements NumberFactory {
         return true;
     }
 
+    @SuppressWarnings("checkstyle:FallThrough")
     private Number constructInteger(String str) {
         switch (integerPolicy) {
             case PREFER_INTEGER:
@@ -90,6 +91,7 @@ public class DefaultNumberFactory implements NumberFactory {
         return true;
     }
 
+    @SuppressWarnings("checkstyle:FallThrough")
     private Number constructFloat(String str) {
         switch (floatPolicy) {
             case PREFER_FLOAT:
@@ -119,6 +121,8 @@ public class DefaultNumberFactory implements NumberFactory {
         private @Nullable Integer bigDecimalScale;
         
         /**
+         * Set the integer policy, if any.
+         * 
          * @param integerPolicy the way to handle integers, pass in null if all numbers should be floats
          */
         public Builder setIntegerPolicy(@Nullable IntegerPolicy integerPolicy) {
@@ -126,6 +130,9 @@ public class DefaultNumberFactory implements NumberFactory {
             return this;
         }
         
+        /**
+         * Set the float policy.
+         */
         public Builder setFloatPolicy(@Nonnull FloatPolicy floatPolicy) {
             this.floatPolicy = Objects.requireNonNull(floatPolicy);
             return this;
