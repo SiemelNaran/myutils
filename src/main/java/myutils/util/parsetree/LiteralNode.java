@@ -1,6 +1,7 @@
 package myutils.util.parsetree;
 
 import java.util.Map;
+import java.util.Objects;
 
 
 public class LiteralNode implements ParseNode {
@@ -38,7 +39,7 @@ public class LiteralNode implements ParseNode {
     @Override
     public void reduce(Listener listener) {
         listener.startLiteral(this);
-        listener.accepLiteral(this);
+        listener.acceptLiteral(this);
         listener.endLiteral(this);
     }
 
@@ -56,6 +57,6 @@ public class LiteralNode implements ParseNode {
     
     @Override
     public String toString() {
-        return Objecs.toString(value);
+        return Objects.toString(value);
     }
 }

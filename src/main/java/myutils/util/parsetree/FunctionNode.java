@@ -58,17 +58,17 @@ public abstract class FunctionNode implements ParseNode {
     @Override
     public void reduce(Listener listener) {
         listener.startFunction(this);
-        switch (listener.unaryOperatorPosition()) {
+        switch (listener.characteristics().functionPosition()) {
             case FUNCTION_FIRST:
                 listener.acceptFunction(this);
-                node.reduce(listener);
+                args.forEach(arg -> arg.reduce(listener));
                 break;
             case FUNCTION_LAST:
+                args.forEach(arg -> arg.reduce(listener));
                 listener.acceptFunction(this);
-                listener.acceptUnaryOperator();
                 break;
         }
-        listener.endFuntion(this);
+        listener.endFunction(this);
     }
 
     protected abstract String getName();

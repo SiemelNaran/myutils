@@ -44,50 +44,50 @@ public interface ParseNode {
         void acceptLiteral(LiteralNode literal);
         void endLiteral(LiteralNode literal);
                 
-        void startidentifier(IdentifierNode identifier);
+        void startIdentifier(IdentifierNode identifier);
         void acceptIdentifier(IdentifierNode identifier);
         void endIdentifier(IdentifierNode identifier);
-    }
-    
-    public interface Characteristics {
         
-        static Characteristics defaultCharacteristics() {
-            return new Characteristics() {
-                @Override
-                public UnaryOperatorPosition unaryOperatorPosition() {
-                    return UnaryOperatorPosition.OPERATOR_FIRST;
-                }
-                
-                @Override
-                public BinaryOperatorPosition binaryOperatorPosition() {
-                    return BinaryOperatorPosition.OPERATOR_MIDDLE;
-                }
-                
-                @Override
-                public FunctionPosition functionPosition() {
-                    return FunctionPosition.FUNCTION_FIRST;
-                }
-            };
-        }
-        
-        UnaryOperatorPosition unaryOperatorPosition();
-        BinaryOperatorPosition binaryOperatorPosition();
-        FunctionPosition functionPosition();
-        
-        enum UnaryOperatorPosition {
-            OPERATOR_FIRST,
-            OPERATOR_LAST
-        }
-        
-        enum BinaryOperatorPosition {
-            OPERATOR_FIRST,
-            OPERATOR_MIDDLE,
-            OPERATOR_LAST
-        }
-        
-        enum FunctionPosition {
-            FUNCTION_FIRST,
-            FUNCTION_LAST
+        public interface Characteristics {
+            
+            static Characteristics defaultCharacteristics() {
+                return new Characteristics() {
+                    @Override
+                    public UnaryOperatorPosition unaryOperatorPosition() {
+                        return UnaryOperatorPosition.OPERATOR_FIRST;
+                    }
+                    
+                    @Override
+                    public BinaryOperatorPosition binaryOperatorPosition() {
+                        return BinaryOperatorPosition.OPERATOR_MIDDLE;
+                    }
+                    
+                    @Override
+                    public FunctionPosition functionPosition() {
+                        return FunctionPosition.FUNCTION_FIRST;
+                    }
+                };
+            }
+            
+            UnaryOperatorPosition unaryOperatorPosition();
+            BinaryOperatorPosition binaryOperatorPosition();
+            FunctionPosition functionPosition();
+            
+            enum UnaryOperatorPosition {
+                OPERATOR_FIRST,
+                OPERATOR_LAST
+            }
+            
+            enum BinaryOperatorPosition {
+                OPERATOR_FIRST,
+                OPERATOR_MIDDLE,
+                OPERATOR_LAST
+            }
+            
+            enum FunctionPosition {
+                FUNCTION_FIRST,
+                FUNCTION_LAST
+            }
         }
     }
 }

@@ -76,7 +76,7 @@ public abstract class BinaryOperatorNode implements OperatorNode {
     @Override
     public void reduce(Listener listener) {
         listener.startBinaryOperator(this);
-        switch (listener.binaryOperatorPosition()) {
+        switch (listener.characteristics().binaryOperatorPosition()) {
             case OPERATOR_FIRST:
                 listener.acceptBinaryOperator(this);
                 left.reduce(listener);
