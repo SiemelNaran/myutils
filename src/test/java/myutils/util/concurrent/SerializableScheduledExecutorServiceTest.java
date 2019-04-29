@@ -7,6 +7,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -59,13 +60,13 @@ public class SerializableScheduledExecutorServiceTest {
     };
 
     @Test
-    void testBasicRunnable() throws InstantiationException, IllegalAccessException {
+    void testBasicRunnable() throws InstantiationException, IllegalAccessException, IllegalArgumentException, InvocationTargetException, NoSuchMethodException, SecurityException {
         Runnable runnableZero = new TestBasicRunnable();
         runnableZero.run();
         assertEquals(1, TestBasicRunnable.number.get());
         
         Class<? extends Runnable> clazz = runnableZero.getClass();
-        Runnable instance = clazz.newInstance();
+        Runnable instance = clazz.getDeclaredConstructor().newInstance();
         instance.run();
         assertEquals(2, TestBasicRunnable.number.get());
     }
