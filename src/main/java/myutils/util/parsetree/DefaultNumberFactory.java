@@ -22,7 +22,7 @@ public class DefaultNumberFactory implements NumberFactory {
         PREFER_BIG_DECIMAL
     };
     
-    static final NumberFactory DEFAULT_NUMBER_FACTORY = NumberFactory.builder().build();
+    static final NumberFactory DEFAULT_NUMBER_FACTORY = DefaultNumberFactory.builder().build();
     
     public static Builder builder() {
         return new Builder();
@@ -32,7 +32,9 @@ public class DefaultNumberFactory implements NumberFactory {
     private final @Nonnull FloatPolicy floatPolicy;
     private final @Nullable Integer bigDecimalScale;
     
-    private NumberFactory(IntegerPolicy integerPolicy, FloatPolicy floatPolicy, Integer bigDecimalScale) {
+    private DefaultNumberFactory(IntegerPolicy integerPolicy,
+                                 FloatPolicy floatPolicy,
+                                 Integer bigDecimalScale) {
         this.integerPolicy = integerPolicy;
         this.floatPolicy = floatPolicy;
         this.bigDecimalScale = bigDecimalScale;
@@ -134,8 +136,8 @@ public class DefaultNumberFactory implements NumberFactory {
             return this;
         }
         
-        public NumberFactory build() {
-            return new NumberFactory(integerPolicy, floatPolicy, bigDecimalScale);
+        public DefaultNumberFactory build() {
+            return new DefaultNumberFactory(integerPolicy, floatPolicy, bigDecimalScale);
         }
     }
 }

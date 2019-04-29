@@ -1,5 +1,7 @@
 package myutils.util.parsetree;
 
+import static myutils.TestUtil.assertExceptionFromCallable;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.text.ParseException;
@@ -65,7 +67,7 @@ public class ExpressionParserTest {
         assertParseError("2 +", "");
         assertParseError("(2 + 3", "");
         assertParseError("max(3, 4", "");
-        assertParseError("unknown(3, 4"), "");
+        assertParseError("unknown(3, 4)", "");
         assertParseError("max(3, 4", "");
         assertParseError("2 ^ 3", "");
         assertParseError("2 * * 3", "");
@@ -73,17 +75,16 @@ public class ExpressionParserTest {
     
     private static int evaluate(String expression, Map<String, Object> scope) throws ParseException {
         ParseNode tree = PARSER.parse(expression);
-        assertEquals(Integer.class, tree.checkEval(scope));
+        Map<String, Class<?>> scopeTypes = scope.entrySet()
+                                                .stream()
+                                                .collect(Collectors.toMap(Map.Entry::getKey,
+                                                                          entry -> entry.getValue().getClass()));
+        assertEquals(Integer.class, tree.checkEval(scopeTypes));
         return (int) tree.eval(scope);
     }
     
     private static void assertParseError(String expression, String expectedErrorMsg) {
-        try {
-            ParseNode tree = PARSER.parse(expression);
-            fail("expected ParseException in expression " + expression);
-        } catch (ParseException e) {
-            assertEquals(expectedErrorMsg, e.getMessage(), "unexpected ParseException in expression " + expression);
-        }        
+        assertExceptionFromCallable(() -> PARSER.parse(expression), ParseException.class, expectedErrorMsg);
     }
     
     /////

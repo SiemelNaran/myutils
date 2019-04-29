@@ -280,7 +280,7 @@ public class ExpressionParser {
         private Map<String, Constructor<? extends BinaryOperatorNode>> binaryOperators = new HashMap<>();
         private Map<String, Constructor<? extends UnaryOperatorNode>> unaryOperators = new HashMap<>();
         private Map<String, Constructor<? extends FunctionNode>> functions = new HashMap<>();
-        private NumberFactory numberFactory = NumberFactory.DEFAULT_NUMBER_FACTORY;
+        private NumberFactory numberFactory = DefaultNumberFactory.DEFAULT_NUMBER_FACTORY;
         
         /**
          * Add binary operator.
@@ -372,7 +372,7 @@ public class ExpressionParser {
         private static boolean verifyFunctionNameValid(String oper) {
             int N = oper.length();
             if (!Character.isLetter(oper.charAt(0))) {
-                throw new InvalidOperatorException(oper, c);                
+                throw new InvalidOperatorException(oper, oper.charAt(0));                
             }
             for (int i = 0; i < N; i++) {
                 char c = oper.charAt(i);

@@ -44,7 +44,7 @@ public class IdentifierNode implements ParseNode {
     
     @Override
     public Class<?> checkEval(Map<String, Class<?>> scopeTypes) {
-        Object result = scopeTypes.get(identifier);
+        Class<?> result = scopeTypes.get(identifier);
         if (result == null) {
             throw new VariableNotFoundTypeException(identifier);
         }

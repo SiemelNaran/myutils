@@ -1,5 +1,7 @@
 package myutils.util;
 
+import static myutils.TestUtil.assertException;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -158,15 +160,12 @@ public class SimpleStringTokenizerFactoryTest {
     
     @Test
     void testInvalidStringTokenizer() {
-        try {
-            SimpleStringTokenizerFactory(SKIP_CHARACTERS,
-                                         new QuoteStrategy(true, true),
-                                         Arrays.asList("+++", "***", "+", "*"),
-                                         Collections.singletonList(LITERAL_CLASS));
-            fail("expected exception because symbols are invalid");
-        } catch (IllegalArgumentException e) {
-            assertEquals("expected to find ** in dictionary");
-        }
+        assertException(() -> new SimpleStringTokenizerFactory(SKIP_CHARACTERS,
+                                                               new QuoteStrategy(true, true),
+                                                               Arrays.asList("+++", "***", "+", "*"),
+                                                               Collections.singletonList(LITERAL_CLASS)),
+                        IllegalArgumentException.class,
+                        "expected to find ** in dictionary");
     }
     
     private static final IntPredicate SKIP_CHARACTERS

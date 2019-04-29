@@ -2,6 +2,7 @@ package myutils.util;
 
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.function.BiConsumer;
@@ -44,7 +45,7 @@ public class SimpleTrie<T> {
     }
     
     private void doVisit(LinkedList<T> list, BiConsumer<List<T>, SimpleTrie<T>> consumer) {
-        for (Map.Entry<T, SimpleTrie<T>> entry : children) {
+        for (Map.Entry<T, SimpleTrie<T>> entry : children.entrySet()) {
             list.add(entry.getKey());
             consumer.accept(list, entry.getValue());
             doVisit(list, consumer);

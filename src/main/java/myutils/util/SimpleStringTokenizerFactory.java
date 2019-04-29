@@ -84,7 +84,7 @@ public class SimpleStringTokenizerFactory {
      * @param symbols if the token matches a symbol in this list (the longest symbol), return it
      * @param characterClasses a list of predicates, where each predicate describes the multiple characters in this character class
      * 
-     * @throws IllegalArgumentException if every subword in symbols is not also in symbols
+     * @throws IllegalArgumentException if every sub-word in symbols is not also in symbols
      */
     public SimpleStringTokenizerFactory(@Nonnull IntPredicate skipChars,
                                         @Nonnull QuoteStrategy quoteStrategy,
@@ -112,13 +112,14 @@ public class SimpleStringTokenizerFactory {
         return trie;
     }
     
-    private static void checkTrie(SimpleTrie<Integer> trie) throws IllegaArgumentException {
-        trie.visit((word, trie) -> {
-            if (!trie.isWord()) {
-                String str = new String(word.toArray(new Integer[0]), 0, word.size());
-                throw new IllegaArgumentException("expected to find " + str + " in dictionary");
+    private static void checkTrie(SimpleTrie<Integer> trie) throws IllegalArgumentException {
+        trie.visit((List<Integer> word, SimpleTrie<Integer> subTrie) -> {
+            if (!subTrie.isWord()) {
+                int[] wordArray = word.stream().mapToInt(Integer::intValue).toArray();
+                String str = new String(wordArray, 0, word.size());
+                throw new IllegalArgumentException("expected to find " + str + " in dictionary");
             }
-        })
+        });
     }
     
     public Iterator<Token> tokenizer(CharSequence str) {

@@ -37,7 +37,7 @@ public class TestUtil {
     }
     
     @SuppressWarnings("unchecked")
-    public static <T, U> U assertException(Runnable runnable, Class<U> expectedException) {
+    public static <U> U assertException(Runnable runnable, Class<U> expectedException) {
         try {
             runnable.run();
             fail("Expected exception " + expectedException.getSimpleName() + ", but got no exception");
@@ -50,7 +50,7 @@ public class TestUtil {
         }
     }
     
-    public static <T, U> void assertException(Runnable runnable, Class<U> expectedException, String expectedMessage) {
+    public static <U> void assertException(Runnable runnable, Class<U> expectedException, String expectedMessage) {
         try {
             runnable.run();
             fail("Expected exception " + expectedException.getSimpleName() + ", but got no exception");
