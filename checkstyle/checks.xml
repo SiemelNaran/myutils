@@ -57,6 +57,7 @@
         </module>
         <module name="UnusedImports"/>
         <module name="RedundantImport"/>
+        <module name="IllegalImport"/>
         <module name="AvoidStarImport"/>
         <module name="OneTopLevelClass"/>
         <module name="NoLineWrap"/>
