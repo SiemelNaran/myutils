@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import myutils.util.parsetree.ParseNode.Listener;
 import myutils.util.parsetree.UnitNumberFactory.UnitPosition;
 
 import org.junit.jupiter.api.Test;
@@ -89,6 +90,72 @@ public class ExpressionParserTest {
         assertEquals(Integer.valueOf(1_003_002), evaluate("2m+3km+x", scope));
     }
     
+    void testReduce() throws ParseException {
+        ParseNode tree = PARSER.parse("2+x*-y");
+        
+        Listener listener = new Listener() {
+            private final StringBuilder str = new StringBuilder();
+            
+            @Override
+            public String toString() {
+                return str.toString();
+            }
+
+            @Override
+            public Characteristics characteristics() {
+                return new Characteristics() {
+                    @Override
+                    public UnaryOperatorPosition unaryOperatorPosition() {
+                        return UnaryOperatorPosition.OPERATOR_FIRST;
+                    }
+                    
+                    @Override
+                    public BinaryOperatorPosition binaryOperatorPosition() {
+                        return BinaryOperatorPosition.OPERATOR_FIRST;
+                    }
+                    
+                    @Override
+                    public FunctionPosition functionPosition() {
+                        return FunctionPosition.FUNCTION_FIRST;
+                    }
+                };
+            }
+            
+            @Override public void startBinaryOperator(BinaryOperatorNode operator) { }
+            @Override public void acceptBinaryOperator(BinaryOperatorNode operator) { str.append(operator.getClass().getSimpleName()).append('('); }
+            @Override public void nextBinaryOperatorArgument(BinaryOperatorNode operator) { str.append(", "); }
+            @Override public void endBinaryOperator(BinaryOperatorNode operator) { str.append(')'); }
+            
+            @Override public void startUnaryOperator(UnaryOperatorNode operator) { }
+            @Override public void acceptUnaryOperator(UnaryOperatorNode operator) { str.append(operator.getToken()); }
+            @Override public void endUnaryOperator(UnaryOperatorNode operator) { }
+            
+            @Override public void startFunction(FunctionNode function) { }
+            @Override public void acceptFunction(FunctionNode function) { str.append(function.getName()).append('('); }
+            @Override public void nextFunctionArgument(FunctionNode operator, int argNumber) { if (argNumber > 0) str.append(", "); }
+            @Override public void endFunction(FunctionNode function) { str.append(')'); }
+                    
+            @Override public void startLiteral(LiteralNode literal) { }
+            @Override public void acceptLiteral(LiteralNode literal) { str.append(literal.toString()); }
+            @Override public void endLiteral(LiteralNode literal) { }
+                    
+            @Override public void startIdentifier(IdentifierNode identifier) { }
+            @Override public void acceptIdentifier(IdentifierNode identifier) {  str.append("table.").append(map(identifier.getIdentifier())); }
+            @Override public void endIdentifier(IdentifierNode identifier) { }
+            
+            private String map(String identifier) {
+                if ("x".equals(identifier)) return "a";
+                if ("y".equals(identifier)) return "b";
+                throw new UnsupportedOperationException(identifier);
+            }
+            
+        };
+        
+        tree.reduce(listener);
+        String summary = listener.toString();
+        assertEquals("PLUS(2, TIMES(table.a, -table.b))", summary);
+    }
+
     @SuppressWarnings("checkstyle:Indentation") // to suppress complaints about entry -> entry.getValue().getClass() below
     private static int evaluate(String expression, Map<String, Object> scope) throws ParseException {
         ParseNode tree = PARSER.parse(expression);

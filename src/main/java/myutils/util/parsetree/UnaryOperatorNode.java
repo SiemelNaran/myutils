@@ -34,7 +34,7 @@ public abstract class UnaryOperatorNode implements OperatorNode {
     }
 
     @Override
-    public boolean isComplete() {
+    public final boolean isComplete() {
         return node != null;
     }
 
@@ -48,6 +48,24 @@ public abstract class UnaryOperatorNode implements OperatorNode {
         return apply(node.eval(scope));
     }
 
+    @Override
+    public void reduce(Listener listener) {
+        listener.startUnaryOperator(this);
+        switch (listener.characteristics().unaryOperatorPosition()) {
+            case OPERATOR_FIRST:
+                listener.acceptUnaryOperator(this);
+                node.reduce(listener);
+                break;
+            case OPERATOR_LAST:
+                node.reduce(listener);
+                listener.acceptUnaryOperator(this);
+                break;
+            default:
+                throw new UnsupportedOperationException();
+        }
+        listener.endUnaryOperator(this);
+    }
+    
     protected abstract Class<?> checkApply(Class<?> type) throws TypeException;
 
     protected abstract Object apply(Object value) throws EvalException;

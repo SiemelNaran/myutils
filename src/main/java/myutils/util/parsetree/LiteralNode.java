@@ -1,6 +1,7 @@
 package myutils.util.parsetree;
 
 import java.util.Map;
+import java.util.Objects;
 
 
 public class LiteralNode implements ParseNode {
@@ -24,26 +25,52 @@ public class LiteralNode implements ParseNode {
     private LiteralNode(Object value) {
         this.value = value;
     }
-
-    @Override
-    public Class<?> checkEval(Map<String, Class<?>> scopeTypes) {
-        return value.getClass();
-    }
-
-    @Override
-    public Object eval(Map<String, Object> scope) {
+    
+    public Object getValue() {
         return value;
     }
+    
+    @Override
+    public final Class<?> checkEval(Map<String, Class<?>> scopeTypes) {
+        return value.getClass();
+    }
+    
+    @Override
+    public final Object eval(Map<String, Object> scope) {
+        return value;
+    }
+    
+    @Override
+    public void reduce(Listener listener) {
+        listener.startLiteral(this);
+        listener.acceptLiteral(this);
+        listener.endLiteral(this);
+    }
 
-    private static class StringLiteralNodeImpl extends LiteralNode {
+    private static final class StringLiteralNodeImpl extends LiteralNode {
         private StringLiteralNodeImpl(String value) {
             super(value);
         }
+
+        @Override
+        public String getValue() {
+            return (String) super.getValue();
+        }
     }
 
-    private static class NumberLiteralNodeImpl extends LiteralNode {
+    private static final class NumberLiteralNodeImpl extends LiteralNode {
         private NumberLiteralNodeImpl(Number value) {
             super(value);
         }
+        
+        @Override
+        public Number getValue() {
+            return (Number) super.getValue();
+        }
+    }
+    
+    @Override
+    public String toString() {
+        return Objects.toString(value);
     }
 }

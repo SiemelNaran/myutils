@@ -50,29 +50,57 @@ public abstract class BinaryOperatorNode implements OperatorNode {
      * 
      * @return true if this node is surrounded by parenthesis, meaning that it cannot be split up for operator precedence rules.
      */
-    public boolean isAtomic() {
+    public final boolean isAtomic() {
         return atomic;
     }
 
     @Override
-    public boolean isComplete() {
+    public final boolean isComplete() {
         return left != null && right != null;
     }
 
     @Override
-    public Class<?> checkEval(Map<String, Class<?>> scopeTypes) throws TypeException {
+    public final Class<?> checkEval(Map<String, Class<?>> scopeTypes) throws TypeException {
         Class<?> leftValue = left.checkEval(scopeTypes);
         Class<?> rightValue = right.checkEval(scopeTypes);
         return checkCombine(leftValue, rightValue);
     }
 
     @Override
-    public Object eval(Map<String, Object> scope) throws EvalException {
+    public final Object eval(Map<String, Object> scope) throws EvalException {
         Object leftValue = left.eval(scope);
         Object rightValue = right.eval(scope);
         return combine(leftValue, rightValue);
     }
-
+    
+    @Override
+    public void reduce(Listener listener) {
+        listener.startBinaryOperator(this);
+        switch (listener.characteristics().binaryOperatorPosition()) {
+            case OPERATOR_FIRST:
+                listener.acceptBinaryOperator(this);
+                left.reduce(listener);
+                listener.nextBinaryOperatorArgument(this);
+                right.reduce(listener);
+                break;
+            case OPERATOR_MIDDLE:
+                left.reduce(listener);
+                listener.acceptBinaryOperator(this);
+                listener.nextBinaryOperatorArgument(this);
+                right.reduce(listener);
+                break;
+            case OPERATOR_LAST:
+                left.reduce(listener);
+                listener.nextBinaryOperatorArgument(this);
+                right.reduce(listener);
+                listener.acceptBinaryOperator(this);
+                break;
+            default:
+                throw new UnsupportedOperationException();
+        }
+        listener.endBinaryOperator(this);
+    }
+    
     /**
      * Return the precedence of this binary operator.
      * 
