@@ -58,26 +58,32 @@ public class PageListTest {
     }
 
     private static PageList<Integer> constructPageList(int preferredMaxPageSize, int maxPageSize) {
-        if (ArrayListPageList.class.equals(PAGE_LIST_CLASS.get()))
+        if (ArrayListPageList.class.equals(PAGE_LIST_CLASS.get())) {
             return new ArrayListPageList<>(preferredMaxPageSize, maxPageSize);
-        if (LinkedListPageList.class.equals(PAGE_LIST_CLASS.get()))
+        }
+        if (LinkedListPageList.class.equals(PAGE_LIST_CLASS.get())) {
             return new LinkedListPageList<>(preferredMaxPageSize, maxPageSize);
+        }
         throw new UnsupportedOperationException();
     }
     
     private static PageList<Integer> constructPageList() {
-        if (ArrayListPageList.class.equals(PAGE_LIST_CLASS.get()))
+        if (ArrayListPageList.class.equals(PAGE_LIST_CLASS.get())) {
             return new ArrayListPageList<>();
-        if (LinkedListPageList.class.equals(PAGE_LIST_CLASS.get()))
+        }
+        if (LinkedListPageList.class.equals(PAGE_LIST_CLASS.get())) {
             return new LinkedListPageList<>();
+        }
         throw new UnsupportedOperationException();
     }
     
     private static PageList<Integer> constructPageList(List<Integer> normalList, int preferredMaxPageSize, int maxPageSize) {
-        if (ArrayListPageList.class.equals(PAGE_LIST_CLASS.get()))
+        if (ArrayListPageList.class.equals(PAGE_LIST_CLASS.get())) {
             return new ArrayListPageList<>(normalList, preferredMaxPageSize, maxPageSize);
-        if (LinkedListPageList.class.equals(PAGE_LIST_CLASS.get()))
+        }
+        if (LinkedListPageList.class.equals(PAGE_LIST_CLASS.get())) {
             return new LinkedListPageList<>(normalList, preferredMaxPageSize, maxPageSize);
+        }
         throw new UnsupportedOperationException();
     }
     
@@ -115,13 +121,13 @@ public class PageListTest {
     @Test
     void testEmpty() {
         testAllLists(() -> {
-	        PageList<Integer> list = constructPageList(3, 5);
-	        assertEquals(0, list.size());
-	        assertTrue(list.isEmpty());
-	        assertEquals(0, list.stream().count());
-	        assertNull(list.spliterator().trySplit());
-	        list.spliterator().tryAdvance(val -> { throw new RuntimeException(); });
-	        list.spliterator().forEachRemaining(val -> { throw new RuntimeException(); });
+            PageList<Integer> list = constructPageList(3, 5);
+            assertEquals(0, list.size());
+            assertTrue(list.isEmpty());
+            assertEquals(0, list.stream().count());
+            assertNull(list.spliterator().trySplit());
+            list.spliterator().tryAdvance(val -> { throw new RuntimeException(); });
+            list.spliterator().forEachRemaining(val -> { throw new RuntimeException(); });
         });
     }
     
@@ -343,6 +349,7 @@ public class PageListTest {
     }
         
     @Test
+    @SuppressWarnings("checkstyle:LineLength")
     void testConstructors() {
         testAllLists(() -> {
             assertException(() -> constructPageList(3, 3), IllegalArgumentException.class, "preferredMaxPageSize(3) should be < maxPageSize(3)");
@@ -350,7 +357,8 @@ public class PageListTest {
             
             PageList<Integer> list = constructPageList();
             IntStream.range(1, 54).forEach(list::add);
-            assertEquals("0[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50] * 50[51,52,53]", extract(list));
+            assertEquals("0[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50] * 50[51,52,53]",
+                         extract(list));
         });
     }
         
@@ -588,6 +596,7 @@ public class PageListTest {
     }
     
     @Test
+    @SuppressWarnings("checkstyle:LineLength")
     void testConcurrentModification() {
         testAllLists(() -> {
             PageList<Integer> list = constructPageList(3, 5);
@@ -656,7 +665,7 @@ public class PageListTest {
             IntStream.range(1, 16).forEach(list::add);
             assertEquals("0[1,2,3] * 3[4,5,6] * 6[7,8,9] * 9[10,11,12] * 12[13,14,15]", extract(list));
             
-            list.sort((lhs, rhs)-> Integer.compare(rhs, lhs));
+            list.sort((lhs, rhs) -> Integer.compare(rhs, lhs));
             assertEquals("0[15,14,13] * 3[12,11,10] * 6[9,8,7] * 9[6,5,4] * 12[3,2,1]", extract(list));
         });        
     }
@@ -680,20 +689,24 @@ public class PageListTest {
             AtomicInteger sum = new AtomicInteger();
             
             Thread thread1 = new Thread(() -> {
-            	while (iter1.tryAdvance(val -> sum.addAndGet(val)));
+                while (iter1.tryAdvance(val -> sum.addAndGet(val))) {
+                    ;
+                }
             });
             Thread thread2 = new Thread(() -> {
-            	while (iter2.tryAdvance(val -> sum.addAndGet(val)));
+                while (iter2.tryAdvance(val -> sum.addAndGet(val))) {
+                    ;
+                }
             });
             
             thread1.start();
             thread2.start();
             
             try {
-	            thread1.join();
-	            thread2.join();
+                thread1.join();
+                thread2.join();
             } catch (InterruptedException e) {
-            	throw new RuntimeException(e);
+                throw new RuntimeException(e);
             }
             
             assertEquals(expectedSum, sum.get());
@@ -720,22 +733,20 @@ public class PageListTest {
     }
     
     @Test
+    @SuppressWarnings("checkstyle:Indentation") // to suppress complaints about arrayCreators below
     void testPerformance_BinarySearch() {
         System.out.println("\ntestPerformance_BinarySearch");
         
         List<Integer> arrayList = Collections.unmodifiableList(generateHugeSortedArrayList());
         Random random = new Random();
         List<Integer> indices = new ArrayList<>();
-        for (int i=0; i<50_000; i++) {
+        for (int i = 0; i < 50_000; i++) {
             indices.add(random.nextInt(arrayList.size()));
         }
         
-        List<Supplier<List<Integer>>> arrayCreators = Arrays.asList
-            (
-                () -> new ArrayList<>(arrayList),
-                () -> new ArrayListPageList<>(arrayList),
-                () -> new LinkedListPageList<>(arrayList)
-            );
+        List<Supplier<List<Integer>>> arrayCreators = Arrays.asList(() -> new ArrayList<>(arrayList),
+                                                                    () -> new ArrayListPageList<>(arrayList),
+                                                                    () -> new LinkedListPageList<>(arrayList));
 
         for (Supplier<List<Integer>> arrayCreator: arrayCreators) {
             List<Integer> list = arrayCreator.get();
@@ -774,7 +785,7 @@ public class PageListTest {
         ArrayListPageList<Integer> pageList = new ArrayListPageList<>(normalList);
         
         List<Integer> indices = new ArrayList<>();
-        for (int i=0; i<50_000; i++) {
+        for (int i = 0; i < 50_000; i++) {
             indices.add(random.nextInt(normalList.size() - i));
         }
         
@@ -883,15 +894,17 @@ public class PageListTest {
     
     private static String listToStringByGet(List<Integer> list) {
         StringJoiner result = new StringJoiner(",");
-        for (int i=0; i<list.size(); i++)
+        for (int i = 0; i < list.size(); i++) {
             result.add(Integer.toString(list.get(i)));
+        }
         return result.toString();
     }
     
     private static String listToStringByIter(List<Integer> list) {
         StringJoiner result = new StringJoiner(",");
-        for (int elem: list)
+        for (int elem: list) {
             result.add(Integer.toString(elem));
+        }
         return result.toString();
     }
     
@@ -900,11 +913,11 @@ public class PageListTest {
     }
     
     private static ArrayList<Integer> generateHugeSortedArrayList() {
-        final int SIZE = 1_000_000;
-        ArrayList<Integer> output = new ArrayList<>(SIZE);
+        final int size = 1_000_000;
+        ArrayList<Integer> output = new ArrayList<>(size);
         Random random = new Random();
         int val = 0;
-        for (int i=0; i<SIZE; i++) {
+        for (int i = 0; i < size; i++) {
             val += random.nextInt(8) + 1;
             output.add(val);
         }

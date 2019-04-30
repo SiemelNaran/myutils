@@ -8,7 +8,12 @@ import java.util.concurrent.Callable;
 
 
 public class TestUtil {
-    
+
+    /**
+     * Assert that the desired exception is thrown.
+     * 
+     * @return the exception (not null)
+     */
     @SuppressWarnings("unchecked")
     public static <T, U> U assertExceptionFromCallable(Callable<T> callable, Class<U> expectedException) {
         try {
@@ -16,29 +21,37 @@ public class TestUtil {
             fail("Expected exception " + expectedException.getSimpleName() + ", but got no exception");
             throw new AssertionError();
         } catch (Exception e) {
-            assertTrue(expectedException.isInstance(e),
-            		   "Expected " + expectedException.getSimpleName() + " or an exception derived from it, "
-                           + "but got " + e.getClass().getSimpleName()
-                       );
+            assertTrue(expectedException.isInstance(e), "Expected " + expectedException.getSimpleName()
+                    + " or an exception derived from it, " + "but got " + e.getClass().getSimpleName());
             return (U) e;
         }
     }
-    
+
+    /**
+     * Assert that the desired exception is thrown.
+     * 
+     * @return the exception (not null)
+     */
     @SuppressWarnings("unchecked")
-    public static <T, U> U assertExceptionFromCallable(Callable<T> callable, Class<U> expectedException, String expectedMessage) {
+    public static <T, U> U assertExceptionFromCallable(Callable<T> callable, Class<U> expectedException,
+            String expectedMessage) {
         try {
             callable.call();
             fail("Expected exception " + expectedException.getSimpleName() + ", but got no exception");
             throw new AssertionError();
         } catch (Exception e) {
-            assertTrue(expectedException.isInstance(e),
-            		   "Expected " + expectedException.getSimpleName() + " or an exception derived from it, "
-                           + "but got " + e.getClass().getSimpleName());
+            assertTrue(expectedException.isInstance(e), "Expected " + expectedException.getSimpleName()
+                    + " or an exception derived from it, " + "but got " + e.getClass().getSimpleName());
             assertEquals(expectedMessage, e.getMessage());
             return (U) e;
         }
     }
-    
+
+    /**
+     * Assert that the desired exception is thrown.
+     * 
+     * @return the exception (not null)
+     */
     @SuppressWarnings("unchecked")
     public static <U> U assertException(Runnable runnable, Class<U> expectedException) {
         try {
@@ -46,22 +59,28 @@ public class TestUtil {
             fail("Expected exception " + expectedException.getSimpleName() + ", but got no exception");
             throw new AssertionError();
         } catch (RuntimeException e) {
-            assertTrue(expectedException.isInstance(e),
-            		   "Expected " + expectedException.getSimpleName() + " or an exception derived from it, "
-                           + "but got " + e.getClass().getSimpleName());
+            assertTrue(expectedException.isInstance(e), "Expected " + expectedException.getSimpleName()
+                    + " or an exception derived from it, " + "but got " + e.getClass().getSimpleName());
             return (U) e;
         }
     }
-    
-    public static <U> void assertException(Runnable runnable, Class<U> expectedException, String expectedMessage) {
+
+    /**
+     * Assert that the desired exception is thrown.
+     * 
+     * @return the exception (not null)
+     */
+    @SuppressWarnings("unchecked")
+    public static <U> U assertException(Runnable runnable, Class<U> expectedException, String expectedMessage) {
         try {
             runnable.run();
             fail("Expected exception " + expectedException.getSimpleName() + ", but got no exception");
+            throw new AssertionError();
         } catch (RuntimeException e) {
-            assertTrue(expectedException.isInstance(e),
-            		   "Expected " + expectedException.getSimpleName() + " or an exception derived from it, "
-                           + "but got " + e.getClass().getSimpleName());
+            assertTrue(expectedException.isInstance(e), "Expected " + expectedException.getSimpleName()
+                    + " or an exception derived from it, " + "but got " + e.getClass().getSimpleName());
             assertEquals(expectedMessage, e.getMessage());
+            return (U) e;
         }
     }
 }

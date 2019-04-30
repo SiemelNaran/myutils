@@ -78,6 +78,7 @@ public class ExpressionParserTest {
         assertNull(tree);
     }
     
+    @SuppressWarnings("checkstyle:Indentation") // to suppress complaints about entry -> entry.getValue().getClass() below
     private static int evaluate(String expression, Map<String, Object> scope) throws ParseException {
         ParseNode tree = PARSER.parse(expression);
         Map<String, Class<?>> scopeTypes = scope.entrySet()
@@ -109,7 +110,7 @@ public class ExpressionParserTest {
     
     /////
 
-    private static abstract class ArithmeticIntegerBinaryOperator extends BinaryOperatorNode {
+    private abstract static class ArithmeticIntegerBinaryOperator extends BinaryOperatorNode {
         @Override
         protected final Class<?> checkCombine(Class<?> left, Class<?> right) throws TypeException {
             TypeException.assertSameType("+", 0, left, right);
@@ -197,7 +198,7 @@ public class ExpressionParserTest {
     
     /////
     
-    private static abstract class ArithmeticIntegerUnaryOperator extends UnaryOperatorNode {
+    private abstract static class ArithmeticIntegerUnaryOperator extends UnaryOperatorNode {
         @Override
         protected final Class<?> checkApply(Class<?> type) throws TypeException {
             if (!type.equals(Integer.class)) {
@@ -240,7 +241,7 @@ public class ExpressionParserTest {
     
     /////
     
-    private static abstract class ArithmeticIntegerFunction extends FunctionNode {
+    private abstract static class ArithmeticIntegerFunction extends FunctionNode {
         @Override
         protected final Class<?> checkCombine(List<Class<?>> args) throws TypeException {
             if (!args.isEmpty()) {

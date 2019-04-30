@@ -23,19 +23,20 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
-import org.junit.jupiter.api.Test;
-
 import myutils.TestUtil;
 import myutils.util.concurrent.SerializableScheduledExecutorService.RecreateRunnableFailedException;
 import myutils.util.concurrent.SerializableScheduledExecutorService.UnfinishedTasks;
+
+import org.junit.jupiter.api.Test;
 
 
 public class SerializableScheduledExecutorServiceTest {
 
     private static List<AtomicInteger> createNumbers(int count) {
         List<AtomicInteger> numbers = new ArrayList<>();
-        for (int i=0; i<count; i++)
+        for (int i = 0; i < count; i++) {
             numbers.add(new AtomicInteger());
+        }
         return numbers;
     }
 
@@ -57,10 +58,12 @@ public class SerializableScheduledExecutorServiceTest {
         public void run() {
             number.incrementAndGet();                
         }                    
-    };
+    }
 
     @Test
-    void testBasicRunnable() throws InstantiationException, IllegalAccessException, IllegalArgumentException, InvocationTargetException, NoSuchMethodException, SecurityException {
+    void testBasicRunnable()
+            throws InstantiationException, IllegalAccessException, IllegalArgumentException,
+                   InvocationTargetException, NoSuchMethodException, SecurityException {
         Runnable runnableZero = new TestBasicRunnable();
         runnableZero.run();
         assertEquals(1, TestBasicRunnable.number.get());
@@ -78,36 +81,40 @@ public class SerializableScheduledExecutorServiceTest {
         
         private static class FirstRunnable implements Runnable {
             public FirstRunnable() { }
+            
             @Override
             public void run() {
                 numbers.get(0).incrementAndGet();                
             }                    
-        };
+        }
 
         private static class SecondRunnable implements Runnable {
             public SecondRunnable() { }
+            
             @Override
             public void run() {
                 numbers.get(1).incrementAndGet();                
             }                    
-        };
+        }
 
         private static class ThirdRunnable implements Runnable {
             public ThirdRunnable() { }
+            
             @Override
             public void run() {
                 numbers.get(2).incrementAndGet();                
             }                    
-        };
+        }
 
         private static class FourthRunnable implements Runnable {
             public FourthRunnable() { }
+            
             @Override
             public void run() {
                 numbers.get(3).incrementAndGet();                
             }                    
-        };
-    };
+        }
+    }
 
     @Test
     void testNormalRunnable() throws InterruptedException, IOException, ClassNotFoundException, RecreateRunnableFailedException {
@@ -122,7 +129,7 @@ public class SerializableScheduledExecutorServiceTest {
             SerializableScheduledExecutorService service = new SerializableScheduledThreadPoolExecutor(1);
             service.schedule(runnableOne, 600, TimeUnit.MILLISECONDS);
             service.schedule(runnableOne, 1610, TimeUnit.MILLISECONDS);
-            ScheduledFuture<?> future1620 = service.schedule(runnableOne, 1620, TimeUnit.MILLISECONDS); // cancelled below
+            final ScheduledFuture<?> future1620 = service.schedule(runnableOne, 1620, TimeUnit.MILLISECONDS); // cancelled below
             service.schedule(runnableOne, 2630, TimeUnit.MILLISECONDS);
             service.scheduleAtFixedRate(runnableTwo, 50, 800, TimeUnit.MILLISECONDS);
             service.scheduleWithFixedDelay(runnableThree, 60, 800, TimeUnit.MILLISECONDS);
@@ -140,7 +147,10 @@ public class SerializableScheduledExecutorServiceTest {
             recurringFuture70.cancel(false);
             
             List<Runnable> unfinishedRunnables = service.shutdownNow();
-            assertEquals(Arrays.asList(1, 2, 2, 2), TestRunnablesWithDefaultConstructor.numbers.stream().map(AtomicInteger::get).collect(Collectors.toList()));
+            assertEquals(Arrays.asList(1, 2, 2, 2),
+                         TestRunnablesWithDefaultConstructor.numbers.stream()
+                                                                    .map(AtomicInteger::get)
+                                                                    .collect(Collectors.toList()));
             assertEquals(2, unfinishedRunnables.size()); // returns the cancelled tasks
             
             UnfinishedTasks unfinishedTasks = service.exportUnfinishedTasks();
@@ -160,7 +170,10 @@ public class SerializableScheduledExecutorServiceTest {
         }
         
         Thread.sleep(1000);
-        assertEquals(Arrays.asList(1, 2, 2, 2), TestRunnablesWithDefaultConstructor.numbers.stream().map(AtomicInteger::get).collect(Collectors.toList()));
+        assertEquals(Arrays.asList(1, 2, 2, 2),
+                     TestRunnablesWithDefaultConstructor.numbers.stream()
+                                                                .map(AtomicInteger::get)
+                                                                .collect(Collectors.toList()));
         
         {
             ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
@@ -179,7 +192,10 @@ public class SerializableScheduledExecutorServiceTest {
             // runnable4: 1670 was cancelled above
             
             List<Runnable> unfinishedRunnables = service.shutdownNow();
-            assertEquals(Arrays.asList(2, 3, 3, 2), TestRunnablesWithDefaultConstructor.numbers.stream().map(AtomicInteger::get).collect(Collectors.toList()));
+            assertEquals(Arrays.asList(2, 3, 3, 2),
+                         TestRunnablesWithDefaultConstructor.numbers.stream()
+                                                                    .map(AtomicInteger::get)
+                                                                    .collect(Collectors.toList()));
             assertEquals(0, unfinishedRunnables.size());
             
             UnfinishedTasks unfinishedTasks = service.exportUnfinishedTasks();
@@ -209,9 +225,10 @@ public class SerializableScheduledExecutorServiceTest {
         public void run() {
             numbers.get(index - 1).incrementAndGet();                
         }                    
-    };
+    }
 
     @Test
+    @SuppressWarnings("checkstyle:MethodLength")
     void testSerializableRunnable() throws InterruptedException, IOException, ClassNotFoundException, RecreateRunnableFailedException {
         Runnable runnableOne = new TestSerializableRunnable(1);
         Runnable runnableTwo = new TestSerializableRunnable(2);
@@ -304,7 +321,7 @@ public class SerializableScheduledExecutorServiceTest {
         public Integer call() {
             return number.addAndGet(3);
         }
-    };
+    }
 
     private static class TestSerializableCallable implements SerializableCallable<Integer> {
         private static final long serialVersionUID = 1L;
@@ -326,10 +343,12 @@ public class SerializableScheduledExecutorServiceTest {
             number.set(result * 5);
             return result;
         }
-    };
+    }
     
     @Test
-    void testCallable() throws InterruptedException, IOException, ClassNotFoundException, RecreateRunnableFailedException, ExecutionException, TimeoutException {
+    void testCallable() throws InterruptedException,
+                               IOException, ClassNotFoundException, RecreateRunnableFailedException,
+                               ExecutionException, TimeoutException {
         Callable<Integer> callableOne = new TestStandardCallable();
         Callable<Integer> callableTwo = new TestSerializableCallable(5);
 
@@ -356,7 +375,7 @@ public class SerializableScheduledExecutorServiceTest {
             future1630.cancel(false);
 
             List<Runnable> unfinishedRunnables = service.shutdownNow();
-            assertEquals(Arrays.asList(1*3, 6*5), Arrays.asList(TestStandardCallable.number.get(), TestSerializableCallable.number.get()));
+            assertEquals(Arrays.asList(1 * 3, 6 * 5), Arrays.asList(TestStandardCallable.number.get(), TestSerializableCallable.number.get()));
             assertEquals(1, unfinishedRunnables.size()); // returns the cancelled tasks
             
             UnfinishedTasks unfinishedTasks = service.exportUnfinishedTasks();
@@ -368,7 +387,8 @@ public class SerializableScheduledExecutorServiceTest {
             assertEquals(6, future620.get(1, TimeUnit.MILLISECONDS).intValue());
             assertEquals(6, future620.get().intValue());
             
-            assertEquals(Arrays.asList(6, 6, 6), // future620 caused callableTwo.call to be run, thereby increasing TestSerializableCallable.number from 5 to 6
+            // future620 caused callableTwo.call to be run, thereby increasing TestSerializableCallable.number from 5 to 6
+            assertEquals(Arrays.asList(6, 6, 6),
                     unfinishedTasks.stream()
                                    .sorted(Comparator.comparing(UnfinishedTasks.TaskInfo::getInitialDelayInNanos))
                                    .map(UnfinishedTasks.TaskInfo::getSerializableCallable)
@@ -417,7 +437,7 @@ public class SerializableScheduledExecutorServiceTest {
             // callable1: 1630 was cancelled so not in this executor
 
             List<Runnable> unfinishedRunnables = service.shutdownNow();
-            assertEquals(Arrays.asList(2*3, 7*5), Arrays.asList(TestStandardCallable.number.get(), TestSerializableCallable.number.get()));
+            assertEquals(Arrays.asList(2 * 3, 7 * 5), Arrays.asList(TestStandardCallable.number.get(), TestSerializableCallable.number.get()));
             assertEquals(0, unfinishedRunnables.size());
 
             UnfinishedTasks unfinishedTasks = service.exportUnfinishedTasks();
@@ -439,7 +459,7 @@ public class SerializableScheduledExecutorServiceTest {
         @Override
         public void run() {
         }                    
-    };
+    }
 
     private class TestNonStaticClassRunnable implements Runnable {
         public TestNonStaticClassRunnable() { }
@@ -447,7 +467,7 @@ public class SerializableScheduledExecutorServiceTest {
         @Override
         public void run() {
         }                    
-    };
+    }
 
     private static class TestNonPublicConstructorCallable implements Callable<Integer> {
         TestNonPublicConstructorCallable() { }
@@ -456,7 +476,7 @@ public class SerializableScheduledExecutorServiceTest {
         public Integer call() {
             return 7;
         }                    
-    };
+    }
 
     private class TestNonStaticClassCallable implements Callable<Integer> {
         public TestNonStaticClassCallable() { }
@@ -465,7 +485,7 @@ public class SerializableScheduledExecutorServiceTest {
         public Integer call() {
             return 9;
         }                    
-    };
+    }
 
     @Test
     void testNonSerializable() throws InterruptedException, IOException, ClassNotFoundException, RecreateRunnableFailedException {
@@ -475,7 +495,7 @@ public class SerializableScheduledExecutorServiceTest {
             @Override
             public void run() {
             }                    
-        };
+        }
 
         class LocalClassCallable implements Callable<Integer> {
             public LocalClassCallable() { }
@@ -484,7 +504,7 @@ public class SerializableScheduledExecutorServiceTest {
             public Integer call() {
                 return 11;
             }                    
-        };
+        }
 
         Runnable runnable1 = new TestNonPublicConstructorRunnable();
         Runnable runnable2 = new TestNonStaticClassRunnable();
@@ -544,41 +564,44 @@ public class SerializableScheduledExecutorServiceTest {
         private static final AtomicInteger number = new AtomicInteger();
         
         public TestRuntimeExceptionRunnable() {
-            if (number.incrementAndGet() > 1)
+            if (number.incrementAndGet() > 1) {
                 throw new RuntimeException("runtime exception recreating Runnable");
+            }
         }
         
         @Override
         public void run() {
         }                    
-    };
+    }
 
     private static class TestCheckedExceptionRunnable implements Runnable {
         private static final AtomicInteger number = new AtomicInteger();
         
         public TestCheckedExceptionRunnable() throws Exception {
-            if (number.incrementAndGet() > 1)
+            if (number.incrementAndGet() > 1) {
                 throw new Exception("checked exception recreating Runnable");
+            }
         }
         
         @Override
         public void run() {
         }                    
-    };
+    }
 
     private static class TestRuntimeExceptionCallable implements Callable<Integer> {
         private static final AtomicInteger number = new AtomicInteger();
         
         public TestRuntimeExceptionCallable() {
-            if (number.incrementAndGet() > 1)
+            if (number.incrementAndGet() > 1) {
                 throw new RuntimeException("runtime exception recreating Callable");
+            }
         }
         
         @Override
         public Integer call() {
             return 5;                
         }                    
-    };
+    }
 
     @Test
     void testExceptionDeserialize() throws InterruptedException, IOException, ClassNotFoundException  {
@@ -625,8 +648,8 @@ public class SerializableScheduledExecutorServiceTest {
             
             SerializableScheduledExecutorService service = new SerializableScheduledThreadPoolExecutor(1);
             RecreateRunnableFailedException exception = TestUtil.assertExceptionFromCallable(
-                    () -> { service.importUnfinishedTasks(tasks); return null; },
-                    RecreateRunnableFailedException.class);
+                () -> { service.importUnfinishedTasks(tasks); return null; },
+                RecreateRunnableFailedException.class);
             assertEquals(3, exception.getFailedClasses().size());
             assertEquals(Arrays.asList("TestCheckedExceptionRunnable", "TestRuntimeExceptionCallable", "TestRuntimeExceptionRunnable"),
                          exception.getFailedClasses().stream()
@@ -653,8 +676,9 @@ public class SerializableScheduledExecutorServiceTest {
         
         @Override
         public void run() {
-            if (staticCounter.incrementAndGet() >= 3)
+            if (staticCounter.incrementAndGet() >= 3) {
                 throw new RuntimeException("runnable encountered exception");
+            }
             index.incrementAndGet();
         }                    
     }

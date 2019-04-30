@@ -14,10 +14,10 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.function.IntPredicate;
 
-import org.junit.jupiter.api.Test;
-
 import myutils.util.SimpleStringTokenizerFactory.QuoteStrategy;
 import myutils.util.SimpleStringTokenizerFactory.Token;
+
+import org.junit.jupiter.api.Test;
 
 
 public class SimpleStringTokenizerFactoryTest {
@@ -81,7 +81,7 @@ public class SimpleStringTokenizerFactoryTest {
     void test() {
         Token token;
         Iterator<Token> tokenizer = createSimpleStringTokenizer("  hello(world++2.9**3) +\t\n  9  ");
-                                                              // 012    7     3    8 0  3    6 8
+        // CHECKSTYLE:OFF                                     // 012    7     3    8 0  3    6 8                CHECKSTYLE:ON
         
         token = tokenizer.next();
         assertEquals("hello", token.getText());
@@ -134,7 +134,7 @@ public class SimpleStringTokenizerFactoryTest {
     void test2() {
         Token token;
         Iterator<Token> tokenizer = createSimpleStringTokenizer("  2 ^ 3");
-                                                              // 012    7     3    8 0  3    6 8
+        // CHECKSTYLE:OFF                                     // 012    7       CHECKSTYLE:ON
         
         token = tokenizer.next();
         assertEquals("2", token.getText());

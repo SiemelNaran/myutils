@@ -1,6 +1,5 @@
 package myutils.util.concurrent;
 
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -37,7 +36,7 @@ public class StackTraceCompletableFutureTest {
     }
     
     private CompletionStage<Integer> doEvenMore(CompletionStage<Integer> stage) {
-        return stage.thenApply(val -> { // line 40
+        return stage.thenApply(val -> { // line 39
             sleep(SLEEP_TIME);
             System.out.println("phase 3");
             return val + 3;
@@ -45,10 +44,11 @@ public class StackTraceCompletableFutureTest {
     }
     
     private CompletionStage<Integer> doMore(CompletionStage<Integer> stage) {
-        return doEvenMore(stage); // line 48
+        return doEvenMore(stage); // line 47
     }
     
-    public CompletionStage<Integer> common(boolean shouldThrow) {
+    @SuppressWarnings("checkstyle:LineLength")
+    private CompletionStage<Integer> common(boolean shouldThrow) {
         CompletionStage<Integer> stage = StackTraceCompletableFuture.supplyAsync(() -> { // line 52
             sleep(SLEEP_TIME);
             System.out.println("phase 1");
@@ -81,7 +81,7 @@ public class StackTraceCompletableFutureTest {
     
     private static final List<String> EXPECTED_CALLED_FROM = Collections.unmodifiableList(Arrays.asList(
             "Called from", "StackTraceCompletableFutureTest.java:66",
-            "Called from", "StackTraceCompletableFutureTest.java:40", "48", "64",
+            "Called from", "StackTraceCompletableFutureTest.java:39", "47", "64",
             "Called from", "StackTraceCompletableFutureTest.java:58",
             "Called from", "StackTraceCompletableFutureTest.java:52"));
 
@@ -102,7 +102,10 @@ public class StackTraceCompletableFutureTest {
         assertStringContainsInOrder(EXPECTED_CALLED_FROM, calledFrom);
         
         System.out.println(stage.toString());
-        assertStringContainsInOrder(Arrays.asList("StackTraceCompletableFuture", "java.util.concurrent.CompletableFuture", "[Completed normally]"), stage.toString());
+        assertStringContainsInOrder(Arrays.asList("StackTraceCompletableFuture",
+                                                  "java.util.concurrent.CompletableFuture",
+                                                  "[Completed normally]"),
+                                    stage.toString());
     }
 
     @Test
@@ -119,14 +122,17 @@ public class StackTraceCompletableFutureTest {
         assertStringContainsInOrder(EXPECTED_CALLED_FROM, calledFrom);
         
         System.out.println(stage.toString());
-        assertStringContainsInOrder(Arrays.asList("StackTraceCompletableFuture", "java.util.concurrent.CompletableFuture", "[Completed normally]"), stage.toString());
+        assertStringContainsInOrder(Arrays.asList("StackTraceCompletableFuture",
+                                                  "java.util.concurrent.CompletableFuture",
+                                                  "[Completed normally]"),
+                                    stage.toString());
     }
 
     @Test()
     void testExceptionalExecutionAllOf() throws InterruptedException, ExecutionException, TimeoutException {
         System.out.println("testExceptionalExecutionAllOf");
         CompletionStage<Integer> stage = common(true);
-        CompletionStage<Void> waitForAll = StackTraceCompletableFuture.allOf(stage.toCompletableFuture()); // line 129
+        CompletionStage<Void> waitForAll = StackTraceCompletableFuture.allOf(stage.toCompletableFuture()); // line 135
         
         try {
             waitForAll.toCompletableFuture().join();
@@ -137,7 +143,9 @@ public class StackTraceCompletableFutureTest {
             e.printStackTrace(stream);
             String eString = bos.toString();
             System.out.println(eString);
-            assertStringContainsInOrder(Arrays.asList("Caused by: java.lang.IllegalStateException: failed", "Called from", "StackTraceCompletableFutureTest.java:129"),
+            assertStringContainsInOrder(Arrays.asList("Caused by: java.lang.IllegalStateException: failed",
+                                                      "Called from",
+                                                      "StackTraceCompletableFutureTest.java:135"),
                                         eString);
         }
         
@@ -162,7 +170,8 @@ public class StackTraceCompletableFutureTest {
             e.printStackTrace(stream);
             String eString = bos.toString();
             System.out.println(eString);
-            assertStringContainsInOrder(add(Arrays.asList("Caused by: java.lang.IllegalStateException: failed"), EXPECTED_CALLED_FROM),
+            assertStringContainsInOrder(add(Arrays.asList("Caused by: java.lang.IllegalStateException: failed"),
+                                            EXPECTED_CALLED_FROM),
                                         eString);
         }
         
