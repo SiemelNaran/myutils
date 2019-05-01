@@ -35,8 +35,6 @@ public class ExpressionParserTest {
         assertEquals(14, evaluate("--2+3*4", scope));
         assertEquals(-14, evaluate("-(2+3*4)", scope));
         assertEquals(14, evaluate("--(2+3*4)", scope));
-        
-        assertEquals(0, evaluate("3 + (1 + -2) * 3", scope));
 
         assertEquals(10, evaluate("2*3+4", scope));
         assertEquals(14, evaluate("2*(3+4)", scope));
@@ -64,6 +62,7 @@ public class ExpressionParserTest {
         scope.put("y", 4);
         assertEquals(14, evaluate("2+x*max(---5,y)", scope)); // 2 + 3 * 4
         assertEquals(14, evaluate("2+x*MAX(---5,y)", scope)); // 2 + 3 * 4
+        assertEquals(0, evaluate("3 + (min(5, 1) + -2) * 3", scope)); // 3 + (1 + -2) * 3 = 3 * -1 * 3 = 0
     }
     
     @Test
@@ -167,10 +166,16 @@ public class ExpressionParserTest {
     @Test
     @SuppressWarnings({"checkstyle:EmptyLineSeparator", "checkstyle:RightCurlyAlone", "checkstyle:NeedBraces"})
     void testReduce2() throws ParseException {
-        ParseNode tree = PARSER.parse("3 + (x + -y) * z");
+        ParseNode tree = PARSER.parse("3 + (min(5, x) + -y) * z");
         
         /**
-         * This listener prints out the original expression
+         * This listener prints out the original expression.
+         * 
+         * <p>We can use this approach to convert a query expression into a SQL where clause.
+         * acceptIdentifier would append the column name corresponding to the identifier.
+         * But if the expression were "a ** b", this would need to converted to "pow(colA, colB)", which
+         * the approach here does not do, as it visits the 'a' before the '**', because of OPERATOR_MIDDLE,
+         * To solve, we could try the approach below.
          */
         Listener listener = new Listener() {
             private final StringBuilder str = new StringBuilder();
@@ -207,7 +212,7 @@ public class ExpressionParserTest {
             @Override public void acceptUnaryOperator(UnaryOperatorNode operator) { str.append(operator.getToken()); }
             
             @Override public void acceptFunction(FunctionNode function) { str.append(function.getName()).append('('); }
-            @Override public void nextFunctionArgument(FunctionNode operator, int argNumber) { if (argNumber > 0) str.append(", "); }
+            @Override public void nextFunctionArgument(FunctionNode operator, int argNumber) { if (argNumber > 0) str.append(","); }
             @Override public void endFunction(FunctionNode function) { str.append(')'); }
                     
             @Override public void acceptLiteral(LiteralNode literal) { str.append(literal.toString()); }
@@ -217,15 +222,18 @@ public class ExpressionParserTest {
         
         tree.reduce(listener);
         String summary = listener.toString();
-        assertEquals("3+(x+-y)*z", summary);
+        assertEquals("3+(min(5,x)+-y)*z", summary);
     }
 
     @Test
     void testReduce3() throws ParseException {
-        ParseNode tree = PARSER.parse("3 + (x + -y) * z");
+        ParseNode tree = PARSER.parse("3 + (min(5, x) + -y) * z");
         
         /**
-         * This listener evaluates the parse tree using stacks
+         * This listener evaluates the parse tree using stacks.
+         * 
+         * <p>We can use this approach to build a JOOQ where clause -- that is, to reduce the expression
+         * to a org.jooq.Condition.
          */
         class EvalListener implements Listener {
             private final Stack<String> binaryOperators = new Stack<>();
