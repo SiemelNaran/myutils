@@ -55,6 +55,8 @@
             <property name="max" value="75"/>
             <property name="countEmpty" value="true"/>
         </module>
+        <module name="UnusedImports"/>
+        <module name="RedundantImport"/>
         <module name="AvoidStarImport"/>
         <module name="OneTopLevelClass"/>
         <module name="NoLineWrap"/>
