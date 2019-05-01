@@ -90,6 +90,7 @@ public class ExpressionParserTest {
         assertEquals(Integer.valueOf(1_003_002), evaluate("2m+3km+x", scope));
     }
     
+    @SuppressWarnings({"checkstyle:EmptyLineSeparator", "checkstyle:RightCurlyAlone", "checkstyle:NeedBraces"})
     void testReduce() throws ParseException {
         ParseNode tree = PARSER.parse("2+x*-y");
         
@@ -144,9 +145,11 @@ public class ExpressionParserTest {
             @Override public void endIdentifier(IdentifierNode identifier) { }
             
             private String map(String identifier) {
-                if ("x".equals(identifier)) return "a";
-                if ("y".equals(identifier)) return "b";
-                throw new UnsupportedOperationException(identifier);
+                switch (identifier) {
+                    case "x": return "a";
+                    case "y": return "b";
+                    default: throw new UnsupportedOperationException(identifier);
+                }
             }
             
         };
