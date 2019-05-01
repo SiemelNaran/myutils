@@ -24,9 +24,9 @@ public class CompletionStageUtilsTest {
         CompletionStage<Integer> third = CompletableFuture.supplyAsync(() -> sleepAndReturn(2, 3));
         List<String> errors = Collections.synchronizedList(new ArrayList<>());
         CompletionStage<List<Integer>> all = CompletionStageUtils.awaitAll(
-                Arrays.asList(first, second, third),
-                (index, throwable) -> { errors.add(index + "=" + throwable.getMessage()); return null; });
-        List<Integer> result= all.toCompletableFuture().join();
+            Arrays.asList(first, second, third),
+            (index, throwable) -> { errors.add(index + "=" + throwable.getMessage()); return null; });
+        List<Integer> result = all.toCompletableFuture().join();
         assertEquals(3, result.size());
         assertEquals(1, result.get(0).intValue());
         assertEquals(2, result.get(1).intValue());
@@ -41,9 +41,9 @@ public class CompletionStageUtilsTest {
         CompletionStage<Integer> third = CompletableFuture.supplyAsync(() -> sleepAndReturn(2, 3));
         List<String> errors = Collections.synchronizedList(new ArrayList<>());
         CompletionStage<List<Integer>> all = CompletionStageUtils.awaitAll(
-                Arrays.asList(first, second, third),
-                (index, throwable) -> { errors.add(index + "=" + throwable.getMessage()); return null; });
-        List<Integer> result= all.toCompletableFuture().join();
+            Arrays.asList(first, second, third),
+            (index, throwable) -> { errors.add(index + "=" + throwable.getMessage()); return null; });
+        List<Integer> result = all.toCompletableFuture().join();
         assertEquals(3, result.size());
         assertNull(result.get(0));
         assertEquals(2, result.get(1).intValue());
@@ -58,9 +58,9 @@ public class CompletionStageUtilsTest {
         CompletionStage<Integer> third = CompletableFuture.supplyAsync(() -> sleepAndReturn(2, 3));
         List<String> errors = Collections.synchronizedList(new ArrayList<>());
         CompletionStage<List<Integer>> all = CompletionStageUtils.awaitAll(
-                Arrays.asList(first, second, third),
-                (index, throwable) -> { errors.add(index + "=" + throwable.getMessage()); throw new CompletionException(throwable); });
-        List<Integer> result= all.toCompletableFuture().join();
+            Arrays.asList(first, second, third),
+            (index, throwable) -> { errors.add(index + "=" + throwable.getMessage()); throw new CompletionException(throwable); });
+        List<Integer> result = all.toCompletableFuture().join();
         assertEquals(2, result.size());
         assertEquals(2, result.get(0).intValue());
         assertEquals(3, result.get(1).intValue());

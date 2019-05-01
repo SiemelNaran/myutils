@@ -28,7 +28,6 @@
     </dependencies>
 
     <build>
-        <pluginManagement>
 	        <plugins>
 	            <plugin>
 	                <groupId>org.apache.maven.plugins</groupId>
@@ -43,9 +42,10 @@
 	                </dependencies>
 	                <executions>
 	                    <execution>
-	                        <id>compile</id>
-	                        <phase>compile</phase>
+	                        <id>test-compile</id>
+	                        <phase>test-compile</phase>
 	                        <configuration>
+                                <includeTestSourceDirectory>true</includeTestSourceDirectory>
 	                            <configLocation>${project.basedir}/checkstyle/checks.xml</configLocation>
 	                            <suppressionsLocation>${project.basedir}/checkstyle/suppressions.xml</suppressionsLocation>
 	                            <encoding>UTF-8</encoding>
@@ -73,7 +73,6 @@
 	                <version>3.0.0-M3</version>
 	            </plugin>
 	        </plugins>
-        </pluginManagement>
     </build>
 
 </project>
