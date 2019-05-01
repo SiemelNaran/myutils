@@ -31,6 +31,11 @@ public class LiteralNode implements ParseNode {
     }
     
     @Override
+    public String toString() {
+        return Objects.toString(value);
+    }
+
+    @Override
     public final Class<?> checkEval(Map<String, Class<?>> scopeTypes) {
         return value.getClass();
     }
@@ -41,7 +46,7 @@ public class LiteralNode implements ParseNode {
     }
     
     @Override
-    public void reduce(Listener listener) {
+    public final void reduce(Listener listener) {
         listener.startLiteral(this);
         listener.acceptLiteral(this);
         listener.endLiteral(this);
@@ -67,10 +72,5 @@ public class LiteralNode implements ParseNode {
         public Number getValue() {
             return (Number) super.getValue();
         }
-    }
-    
-    @Override
-    public String toString() {
-        return Objects.toString(value);
     }
 }

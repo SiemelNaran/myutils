@@ -49,7 +49,7 @@ public abstract class UnaryOperatorNode implements OperatorNode {
     }
 
     @Override
-    public void reduce(Listener listener) {
+    public final void reduce(Listener listener) {
         listener.startUnaryOperator(this);
         switch (listener.characteristics().unaryOperatorPosition()) {
             case OPERATOR_FIRST:

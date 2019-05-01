@@ -56,7 +56,7 @@ public abstract class FunctionNode implements ParseNode {
     }
     
     @Override
-    public void reduce(Listener listener) {
+    public final void reduce(Listener listener) {
         listener.startFunction(this);
         switch (listener.characteristics().functionPosition()) {
             case FUNCTION_FIRST:

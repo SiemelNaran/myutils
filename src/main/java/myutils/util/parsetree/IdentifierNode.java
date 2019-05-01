@@ -61,7 +61,7 @@ public final class IdentifierNode implements ParseNode {
     }
     
     @Override
-    public void reduce(Listener listener) {
+    public final void reduce(Listener listener) {
         listener.startIdentifier(this);
         listener.acceptIdentifier(this);
         listener.endIdentifier(this);
