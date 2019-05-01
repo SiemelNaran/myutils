@@ -57,6 +57,7 @@ public class ExpressionParserTest {
         scope.put("x", 3);
         scope.put("y", 4);
         assertEquals(14, evaluate("2+x*max(---5,y)", scope)); // 2 + 3 * 4
+        assertEquals(14, evaluate("2+x*MAX(---5,y)", scope)); // 2 + 3 * 4
     }
     
     @Test
@@ -68,6 +69,7 @@ public class ExpressionParserTest {
         assertParseError("(2 + 3", "missing close parenthesis", 6); // one past end of expression
         assertParseError("max(3, 4", "missing close parenthesis in function call", 8); // one past end of of expression
         assertParseError("unknown(3, 4)", "unrecognized function 'unknown'", 0); // index of start of expression
+        assertParseError("Max(3, 4)", "unrecognized function 'Max'", 0); // index of start of expression
         assertParseError("2 * * 3", "unrecognized token '*'", 4); // index of second *
         assertParseError("2 ^ 3", "unrecognized token '^'", 2); // index of ^
     }
@@ -104,6 +106,7 @@ public class ExpressionParserTest {
                                                                    .addBinaryOperator(DIVIDE.class)
                                                                    .addUnaryOperator(POSITIVE.class)
                                                                    .addUnaryOperator(NEGATIVE.class)
+                                                                   .setFunctionCase(ExpressionParser.FunctionCase.ALL_LETTERS_SAME_CASE)
                                                                    .addFunction(MAX.class)
                                                                    .addFunction(MIN.class)
                                                                    .build();

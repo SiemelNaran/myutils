@@ -9,7 +9,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.IntPredicate;
+
+import javax.annotation.Nonnull;
 
 import myutils.util.RewindableIterator;
 import myutils.util.SimpleStringTokenizerFactory;
@@ -33,16 +36,19 @@ public class ExpressionParser {
     
     private final Map<String, Constructor<? extends BinaryOperatorNode>> binaryOperators;
     private final Map<String, Constructor<? extends UnaryOperatorNode>> unaryOperators;
+    private FunctionCase functionCase;
     private final Map<String, Constructor<? extends FunctionNode>> functions;
     private final NumberFactory numberFactory;
     private final SimpleStringTokenizerFactory tokenizerFactory;
-    
+
     private ExpressionParser(Map<String, Constructor<? extends BinaryOperatorNode>> binaryOperators,
                              Map<String, Constructor<? extends UnaryOperatorNode>> unaryOperators,
+                             FunctionCase functionCase,
                              Map<String, Constructor<? extends FunctionNode>> functions,
                              NumberFactory numberFactory) {
         this.binaryOperators = binaryOperators;
         this.unaryOperators = unaryOperators;
+        this.functionCase = functionCase;
         this.functions = functions;
         this.numberFactory = numberFactory;
         
@@ -181,9 +187,15 @@ public class ExpressionParser {
                 if (result instanceof IdentifierNode && tokenizer.hasNext()) {
                     Token nextToken = tokenizer.next();
                     if (nextToken.getText().equals("(")) {
-                        IdentifierNode functionName = (IdentifierNode) result;
+                        String functionName = ((IdentifierNode) result).getIdentifier();
                         try {
-                            result = FunctionNode.tryConstruct(functionName.getIdentifier(), functions);
+                            functionName = functionCase.convert(functionName);
+                        } catch (IllegalArgumentException ignored) {
+                            // function name unchanged and it won't be found in map
+                            // so we throw ParseException("unrecognized function ...")
+                        }
+                        try {
+                            result = FunctionNode.tryConstruct(functionName, functions);
                             FunctionNode resultAsFunction = (FunctionNode) result;
                             int oldLevel = parenthesisLevel++;
                             while (parenthesisLevel > oldLevel) {
@@ -198,7 +210,7 @@ public class ExpressionParser {
                             }
                             resultAsFunction.checkNumArgs(endOfLastToken - 1);
                         } catch (ConstructException ignored) {
-                            throw new ParseException("unrecognized function '" + functionName.getIdentifier() + "'",
+                            throw new ParseException("unrecognized function '" + functionName + "'",
                                                      token.getStart()); // handles case: unknown(3, 4)
                         }
                     } else {
@@ -281,9 +293,69 @@ public class ExpressionParser {
         }
     }
     
+    public enum FunctionCase {
+        /**
+         * Respect the original case of the function, so max and MAX are different functions.
+         */
+        ACTUAL_CASE {
+            @Override
+            @Nonnull String convert(@Nonnull String str) {
+                return str;
+            }
+        },
+        
+        /**
+         * Ignore the original case of the function, so max and MAX and Max are the same function.
+         */
+        IGNORE_CASE {
+            @Override
+            @Nonnull String convert(@Nonnull String str) {
+                return str.toLowerCase();
+            }
+        },
+        
+        ALL_LETTERS_SAME_CASE {                
+            @Override
+            @Nonnull String convert(@Nonnull String str) {
+                if (!str.isEmpty()) {
+                    int first = str.codePointAt(0);
+                    if (Character.isLowerCase(first)) {
+                        str.codePoints().skip(1).forEach(FunctionCase::assertLowerCase);
+                    } else if (Character.isUpperCase(first)) {
+                        str.codePoints().skip(1).forEach(FunctionCase::assertUpperCase);
+                        str = str.toLowerCase();
+                    }
+                }
+                return str;
+            }
+        };
+        
+        /**
+         * Convert the function name.
+         * 
+         * @param str the function 
+         * @return the converted function
+         * @throws IllegalArgumentException if the function case is invalid
+         */
+        abstract String convert(@Nonnull String str);
+        
+        private static void assertLowerCase(int c) {
+            if (Character.isLetter(c) && !Character.isLowerCase(c)) {
+                throw new IllegalArgumentException("Found lowercase character in function name");
+            }
+        }
+        
+        private static void assertUpperCase(int c) {
+            if (Character.isLetter(c) && !Character.isUpperCase(c)) {
+                throw new IllegalArgumentException("Found uppercase character in function name");
+            }
+        }
+    }
+    
     public static class Builder {
         private Map<String, Constructor<? extends BinaryOperatorNode>> binaryOperators = new HashMap<>();
         private Map<String, Constructor<? extends UnaryOperatorNode>> unaryOperators = new HashMap<>();
+        private FunctionCase functionCase = null;
         private Map<String, Constructor<? extends FunctionNode>> functions = new HashMap<>();
         private NumberFactory numberFactory = DefaultNumberFactory.DEFAULT_NUMBER_FACTORY;
         
@@ -330,6 +402,21 @@ public class ExpressionParser {
         }
         
         /**
+         * Set the function case.
+         * This function must be called before addFunction.
+         * 
+         * @param functionCase the function case
+         * @return this
+         */
+        public Builder setFunctionCase(@Nonnull FunctionCase functionCase) {
+            if (this.functionCase != null) {
+                throw new IllegalStateException("functionCase has already been set");
+            }
+            this.functionCase = Objects.requireNonNull(functionCase);
+            return this;
+        }
+        
+        /**
          * Add unary operator.
          * 
          * @param function the function
@@ -339,17 +426,19 @@ public class ExpressionParser {
          * @throws InvalidOperatorException if function name contains invalid chars, which are: not letter/digits 
          */
         public Builder addFunction(Class<? extends FunctionNode> function) throws BuilderException {
+            Objects.requireNonNull(functionCase);
             try {
                 Constructor<? extends FunctionNode> constructor = function.getConstructor();
                 FunctionNode instance = constructor.newInstance();
                 verifyFunctionNameValid(instance.getName());
-                functions.put(instance.getName(), constructor);
+                String functionName = functionCase.convert(instance.getName());
+                functions.put(functionName, constructor);
                 return this;
             } catch (NoSuchMethodException | IllegalAccessException | InstantiationException | InvocationTargetException e) {
                 throw new BuilderException(e);
             }
         }
-        
+
         private static boolean verifyOperatorValid(String oper) {
             int len = oper.length();
             for (int i = 0; i < len; i++) {
@@ -403,6 +492,7 @@ public class ExpressionParser {
         public ExpressionParser build() {
             return new ExpressionParser(binaryOperators,
                                         unaryOperators,
+                                        functionCase,
                                         functions,
                                         numberFactory);
 
