@@ -192,6 +192,7 @@ public class ExpressionParser {
                             functionName = functionCase.convert(functionName);
                         } catch (IllegalArgumentException ignored) {
                             // function name unchanged and it won't be found in map
+                            // for example function name is mixed case and functionCase is ALL_LETTERS_SAME_CASE
                             // so we throw ParseException("unrecognized function ...")
                         }
                         try {
