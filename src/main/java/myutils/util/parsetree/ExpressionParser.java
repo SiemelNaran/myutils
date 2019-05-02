@@ -36,7 +36,7 @@ public class ExpressionParser {
     
     private final Map<String, Constructor<? extends BinaryOperatorNode>> binaryOperators;
     private final Map<String, Constructor<? extends UnaryOperatorNode>> unaryOperators;
-    private FunctionCase functionCase;
+    private final FunctionCase functionCase;
     private final Map<String, Constructor<? extends FunctionNode>> functions;
     private final NumberFactory numberFactory;
     private final SimpleStringTokenizerFactory tokenizerFactory;
@@ -192,8 +192,8 @@ public class ExpressionParser {
                             functionName = functionCase.convert(functionName);
                         } catch (IllegalArgumentException ignored) {
                             // function name unchanged and it won't be found in map
-                            // for example function name is mixed case and functionCase is ALL_LETTERS_SAME_CASE
-                            // so we throw ParseException("unrecognized function ...")
+                            // for example if function name is mixed case and functionCase is ALL_LETTERS_SAME_CASE
+                            // so we throw ParseException("unrecognized function ...") below
                         }
                         try {
                             result = FunctionNode.tryConstruct(functionName, functions);
@@ -320,6 +320,8 @@ public class ExpressionParser {
             @Nonnull String convert(@Nonnull String str) {
                 if (!str.isEmpty()) {
                     int first = str.codePointAt(0);
+                    // verifyFunctionNameValid verifies first char is a letter
+                    // so one of the below two conditions must be true
                     if (Character.isLowerCase(first)) {
                         str.codePoints().skip(1).forEach(FunctionCase::assertLowerCase);
                     } else if (Character.isUpperCase(first)) {
