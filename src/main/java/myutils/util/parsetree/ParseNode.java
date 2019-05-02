@@ -7,7 +7,16 @@ public interface ParseNode {
     /**
      * Check if this parse node is valid.
      * 
+     * <p>This function is used to check if the expression is valid, prior to you knowing the values
+     * of the bind variables. For example in <code>if(a + b, "trueResult", "falseResult")</code>
+     * there is an error because the first argument to function <code>if</code> should be a boolean.
+     * If the first argument were <code>a > b</code> then the expression is valid, and checkVal
+     * would return Strring.class.
+     * 
+     * <p>checkEval could be implemented via reduce instead.
+     * 
      * @param scopeTypes the type of all identifiers in this scope
+     * @return the type of the return value
      * @throws myutils.util.parsetree.TypeException if there is an error. This is a runtime exception.
      */
     Class<?> checkEval(Map<String, Class<?>> scopeTypes) throws myutils.util.parsetree.TypeException;
@@ -15,7 +24,10 @@ public interface ParseNode {
     /**
      * Evaluate this parse node.
      * 
+     * <p>eval could be implemented in via reduce instead.
+     * 
      * @param scope the value of all identifiers in this scope
+     * @return the return value
      * @throws myutils.util.parsetree.EvalException if there is an error. This is a runtime exception.
      */
     Object eval(Map<String, Object> scope) throws myutils.util.parsetree.EvalException;
@@ -26,6 +38,10 @@ public interface ParseNode {
     void reduce(Listener listener);
     
     public interface Listener {
+        /**
+         * The characteristics of the listener, such as the order in which operators and nodes should
+         * be visited.
+         */
         Characteristics characteristics();
 
         

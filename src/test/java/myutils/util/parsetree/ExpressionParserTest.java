@@ -174,7 +174,7 @@ public class ExpressionParserTest {
          * <p>We can use this approach to convert a query expression into a SQL where clause.
          * acceptIdentifier would append the column name corresponding to the identifier.
          * But if the expression were "a ** b", this would need to converted to "pow(colA, colB)", which
-         * the approach here does not do, as it visits the 'a' before the '**', because of OPERATOR_MIDDLE,
+         * the approach here does not do, as it visits the 'a' before the '**', because of OPERATOR_MIDDLE.
          * To solve, we could try the approach below.
          */
         Listener listener = new Listener() {

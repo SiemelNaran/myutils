@@ -46,7 +46,7 @@ public class LiteralNode implements ParseNode {
     }
     
     @Override
-    public final void reduce(Listener listener) {
+    public void reduce(Listener listener) {
         listener.startLiteral(this);
         listener.acceptLiteral(this);
         listener.endLiteral(this);
