@@ -56,7 +56,7 @@ public class UnitNumberFactory implements NumberFactory {
             }
         }
         if (converter == null) {
-            throw new NumberFormatException("unit missing in " + str);
+            throw new NumberFormatException("unrecognized unit in " + str);
         }
         
         Number basic = numberFactory.fromString(str);
