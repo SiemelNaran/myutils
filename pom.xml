@@ -52,7 +52,6 @@
 	                            <consoleOutput>true</consoleOutput>
 	                            <violationSeverity>warning</violationSeverity>
 	                            <failsOnError>true</failsOnError>
-                                <includeTestSourceDirectory>true</includeTestSourceDirectory>
 	                        </configuration>
 	                        <goals>
 	                            <goal>check</goal>
