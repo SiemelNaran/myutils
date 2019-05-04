@@ -14,6 +14,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import myutils.util.parsetree.UnitNumberFactory.UnitPosition;
+
 import org.junit.jupiter.api.Test;
 
 
@@ -110,7 +112,7 @@ public class ExpressionParserTest {
                                                                          .addUnit("m", val -> val)
                                                                          .addUnit("km", ExpressionParserTest::multiplyTimesOneThousand)
                                                                          .setDefaultUnit("m")
-                                                                         .setUnitAfter(true)
+                                                                         .setUnitPosition(UnitPosition.AFTER)
                                                                          .build();
     
     private static Integer multiplyTimesOneThousand(Number number) {

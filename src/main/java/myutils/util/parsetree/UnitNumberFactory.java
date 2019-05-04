@@ -1,10 +1,8 @@
 package myutils.util.parsetree;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.UnaryOperator;
 
 import javax.annotation.Nonnull;
@@ -17,16 +15,16 @@ public class UnitNumberFactory implements NumberFactory {
     }
     
     private final @Nonnull DefaultNumberFactory numberFactory;
-    private final boolean unitAfter;
-    private final @Nonnull Collection<Map.Entry<String /*unit*/, UnaryOperator<Number>>> units; // sorted by longest first
+    private final @Nonnull UnitPosition unitPosition;
+    private final @Nonnull Map<String /*unit*/, UnaryOperator<Number>> units;
     private final @Nullable UnaryOperator<Number> defaultConverter;
     
     private UnitNumberFactory(DefaultNumberFactory numberFactory,
-                              boolean unitAfter,
-                              Collection<Map.Entry<String /*unit*/, UnaryOperator<Number>>> units,
+                              UnitPosition unitPosition,
+                              Map<String /*unit*/, UnaryOperator<Number>> units,
                               UnaryOperator<Number> defaultConverter) {
         this.numberFactory = numberFactory;
-        this.unitAfter = unitAfter;
+        this.unitPosition = unitPosition;
         this.units = units;
         this.defaultConverter = defaultConverter;
     }
@@ -37,45 +35,95 @@ public class UnitNumberFactory implements NumberFactory {
             return null;
         }
         
-        UnaryOperator<Number> converter = defaultConverter;
-        if (unitAfter) {
-            for (Map.Entry<String, UnaryOperator<Number>> entry : units) {
-                String unitName = entry.getKey();
-                if (str.endsWith(unitName)) {
-                    converter = entry.getValue();
-                    str = str.substring(0, str.length() - unitName.length());
+        String original = str;
+        
+        String unitName;
+        switch (unitPosition) {
+            case BEFORE: {
+                int[] unit = getWordAtStart(str);
+                if (unit.length > 0) {
+                    unitName = new String(unit, 0, unit.length);
+                    str = str.substring(unitName.length());
+                } else {
+                    unitName = "";
                 }
+                break;
+            }
+            
+            case AFTER: {
+                int[] number = getNumberAtStart(str);
+                if (number.length > 0) {
+                    unitName = str.substring(number.length);
+                    str = new String(number, 0, number.length);
+                } else {
+                    unitName = "";
+                }
+                break;
+            }
+                
+            default:
+                throw new UnsupportedOperationException();
+        }
+        
+        UnaryOperator<Number> converter;
+        if (unitName.isEmpty()) {
+            converter = defaultConverter;
+            if (converter == null) {
+                throw new NumberFormatException("unit missing in " + original);
             }
         } else {
-            for (Map.Entry<String, UnaryOperator<Number>> entry : units) {
-                String unitName = entry.getKey();
-                if (str.startsWith(unitName)) {
-                    converter = entry.getValue();
-                    str = str.substring(unitName.length());
-                }
+            converter = units.get(unitName);
+            if (converter == null) {
+                throw new NumberFormatException("unrecognized unit " + unitName + " in " + original);
             }
-        }
-        if (converter == null) {
-            throw new NumberFormatException("unrecognized unit in " + str);
         }
         
         Number basic = numberFactory.fromString(str);
         return converter.apply(basic);
     }
     
+    private static @Nonnull int[] getWordAtStart(String str) {
+        return str.codePoints().takeWhile(Character::isLetter).toArray();
+    }
+    
+    private static @Nonnull int[] getNumberAtStart(String str) {
+        return str.codePoints().takeWhile(UnitNumberFactory::isNumberChar).toArray();
+    }
+    
+    private static boolean isNumberChar(int c) {
+        return Character.isDigit(c) || c == '.' || c == '+' || c == '-';
+    }
+    
+    public enum UnitPosition {
+        BEFORE,
+        AFTER
+    }
+
     public static class Builder {
         private @Nonnull DefaultNumberFactory numberFactory = DefaultNumberFactory.DEFAULT_NUMBER_FACTORY;
-        private boolean unitAfter = true;
+        private UnitPosition unitPosition = UnitPosition.AFTER;
         private @Nonnull final Map<String /*unit*/, UnaryOperator<Number>> units = new HashMap<>();
         private @Nullable String defaultUnit;
         
+        /**
+         * Set the factory used to parse the number part of a string, such as the "3" in "3km".
+         * 
+         * @param numberFactory the number factory
+         * @return this
+         */
         public Builder setNumberFactory(@Nonnull DefaultNumberFactory numberFactory) {
-            this.numberFactory = numberFactory;
+            this.numberFactory = Objects.requireNonNull(numberFactory);
             return this;
         }
         
-        public Builder setUnitAfter(boolean unitAfter) {
-            this.unitAfter = unitAfter;
+        /**
+         * Set the unit position, as in after the number or before or either.
+         * 
+         * @param unitPosition the unit position
+         * @return this
+         */
+        public Builder setUnitPosition(@Nonnull UnitPosition unitPosition) {
+            this.unitPosition = Objects.requireNonNull(unitPosition);
             return this;
         }
         
@@ -85,6 +133,7 @@ public class UnitNumberFactory implements NumberFactory {
          * @param unit the unit abbreviation
          * @param converter a tool to convert the plain Number read by the number factory to a new number
          * @return this
+         * @throws IllegalArgumentException if unit name is not all letters
          */
         public Builder addUnit(@Nonnull String unit, UnaryOperator<Number> converter) {
             verifyUnit(unit);
@@ -119,15 +168,9 @@ public class UnitNumberFactory implements NumberFactory {
          */
         public UnitNumberFactory build() {
             return new UnitNumberFactory(numberFactory,
-                                         unitAfter,
-                                         getUnits(),
+                                         unitPosition,
+                                         units,
                                          units.get(defaultUnit));
-        }
-        
-        private List<Map.Entry<String, UnaryOperator<Number>>> getUnits() {
-            var list = new ArrayList<>(units.entrySet());
-            list.sort((first, second) -> second.getKey().length() - first.getKey().length());
-            return list;
         }
     }
 }
