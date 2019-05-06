@@ -97,7 +97,7 @@ public class ExpressionParserTest {
         ParseNode tree = PARSER.parse("2+x*-y");
         
         /**
-         * This listener prints out a+b like PLUS(a, b)
+         * This listener prints out <code>a+b</code> like <code>PLUS(a, b)</code>.
          */
         Listener listener = new Listener() {
             private final StringBuilder str = new StringBuilder();
@@ -333,7 +333,7 @@ public class ExpressionParserTest {
                 }
             }
             
-        };
+        }
         
         EvalListener listener = new EvalListener();
         tree.reduce(listener);
