@@ -22,7 +22,7 @@ public class DefaultNumberFactory implements NumberFactory {
         PREFER_BIG_DECIMAL
     }
     
-    static final NumberFactory DEFAULT_NUMBER_FACTORY = DefaultNumberFactory.builder().build();
+    static final DefaultNumberFactory DEFAULT_NUMBER_FACTORY = DefaultNumberFactory.builder().build();
     
     public static Builder builder() {
         return new Builder();
