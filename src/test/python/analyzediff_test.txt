@@ -1,0 +1,81 @@
+diff --git a/analyzediff_test0.txt b/analyzediff_test1.txt
+index ca3bc2c..e741e06 100644
+--- a/analyzediff_test0.txt
++++ b/analyzediff_test1.txt
+@@ -6,16 +6,24 @@ git diff --no-index analyzediff_test0.txt analyzediff_test1.txt > analyzediff_te
+ 
+ package test;
+ 
++// new lines added:
++// renames getValue to getIntegerValue
++// renames getSeven to getNumber
++
+ public class Thing {
+     // method of 3 arguments all on the same line -- this will change
+-    private static void test1(int x, int y, int z) {
++    private static void test1(int x,
++                              int y,
++                              int z) {
+         Thing thing = new Thing();
+ 
+-        int a = thing.getValue() + 1;
++        int a = thing.getIntegerValue() + 1;
+         System.out.println(a);
+ 
+-        int b = thing.getValue();
+-        int c = thing.getValue();
++        // new line added add end of paragraph
++        int b = thing.getIntegerValue();
++        int c = thing.getIntegerValue();
++        int d = thing.getIntegerValue();
+         System.out.println(b + c);
+ 
+         System.out.println();
+@@ -24,7 +32,7 @@ public class Thing {
+         System.out.println();
+         System.out.println();
+ 
+-        int e = thing.getValue() + thing.getValue();
++        int e = thing.getIntegerValue() + thing.getIntegerValue();
+         System.out.println(d);
+     }
+ 
+@@ -34,14 +42,20 @@ public class Thing {
+                               int z) {
+         Thing thing = new Thing();
+ 
+-        int a = thing.getSeven() + 1;
++        int a = thing.getNumber() + 1;
+         System.out.println(a);
+ 
+-        int b = thing.getSeven();
+-        int c = thing.getSeven();
++        int b = thing.getNumber();
++        int c = thing.getNumber();
+         System.out.println(b + c);
+ 
+-        int d = thing.getSeven() + thing.getSeven();
++        System.out.println();
++        System.out.println();
++        System.out.println();
++        System.out.println();
++        System.out.println();
++
++        int d = thing.getNumber() + thing.getNumber();
+         System.out.println(d);
+     }
+ 
+@@ -50,11 +64,11 @@ public class Thing {
+         test2();
+     }
+ 
+-    public int getValue() {
++    public int getIntegerValue() {
+         return 5;
+     }
+ 
+-    public int getSeven() {
++    public int getNumber() {
+         return 7;
+     }
+ }
