@@ -44,15 +44,41 @@ public abstract class FunctionNode implements ParseNode {
             throw new ParseException("too many arguments to function " + getName(), tokenStart);
         }
     }
-
+    
     @Override
-    public Class<?> checkEval(Map<String, Class<?>> scopeTypes) throws TypeException {
+    public final Class<?> checkEval(Map<String, Class<?>> scopeTypes) throws TypeException {
         return checkCombine(args.stream().map(node -> node.checkEval(scopeTypes)).collect(Collectors.toList()));
     }
-
+    
     @Override
-    public Object eval(Map<String, Object> scope) throws EvalException {
+    public final Object eval(Map<String, Object> scope) throws EvalException {
         return combine(args.stream().map(node -> node.eval(scope)).collect(Collectors.toList()));
+    }
+    
+    @Override
+    public void reduce(Listener listener) {
+        listener.startFunction(this);
+        switch (listener.characteristics().functionPosition()) {
+            case FUNCTION_FIRST:
+                listener.acceptFunction(this);
+                reduceArgs(listener);
+                break;
+            case FUNCTION_LAST:
+                reduceArgs(listener);
+                listener.acceptFunction(this);
+                break;
+            default:
+                throw new UnsupportedOperationException();
+        }
+        listener.endFunction(this);
+    }
+    
+    private void reduceArgs(Listener listener) {
+        for (int i = 0; i < args.size(); i++) {
+            ParseNode arg = args.get(i);
+            listener.nextFunctionArgument(this, i);
+            arg.reduce(listener);
+        }
     }
 
     protected abstract String getName();

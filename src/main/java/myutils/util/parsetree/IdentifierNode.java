@@ -2,7 +2,7 @@ package myutils.util.parsetree;
 
 import java.util.Map;
 
-public class IdentifierNode implements ParseNode {
+public final class IdentifierNode implements ParseNode {
     private final String identifier;
 
     static IdentifierNode tryConstruct(String token) throws ConstructException {
@@ -38,7 +38,7 @@ public class IdentifierNode implements ParseNode {
         this.identifier = identifier;
     }
 
-    public String getIdentifier() {
+    public final String getIdentifier() {
         return identifier;
     }
     
@@ -60,6 +60,13 @@ public class IdentifierNode implements ParseNode {
         return result;
     }
     
+    @Override
+    public void reduce(Listener listener) {
+        listener.startIdentifier(this);
+        listener.acceptIdentifier(this);
+        listener.endIdentifier(this);
+    }
+
     public static class VariableNotFoundTypeException extends EvalException {
         private static final long serialVersionUID = 1L;
 
