@@ -53,13 +53,13 @@ public enum StringCase {
     
     private static void assertLowerCase(int c) {
         if (Character.isLetter(c) && !Character.isLowerCase(c)) {
-            throw new IllegalArgumentException("Found lowercase character in function name");
+            throw new IllegalArgumentException("Found lowercase character in string");
         }
     }
     
     private static void assertUpperCase(int c) {
         if (Character.isLetter(c) && !Character.isUpperCase(c)) {
-            throw new IllegalArgumentException("Found uppercase character in function name");
+            throw new IllegalArgumentException("Found uppercase character in string");
         }
     }
 }
