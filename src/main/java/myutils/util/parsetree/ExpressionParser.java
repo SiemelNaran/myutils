@@ -36,14 +36,14 @@ public class ExpressionParser {
     
     private final Map<String, Constructor<? extends BinaryOperatorNode>> binaryOperators;
     private final Map<String, Constructor<? extends UnaryOperatorNode>> unaryOperators;
-    private final FunctionCase functionCase;
+    private final StringCase functionCase;
     private final Map<String, Constructor<? extends FunctionNode>> functions;
     private final NumberFactory numberFactory;
     private final SimpleStringTokenizerFactory tokenizerFactory;
 
     private ExpressionParser(Map<String, Constructor<? extends BinaryOperatorNode>> binaryOperators,
                              Map<String, Constructor<? extends UnaryOperatorNode>> unaryOperators,
-                             FunctionCase functionCase,
+                             StringCase functionCase,
                              Map<String, Constructor<? extends FunctionNode>> functions,
                              NumberFactory numberFactory) {
         this.binaryOperators = binaryOperators;
@@ -294,71 +294,10 @@ public class ExpressionParser {
         }
     }
     
-    public enum FunctionCase {
-        /**
-         * Respect the original case of the function, so max and MAX are different functions.
-         */
-        ACTUAL_CASE {
-            @Override
-            @Nonnull String convert(@Nonnull String str) {
-                return str;
-            }
-        },
-        
-        /**
-         * Ignore the original case of the function, so max and MAX and Max are the same function.
-         */
-        IGNORE_CASE {
-            @Override
-            @Nonnull String convert(@Nonnull String str) {
-                return str.toLowerCase();
-            }
-        },
-        
-        ALL_LETTERS_SAME_CASE {                
-            @Override
-            @Nonnull String convert(@Nonnull String str) {
-                if (!str.isEmpty()) {
-                    int first = str.codePointAt(0);
-                    // verifyFunctionNameValid verifies first char is a letter
-                    // so one of the below two conditions must be true
-                    if (Character.isLowerCase(first)) {
-                        str.codePoints().skip(1).forEach(FunctionCase::assertLowerCase);
-                    } else if (Character.isUpperCase(first)) {
-                        str.codePoints().skip(1).forEach(FunctionCase::assertUpperCase);
-                        str = str.toLowerCase();
-                    }
-                }
-                return str;
-            }
-        };
-        
-        /**
-         * Convert the function name.
-         * 
-         * @param str the function 
-         * @return the converted function
-         * @throws IllegalArgumentException if the function case is invalid
-         */
-        abstract String convert(@Nonnull String str);
-        
-        private static void assertLowerCase(int c) {
-            if (Character.isLetter(c) && !Character.isLowerCase(c)) {
-                throw new IllegalArgumentException("Found lowercase character in function name");
-            }
-        }
-        
-        private static void assertUpperCase(int c) {
-            if (Character.isLetter(c) && !Character.isUpperCase(c)) {
-                throw new IllegalArgumentException("Found uppercase character in function name");
-            }
-        }
-    }
-    
     public static class Builder {
         private Map<String, Constructor<? extends BinaryOperatorNode>> binaryOperators = new HashMap<>();
         private Map<String, Constructor<? extends UnaryOperatorNode>> unaryOperators = new HashMap<>();
-        private FunctionCase functionCase = null;
+        private StringCase functionCase = null;
         private Map<String, Constructor<? extends FunctionNode>> functions = new HashMap<>();
         private NumberFactory numberFactory = DefaultNumberFactory.DEFAULT_NUMBER_FACTORY;
         
@@ -411,7 +350,7 @@ public class ExpressionParser {
          * @param functionCase the function case
          * @return this
          */
-        public Builder setFunctionCase(@Nonnull FunctionCase functionCase) {
+        public Builder setFunctionCase(@Nonnull StringCase functionCase) {
             if (this.functionCase != null) {
                 throw new IllegalStateException("functionCase has already been set");
             }
