@@ -5,6 +5,7 @@ import static myutils.TestUtil.assertException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Objects;
 
 import myutils.util.parsetree.UnitNumberFactory.UnitPosition;
@@ -38,7 +39,7 @@ public class UnitNumberFactoryTest {
                                                  .setNumberFactory(DefaultNumberFactory.builder()
                                                                                        .setIntegerPolicy(null)
                                                                                        .setFloatPolicy(DefaultNumberFactory.FloatPolicy.PREFER_BIG_DECIMAL)
-                                                                                       .setBigDecimalScale(2)
+                                                                                       .setBigDecimalScale(2, RoundingMode.FLOOR)
                                                                                        .build())
                                                  .setUnitCase(StringCase.ACTUAL_CASE)
                                                  .addUnit("USD", val -> new USD((BigDecimal) val))
@@ -52,6 +53,7 @@ public class UnitNumberFactoryTest {
         assertException(() -> factory.fromString("2"), NumberFormatException.class, "unit missing in 2");
         assertException(() -> factory.fromString("usd2"), NumberFormatException.class, "unrecognized unit usd in usd2");
         assertException(() -> factory.fromString("XYZ2"), NumberFormatException.class, "unrecognized unit XYZ in XYZ2");
+        assertEquals(new EUR(new BigDecimal("4.05")), factory.fromString("EUR4.05"));
     }
     
     private abstract static class Currency extends Number {

@@ -2,6 +2,7 @@ package myutils.util.parsetree;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.util.Objects;
 
 import javax.annotation.Nonnull;
@@ -31,13 +32,16 @@ public class DefaultNumberFactory implements NumberFactory {
     private final @Nullable IntegerPolicy integerPolicy;
     private final @Nonnull FloatPolicy floatPolicy;
     private final @Nullable Integer bigDecimalScale;
+    private final @Nullable RoundingMode roundingMode;
     
     private DefaultNumberFactory(IntegerPolicy integerPolicy,
                                  FloatPolicy floatPolicy,
-                                 Integer bigDecimalScale) {
+                                 Integer bigDecimalScale,
+                                 RoundingMode roundingMode) {
         this.integerPolicy = integerPolicy;
         this.floatPolicy = floatPolicy;
         this.bigDecimalScale = bigDecimalScale;
+        this.roundingMode = roundingMode;
     }
 
     @Override
@@ -109,7 +113,7 @@ public class DefaultNumberFactory implements NumberFactory {
             default:
                 BigDecimal number = new BigDecimal(str);
                 if (bigDecimalScale != null) {
-                    number = number.setScale(bigDecimalScale);
+                    number = number.setScale(bigDecimalScale, roundingMode);
                 }
                 return number;
         }
@@ -119,6 +123,7 @@ public class DefaultNumberFactory implements NumberFactory {
         private @Nullable IntegerPolicy integerPolicy = IntegerPolicy.PREFER_INTEGER;
         private @Nonnull FloatPolicy floatPolicy = FloatPolicy.PREFER_DOUBLE;
         private @Nullable Integer bigDecimalScale;
+        private @Nullable RoundingMode roundingMode;
         
         /**
          * Set the integer policy, if any.
@@ -138,13 +143,21 @@ public class DefaultNumberFactory implements NumberFactory {
             return this;
         }
         
-        public Builder setBigDecimalScale(@Nullable Integer bigDecimalScale) {
+        public Builder setBigDecimalScale(@Nullable Integer bigDecimalScale, @Nullable RoundingMode roundingMode) {
+            if (bigDecimalScale != null) {
+                Objects.requireNonNull(roundingMode);
+            } else {
+                if (roundingMode == null) {
+                    throw new IllegalArgumentException("roundingMode must be null when bigDecimalScale is null");
+                }
+            }
             this.bigDecimalScale = bigDecimalScale;
+            this.roundingMode = roundingMode;
             return this;
         }
         
         public DefaultNumberFactory build() {
-            return new DefaultNumberFactory(integerPolicy, floatPolicy, bigDecimalScale);
+            return new DefaultNumberFactory(integerPolicy, floatPolicy, bigDecimalScale, roundingMode);
         }
     }
 }
