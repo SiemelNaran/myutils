@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from itertools import islice
+import itertools
 
 
 class Segment:
@@ -14,8 +14,14 @@ class Segment:
     """
 
     @staticmethod
-    def empty_segment():
+    def empty_segment_start_of_string():
         segment = Segment(-1, -1)
+        segment.length = 0
+        return segment
+
+    @staticmethod
+    def empty_segment_end_of_string(first, second):
+        segment = Segment(len(first) - 1, len(second) - 1)
         segment.length = 0
         return segment
 
@@ -64,10 +70,8 @@ class Group:
             return False
 
     def __repr__(self):
-        return str(get_segments())
+        return str(self.get_segments())
 
-# getone
-# getnowone
 
 class LineDiff:
     def __init__(self, first, second):
@@ -75,7 +79,7 @@ class LineDiff:
 
     @staticmethod
     def compute_group(first, second):
-        groups = [Group(None, Segment.empty_segment())]
+        groups = [Group(None, Segment.empty_segment_start_of_string())]
         for fIndex, fChar in enumerate(first):
             new_groups = []
             for group in groups:
@@ -94,10 +98,9 @@ class LineDiff:
                             if sIndex == -1:
                                 break
                             new_groups.append(Group(group, Segment(fIndex, sIndex)))
-                else:
-                    raise NotImplementedError()
-            LineDiff.remove_lowest_groups(new_groups)
-            groups = new_groups
+            if any(new_groups):
+                LineDiff.remove_lowest_groups(new_groups)
+                groups = new_groups
         return groups[0]
 
     @staticmethod
@@ -132,9 +135,12 @@ class Replacements:
         diff = LineDiff(first, second)
         segments = diff.group.get_segments()
         prev_segment = segments[0]
-        for segment in islice(segments, 1, len(segments)):
-            old_range = range(prev_segment.fIndex + 1, prev_segment.fIndex + 1)
+        for segment in itertools.chain(itertools.islice(segments, 1, len(segments)),
+                                      [Segment.empty_segment_end_of_string(first, second)]):
+            old_range = range(prev_segment.fIndex + 1, segment.fIndex - segment.length + 1)
             new_text = second[prev_segment.sIndex + 1 : segment.sIndex - segment.length + 1]
+            if len(old_range) == 0 and len(new_text) == 0:
+                continue
             self.replacements.append(Replacement(old_range, new_text))
             prev_segment = segment
 
