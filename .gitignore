@@ -24,3 +24,4 @@ site-content
 
 # python files
 __pycache__
+*.pyc

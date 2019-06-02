@@ -4,6 +4,7 @@ import traceback
 from itertools import takewhile
 
 sys.path.append("../../main/python")
+from analyzediff import linediff
 from analyzediff import Replacements
 
 

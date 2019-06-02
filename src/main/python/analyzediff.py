@@ -72,17 +72,20 @@ class Group:
         segments.append(self.segment)
         return segments
 
-    def try_extend(self, fIndex, sIndex):
+    def try_extend(self, new_char_first_index, new_char, second_string):
         top = self.top()
-        if top.fIndex + 1 == fIndex and top.sIndex + 1 == sIndex:
-            top.length += 1
-            top.fIndex += 1
-            top.sIndex += 1
-            self.total_length += 1
-            self.max_segment = max(self.max_segment, top.length)
-            return True
-        else:
+
+        if top.fIndex + 1 != new_char_first_index or \
+               len(second_string) == top.sIndex + 1 or \
+               new_char != second_string[top.sIndex + 1]:
             return False
+
+        top.length += 1
+        top.fIndex += 1
+        top.sIndex += 1
+        self.total_length += 1
+        self.max_segment = max(self.max_segment, top.length)
+        return True
 
     def __repr__(self):
         return str(self.get_segments())
@@ -110,7 +113,6 @@ def linediff(first, second):
     for fIndex, fChar in enumerate(first):
         groups_extended = []
         groups_not_extended = []
-        new_groups = []
 
         # try to extend existing groups with the new char
         # for example if strings are 
@@ -119,12 +121,10 @@ def linediff(first, second):
         # and we have matched the x in the first string to both x's in the second string (two groups)
         # then upon reading the g, extend both groups by one char
         for group in groups:
-            sIndex = second.find(fChar, group.top().sIndex + 1)
-            if sIndex >= 0:
-                if group.try_extend(fIndex, sIndex):
-                    groups_extended.append(group)
-                else:
-                    groups_not_extended.append(group)
+            if group.try_extend(fIndex, fChar, second):
+                groups_extended.append(group)
+            else:
+                groups_not_extended.append(group)
 
         # if there are two or more groups and some were not extended, drop the ones that was not extended
         # if its total length is less than the smallest of those groups that were extended
@@ -139,11 +139,15 @@ def linediff(first, second):
         # and we have read the e so there are two groups xge and ge
         # then upon reading the t, there are two groups xge and get, and no groups deleted.
         # upon reading the 5 we have xge and get5, and xge is dropped because its length is less than the other group.
-        smallest_total_length = min(map(lambda group: group.total_length, groups_extended)) if any(groups_extended) else 0
-        removeif_inplace(lambda group: group.total_length < smallest_total_length, new_groups)
+        smallest_total_length_of_extended_groups = min(map(lambda group: group.total_length, groups_extended)) if any(groups_extended) else 0
+        for group in groups_not_extended:
+            if  group.total_length < smallest_total_length_of_extended_groups:
+                group.deleted = True
+        removeif_inplace(lambda group: hasattr(group, "deleted"), groups)
 
         # for all groups that were not extended, including the empty group representing the start of both strings,
         # create new groups with one more segment
+        new_groups = []
         for group in itertools.chain(groups_not_extended, [None]):
             sIndex = group.top().sIndex if group is not None else -1
             while True:
@@ -167,7 +171,8 @@ def linediff(first, second):
             groups.extend(new_groups)
 
         # sort by groups with total length first, then longest segment first, then fewest segments first
-        groups.sort(key=attrgetter("total_length", "max_segment", "negative_num_segments"), reverse=True)
+        if any(groups_extended) or any(new_groups):
+            groups.sort(key=attrgetter("total_length", "max_segment", "negative_num_segments"), reverse=True)
 
     if not any(groups):
         return []
