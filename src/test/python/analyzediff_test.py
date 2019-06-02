@@ -41,68 +41,53 @@ def test_replacements():
 
     try:
         # empty string
-        replacements = Replacements("", "")
-        asserter.assert_equals("[]", str(replacements))
+        asserter.assert_equals("[]", str(Replacements("", "")))
 
         # strings identical
-        replacements = Replacements("abc", "abc")
-        asserter.assert_equals("[]", str(replacements))
+        asserter.assert_equals("[]", str(Replacements("abc", "abc")))
 
         # add entire string
-        replacements = Replacements("", "abc")
-        asserter.assert_equals("[range(0, 0) -> abc]", str(replacements))
+        asserter.assert_equals("[range(0, 0) -> abc]", str(Replacements("", "abc")))
 
         # delete entire string
-        replacements = Replacements("abc", "")
-        asserter.assert_equals("[range(0, 3) -> ]", str(replacements))
+        asserter.assert_equals("[range(0, 3) -> ]", str(Replacements("abc", "")))
 
         # replace entire string
-        replacements = Replacements("ab", "cdef")
-        asserter.assert_equals("[range(0, 2) -> cdef]", str(replacements))
+        asserter.assert_equals("[range(0, 2) -> cdef]", str(Replacements("ab", "cdef")))
 
         # add text in middle (one addition)
-        replacements = Replacements("xgetone", "xgetnowtrone")
-        asserter.assert_equals("[range(4, 4) -> nowtr]", str(replacements))
+        asserter.assert_equals("[range(4, 4) -> nowtr]", str(Replacements("xgetone", "xgetnowtrone")))
 
         # replace text in middle (one replacement)
-        replacements = Replacements("xgetABone", "xgetnowtrone")
-        asserter.assert_equals("[range(4, 6) -> nowtr]", str(replacements))
+        asserter.assert_equals("[range(4, 6) -> nowtr]", str(Replacements("xgetABone", "xgetnowtrone")))
 
         # delete text in middle (one deletion)
-        replacements = Replacements("xgetnowtrone", "xgetone")
-        asserter.assert_equals("[range(4, 9) -> ]", str(replacements))
+        asserter.assert_equals("[range(4, 9) -> ]", str(Replacements("xgetnowtrone", "xgetone")))
 
         # add text at end (one addition)
-        replacements = Replacements("ab", "abcdef")
-        asserter.assert_equals("[range(2, 2) -> cdef]", str(replacements))
+        asserter.assert_equals("[range(2, 2) -> cdef]", str(Replacements("ab", "abcdef")))
 
         # replace text at end (one replacement)
-        replacements = Replacements("xgetoneAB", "xgetonenowtr")
-        asserter.assert_equals("[range(7, 9) -> nowtr]", str(replacements))
+        asserter.assert_equals("[range(7, 9) -> nowtr]", str(Replacements("xgetoneAB", "xgetonenowtr")))
 
         # delete text at end (one deletion)
-        replacements = Replacements("xgetonenowtr", "xgetone")
-        asserter.assert_equals("[range(7, 12) -> ]", str(replacements))
+        asserter.assert_equals("[range(7, 12) -> ]", str(Replacements("xgetonenowtr", "xgetone")))
 
         # add text at start (one addition)
-        replacements = Replacements("ab", "cdefab")
-        asserter.assert_equals("[range(0, 0) -> cdef]", str(replacements))
+        asserter.assert_equals("[range(0, 0) -> cdef]", str(Replacements("ab", "cdefab")))
 
         # replace text at start (one replacement)
-        replacements = Replacements("ABxgetone", "nowtrxgetone")
-        asserter.assert_equals("[range(0, 2) -> nowtr]", str(replacements))
+        asserter.assert_equals("[range(0, 2) -> nowtr]", str(Replacements("ABxgetone", "nowtrxgetone")))
 
         # delete text at start (one deletion)
-        replacements = Replacements("nowtrxgetone", "xgetone")
-        asserter.assert_equals("[range(0, 5) -> ]", str(replacements))
+        asserter.assert_equals("[range(0, 5) -> ]", str(Replacements("nowtrxgetone", "xgetone")))
+
+        # add text in middle 2 (one addition)
+        asserter.assert_equals("[range(0, 1) -> 0, range(4, 4) -> 12ab34]", str(Replacements("abcd", "0bcd12ab34")))
 
         # longest common substring
-        replacements = Replacements("abcde", "-ab+bcd*")
-        # longest common substring is "bcd" so insert "b+" after 1st char, and replace last char "e" with "*"
-        # in other words: asserter.assert_equals("[range(0, 0) -> -, range(1, 1) -> b+, range(4, 5) -> *]", str(replacements))
-        # but our algorithm does not find the longest common substring 
-        # instead the only strings found are "ab" and "cd"
-        asserter.assert_equals("[range(0, 0) -> -, range(2, 2) -> +b, range(4, 5) -> *]", str(replacements))
+        asserter.assert_equals("[range(0, 1) -> -ab+, range(4, 5) -> *]", str(Replacements("abcde", "-ab+bcd*")))
+        asserter.assert_equals("[range(0, 1) -> U, range(5, 6) -> UUxgUeUxgeUUtU]", str(Replacements("xget5+", "Uget5UUxgUeUxgeUUtU"))) 
 
     finally:
         asserter.throw_if_failures()
@@ -122,9 +107,6 @@ def test_equivalent():
         asserter.throw_if_failures()
 
 
-def main():
+if __name__ == "__main__":
     test_replacements()
     test_equivalent()
-
-if __name__ == "__main__":
-  main()
