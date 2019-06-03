@@ -143,6 +143,14 @@ public class DefaultNumberFactory implements NumberFactory {
             return this;
         }
         
+        /**
+         * Set the number of decimal places and rounding mode.
+
+         * @param bigDecimalScale the number of decimal places, set to null for no rounding.
+         * @param roundingMode required if bigDecimalScale is not null.
+         * @return this
+         * @see RoundingMode
+         */
         public Builder setBigDecimalScale(@Nullable Integer bigDecimalScale, @Nullable RoundingMode roundingMode) {
             if (bigDecimalScale != null) {
                 Objects.requireNonNull(roundingMode);
