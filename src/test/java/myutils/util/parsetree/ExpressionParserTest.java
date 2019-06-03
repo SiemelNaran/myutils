@@ -360,6 +360,7 @@ public class ExpressionParserTest {
     /////
     
     private static final NumberFactory NUMBER_FACTORY = UnitNumberFactory.builder()
+                                                                         .setUnitCase(StringCase.ACTUAL_CASE)
                                                                          .addUnit("m", val -> val)
                                                                          .addUnit("km", ExpressionParserTest::multiplyTimesOneThousand)
                                                                          .setDefaultUnit("m")
@@ -378,7 +379,7 @@ public class ExpressionParserTest {
                                                                    .addBinaryOperator(DIVIDE.class)
                                                                    .addUnaryOperator(POSITIVE.class)
                                                                    .addUnaryOperator(NEGATIVE.class)
-                                                                   .setFunctionCase(ExpressionParser.FunctionCase.ALL_LETTERS_SAME_CASE)
+                                                                   .setFunctionCase(StringCase.ALL_LETTERS_SAME_CASE)
                                                                    .addFunction(MAX.class)
                                                                    .addFunction(MIN.class)
                                                                    .build();

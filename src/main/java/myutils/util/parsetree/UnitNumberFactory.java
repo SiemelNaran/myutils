@@ -16,15 +16,18 @@ public class UnitNumberFactory implements NumberFactory {
     
     private final @Nonnull DefaultNumberFactory numberFactory;
     private final @Nonnull UnitPosition unitPosition;
+    private final @Nonnull StringCase unitCase;
     private final @Nonnull Map<String /*unit*/, UnaryOperator<Number>> units;
     private final @Nullable UnaryOperator<Number> defaultConverter;
     
     private UnitNumberFactory(DefaultNumberFactory numberFactory,
                               UnitPosition unitPosition,
+                              StringCase unitCase,
                               Map<String /*unit*/, UnaryOperator<Number>> units,
                               UnaryOperator<Number> defaultConverter) {
         this.numberFactory = numberFactory;
         this.unitPosition = unitPosition;
+        this.unitCase = unitCase;
         this.units = units;
         this.defaultConverter = defaultConverter;
     }
@@ -65,6 +68,14 @@ public class UnitNumberFactory implements NumberFactory {
                 throw new UnsupportedOperationException();
         }
         
+        try {
+            unitName = unitCase.convert(unitName);
+        } catch (IllegalArgumentException ignored) {
+            // unit name unchanged and it won't be found in map
+            // for example if unit name is mixed case and unitCase is ALL_LETTERS_SAME_CASE
+            // so we throw NumberFormatException("unrecognized unit ...") below
+        }
+        
         UnaryOperator<Number> converter;
         if (unitName.isEmpty()) {
             converter = defaultConverter;
@@ -102,6 +113,7 @@ public class UnitNumberFactory implements NumberFactory {
     public static class Builder {
         private @Nonnull DefaultNumberFactory numberFactory = DefaultNumberFactory.DEFAULT_NUMBER_FACTORY;
         private UnitPosition unitPosition = UnitPosition.AFTER;
+        private StringCase unitCase = null;
         private @Nonnull final Map<String /*unit*/, UnaryOperator<Number>> units = new HashMap<>();
         private @Nullable String defaultUnit;
         
@@ -128,6 +140,21 @@ public class UnitNumberFactory implements NumberFactory {
         }
         
         /**
+         * Set the unit case.
+         * This function must be called before addUnit.
+         * 
+         * @param unitCase the unit case
+         * @return this
+         */
+        public Builder setUnitCase(@Nonnull StringCase unitCase) {
+            if (this.unitCase != null) {
+                throw new IllegalStateException("unitCase has already been set");
+            }
+            this.unitCase = Objects.requireNonNull(unitCase);
+            return this;
+        }
+        
+        /**
          * Add a unit.
          * 
          * @param unit the unit abbreviation
@@ -136,6 +163,8 @@ public class UnitNumberFactory implements NumberFactory {
          * @throws IllegalArgumentException if unit name is not all letters
          */
         public Builder addUnit(@Nonnull String unit, UnaryOperator<Number> converter) {
+            Objects.requireNonNull(unitCase);
+            unit = unitCase.convert(unit);
             verifyUnit(unit);
             this.units.put(unit, converter);
             return this;
@@ -156,6 +185,7 @@ public class UnitNumberFactory implements NumberFactory {
          * Set the default unit. null means that a unit is required when parsing a number.
          */
         public Builder setDefaultUnit(String defaultUnit) {
+            defaultUnit = unitCase.convert(defaultUnit);
             if (!units.containsKey(defaultUnit)) {
                 throw new IllegalArgumentException("default unit " + defaultUnit + " not found");
             }
@@ -169,6 +199,7 @@ public class UnitNumberFactory implements NumberFactory {
         public UnitNumberFactory build() {
             return new UnitNumberFactory(numberFactory,
                                          unitPosition,
+                                         unitCase,
                                          units,
                                          units.get(defaultUnit));
         }

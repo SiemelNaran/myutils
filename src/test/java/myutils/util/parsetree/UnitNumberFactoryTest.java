@@ -16,15 +16,17 @@ public class UnitNumberFactoryTest {
     @Test
     public void testDefaultNumberFactoryAfter() {
         NumberFactory factory = UnitNumberFactory.builder()
+                                                 .setUnitCase(StringCase.IGNORE_CASE)
                                                  .addUnit("m", val -> val)
                                                  .addUnit("km", val -> val.intValue() * 1000)
-                                                 .setDefaultUnit("m")
+                                                 .setDefaultUnit("M")
                                                  .setUnitPosition(UnitPosition.AFTER)
                                                  .build();
         
         assertEquals(Integer.valueOf(2), factory.fromString("2"));
         assertEquals(Integer.valueOf(2), factory.fromString("2m"));
         assertEquals(Integer.valueOf(2000), factory.fromString("2km"));
+        assertEquals(Integer.valueOf(2000), factory.fromString("2kM"));
         assertException(() -> factory.fromString("km2"),
                         NumberFormatException.class,
                         "Character k is neither a decimal digit number, decimal point, nor \"e\" notation exponential mark.");
@@ -38,6 +40,7 @@ public class UnitNumberFactoryTest {
                                                                                        .setFloatPolicy(DefaultNumberFactory.FloatPolicy.PREFER_BIG_DECIMAL)
                                                                                        .setBigDecimalScale(2)
                                                                                        .build())
+                                                 .setUnitCase(StringCase.ACTUAL_CASE)
                                                  .addUnit("USD", val -> new USD((BigDecimal) val))
                                                  .addUnit("EUR", val -> new EUR((BigDecimal) val))
                                                  .setUnitPosition(UnitPosition.BEFORE)
@@ -45,7 +48,9 @@ public class UnitNumberFactoryTest {
         
         assertEquals(new USD(new BigDecimal("2.00")), factory.fromString("USD2"));
         assertEquals(new EUR(new BigDecimal("4.00")), factory.fromString("EUR4"));
+        assertEquals(new EUR(new BigDecimal("4.05")), factory.fromString("EUR4.05"));
         assertException(() -> factory.fromString("2"), NumberFormatException.class, "unit missing in 2");
+        assertException(() -> factory.fromString("usd2"), NumberFormatException.class, "unrecognized unit usd in usd2");
         assertException(() -> factory.fromString("XYZ2"), NumberFormatException.class, "unrecognized unit XYZ in XYZ2");
     }
     
