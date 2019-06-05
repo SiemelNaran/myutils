@@ -40,6 +40,10 @@ class Segment:
     def __repr__(self):
         return "(len=%d, %d, %d)" % (self.length, self.fIndex, self.sIndex)
 
+    def debug(self, first_string):
+        return "(%s, len=%d, %d, %d)" % (first_string[self.fIndex - self.length + 1 : self.fIndex + 1],
+                                         self.length, self.fIndex, self.sIndex)
+
 
 class Group:
     """
@@ -89,6 +93,9 @@ class Group:
 
     def __repr__(self):
         return str(self.get_segments())
+
+    def debug(self, first_string):
+        return " -> ".join([segment.debug(first_string) for segment in self.get_segments()])
 
 
 def linediff(first, second):
@@ -162,7 +169,8 @@ def linediff(first, second):
                 # When we read g, then we will extend the first group to xg.
                 # We then find substrings in the second string starting with g only,
                 # but only the second g qualifies. The first g does not qualify as it is already used in xg.
-                if any(filter(lambda extended_group: extended_group.top().contains_sIndex(sIndex), groups_extended)):
+                if any(filter(lambda extended_group: extended_group.top().contains_sIndex(sIndex),
+                              itertools.chain(groups_extended, new_groups))):
                     continue
                 new_groups.append(Group(group, Segment(1, fIndex, sIndex)))
 
@@ -173,6 +181,7 @@ def linediff(first, second):
         # sort by groups with total length first, then longest segment first, then fewest segments first
         if any(groups_extended) or any(new_groups):
             groups.sort(key=attrgetter("total_length", "max_segment", "negative_num_segments"), reverse=True)
+
 
     if not any(groups):
         return []
