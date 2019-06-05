@@ -53,21 +53,23 @@ public class SimpleStringTokenizerFactory {
      *  
      *  <p>You can choose to treat text within single quotes, within double quotes, or both as a token.
      *  
-     *  <p>At present, characters are escaped, so if you want a double quote inside a double quoted string,
+     *  <p>If escape is true, characters are escaped, so if you want a double quote inside a double quoted string,
      *  enter <code>\"</code>, and if you want a backslash then enter <code>\\</code>.
      *  The tokenizer also transforms \n \r \t \f \b.
      *  
-     *  <p>In the future, QuoteStrategy will support double-quoting, so if you want a double quote inside a double quoted string,
-     *  enter <code>""</code>.
+     *  <p>If escape is false, then two quotes means one quote.
      */
     public static class QuoteStrategy {
         private final boolean singleQuotes;
         private final boolean doubleQuotes;
+        private final boolean escape;
         
         public QuoteStrategy(boolean singleQuotes,
-                             boolean doubleQuotes) {
+                             boolean doubleQuotes,
+                             boolean escape) {
             this.singleQuotes = singleQuotes;
             this.doubleQuotes = doubleQuotes;
+            this.escape = escape;
         }
     }
     
