@@ -204,7 +204,7 @@ public class SimpleStringTokenizerFactoryTest {
     @Test
     void testInvalidStringTokenizer() {
         assertException(() -> new SimpleStringTokenizerFactory(SKIP_CHARACTERS,
-                                                               new QuoteStrategy(true, true, true),
+                                                               QuoteStrategy.builder().build(),
                                                                Arrays.asList("+++", "***", "+", "*"),
                                                                Collections.singletonList(LITERAL_CLASS)),
                         IllegalArgumentException.class,
@@ -222,7 +222,7 @@ public class SimpleStringTokenizerFactoryTest {
 
     private Iterator<Token> createSimpleStringTokenizer(String expression, boolean escape) {
         return new SimpleStringTokenizerFactory(SKIP_CHARACTERS,
-                                                new QuoteStrategy(true, true, escape),
+                                                QuoteStrategy.builder().addSingleQuoteChar().addDoubleQuoteChar().setEscape(escape).build(),
                                                 SYMBOLS,
                                                 Collections.singletonList(LITERAL_CLASS))
                 .tokenizer(expression);

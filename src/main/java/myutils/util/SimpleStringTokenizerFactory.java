@@ -60,16 +60,71 @@ public class SimpleStringTokenizerFactory {
      *  <p>If escape is false, then two quotes means one quote.
      */
     public static class QuoteStrategy {
+        public static Builder builder() {
+            return new Builder();
+        }
+        
         private final boolean singleQuotes;
         private final boolean doubleQuotes;
         private final boolean escape;
         
-        public QuoteStrategy(boolean singleQuotes,
-                             boolean doubleQuotes,
-                             boolean escape) {
+        private QuoteStrategy(boolean singleQuotes,
+                              boolean doubleQuotes,
+                              boolean escape) {
             this.singleQuotes = singleQuotes;
             this.doubleQuotes = doubleQuotes;
             this.escape = escape;
+        }
+        
+        
+        public static class Builder {
+            private boolean singleQuotes;
+            private boolean doubleQuotes;
+            private boolean escape = true;
+            
+            /**
+             * Add a supported quote character.
+             *
+             * @param c must be either ' or "
+             * @throws UnsupportedOperationException if c is not a supported quote character
+             */
+            public Builder addQuoteChar(char c) {
+                if (c == '\'') {
+                    singleQuotes = true;
+                } else if (c == '\"') {
+                    doubleQuotes = true;
+                } else {
+                    throw new UnsupportedOperationException();
+                }
+                return this;
+            }
+            
+            /**
+             * Add ' as a supported quote character.
+             */
+            public Builder addSingleQuoteChar() {
+                return addQuoteChar('\'');
+            }
+            
+            /**
+             * Add " as a supported quote character.
+             */
+            public Builder addDoubleQuoteChar() {
+                return addQuoteChar('"');
+            }
+            
+            /**
+             * Set whether characters will be escaped or double quoted.
+             * Default is true.
+             */
+            public Builder setEscape(boolean escape) {
+                this.escape = escape;
+                return this;
+            }
+            
+            public QuoteStrategy build() {
+                return new QuoteStrategy(singleQuotes, doubleQuotes, escape);
+            }
         }
     }
     
