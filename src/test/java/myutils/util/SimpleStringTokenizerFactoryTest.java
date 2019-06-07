@@ -147,7 +147,7 @@ public class SimpleStringTokenizerFactoryTest {
     
     @Test
     void testSingleQuotedStrings() {
-        Iterator<Token> tokenizer = createSimpleStringTokenizer("  'hello\" \\'abc\\' world' stuff ", true);
+        Iterator<Token> tokenizer = createSimpleStringTokenizer("  'hello\" \\'abc\\' world'stuff 'last one'", true);
 
         Token token = tokenizer.next();
         assertEquals(2, token.getStart());
@@ -156,12 +156,16 @@ public class SimpleStringTokenizerFactoryTest {
         
         token = tokenizer.next();
         assertEquals("stuff", token.getText());
+
+        token = tokenizer.next();
+        assertEquals("'last one'", token.getText());
+
         assertFalse(tokenizer.hasNext());
     }
     
     @Test
     void testDoubleQuotedStrings() {
-        Iterator<Token> tokenizer = createSimpleStringTokenizer("  \"hello' \\\"abc\\\" world\" stuff ", true);
+        Iterator<Token> tokenizer = createSimpleStringTokenizer("  \"hello' \\\"abc\\\" world\"stuff \"last one\"", true);
         
         Token token = tokenizer.next();
         assertEquals(2, token.getStart());
@@ -170,12 +174,16 @@ public class SimpleStringTokenizerFactoryTest {
         
         token = tokenizer.next();
         assertEquals("stuff", token.getText());
+
+        token = tokenizer.next();
+        assertEquals("\"last one\"", token.getText());
+
         assertFalse(tokenizer.hasNext());
     }
     
     @Test
     void testTwiceSingleQuotedStrings() {
-        Iterator<Token> tokenizer = createSimpleStringTokenizer("  'hello\" ''abc'' world' stuff ", false);
+        Iterator<Token> tokenizer = createSimpleStringTokenizer("  'hello\" ''abc'' world'stuff 'last one'", false);
         
         Token token = tokenizer.next();
         assertEquals(2, token.getStart());
@@ -184,12 +192,16 @@ public class SimpleStringTokenizerFactoryTest {
         
         token = tokenizer.next();
         assertEquals("stuff", token.getText());
+
+        token = tokenizer.next();
+        assertEquals("'last one'", token.getText());
+
         assertFalse(tokenizer.hasNext());
     }
     
     @Test
     void testTwiceDoubleQuotedStrings() {
-        Iterator<Token> tokenizer = createSimpleStringTokenizer("  \"hello' \"\"abc\"\" world\" stuff ", false);
+        Iterator<Token> tokenizer = createSimpleStringTokenizer("  \"hello' \"\"abc\"\" world\"stuff \"last one\"", false);
         
         Token token = tokenizer.next();
         assertEquals(2, token.getStart());
@@ -198,6 +210,10 @@ public class SimpleStringTokenizerFactoryTest {
         
         token = tokenizer.next();
         assertEquals("stuff", token.getText());
+
+        token = tokenizer.next();
+        assertEquals("\"last one\"", token.getText());
+
         assertFalse(tokenizer.hasNext());
     }
     

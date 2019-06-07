@@ -248,9 +248,17 @@ public class SimpleStringTokenizerFactory {
             
             CharSequence token;
             if (c == '\'' && quoteStrategy.singleQuotes) {
-                token = readQuotedEscapedString('\'');
+                if (quoteStrategy.escape) {
+                    token = readQuotedEscapedString(c);
+                } else {
+                    token = readQuotedDoubleQuotesToEscapeString(c);
+                }
             } else if (c == '"' && quoteStrategy.doubleQuotes) {
-                token = readQuotedEscapedString('"');
+                if (quoteStrategy.escape) {
+                    token = readQuotedEscapedString(c);
+                } else {
+                    token = readQuotedDoubleQuotesToEscapeString(c);
+                }
             } else {
                 token = readRegularToken(tokenStart, c);
             }
@@ -259,7 +267,7 @@ public class SimpleStringTokenizerFactory {
         }
         
         @SuppressWarnings("checkstyle:OneStatementPerLine")
-        private CharSequence readQuotedEscapedString(final char expect) {
+        private CharSequence readQuotedEscapedString(final int expect) {
             StringBuilder token = new StringBuilder(32);
             token.append(expect);
             boolean escapeMode = false;
@@ -288,7 +296,35 @@ public class SimpleStringTokenizerFactory {
             }
             return token;
         }
-    
+
+        @SuppressWarnings("checkstyle:OneStatementPerLine")
+        private CharSequence readQuotedDoubleQuotesToEscapeString(final int expect) {
+            StringBuilder token = new StringBuilder(32);
+            token.append(expect);
+            boolean escapeMode = false;
+            while (iterCodePoints.hasNext()) {
+                int c = iterCodePoints.next();
+                if (!escapeMode) {
+                    if (c == expect) {
+                        escapeMode = true;
+                    } else {
+                        token.appendCodePoint(c);
+                    }
+                } else {
+                    token.appendCodePoint(expect);
+                    if (c != expect) {
+                        iterCodePoints.rewind();
+                        break;
+                    }
+                    escapeMode = false;
+                }
+            }
+            if (escapeMode) {
+                token.appendCodePoint(expect);
+            }
+            return token;
+        }
+
         private CharSequence readRegularToken(int tokenStart, int first) {
             SimpleTrie<Integer> trie = symbols.find(first);
             if (trie != null) {
