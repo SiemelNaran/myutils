@@ -1,9 +1,10 @@
+import os
 import sys
 import traceback
 
 from itertools import takewhile
 
-sys.path.append("../../main/python")
+sys.path.append(os.path.join(sys.path[0], "..", "..", "main", "python"))
 from analyzediff import linediff
 from analyzediff import Replacements
 
@@ -38,6 +39,7 @@ class AssertionFailures:
         
 
 def test_replacements():
+    #assert 1 == 2
     asserter = AssertionFailures()
 
     try:
@@ -95,6 +97,7 @@ def test_replacements():
 
 
 def test_equivalent():
+    #assert 1 == 2
     asserter = AssertionFailures()
 
     try:
@@ -103,6 +106,7 @@ def test_equivalent():
         asserter.assert_equals(1, len(replacements1.replacements))
         asserter.assert_equals(1, len(replacements2.replacements))
         asserter.assert_true(replacements1.replacements[0].equivalent(replacements2.replacements[0]))
+        #asserter.assert_equals(1, 2)
 
     finally:
         asserter.throw_if_failures()

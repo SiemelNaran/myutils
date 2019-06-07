@@ -8,7 +8,7 @@ from operator import attrgetter
 
 class Segment:
     """
-    Class representing a substring in two strings.
+    Class representing a common substring in two strings.
 
     Members:
     - length (int): The length of the substring
