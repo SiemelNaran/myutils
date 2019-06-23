@@ -34,7 +34,7 @@ public class SimpleStringTokenizerFactoryTest {
     
     @Test
     void testNoMoreElements() {
-        Iterator<Token> tokenizer = createSimpleStringTokenizer("  \t\n\r    ");
+        Iterator<Token> tokenizer = createSimpleStringTokenizer("  \t\n\r    ", true);
         
         assertFalse(tokenizer.hasNext());
         try {
@@ -46,7 +46,7 @@ public class SimpleStringTokenizerFactoryTest {
     
     @Test
     void testYesMoreElements() {
-        Iterator<Token> tokenizer = createSimpleStringTokenizer("  \t\n\r R   ");
+        Iterator<Token> tokenizer = createSimpleStringTokenizer("  \t\n\r R   ", true);
         assertTrue(tokenizer.hasNext());
         Token token = tokenizer.next();
         assertEquals("R", token.getText());
@@ -62,14 +62,14 @@ public class SimpleStringTokenizerFactoryTest {
     
     @Test
     void testTokenStart() {
-        Iterator<Token> tokenizer = createSimpleStringTokenizer("a");
+        Iterator<Token> tokenizer = createSimpleStringTokenizer("a", true);
         assertTrue(tokenizer.hasNext());
         Token token = tokenizer.next();
         assertEquals("a", token.getText());
         assertEquals(0, token.getStart());
         assertFalse(tokenizer.hasNext());
         
-        tokenizer = createSimpleStringTokenizer(" a");
+        tokenizer = createSimpleStringTokenizer(" a", true);
         assertTrue(tokenizer.hasNext());
         token = tokenizer.next();
         assertEquals("a", token.getText());
@@ -80,7 +80,7 @@ public class SimpleStringTokenizerFactoryTest {
     @Test
     void test() {
         Token token;
-        Iterator<Token> tokenizer = createSimpleStringTokenizer("  hello(world++2.9**3) +\t\n  9  ");
+        Iterator<Token> tokenizer = createSimpleStringTokenizer("  hello(world++2.9**3) +\t\n  9  ", true);
         // CHECKSTYLE:OFF                                     // 012    7     3    8 0  3    6 8                CHECKSTYLE:ON
         
         token = tokenizer.next();
@@ -133,7 +133,7 @@ public class SimpleStringTokenizerFactoryTest {
     @Test
     void test2() {
         Token token;
-        Iterator<Token> tokenizer = createSimpleStringTokenizer("  2 ^ 3");
+        Iterator<Token> tokenizer = createSimpleStringTokenizer("  2 ^ 3", true);
         // CHECKSTYLE:OFF                                     // 012    7       CHECKSTYLE:ON
         
         token = tokenizer.next();
@@ -146,37 +146,81 @@ public class SimpleStringTokenizerFactoryTest {
     }
     
     @Test
-    void testSingleQuotedStrings() {
-        Iterator<Token> tokenizer = createSimpleStringTokenizer("  'hello \\'abc\\' world' stuff ");
+    void testSingleQuotedStrings_Escape() {
+        Iterator<Token> tokenizer = createSimpleStringTokenizer("  'hello\" \\'abc\\' world'stuff 'last one'", true);
 
         Token token = tokenizer.next();
         assertEquals(2, token.getStart());
-        assertEquals("'hello 'abc' world'", token.getText());
-        assertEquals(19, token.getText().length());
+        assertEquals("'hello\" 'abc' world'", token.getText());
+        assertEquals(20, token.getText().length());
         
         token = tokenizer.next();
         assertEquals("stuff", token.getText());
+
+        token = tokenizer.next();
+        assertEquals("'last one'", token.getText());
+
         assertFalse(tokenizer.hasNext());
     }
     
     @Test
-    void testDoubleQuotedStrings() {
-        Iterator<Token> tokenizer = createSimpleStringTokenizer("  \"hello \\\"abc\\\" world\" stuff ");
+    void testDoubleQuotedStrings_Escape() {
+        Iterator<Token> tokenizer = createSimpleStringTokenizer("  \"hello' \\\"abc\\\" world\"stuff \"last one\"", true);
         
         Token token = tokenizer.next();
         assertEquals(2, token.getStart());
-        assertEquals("\"hello \"abc\" world\"", token.getText());
-        assertEquals(19, token.getText().length());
+        assertEquals("\"hello' \"abc\" world\"", token.getText());
+        assertEquals(20, token.getText().length());
         
         token = tokenizer.next();
         assertEquals("stuff", token.getText());
+
+        token = tokenizer.next();
+        assertEquals("\"last one\"", token.getText());
+
+        assertFalse(tokenizer.hasNext());
+    }
+    
+    @Test
+    void testSingleQuotedStrings_DoubleQuote() {
+        Iterator<Token> tokenizer = createSimpleStringTokenizer("  'hello\" ''abc'' world'stuff 'last one'", false);
+        
+        Token token = tokenizer.next();
+        assertEquals(2, token.getStart());
+        assertEquals("'hello\" 'abc' world'", token.getText());
+        assertEquals(20, token.getText().length());
+        
+        token = tokenizer.next();
+        assertEquals("stuff", token.getText());
+
+        token = tokenizer.next();
+        assertEquals("'last one'", token.getText());
+
+        assertFalse(tokenizer.hasNext());
+    }
+    
+    @Test
+    void testDoubleQuotedStrings_DoubleQuote() {
+        Iterator<Token> tokenizer = createSimpleStringTokenizer("  \"hello' \"\"abc\"\" world\"stuff \"last one\"", false);
+        
+        Token token = tokenizer.next();
+        assertEquals(2, token.getStart());
+        assertEquals("\"hello' \"abc\" world\"", token.getText());
+        assertEquals(20, token.getText().length());
+        
+        token = tokenizer.next();
+        assertEquals("stuff", token.getText());
+
+        token = tokenizer.next();
+        assertEquals("\"last one\"", token.getText());
+
         assertFalse(tokenizer.hasNext());
     }
     
     @Test
     void testInvalidStringTokenizer() {
         assertException(() -> new SimpleStringTokenizerFactory(SKIP_CHARACTERS,
-                                                               new QuoteStrategy(true, true),
+                                                               QuoteStrategy.builder().build(),
                                                                Arrays.asList("+++", "***", "+", "*"),
                                                                Collections.singletonList(LITERAL_CLASS)),
                         IllegalArgumentException.class,
@@ -192,9 +236,9 @@ public class SimpleStringTokenizerFactoryTest {
     private static final IntPredicate LITERAL_CLASS
         = codePoint -> Character.isLetterOrDigit(codePoint) || codePoint == '.';
 
-    private Iterator<Token> createSimpleStringTokenizer(String expression) {
+    private Iterator<Token> createSimpleStringTokenizer(String expression, boolean escape) {
         return new SimpleStringTokenizerFactory(SKIP_CHARACTERS,
-                                                new QuoteStrategy(true, true),
+                                                QuoteStrategy.builder().addSingleQuoteChar().addDoubleQuoteChar().setEscape(escape).build(),
                                                 SYMBOLS,
                                                 Collections.singletonList(LITERAL_CLASS))
                 .tokenizer(expression);

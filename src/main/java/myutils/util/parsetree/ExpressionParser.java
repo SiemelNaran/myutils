@@ -57,7 +57,7 @@ public class ExpressionParser {
         symbols.addAll(unaryOperators.keySet());
         symbols.addAll(BASIC_SYMBOLS);
         this.tokenizerFactory = new SimpleStringTokenizerFactory(SKIP_CHARACTERS,
-                                                                 new QuoteStrategy(true, true),
+                                                                 QuoteStrategy.builder().addSingleQuoteChar().addDoubleQuoteChar().build(),
                                                                  symbols,
                                                                  Collections.singletonList(LITERAL_CLASS));
     }

@@ -53,21 +53,78 @@ public class SimpleStringTokenizerFactory {
      *  
      *  <p>You can choose to treat text within single quotes, within double quotes, or both as a token.
      *  
-     *  <p>At present, characters are escaped, so if you want a double quote inside a double quoted string,
+     *  <p>If escape is true, characters are escaped, so if you want a double quote inside a double quoted string,
      *  enter <code>\"</code>, and if you want a backslash then enter <code>\\</code>.
      *  The tokenizer also transforms \n \r \t \f \b.
      *  
-     *  <p>In the future, QuoteStrategy will support double-quoting, so if you want a double quote inside a double quoted string,
-     *  enter <code>""</code>.
+     *  <p>If escape is false, then two quotes means one quote.
      */
     public static class QuoteStrategy {
+        public static Builder builder() {
+            return new Builder();
+        }
+        
         private final boolean singleQuotes;
         private final boolean doubleQuotes;
+        private final boolean escape;
         
-        public QuoteStrategy(boolean singleQuotes,
-                             boolean doubleQuotes) {
+        private QuoteStrategy(boolean singleQuotes,
+                              boolean doubleQuotes,
+                              boolean escape) {
             this.singleQuotes = singleQuotes;
             this.doubleQuotes = doubleQuotes;
+            this.escape = escape;
+        }
+        
+        
+        public static class Builder {
+            private boolean singleQuotes;
+            private boolean doubleQuotes;
+            private boolean escape = true;
+            
+            /**
+             * Add a supported quote character.
+             *
+             * @param c must be either ' or "
+             * @throws UnsupportedOperationException if c is not a supported quote character
+             */
+            public Builder addQuoteChar(char c) {
+                if (c == '\'') {
+                    singleQuotes = true;
+                } else if (c == '\"') {
+                    doubleQuotes = true;
+                } else {
+                    throw new UnsupportedOperationException();
+                }
+                return this;
+            }
+            
+            /**
+             * Add ' as a supported quote character.
+             */
+            public Builder addSingleQuoteChar() {
+                return addQuoteChar('\'');
+            }
+            
+            /**
+             * Add " as a supported quote character.
+             */
+            public Builder addDoubleQuoteChar() {
+                return addQuoteChar('"');
+            }
+            
+            /**
+             * Set whether characters will be escaped or double quoted.
+             * Default is true.
+             */
+            public Builder setEscape(boolean escape) {
+                this.escape = escape;
+                return this;
+            }
+            
+            public QuoteStrategy build() {
+                return new QuoteStrategy(singleQuotes, doubleQuotes, escape);
+            }
         }
     }
     
@@ -191,9 +248,17 @@ public class SimpleStringTokenizerFactory {
             
             CharSequence token;
             if (c == '\'' && quoteStrategy.singleQuotes) {
-                token = readQuotedEscapedString('\'');
+                if (quoteStrategy.escape) {
+                    token = readQuotedEscapedString(c);
+                } else {
+                    token = readQuotedDoubleQuotesToEscapeString(c);
+                }
             } else if (c == '"' && quoteStrategy.doubleQuotes) {
-                token = readQuotedEscapedString('"');
+                if (quoteStrategy.escape) {
+                    token = readQuotedEscapedString(c);
+                } else {
+                    token = readQuotedDoubleQuotesToEscapeString(c);
+                }
             } else {
                 token = readRegularToken(tokenStart, c);
             }
@@ -202,9 +267,9 @@ public class SimpleStringTokenizerFactory {
         }
         
         @SuppressWarnings("checkstyle:OneStatementPerLine")
-        private CharSequence readQuotedEscapedString(final char expect) {
+        private CharSequence readQuotedEscapedString(final int expect) {
             StringBuilder token = new StringBuilder(32);
-            token.append(expect);
+            token.appendCodePoint(expect);
             boolean escapeMode = false;
             while (iterCodePoints.hasNext()) {
                 int c = iterCodePoints.next();
@@ -231,7 +296,34 @@ public class SimpleStringTokenizerFactory {
             }
             return token;
         }
-    
+
+        private CharSequence readQuotedDoubleQuotesToEscapeString(final int expect) {
+            StringBuilder token = new StringBuilder(32);
+            token.appendCodePoint(expect);
+            boolean escapeMode = false;
+            while (iterCodePoints.hasNext()) {
+                int c = iterCodePoints.next();
+                if (!escapeMode) {
+                    if (c == expect) {
+                        escapeMode = true;
+                    } else {
+                        token.appendCodePoint(c);
+                    }
+                } else {
+                    token.appendCodePoint(expect);
+                    if (c != expect) {
+                        iterCodePoints.rewind();
+                        return token;
+                    }
+                    escapeMode = false;
+                }
+            }
+            if (escapeMode) {
+                token.appendCodePoint(expect);
+            }
+            return token;
+        }
+
         private CharSequence readRegularToken(int tokenStart, int first) {
             SimpleTrie<Integer> trie = symbols.find(first);
             if (trie != null) {
