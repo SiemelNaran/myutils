@@ -146,7 +146,7 @@ public class SimpleStringTokenizerFactoryTest {
     }
     
     @Test
-    void testSingleQuotedStrings() {
+    void testSingleQuotedStrings_Escape() {
         Iterator<Token> tokenizer = createSimpleStringTokenizer("  'hello\" \\'abc\\' world'stuff 'last one'", true);
 
         Token token = tokenizer.next();
@@ -164,7 +164,7 @@ public class SimpleStringTokenizerFactoryTest {
     }
     
     @Test
-    void testDoubleQuotedStrings() {
+    void testDoubleQuotedStrings_Escape() {
         Iterator<Token> tokenizer = createSimpleStringTokenizer("  \"hello' \\\"abc\\\" world\"stuff \"last one\"", true);
         
         Token token = tokenizer.next();
@@ -182,7 +182,7 @@ public class SimpleStringTokenizerFactoryTest {
     }
     
     @Test
-    void testTwiceSingleQuotedStrings() {
+    void testSingleQuotedStrings_DoubleQuote() {
         Iterator<Token> tokenizer = createSimpleStringTokenizer("  'hello\" ''abc'' world'stuff 'last one'", false);
         
         Token token = tokenizer.next();
@@ -200,7 +200,7 @@ public class SimpleStringTokenizerFactoryTest {
     }
     
     @Test
-    void testTwiceDoubleQuotedStrings() {
+    void testDoubleQuotedStrings_DoubleQuote() {
         Iterator<Token> tokenizer = createSimpleStringTokenizer("  \"hello' \"\"abc\"\" world\"stuff \"last one\"", false);
         
         Token token = tokenizer.next();

@@ -269,7 +269,7 @@ public class SimpleStringTokenizerFactory {
         @SuppressWarnings("checkstyle:OneStatementPerLine")
         private CharSequence readQuotedEscapedString(final int expect) {
             StringBuilder token = new StringBuilder(32);
-            token.append(expect);
+            token.appendCodePoint(expect);
             boolean escapeMode = false;
             while (iterCodePoints.hasNext()) {
                 int c = iterCodePoints.next();
@@ -297,10 +297,9 @@ public class SimpleStringTokenizerFactory {
             return token;
         }
 
-        @SuppressWarnings("checkstyle:OneStatementPerLine")
         private CharSequence readQuotedDoubleQuotesToEscapeString(final int expect) {
             StringBuilder token = new StringBuilder(32);
-            token.append(expect);
+            token.appendCodePoint(expect);
             boolean escapeMode = false;
             while (iterCodePoints.hasNext()) {
                 int c = iterCodePoints.next();
@@ -314,7 +313,7 @@ public class SimpleStringTokenizerFactory {
                     token.appendCodePoint(expect);
                     if (c != expect) {
                         iterCodePoints.rewind();
-                        break;
+                        return token;
                     }
                     escapeMode = false;
                 }
