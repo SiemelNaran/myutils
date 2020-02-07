@@ -1,24 +1,34 @@
 package myutils.util.concurrent;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 
 
 public class HashLocksTest {
     @Test
-    void testLock1() {
-        HashLocks<ReentrantLock> locks = new HashLocks<>(ReentrantLock.class, 3);
+    void testLocksWithCollisionTracking() {
+        HashLocks locks = new HashLocks(3, false, HashLocks.CollisionTracking.newBuilder().build());
         Lock lock0 = locks.getLock(0);
         Lock lock1 = locks.getLock(1);
         Lock lock2 = locks.getLock(2);
         assertNotSame(lock0, lock1);
         assertNotSame(lock0, lock2);
         assertNotSame(lock0, lock2);
+
+        assertEquals(Arrays.asList(false, false, false), locks.statistics().map(statistics -> statistics.isLocked()).collect(Collectors.toList()));
+        assertEquals(Arrays.asList(1, 1, 1), locks.statistics().map(statistics -> statistics.getUsage()).collect(Collectors.toList()));
 
         Lock lock3 = locks.getLock(3);
         Lock lock4 = locks.getLock(4);
@@ -27,23 +37,30 @@ public class HashLocksTest {
         assertSame(lock1, lock4);
         assertSame(lock2, lock5);
 
-        Lock lock_1 = locks.getLock(-1);
-        Lock lock_2 = locks.getLock(-2);
-        Lock lock_3 = locks.getLock(-3);
-        assertSame(lock2, lock_1);
-        assertSame(lock1, lock_2);
-        assertSame(lock0, lock_3);
+        Lock lockNegative1 = locks.getLock(-1);
+        Lock lockNegative2 = locks.getLock(-2);
+        Lock lockNegative3 = locks.getLock(-3);
+        assertSame(lock2, lockNegative1);
+        assertSame(lock1, lockNegative2);
+        assertSame(lock0, lockNegative3);
+
+        assertEquals(Arrays.asList(false, false, false), locks.statistics().map(statistics -> statistics.isLocked()).collect(Collectors.toList()));
+        assertEquals(Arrays.asList(3, 3, 3), locks.statistics().map(statistics -> statistics.getUsage()).collect(Collectors.toList()));
+        // explanation: 3 since 0, 3, -3 have different values for toString() but all hash to lock0
     }
     
     @Test
-    void testLock2() {
-        HashLocks<ReentrantLock> locks = new HashLocks<>(() -> new ReentrantLock(true), 3);
+    void testLocksWithoutCollisionTracking() {
+        HashLocks locks = new HashLocks(3, false);
         Lock lock0 = locks.getLock(0);
         Lock lock1 = locks.getLock(1);
         Lock lock2 = locks.getLock(2);
         assertNotSame(lock0, lock1);
         assertNotSame(lock0, lock2);
         assertNotSame(lock0, lock2);
+
+        assertEquals(Arrays.asList(false, false, false), locks.statistics().map(statistics -> statistics.isLocked()).collect(Collectors.toList()));
+        assertEquals(Arrays.asList(-1, -1, -1), locks.statistics().map(statistics -> statistics.getUsage()).collect(Collectors.toList()));
 
         Lock lock3 = locks.getLock(3);
         Lock lock4 = locks.getLock(4);
@@ -52,12 +69,108 @@ public class HashLocksTest {
         assertSame(lock1, lock4);
         assertSame(lock2, lock5);
 
-        Lock lock_1 = locks.getLock(-1);
-        Lock lock_2 = locks.getLock(-2);
-        Lock lock_3 = locks.getLock(-3);
-        assertSame(lock2, lock_1);
-        assertSame(lock1, lock_2);
-        assertSame(lock0, lock_3);
+        Lock lockNegative1 = locks.getLock(-1);
+        Lock lockNegative2 = locks.getLock(-2);
+        Lock lockNegative3 = locks.getLock(-3);
+        assertSame(lock2, lockNegative1);
+        assertSame(lock1, lockNegative2);
+        assertSame(lock0, lockNegative3);
+        
+        assertEquals(Arrays.asList(false, false, false), locks.statistics().map(statistics -> statistics.isLocked()).collect(Collectors.toList()));
+        assertEquals(Arrays.asList(-1, -1, -1), locks.statistics().map(statistics -> statistics.getUsage()).collect(Collectors.toList()));
+    }
+    
+    @Test
+    void testStatistics() throws InterruptedException {
+        HashLocks locks = new HashLocks(3, true, HashLocks.CollisionTracking.newBuilder().build());        
+        Lock lock0 = locks.getLock(0);
+
+        final long startOfTime = System.currentTimeMillis();
+        
+        ScheduledExecutorService service = Executors.newScheduledThreadPool(3);
+        service.schedule(() -> {
+            print("start 1st at " + (System.currentTimeMillis() - startOfTime));
+            lock0.lock();
+            try {
+                sleep(1000);
+            } finally {
+                lock0.unlock();
+            }
+            print("end 1st after 1 second at " + (System.currentTimeMillis() - startOfTime));
+        }, 300, TimeUnit.MILLISECONDS);
+        service.schedule(() -> {
+            print("start 2nd at " + (System.currentTimeMillis() - startOfTime));
+            lock0.lock();
+            try {
+                sleep(2000);
+            } finally {
+                lock0.unlock();
+            }
+            print("end 2nd after 2 seconds at " + (System.currentTimeMillis() - startOfTime));
+        }, 500, TimeUnit.MILLISECONDS);
+        service.schedule(() -> {
+            print("start 3rd at " + (System.currentTimeMillis() - startOfTime));
+            lock0.lock();
+            try {
+                sleep(4000);
+            } finally {
+                lock0.unlock();
+            }
+            print("end 3rd after 4 seconds at " + (System.currentTimeMillis() - startOfTime));
+        }, 700, TimeUnit.MILLISECONDS);
+
+        
+        service.shutdown();
+        service.awaitTermination(1000, TimeUnit.SECONDS);
+        
+        /* Ideal output:
+            start 1st at 300
+            start 2nd at 500
+            start 3rd at 700
+            end 1st after 1 second at 1300
+            end 2nd after 2 seconds at 3300
+            end 3rd after 4 seconds at 7300
+         */
+        
+        List<HashLocks.Statistics> statistics = locks.statistics().collect(Collectors.toList());
+        
+        assertEquals(Arrays.asList(1, 0, 0), statistics.stream().map(statistic -> statistic.getUsage()).collect(Collectors.toList()));
+        
+        Duration[] waitTimes = statistics.stream().map(HashLocks.Statistics::getTotalWaitTime).toArray(Duration[]::new);
+        Duration[] lockRunningTimes = statistics.stream().map(HashLocks.Statistics::getTotalLockRunningTime).toArray(Duration[]::new);
+        Duration[] approximateTotalIdleTimes = statistics.stream().map(HashLocks.Statistics::getApproximateTotalIdleTimes).toArray(Duration[]::new);
+        System.out.println("waitTimes: " + toString(waitTimes));
+        System.out.println("lockRunningTimes: " + toString(lockRunningTimes));
+        System.out.println("approximateTotalIdleTimes: " + toString(approximateTotalIdleTimes));
+
+        assertEquals(3400, waitTimes[0].toMillis(), 40.0); // runnable2 waited 1300-500=800, runnable2 waited 3300-700=2600. sum is 3400 
+        assertEquals(0, waitTimes[1].toMillis());
+        assertEquals(0, waitTimes[2].toMillis());
+
+        assertEquals(7000, lockRunningTimes[0].toMillis(), 40.0);
+        assertEquals(0, lockRunningTimes[1].toMillis());
+        assertEquals(0, lockRunningTimes[2].toMillis());
+
+        assertEquals(300, approximateTotalIdleTimes[0].toMillis(), 40.0); 
+        assertEquals(7300, approximateTotalIdleTimes[1].toMillis(), 40.0);
+        assertEquals(7300, approximateTotalIdleTimes[2].toMillis(), 40.0);
+    }
+    
+    
+    private static void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+    
+    private static void print(String line) {
+        System.out.println(line);
+    }
+    
+    private static String toString(Duration[] array) {
+        return Arrays.stream(array).mapToLong(Duration::toMillis).mapToObj(val -> Long.toString(val)).collect(Collectors.joining(", "));
     }
 }
 
