@@ -1,7 +1,7 @@
 package myutils.util.concurrent;
 
 import java.time.Duration;
-import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -95,7 +95,7 @@ public class TimedReentrantLock extends ReentrantLock {
         return new TimedReentrantLock(true);
     }
     
-    public static Statistics toStatistics(TimedReentrantLock lock, @Nullable Map<String, Void> collisionTracking) {
+    public static Statistics toStatistics(TimedReentrantLock lock, @Nullable Set<String> collisionTracking) {
         return new Statistics(lock, collisionTracking);
     }
     
@@ -111,7 +111,7 @@ public class TimedReentrantLock extends ReentrantLock {
         private final Duration approximateTotalIdleTime;
         private final int usage;
         
-        private Statistics(TimedReentrantLock lock, @Nullable Map<String, Void> collisionTracking) {
+        private Statistics(TimedReentrantLock lock, @Nullable Set<String> collisionTracking) {
             this.locked = lock.isLocked();
             this.queueLength = lock.getQueueLength();
             this.totalWaitTime = lock.getTotalWaitTime();

@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
@@ -29,8 +30,8 @@ import javax.annotation.Nonnull;
  */
 public class HashLocks<LockType, LockStatisticsType> {
     private final List<LockType> locks;
-    private final BiFunction<LockType, Map<String, Void>, LockStatisticsType> toLockStatistics;
-    private final List<Map<String, Void>> collisionTrackingList;
+    private final BiFunction<LockType, Set<String>, LockStatisticsType> toLockStatistics;
+    private final List<Set<String>> collisionTrackingList;
     
     /**
      * Create a HashLocks object without collision tracking.
@@ -41,7 +42,7 @@ public class HashLocks<LockType, LockStatisticsType> {
      */
     public static <LockType, LockStatisticsType> HashLocks<LockType, LockStatisticsType> create(int hashLocksSize,
                                                                                                 Supplier<LockType> lockCreator,
-                                                                                                BiFunction<LockType, Map<String, Void>, LockStatisticsType> toLockStatistics) {
+                                                                                                BiFunction<LockType, Set<String>, LockStatisticsType> toLockStatistics) {
         return new HashLocks<>(hashLocksSize, lockCreator, toLockStatistics, null);
     }
 
@@ -55,14 +56,14 @@ public class HashLocks<LockType, LockStatisticsType> {
      */
     public static <LockType, LockStatisticsType> HashLocks<LockType, LockStatisticsType> create(int hashLocksSize,
                                                                                                 Supplier<LockType> lockCreator,
-                                                                                                BiFunction<LockType, Map<String, Void>, LockStatisticsType> toLockStatistics,
+                                                                                                BiFunction<LockType, Set<String>, LockStatisticsType> toLockStatistics,
                                                                                                 CollisionTracking collisionTracking) {
         return new HashLocks<>(hashLocksSize, lockCreator, toLockStatistics, collisionTracking);
     }
 
     private HashLocks(int hashLocksSize,
                       Supplier<LockType> lockCreator,
-                      BiFunction<LockType, Map<String, Void>, LockStatisticsType> toLockStatistics,
+                      BiFunction<LockType, Set<String>, LockStatisticsType> toLockStatistics,
                       CollisionTracking collisionTracking) {
         this.locks = new ArrayList<LockType>(hashLocksSize);
         this.toLockStatistics = toLockStatistics;
@@ -70,9 +71,9 @@ public class HashLocks<LockType, LockStatisticsType> {
             locks.add(lockCreator.get());
         }
         if (collisionTracking != null) {
-            this.collisionTrackingList = new ArrayList<Map<String, Void>>(hashLocksSize);
+            this.collisionTrackingList = new ArrayList<Set<String>>(hashLocksSize);
             for (int i = 0; i < hashLocksSize; i++) {
-                collisionTrackingList.add(Collections.synchronizedMap(new HashLocksKeyMap(collisionTracking)));
+                collisionTrackingList.add(Collections.synchronizedSet(Collections.newSetFromMap(new HashLocksKeyMap(collisionTracking))));
             }
         } else {
             this.collisionTrackingList = null;
@@ -85,7 +86,7 @@ public class HashLocks<LockType, LockStatisticsType> {
     public LockType getLock(Object key) {
         int index = Math.floorMod(key.hashCode(), locks.size());
         if (collisionTrackingList != null) {
-            collisionTrackingList.get(index).put(key.toString(), null);
+            collisionTrackingList.get(index).add(key.toString());
         }
         return locks.get(index);
     }
@@ -103,7 +104,7 @@ public class HashLocks<LockType, LockStatisticsType> {
      * Class to store the N most recently strings that map to each reentrant lock.
      * Only used when doCollisionTracking is true.
      */
-    private static final class HashLocksKeyMap extends LinkedHashMap<String, Void> {
+    private static final class HashLocksKeyMap extends LinkedHashMap<String, Boolean> {
         private static final long serialVersionUID = 1L;
         
         private final CollisionTracking collisionTracking;
@@ -113,7 +114,7 @@ public class HashLocks<LockType, LockStatisticsType> {
         }
 
         @Override
-        protected boolean removeEldestEntry(Map.Entry<String, Void> eldest) {
+        protected boolean removeEldestEntry(Map.Entry<String, Boolean> eldest) {
             return size() > collisionTracking.numStringsPerHashCode;
         }
     }
