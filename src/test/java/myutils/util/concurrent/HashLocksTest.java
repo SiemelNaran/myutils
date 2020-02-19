@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 public class HashLocksTest {
     @Test
     void testLocksWithCollisionTracking() {
-        HashLocks locks = new HashLocks(3, false, HashLocks.CollisionTracking.newBuilder().build());
+        var locks = HashLocks.create(3, () -> new TimedReentrantLock(false), TimedReentrantLock::toStatistics, HashLocks.CollisionTracking.newBuilder().build());
         Lock lock0 = locks.getLock(0);
         Lock lock1 = locks.getLock(1);
         Lock lock2 = locks.getLock(2);
@@ -51,7 +51,7 @@ public class HashLocksTest {
     
     @Test
     void testLocksWithoutCollisionTracking() {
-        HashLocks locks = new HashLocks(3, false);
+        var locks = HashLocks.create(3, () -> new TimedReentrantLock(false), TimedReentrantLock::toStatistics);
         Lock lock0 = locks.getLock(0);
         Lock lock1 = locks.getLock(1);
         Lock lock2 = locks.getLock(2);
@@ -82,7 +82,7 @@ public class HashLocksTest {
     
     @Test
     void testStatistics() throws InterruptedException {
-        HashLocks locks = new HashLocks(3, true, HashLocks.CollisionTracking.newBuilder().build());        
+        var locks = HashLocks.create(3, TimedReentrantLock::newFairLock, TimedReentrantLock::toStatistics, HashLocks.CollisionTracking.newBuilder().build());        
         Lock lock0 = locks.getLock(0);
 
         final long startOfTime = System.currentTimeMillis();
@@ -132,13 +132,13 @@ public class HashLocksTest {
             end 3rd after 4 seconds at 7300
          */
         
-        List<HashLocks.Statistics> statistics = locks.statistics().collect(Collectors.toList());
+        List<TimedReentrantLock.Statistics> statistics = locks.statistics().collect(Collectors.toList());
         
         assertEquals(Arrays.asList(1, 0, 0), statistics.stream().map(statistic -> statistic.getUsage()).collect(Collectors.toList()));
         
-        Duration[] waitTimes = statistics.stream().map(HashLocks.Statistics::getTotalWaitTime).toArray(Duration[]::new);
-        Duration[] lockRunningTimes = statistics.stream().map(HashLocks.Statistics::getTotalLockRunningTime).toArray(Duration[]::new);
-        Duration[] approximateTotalIdleTimes = statistics.stream().map(HashLocks.Statistics::getApproximateTotalIdleTimes).toArray(Duration[]::new);
+        Duration[] waitTimes = statistics.stream().map(TimedReentrantLock.Statistics::getTotalWaitTime).toArray(Duration[]::new);
+        Duration[] lockRunningTimes = statistics.stream().map(TimedReentrantLock.Statistics::getTotalLockRunningTime).toArray(Duration[]::new);
+        Duration[] approximateTotalIdleTimes = statistics.stream().map(TimedReentrantLock.Statistics::getApproximateTotalIdleTimes).toArray(Duration[]::new);
         System.out.println("waitTimes: " + toString(waitTimes));
         System.out.println("lockRunningTimes: " + toString(lockRunningTimes));
         System.out.println("approximateTotalIdleTimes: " + toString(approximateTotalIdleTimes));
@@ -173,4 +173,3 @@ public class HashLocksTest {
         return Arrays.stream(array).mapToLong(Duration::toMillis).mapToObj(val -> Long.toString(val)).collect(Collectors.joining(", "));
     }
 }
-

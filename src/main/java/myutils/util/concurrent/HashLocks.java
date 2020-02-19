@@ -1,17 +1,16 @@
 package myutils.util.concurrent;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BiFunction;
+import java.util.function.Supplier;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 
 
 /**
@@ -24,60 +23,79 @@ import javax.annotation.Nullable;
  * are different objects, so locking on inputString would allow both threads to continue.
  * 
  * <p>Also <code>string.intern()</code> is not guaranteed to produce unique strings, and besides may be too slow.
+ * 
+ * @param <LockType> The type of lock, such as ReentrantLock or TimedReentrantLock
+ * @param <LockStatisticsType> Statistics of the lock
  */
-public class HashLocks {
-    private final TimedReentrantLock[] locks;
+public class HashLocks<LockType, LockStatisticsType> {
+    private final List<LockType> locks;
+    private final BiFunction<LockType, Map<String, Void>, LockStatisticsType> toLockStatistics;
     private final List<Map<String, Void>> collisionTrackingList;
     
     /**
      * Create a HashLocks object without collision tracking.
      * 
      * @param hashLocksSize the number of locks
-     * @param fair should the locks be fair
+     * @param lockCreator function that creates a lock, for example <code>() -> new ReentrantLock(true)</code>
+     * @param toLockStatistics function that creates statistics out of a lock
      */
-    public HashLocks(int hashLocksSize, boolean fair) {
-        this(hashLocksSize, fair, null);
+    public static <LockType, LockStatisticsType> HashLocks<LockType, LockStatisticsType> create(int hashLocksSize,
+                                                                                                Supplier<LockType> lockCreator,
+                                                                                                BiFunction<LockType, Map<String, Void>, LockStatisticsType> toLockStatistics) {
+        return new HashLocks<>(hashLocksSize, lockCreator, toLockStatistics, null);
     }
-    
+
     /**
      * Create a HashLocks object.
      * 
      * @param hashLocksSize the number of locks
-     * @param fair should the locks be fair
+     * @param lockCreator function that creates a lock, for example <code>() -> new ReentrantLock(true)</code>
+     * @param toLockStatistics function that creates statistics out of a lock
      * @param collisionTracking if not null then perform tracking to see how many keys, as defined by key.toString(), map to the same hash code.
      */
-    public HashLocks(int hashLocksSize, boolean fair, CollisionTracking collisionTracking) {
-        locks = new TimedReentrantLock[hashLocksSize];
+    public static <LockType, LockStatisticsType> HashLocks<LockType, LockStatisticsType> create(int hashLocksSize,
+                                                                                                Supplier<LockType> lockCreator,
+                                                                                                BiFunction<LockType, Map<String, Void>, LockStatisticsType> toLockStatistics,
+                                                                                                CollisionTracking collisionTracking) {
+        return new HashLocks<>(hashLocksSize, lockCreator, toLockStatistics, collisionTracking);
+    }
+
+    private HashLocks(int hashLocksSize,
+                      Supplier<LockType> lockCreator,
+                      BiFunction<LockType, Map<String, Void>, LockStatisticsType> toLockStatistics,
+                      CollisionTracking collisionTracking) {
+        this.locks = new ArrayList<LockType>(hashLocksSize);
+        this.toLockStatistics = toLockStatistics;
         for (int i = 0; i < hashLocksSize; i++) {
-            locks[i] = new TimedReentrantLock(fair);
+            locks.add(lockCreator.get());
         }
         if (collisionTracking != null) {
-            collisionTrackingList = new ArrayList<Map<String, Void>>(hashLocksSize);
+            this.collisionTrackingList = new ArrayList<Map<String, Void>>(hashLocksSize);
             for (int i = 0; i < hashLocksSize; i++) {
                 collisionTrackingList.add(Collections.synchronizedMap(new HashLocksKeyMap(collisionTracking)));
             }
         } else {
-            collisionTrackingList = null;
+            this.collisionTrackingList = null;
         }
     }
     
     /**
      * Return the ReentrantLock for 'key' based on the hash code of 'key'.
      */
-    public ReentrantLock getLock(Object key) {
-        int index = Math.floorMod(key.hashCode(), locks.length);
+    public LockType getLock(Object key) {
+        int index = Math.floorMod(key.hashCode(), locks.size());
         if (collisionTrackingList != null) {
             collisionTrackingList.get(index).put(key.toString(), null);
         }
-        return locks[index];
+        return locks.get(index);
     }
     
     /**
      * Return the statistics of each lock.
      */
-    public Stream<Statistics> statistics() {
-        return IntStream.range(0, locks.length)
-                        .mapToObj(index -> new Statistics(locks[index], collisionTrackingList != null ? collisionTrackingList.get(index) : null));
+    public Stream<LockStatisticsType> statistics() {
+        return IntStream.range(0, locks.size())
+                        .mapToObj(index -> toLockStatistics.apply(locks.get(index), collisionTrackingList != null ? collisionTrackingList.get(index) : null));
     }
     
 
@@ -97,77 +115,6 @@ public class HashLocks {
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, Void> eldest) {
             return size() > collisionTracking.numStringsPerHashCode;
-        }
-    }
-    
-    
-    /**
-     * The statistics of each lock.
-     * Use to fine-tune hashLocksSize.
-     */
-    public static final class Statistics {
-        private final boolean locked;
-        private final int queueLength;
-        private final Duration totalWaitTime;
-        private final Duration totalLockRunningTime;
-        private final Duration approximateTotalIdleTime;
-        private final int usage;
-        
-        private Statistics(TimedReentrantLock lock, @Nullable Map<String, Void> collisionTracking) {
-            this.locked = lock.isLocked();
-            this.queueLength = lock.getQueueLength();
-            this.totalWaitTime = lock.getTotalWaitTime();
-            this.totalLockRunningTime = lock.getTotalLockRunningTime();
-            this.approximateTotalIdleTime = lock.getApproximateTotalIdleTime();
-            this.usage = collisionTracking != null ? collisionTracking.size() : -1;
-        }
-        
-        /**
-         * Tells whether the lock is locked right now.
-         */
-        public boolean isLocked() {
-            return locked;
-        }
-
-        /**
-         * An estimate of the number of threads waiting on this lock right now.
-         */
-        public int getQueueLength() {
-            return queueLength;
-        }
-
-        /**
-         * The total time to lock the lock.
-         */
-        public Duration getTotalWaitTime() {
-            return totalWaitTime;
-        }
-
-        /**
-         * The time from the time the lock was acquired to unlock.
-         */
-        public Duration getTotalLockRunningTime() {
-            return totalLockRunningTime;
-        }
-        
-        /**
-         * The approximate time the lock has not bee in use.
-         * This is simply the difference between the lock creation time and now, and the total lock running time.
-         * 
-         * <p>It is approximate because if the lock is in use at the time this function called,
-         * totalLockRunningTime has not been updated (it is only updated upon unlock).
-         */
-        public Duration getApproximateTotalIdleTimes() {
-            return approximateTotalIdleTime;
-        }
-
-        /**
-         * The number of distinct strings using this lock.
-         * 0 indicates that hashLocksSize is too large.
-         * >1 indicates that hashLocksSize is too small.
-         */
-        public int getUsage() {
-            return usage;
         }
     }
     
