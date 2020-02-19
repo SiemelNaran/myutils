@@ -22,11 +22,9 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
-
 import myutils.TestUtil;
 import myutils.util.concurrent.SerializableScheduledExecutorService.RecreateRunnableFailedException;
 import myutils.util.concurrent.SerializableScheduledExecutorService.UnfinishedTasks;
-
 import org.junit.jupiter.api.Test;
 
 
@@ -76,6 +74,7 @@ public class SerializableScheduledExecutorServiceTest {
 
 
     
+    @SuppressWarnings("checkstyle:RightCurlyAlone")
     private static class TestRunnablesWithDefaultConstructor {
         private static final List<AtomicInteger> numbers = createNumbers(4);
         
@@ -453,22 +452,23 @@ public class SerializableScheduledExecutorServiceTest {
 
     
 
+    @SuppressWarnings("checkstyle:RightCurlyAlone")
     private static class TestNonPublicConstructorRunnable implements Runnable {
         TestNonPublicConstructorRunnable() { }
 
         @Override
-        public void run() {
-        }                    
+        public void run() { }                    
     }
 
+    @SuppressWarnings("checkstyle:RightCurlyAlone")
     private class TestNonStaticClassRunnable implements Runnable {
         public TestNonStaticClassRunnable() { }
 
         @Override
-        public void run() {
-        }                    
+        public void run() { }                    
     }
 
+    @SuppressWarnings("checkstyle:RightCurlyAlone")
     private static class TestNonPublicConstructorCallable implements Callable<Integer> {
         TestNonPublicConstructorCallable() { }
 
@@ -478,6 +478,7 @@ public class SerializableScheduledExecutorServiceTest {
         }                    
     }
 
+    @SuppressWarnings("checkstyle:RightCurlyAlone")
     private class TestNonStaticClassCallable implements Callable<Integer> {
         public TestNonStaticClassCallable() { }
 
@@ -488,6 +489,7 @@ public class SerializableScheduledExecutorServiceTest {
     }
 
     @Test
+    @SuppressWarnings("checkstyle:RightCurlyAlone")
     void testNonSerializable() throws InterruptedException, IOException, ClassNotFoundException, RecreateRunnableFailedException {
         class LocalClassRunnable implements Runnable {
             public LocalClassRunnable() { }

@@ -37,6 +37,7 @@ public interface ParseNode {
      */
     void reduce(Listener listener);
     
+    @SuppressWarnings("checkstyle:RightCurlyAlone")
     public interface Listener {
         /**
          * The characteristics of the listener, such as the order in which operators and nodes should

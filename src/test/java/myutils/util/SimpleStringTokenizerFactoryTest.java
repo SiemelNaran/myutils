@@ -1,7 +1,6 @@
 package myutils.util;
 
 import static myutils.TestUtil.assertException;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -13,10 +12,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.function.IntPredicate;
-
 import myutils.util.SimpleStringTokenizerFactory.QuoteStrategy;
 import myutils.util.SimpleStringTokenizerFactory.Token;
-
 import org.junit.jupiter.api.Test;
 
 

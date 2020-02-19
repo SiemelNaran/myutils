@@ -4,7 +4,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
-
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
@@ -145,6 +144,7 @@ public class UnitNumberFactory implements NumberFactory {
          * 
          * @param unitCase the unit case
          * @return this
+         * @throws IllegalStateException if unit case has already been set
          */
         public Builder setUnitCase(@Nonnull StringCase unitCase) {
             if (this.unitCase != null) {

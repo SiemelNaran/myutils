@@ -13,6 +13,7 @@ public class TestUtil {
      * Assert that the desired exception is thrown.
      * 
      * @return the exception (not null)
+     * @throws AssertionError if assertion fails
      */
     @SuppressWarnings("unchecked")
     public static <T, U> U assertExceptionFromCallable(Callable<T> callable, Class<U> expectedException) {
@@ -31,6 +32,7 @@ public class TestUtil {
      * Assert that the desired exception is thrown.
      * 
      * @return the exception (not null)
+     * @throws AssertionError if assertion fails
      */
     @SuppressWarnings("unchecked")
     public static <T, U> U assertExceptionFromCallable(Callable<T> callable, Class<U> expectedException,
@@ -51,6 +53,7 @@ public class TestUtil {
      * Assert that the desired exception is thrown.
      * 
      * @return the exception (not null)
+     * @throws AssertionError if assertion fails
      */
     @SuppressWarnings("unchecked")
     public static <U> U assertException(Runnable runnable, Class<U> expectedException) {
@@ -69,6 +72,7 @@ public class TestUtil {
      * Assert that the desired exception is thrown.
      * 
      * @return the exception (not null)
+     * @throws AssertionError if assertion fails
      */
     @SuppressWarnings("unchecked")
     public static <U> U assertException(Runnable runnable, Class<U> expectedException, String expectedMessage) {

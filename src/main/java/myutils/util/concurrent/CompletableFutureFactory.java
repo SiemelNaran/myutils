@@ -83,6 +83,7 @@ public class CompletableFutureFactory<T> {
      * 
      * @param key corresponds to the value of the system property "java.util.concurrent.CompletableFutureFactory"
      * @param registration a class that calls that static functions of the specified completable future
+     * @throws IllegalArgumentException if the same class is registered twice
      */
     public static synchronized void register(String key, Registration registration) {
         if (registry.containsKey(key)) {

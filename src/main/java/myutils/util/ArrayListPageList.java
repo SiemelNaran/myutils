@@ -6,7 +6,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.RandomAccess;
-
 import javax.annotation.concurrent.NotThreadSafe;
 
 

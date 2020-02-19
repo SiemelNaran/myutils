@@ -6,6 +6,8 @@ public class TypeException extends RuntimeException {
 
     /**
      * Assert that first and second are the same.
+     * 
+     * @throws TypeException if the types are not the same
      */
     public static void assertSameType(String name, int position, Class<?> first, Class<?> second) {
         if (!first.equals(second)) {

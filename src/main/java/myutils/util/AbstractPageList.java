@@ -3,7 +3,6 @@ package myutils.util;
 import static java.lang.Math.min;
 
 import java.io.Serializable;
-
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -19,7 +18,6 @@ import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
-
 import javax.annotation.concurrent.NotThreadSafe;
 
 /**
