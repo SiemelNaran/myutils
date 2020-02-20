@@ -9,7 +9,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletionException;
-
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 

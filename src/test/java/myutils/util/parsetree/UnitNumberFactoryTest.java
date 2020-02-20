@@ -1,15 +1,12 @@
 package myutils.util.parsetree;
 
 import static myutils.TestUtil.assertException;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Objects;
-
 import myutils.util.parsetree.UnitNumberFactory.UnitPosition;
-
 import org.junit.jupiter.api.Test;
 
 

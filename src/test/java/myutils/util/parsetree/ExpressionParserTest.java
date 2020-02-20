@@ -1,7 +1,6 @@
 package myutils.util.parsetree;
 
 import static myutils.TestUtil.assertExceptionFromCallable;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -14,10 +13,8 @@ import java.util.Map;
 import java.util.Stack;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
 import myutils.util.parsetree.ParseNode.Listener;
 import myutils.util.parsetree.UnitNumberFactory.UnitPosition;
-
 import org.junit.jupiter.api.Test;
 
 

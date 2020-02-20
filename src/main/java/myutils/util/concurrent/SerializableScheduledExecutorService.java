@@ -66,6 +66,7 @@ public interface SerializableScheduledExecutorService extends ScheduledExecutorS
      * @param unfinishedTasks the tasks to import
      * @param returnFutures Return the ScheduledFuture's for these classes.
      * @return map of classes in returnFutures to a collection of futures of that type, in no sorted order
+     * @throws RecreateRunnableFailedException if we failed to recreate the runnable
      */
     Map<Class<?>, List<ScheduledFuture<?>>> importUnfinishedTasks(UnfinishedTasks unfinishedTasks,
                                                                   Collection<Class<?>> returnFutures)

@@ -4,7 +4,6 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.Objects;
-
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
@@ -149,6 +148,7 @@ public class DefaultNumberFactory implements NumberFactory {
          * @param bigDecimalScale the number of decimal places, set to null for no rounding.
          * @param roundingMode required if bigDecimalScale is not null.
          * @return this
+         * @throws IllegalArgumentException if rounding mode is not null but big decimal scale is null
          * @see RoundingMode
          */
         public Builder setBigDecimalScale(@Nullable Integer bigDecimalScale, @Nullable RoundingMode roundingMode) {

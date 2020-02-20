@@ -15,7 +15,6 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -80,10 +79,10 @@ public class StackTraceCompletableFutureTest {
     }
     
     private static final List<String> EXPECTED_CALLED_FROM = Collections.unmodifiableList(Arrays.asList(
-            "Called from", "StackTraceCompletableFutureTest.java:66",
-            "Called from", "StackTraceCompletableFutureTest.java:39", "47", "64",
-            "Called from", "StackTraceCompletableFutureTest.java:58",
-            "Called from", "StackTraceCompletableFutureTest.java:52"));
+            "Called from", "StackTraceCompletableFutureTest.java:65",
+            "Called from", "StackTraceCompletableFutureTest.java:38", "46", "63",
+            "Called from", "StackTraceCompletableFutureTest.java:57",
+            "Called from", "StackTraceCompletableFutureTest.java:51"));
 
     @Test
     void testNormalExecutionAllOf() throws InterruptedException, ExecutionException, TimeoutException {
@@ -145,7 +144,7 @@ public class StackTraceCompletableFutureTest {
             System.out.println(eString);
             assertStringContainsInOrder(Arrays.asList("Caused by: java.lang.IllegalStateException: failed",
                                                       "Called from",
-                                                      "StackTraceCompletableFutureTest.java:135"),
+                                                      "StackTraceCompletableFutureTest.java:134"),
                                         eString);
         }
         
