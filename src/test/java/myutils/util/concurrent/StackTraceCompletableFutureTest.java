@@ -77,7 +77,7 @@ public class StackTraceCompletableFutureTest {
         
         return stage;
     }
-    
+
     private static final List<String> EXPECTED_CALLED_FROM = Collections.unmodifiableList(Arrays.asList(
             "Called from", "StackTraceCompletableFutureTest.java:65",
             "Called from", "StackTraceCompletableFutureTest.java:38", "46", "63",

@@ -1,20 +1,28 @@
 package myutils.util.concurrent;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 
 public class PriorityLockTest {
+    long startOfTime;
+    
+    @BeforeEach
+    void setStartOfTime() {
+        startOfTime = System.currentTimeMillis();
+    }
+    
     /**
      * Test min and max thread priority.
      * The purpose of this test is to guard against Java changing max priority to some huge number,
@@ -30,7 +38,7 @@ public class PriorityLockTest {
     void testEnoughThreads() throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock();
 
-        DoThread doThread = new DoThread(priorityLock);
+        DoThread doThread = new DoThread(priorityLock, false);
 
         AtomicInteger threadNumber = new AtomicInteger();
         ScheduledExecutorService executor =
@@ -57,10 +65,11 @@ public class PriorityLockTest {
 
 
     @Test
+    @SuppressWarnings("checkstyle:LineLength")
     void testReuseThreads() throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock();
 
-        DoThread doThread = new DoThread(priorityLock);
+        DoThread doThread = new DoThread(priorityLock, false);
 
         AtomicInteger threadNumber = new AtomicInteger();
         ScheduledExecutorService executor =
@@ -85,33 +94,78 @@ public class PriorityLockTest {
                      doThread.getMessages());
     }
 
-    private static class DoThread {
+
+    @Test
+    @SuppressWarnings("checkstyle:LineLength")
+    void testExceptionWhileAcquireLock() throws InterruptedException {
+        PriorityLock priorityLock = new PriorityLock();
+
+        DoThread doThread = new DoThread(priorityLock, true);
+
+        AtomicInteger threadNumber = new AtomicInteger();
+        ScheduledExecutorService executor =
+                Executors.newScheduledThreadPool(6, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
+
+        executor.schedule(() -> { doThread.action(4); }, 100, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(5); }, 200, TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> future600 =
+        executor.schedule(() -> { doThread.action(7); }, 600, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { System.out.println((System.currentTimeMillis() - startOfTime) + " : interrupt thread priority 7"); future600.cancel(true); }, 700, TimeUnit.MILLISECONDS);
+
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+
+        assertEquals(Arrays.asList("end thread with priority 4", // thread with priority 4 runs first, and while it is running all others get added to the queue
+                                   "end thread with priority 5"), // thread with lowest priority goes last
+                     doThread.getMessages());
+    }
+
+
+    private class DoThread {
         private final PriorityLock priorityLock;
+        private final boolean allowInterrupt;
         private final List<String> messages = Collections.synchronizedList(new ArrayList<>());
 
-        private DoThread(PriorityLock priorityLock) {
+        private DoThread(PriorityLock priorityLock, boolean allowInterrupt) {
             this.priorityLock = priorityLock;
+            this.allowInterrupt = allowInterrupt;
         }
 
         void action(int priority) {
             final Thread currentThread = Thread.currentThread();
             currentThread.setPriority(priority);
-            System.out.println("start " + currentThread.getName() + "@" + currentThread.hashCode() + " at priority " + currentThread.getPriority());
-            priorityLock.lock();
+            logString(currentThread, "start");
+            if (allowInterrupt) {
+                try {
+                    priorityLock.lockInterruptibly();
+                } catch (InterruptedException e) {
+                    logString(currentThread, "caught InterruptedException");
+                    throw new RuntimeException(e);
+                }
+            } else {
+                priorityLock.lock();
+            }
             try {
-                System.out.println("acquired lock in " + currentThread.getName() + "@" + currentThread.hashCode() + " at priority " + currentThread.getPriority());
+                logString(currentThread, "acquired lock");
                 sleep(1000);
-                System.out.println("end " + currentThread.getName() + " at priority " + currentThread.getPriority());
+                logString(currentThread, "end");
                 messages.add("end thread with priority " + currentThread.getPriority());
             } finally {
                 priorityLock.unlock();
             }
         }
+        
+        private void logString(Thread currentThread, String message) {
+            System.out.println(
+                    Long.toString(System.currentTimeMillis() - startOfTime)
+                    + " : " + currentThread.getName() + "@" + currentThread.hashCode() + " at priority " + currentThread.getPriority()
+                    + " : " + message);
+        }
 
         List<String> getMessages() {
             return messages;
         }
-    };
+    }
 
     private static void sleep(long millis) {
         try {

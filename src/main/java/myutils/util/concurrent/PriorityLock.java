@@ -1,12 +1,12 @@
 package myutils.util.concurrent;
 
-import javax.annotation.Nonnull;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import javax.annotation.Nonnull;
 
 
 /**
@@ -14,6 +14,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * This implementation uses Condition objects to wait on threads with a higher priority to finish.
  *
  * @see Thread#MIN_PRIORITY
+ * @see Thread#NORM_PRIORITY
  * @see Thread#MAX_PRIORITY
  */
 public class PriorityLock implements Lock {
@@ -26,11 +27,11 @@ public class PriorityLock implements Lock {
         }
     }
 
-    private final ReentrantLock lock ;
+    private final ReentrantLock lock;
     private final Level[] levels;
 
     public PriorityLock() {
-        lock = new ReentrantLock();
+        lock = new ReentrantLock(true);
         levels = new Level[Thread.MAX_PRIORITY];
         for (int i = 0; i < Thread.MAX_PRIORITY; i++) {
             levels[i] = new Level(lock);
@@ -41,11 +42,16 @@ public class PriorityLock implements Lock {
     public void lock() {
         Thread currentThread = Thread.currentThread();
         addThread(currentThread);
-        lock.lock();
         try {
-            waitForHigherPriorityTasksToFinish(currentThread);
-        } catch (InterruptedException e) {
-            throw new CancellationException(e.getMessage());
+            lock.lock();
+            try {
+                waitForHigherPriorityTasksToFinish(currentThread);
+            } catch (InterruptedException e) {
+                throw new CancellationException(e.getMessage());
+            }
+        } catch (RuntimeException | Error e) {
+            Condition condition = removeThread(currentThread);
+            condition.signalAll();
         }
     }
 
@@ -53,40 +59,57 @@ public class PriorityLock implements Lock {
     public void lockInterruptibly() throws InterruptedException {
         Thread currentThread = Thread.currentThread();
         addThread(currentThread);
-        lock.lockInterruptibly();
-        waitForHigherPriorityTasksToFinish(currentThread);
+        try {
+            lock.lockInterruptibly();
+            waitForHigherPriorityTasksToFinish(currentThread);
+        } catch (InterruptedException | RuntimeException | Error e) {
+            Condition condition = removeThread(currentThread);
+            condition.signalAll();
+        }
     }
 
     @Override
     public boolean tryLock() {
         Thread currentThread = Thread.currentThread();
         addThread(currentThread);
-        boolean acquired = lock.tryLock();
-        if (acquired) {
-            int priority = currentThread.getPriority();
-            Integer nextHigherPriority = computeNextHigherPriority(priority);
-            if (nextHigherPriority != null) {
-                lock.unlock();
-                acquired = false;
+        try {
+            boolean acquired = lock.tryLock();
+            if (acquired) {
+                int priority = currentThread.getPriority();
+                Integer nextHigherPriority = computeNextHigherPriority(priority);
+                if (nextHigherPriority != null) {
+                    lock.unlock();
+                    acquired = false;
+                }
             }
+            return acquired;
+        } catch (RuntimeException | Error e) {
+            Condition condition = removeThread(currentThread);
+            condition.signalAll();
+            return false;
         }
-        return acquired;
     }
 
     @Override
     public boolean tryLock(long time, TimeUnit unit) throws InterruptedException {
         Thread currentThread = Thread.currentThread();
         addThread(currentThread);
-        boolean acquired = lock.tryLock(time, unit);
-        if (acquired) {
-            int priority = currentThread.getPriority();
-            Integer nextHigherPriority = computeNextHigherPriority(priority);
-            if (nextHigherPriority != null) {
-                lock.unlock();
-                acquired = false;
+        try {
+            boolean acquired = lock.tryLock(time, unit);
+            if (acquired) {
+                int priority = currentThread.getPriority();
+                Integer nextHigherPriority = computeNextHigherPriority(priority);
+                if (nextHigherPriority != null) {
+                    lock.unlock();
+                    acquired = false;
+                }
             }
+            return acquired;
+        } catch (InterruptedException | RuntimeException | Error e) {
+            Condition condition = removeThread(currentThread);
+            condition.signalAll();
+            return false;
         }
-        return acquired;
     }
 
     @Override
