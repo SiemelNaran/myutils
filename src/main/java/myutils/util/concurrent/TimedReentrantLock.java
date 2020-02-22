@@ -22,6 +22,10 @@ public class TimedReentrantLock extends ReentrantLock {
     private long totalWaitTime;
     private long totalLockRunningTime;
     
+    public TimedReentrantLock() {
+        this(false);
+    }
+    
     public TimedReentrantLock(boolean fair) {
         super(fair);
         creationTime = System.currentTimeMillis();
@@ -37,23 +41,34 @@ public class TimedReentrantLock extends ReentrantLock {
     @Override
     public void lockInterruptibly() throws InterruptedException {
         setStartTime();
-        super.lockInterruptibly();
-        setTimesOnAcquireLock();
+        try {
+            super.lockInterruptibly();
+            setTimesOnAcquireLock();
+        } catch (InterruptedException e) {
+            setWaitTimeOnAcquireLock(System.currentTimeMillis());
+            throw e;
+        }
     }
     
     @Override
     public boolean tryLock() {
         setStartTime();
         boolean acquired = super.tryLock();
-        setTimesOnAcquireLock();
+        if (acquired) {
+            setTimesOnAcquireLock();
+        }
         return acquired;
     }
-    
+
     @Override
     public boolean tryLock(long timeout, TimeUnit unit) throws InterruptedException {
         setStartTime();
         boolean acquired = super.tryLock(timeout, unit);
-        setTimesOnAcquireLock();
+        if (acquired) {
+            setTimesOnAcquireLock();
+        } else {
+            setWaitTimeOnAcquireLock(System.currentTimeMillis());
+        }
         return acquired;
     }
 
@@ -69,8 +84,12 @@ public class TimedReentrantLock extends ReentrantLock {
     
     private void setTimesOnAcquireLock() {
         long now = System.currentTimeMillis();
-        totalWaitTime += now - startTime.get();
+        setWaitTimeOnAcquireLock(now);
         this.lockStartTime = now;
+    }
+
+    private void setWaitTimeOnAcquireLock(long now) {
+        totalWaitTime += now - startTime.get();
     }
 
     public final Duration getTotalWaitTime() {
@@ -81,7 +100,7 @@ public class TimedReentrantLock extends ReentrantLock {
         return Duration.ofMillis(totalLockRunningTime);
     }
     
-    public final Duration getApproximateTotalIdleTime() {
+    public final Duration getTotalIdleTime() {
         return Duration.ofMillis(System.currentTimeMillis() - creationTime)
                        .minus(getTotalLockRunningTime());
     }
@@ -108,7 +127,7 @@ public class TimedReentrantLock extends ReentrantLock {
         private final int queueLength;
         private final Duration totalWaitTime;
         private final Duration totalLockRunningTime;
-        private final Duration approximateTotalIdleTime;
+        private final Duration totalIdleTime;
         private final int usage;
         
         private Statistics(TimedReentrantLock lock, @Nullable Set<String> collisionTracking) {
@@ -116,7 +135,7 @@ public class TimedReentrantLock extends ReentrantLock {
             this.queueLength = lock.getQueueLength();
             this.totalWaitTime = lock.getTotalWaitTime();
             this.totalLockRunningTime = lock.getTotalLockRunningTime();
-            this.approximateTotalIdleTime = lock.getApproximateTotalIdleTime();
+            this.totalIdleTime = lock.getTotalIdleTime();
             this.usage = collisionTracking != null ? collisionTracking.size() : -1;
         }
         
@@ -155,8 +174,8 @@ public class TimedReentrantLock extends ReentrantLock {
          * <p>It is approximate because if the lock is in use at the time this function called,
          * totalLockRunningTime has not been updated (it is only updated upon unlock).
          */
-        public Duration getApproximateTotalIdleTimes() {
-            return approximateTotalIdleTime;
+        public Duration getTotalIdleTime() {
+            return totalIdleTime;
         }
 
         /**

@@ -121,7 +121,7 @@ public class HashLocksTest {
 
         
         service.shutdown();
-        service.awaitTermination(1000, TimeUnit.SECONDS);
+        service.awaitTermination(10, TimeUnit.SECONDS);
         
         /* Ideal output:
             start 1st at 300
@@ -138,7 +138,7 @@ public class HashLocksTest {
         
         Duration[] waitTimes = statistics.stream().map(TimedReentrantLock.Statistics::getTotalWaitTime).toArray(Duration[]::new);
         Duration[] lockRunningTimes = statistics.stream().map(TimedReentrantLock.Statistics::getTotalLockRunningTime).toArray(Duration[]::new);
-        Duration[] approximateTotalIdleTimes = statistics.stream().map(TimedReentrantLock.Statistics::getApproximateTotalIdleTimes).toArray(Duration[]::new);
+        Duration[] approximateTotalIdleTimes = statistics.stream().map(TimedReentrantLock.Statistics::getTotalIdleTime).toArray(Duration[]::new);
         System.out.println("waitTimes: " + toString(waitTimes));
         System.out.println("lockRunningTimes: " + toString(lockRunningTimes));
         System.out.println("approximateTotalIdleTimes: " + toString(approximateTotalIdleTimes));
