@@ -40,6 +40,7 @@ public class PriorityLock implements Lock {
 
     private final ReentrantLock lock;
     private final Level[] levels;
+    private int originalPriority;
 
     public PriorityLock() {
         lock = new ReentrantLock(true);
@@ -52,7 +53,7 @@ public class PriorityLock implements Lock {
     @Override
     public void lock() {
         Thread currentThread = Thread.currentThread();
-        addThread(currentThread);
+        int priority = addThread(currentThread);
         try {
             lock.lock();
             try {
@@ -61,72 +62,92 @@ public class PriorityLock implements Lock {
                 throw new CancellationException(e.getMessage());
             }
         } catch (RuntimeException | Error e) {
-            Condition condition = removeThread(currentThread);
-            condition.signalAll();
+            cleanupAndRethrowExceptionSafely(priority, e);
         }
+        originalPriority = priority;
     }
 
     @Override
     public void lockInterruptibly() throws InterruptedException {
         Thread currentThread = Thread.currentThread();
-        addThread(currentThread);
+        int priority = addThread(currentThread);
         try {
             lock.lockInterruptibly();
             waitForHigherPriorityTasksToFinish(currentThread);
-        } catch (InterruptedException | RuntimeException | Error e) {
-            Condition condition = removeThread(currentThread);
-            condition.signalAll();
+        } catch (InterruptedException e) {
+            System.out.println("snaran: caught Interruptedexception");
+            removeThread(priority);
+            throw e;
+        } catch (RuntimeException | Error e) {
+            System.out.println("snaran: caught exception");
+            cleanupAndRethrowExceptionSafely(priority, e);
         }
+        originalPriority = priority;
     }
 
     @Override
     public boolean tryLock() {
         Thread currentThread = Thread.currentThread();
-        addThread(currentThread);
+        int priority = addThread(currentThread);
         try {
             boolean acquired = lock.tryLock();
             if (acquired) {
-                int priority = currentThread.getPriority();
-                Integer nextHigherPriority = computeNextHigherPriority(priority);
+                Integer nextHigherPriority = computeNextHigherPriorityIndex(priority);
                 if (nextHigherPriority != null) {
                     lock.unlock();
                     acquired = false;
+                    removeThread(priority);
+                } else {
+                    originalPriority = priority;
                 }
+            } else {
+                removeThread(priority);
             }
             return acquired;
         } catch (RuntimeException | Error e) {
-            Condition condition = removeThread(currentThread);
-            condition.signalAll();
-            return false;
+            return cleanupAndRethrowExceptionSafely(priority, e);
         }
     }
 
     @Override
     public boolean tryLock(long time, TimeUnit unit) throws InterruptedException {
         Thread currentThread = Thread.currentThread();
-        addThread(currentThread);
+        time = unit.toMillis(time);
+        unit = TimeUnit.MILLISECONDS;
+        int priority = addThread(currentThread);
         try {
-            boolean acquired = lock.tryLock(time, unit);
-            if (acquired) {
-                int priority = currentThread.getPriority();
-                Integer nextHigherPriority = computeNextHigherPriority(priority);
-                if (nextHigherPriority != null) {
-                    lock.unlock();
-                    acquired = false;
+            do {
+                long now = System.currentTimeMillis();
+                try {
+                    if (lock.tryLock(time, unit)) {
+                        Integer nextHigherPriority = computeNextHigherPriorityIndex(priority);
+                        if (nextHigherPriority != null) {
+                            lock.unlock();
+                        } else {
+                            originalPriority = priority;
+                            return true;
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    removeThread(priority);
+                    throw e;
                 }
-            }
-            return acquired;
-        } catch (InterruptedException | RuntimeException | Error e) {
-            Condition condition = removeThread(currentThread);
-            condition.signalAll();
+                long delta = System.currentTimeMillis() - now;
+                time -= delta;
+            } while (time > 0);
+            removeThread(priority);
             return false;
+        } catch (RuntimeException | Error e) {
+            return cleanupAndRethrowExceptionSafely(priority, e);
         }
     }
 
     @Override
     public void unlock() {
-        Thread currentThread = Thread.currentThread();
-        Condition condition = removeThread(currentThread);
+        Condition condition = removeThread(originalPriority);
+        // signal all threads waiting on this originalPriority to wake up so that each of them calls computeNextHigherPriority 
+        // if we called condition.signal() it would only wake up one thread, and the others would be waiting for the higher priority thread to finish,
+        // which will never happen if this thread is the last of the higher priority ones.
         condition.signalAll();
         lock.unlock();
     }
@@ -136,23 +157,25 @@ public class PriorityLock implements Lock {
         return lock.newCondition();
     }
 
-    private void addThread(Thread currentThread) {
+    private int addThread(Thread currentThread) {
         int index = currentThread.getPriority() - 1;
         levels[index].count.incrementAndGet();
+        return currentThread.getPriority();
     }
 
     private void waitForHigherPriorityTasksToFinish(Thread currentThread) throws InterruptedException {
         int priority = currentThread.getPriority();
         while (true) {
-            Integer nextHigherPriority = computeNextHigherPriority(priority);
-            if (nextHigherPriority == null) {
+            Integer nextHigherPriorityIndex = computeNextHigherPriorityIndex(priority);
+            if (nextHigherPriorityIndex == null) {
                 break;
             }
-            levels[nextHigherPriority].condition.await();
+            System.out.println("snaran: " + Thread.currentThread().getName() + " awaiting on " + (nextHigherPriorityIndex + 1));
+            levels[nextHigherPriorityIndex].condition.await();
         }
     }
 
-    private Integer computeNextHigherPriority(int priority) {
+    private Integer computeNextHigherPriorityIndex(int priority) {
         for (int i = priority; i < Thread.MAX_PRIORITY; i++) {
             if (levels[i].count.get() > 0) {
                 return i;
@@ -161,8 +184,24 @@ public class PriorityLock implements Lock {
         return null;
     }
 
-    private @Nonnull Condition removeThread(Thread currentThread) {
-        int index = currentThread.getPriority() - 1;
+    private boolean cleanupAndRethrowExceptionSafely(int priority, Throwable e) {
+        Condition condition = removeThread(priority);
+        try {
+            condition.signalAll();
+        } catch (RuntimeException | Error e2) {
+            e.addSuppressed(e2);
+        }
+        if (e instanceof RuntimeException) {
+            throw (RuntimeException) e;
+        }
+        if (e instanceof Error) {
+            throw (Error) e;
+        }
+        throw new UnsupportedOperationException(e);
+    }
+    
+    private @Nonnull Condition removeThread(int priority) {
+        int index = priority - 1;
         levels[index].count.decrementAndGet();
         return levels[index].condition;
     }
