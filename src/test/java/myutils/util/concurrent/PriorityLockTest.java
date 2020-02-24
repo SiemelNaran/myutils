@@ -11,6 +11,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
@@ -212,8 +214,7 @@ public class PriorityLockTest {
         assertThat(doThread.getMessages(),
                    Matchers.contains(
                            // thread with priority 4 runs first, and while it is running all others get added to the queue
-                           "thread with priority 7 interrupted before it even started",
-                           "did not acquire lock in thread with priority 7",
+                           "thread with priority 7 encountered exception java.lang.InterruptedException",
                            "end thread with priority 4",
                            "end thread with priority 6",
                            "end thread with priority 6",
@@ -269,14 +270,10 @@ public class PriorityLockTest {
                            // thread with priority 4 runs first, and while it is running all others get added to the queue
                            "end thread with priority 4",
                            "end thread with priority 7",
-                           "thread with priority 5 interrupted before it even started",
-                           "did not acquire lock on thread with priority 5",
-                           "thread with priority 6 interrupted before it even started",
-                           "did not acquire lock on thread with priority 6",
-                           "thread with priority 5 interrupted before it even started",
-                           "did not acquire lock on thread with priority 5",
-                           "thread with priority 6 interrupted before it even started",
-                           "did not acquire lock on thread with priority 6"));
+                           "thread with priority 5 encountered exception java.lang.InterruptedException",
+                           "thread with priority 6 encountered exception java.lang.InterruptedException",
+                           "thread with priority 5 encountered exception java.lang.InterruptedException",
+                           "thread with priority 6 encountered exception java.lang.InterruptedException"));
     }
 
 
@@ -288,7 +285,7 @@ public class PriorityLockTest {
      */
     @Test
     void testTryLock() throws InterruptedException {
-        PriorityLock priorityLock = new PriorityLock();
+        PriorityLock priorityLock = new PriorityLock(true);
 
         DoThread doThread = new DoThreadTryLock(priorityLock);
 
@@ -311,9 +308,9 @@ public class PriorityLockTest {
                 Matchers.contains(
                         // thread with priority 4 runs first, and while it is running all others get added to the queue
                         "end thread with priority 4",
-                        "did not acquire lock in thread with priority 6",
-                        "did not acquire lock in thread with priority 7",
-                        "did not acquire lock in thread with priority 8",
+                        "thread with priority 6 encountered exception myutils.util.concurrent.PriorityLockTest$FailedToAcquireLockException",
+                        "thread with priority 7 encountered exception myutils.util.concurrent.PriorityLockTest$FailedToAcquireLockException",
+                        "thread with priority 8 encountered exception myutils.util.concurrent.PriorityLockTest$FailedToAcquireLockException",
                         "end thread with priority 5",
                         "end thread with priority 1"));
     }
@@ -353,16 +350,140 @@ public class PriorityLockTest {
                         // thread with priority 4 runs first, and while it is running all others get added to the queue
                         "end thread with priority 4",
                         "end thread with priority 8",
-                        "did not acquire lock in thread with priority 5",
-                        "did not acquire lock in thread with priority 6",
+                        "thread with priority 5 encountered exception myutils.util.concurrent.PriorityLockTest$FailedToAcquireLockException",
+                        "thread with priority 6 encountered exception myutils.util.concurrent.PriorityLockTest$FailedToAcquireLockException",
                         "end thread with priority 7",
                         "end thread with priority 1"));
     }
 
 
+    /**
+     * This test starts 3 threads with different priorities, and acquiring a lock on the first thread throws.
+     * The test verifies that the second thread still runs.
+     */
+    @Test
+    void testLockException() throws InterruptedException {
+        PriorityLock priorityLock = new PriorityLock(new ThrowAtPrioritySevenReentrantLock());
+
+        DoThread doThread = new DoThreadLock(priorityLock);
+
+        AtomicInteger threadNumber = new AtomicInteger();
+        ScheduledExecutorService executor =
+                Executors.newScheduledThreadPool(3, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
+
+        executor.schedule(() -> { doThread.action(4); }, 100, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(7); }, 1200, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(6); }, 1300, TimeUnit.MILLISECONDS);
+
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+        prettyPrintList("messages", doThread.getMessages());
+
+        assertThat(doThread.getMessages(),
+                   Matchers.contains(
+                           // thread with priority 4 runs first, and while it is running all others get added to the queue
+                           "end thread with priority 4",
+                           "thread with priority 7 encountered exception java.lang.IllegalArgumentException: priority 7 not allowed",
+                           "end thread with priority 6"));
+    }
+
+
+    /**
+     * This test starts 3 threads with different priorities, and acquiring a lock on the first thread throws.
+     * The test verifies that the second thread still runs.
+     */
+    @Test
+    void testLockInterruptiblyException() throws InterruptedException {
+        PriorityLock priorityLock = new PriorityLock(new ThrowAtPrioritySevenReentrantLock());
+
+        DoThread doThread = new DoThreadLockInterruptibly(priorityLock);
+
+        AtomicInteger threadNumber = new AtomicInteger();
+        ScheduledExecutorService executor =
+                Executors.newScheduledThreadPool(3, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
+
+        executor.schedule(() -> { doThread.action(4); }, 100, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(7); }, 1200, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(6); }, 1300, TimeUnit.MILLISECONDS);
+
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+        prettyPrintList("messages", doThread.getMessages());
+
+        assertThat(doThread.getMessages(),
+                   Matchers.contains(
+                           // thread with priority 4 runs first, and while it is running all others get added to the queue
+                           "end thread with priority 4",
+                           "thread with priority 7 encountered exception java.lang.IllegalArgumentException: priority 7 not allowed",
+                           "end thread with priority 6"));
+    }
+
+
+    /**
+     * This test starts 3 threads with different priorities, and acquiring a lock on the first thread throws.
+     * The test verifies that the second thread still runs.
+     */
+    @Test
+    void testTryLockWithException() throws InterruptedException {
+        PriorityLock priorityLock = new PriorityLock(new ThrowAtPrioritySevenReentrantLock());
+
+        DoThread doThread = new DoThreadTryLock(priorityLock);
+
+        AtomicInteger threadNumber = new AtomicInteger();
+        ScheduledExecutorService executor =
+                Executors.newScheduledThreadPool(3, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
+
+        executor.schedule(() -> { doThread.action(4); }, 100, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(7); }, 1200, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(6); }, 1300, TimeUnit.MILLISECONDS);
+
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+        prettyPrintList("messages", doThread.getMessages());
+
+        assertThat(doThread.getMessages(),
+                   Matchers.contains(
+                           // thread with priority 4 runs first, and while it is running all others get added to the queue
+                           "end thread with priority 4",
+                           "thread with priority 7 encountered exception java.lang.IllegalArgumentException: priority 7 not allowed",
+                           "end thread with priority 6"));
+    }
+
+
+    /**
+     * This test starts 3 threads with different priorities, and acquiring a lock on the first thread throws.
+     * The test verifies that the second thread still runs.
+     */
+    @Test
+    void testTryLockWithArgsWithException() throws InterruptedException {
+        PriorityLock priorityLock = new PriorityLock(new ThrowAtPrioritySevenReentrantLock());
+
+        DoThread doThread = new DoThreadTryLockWithArgs(priorityLock, 2000);
+
+        AtomicInteger threadNumber = new AtomicInteger();
+        ScheduledExecutorService executor =
+                Executors.newScheduledThreadPool(3, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
+
+        executor.schedule(() -> { doThread.action(4); }, 100, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(7); }, 1200, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(6); }, 1300, TimeUnit.MILLISECONDS);
+
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+        prettyPrintList("messages", doThread.getMessages());
+
+        assertThat(doThread.getMessages(),
+                   Matchers.contains(
+                           // thread with priority 4 runs first, and while it is running all others get added to the queue
+                           "end thread with priority 4",
+                           "thread with priority 7 encountered exception java.lang.IllegalArgumentException: priority 7 not allowed",
+                           "end thread with priority 6"));
+    }
+
+
     private abstract class DoThread {
         final PriorityLock priorityLock;
-        final List<String> messages = Collections.synchronizedList(new ArrayList<>());
+        private final List<String> messages = Collections.synchronizedList(new ArrayList<>());
 
         private DoThread(PriorityLock priorityLock) {
             this.priorityLock = priorityLock;
@@ -376,7 +497,8 @@ public class PriorityLockTest {
             final Thread currentThread = Thread.currentThread();
             currentThread.setPriority(priority);
             logString("start");
-            if (getLock()) {
+            try {
+                getLock();
                 try {
                     logString("acquired lock");
                     sleep(1000);
@@ -389,13 +511,13 @@ public class PriorityLockTest {
                 } finally {
                     priorityLock.unlock();
                 }
-            } else {
-               logString("failed to acquire lock");
-               messages.add("did not acquire lock in thread with priority " + currentThread.getPriority());
+            } catch (InterruptedException | RuntimeException e) {
+                logString("caught exception " + e.toString());
+                messages.add("thread with priority " + currentThread.getPriority() + " encountered exception " + e.toString());
             }
         }
         
-        abstract boolean getLock();
+        abstract void getLock() throws InterruptedException;
         
         List<String> getMessages() {
             return messages;
@@ -408,9 +530,8 @@ public class PriorityLockTest {
         }
         
         @Override
-        boolean getLock() {
+        void getLock() {
             priorityLock.lock();
-            return true;
         }
     }
 
@@ -420,20 +541,8 @@ public class PriorityLockTest {
         }
         
         @Override
-        boolean getLock() {
-            Thread currentThread = Thread.currentThread();
-            try {
-                priorityLock.lockInterruptibly();
-                return true;
-            } catch (InterruptedException e) {
-                logString("caught InterruptedException during lockInterruptibly");
-                messages.add("thread with priority " + currentThread.getPriority() + " interrupted before it even started");
-                return false;
-            } catch (Throwable e) {
-                logString("caught exception in lockInterruptibly : " + e.toString());
-                messages.add("thread with priority " + currentThread.getPriority() + " encountered unknown exception " + e.toString());
-                throw e;
-            }
+        void getLock() throws InterruptedException {
+            priorityLock.lockInterruptibly();
         }
     }
 
@@ -443,36 +552,85 @@ public class PriorityLockTest {
         }
         
         @Override
-        boolean getLock() {
-            return priorityLock.tryLock();
-        }
-    }
-
-    private class DoThreadTryLockWithArgs extends DoThread {
-        private final long waitTime;
-
-        private DoThreadTryLockWithArgs(PriorityLock priorityLock, long waitTime) {
-            super(priorityLock);
-            this.waitTime = waitTime;
-        }
-        
-        @Override
-        boolean getLock() {
-            Thread currentThread = Thread.currentThread();
-            try {
-                return priorityLock.tryLock(waitTime, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                logString("caught InterruptedException during tryLock");
-                messages.add("thread with priority " + currentThread.getPriority() + " interrupted before it even started");
-                return false;
-            } catch (Throwable e) {
-                logString("caught exception in tryLock : " + e.toString());
-                messages.add("thread with priority " + currentThread.getPriority() + " encountered exception " + e.toString());
-                throw e;
+        void getLock() {
+            boolean acquired = priorityLock.tryLock();
+            if (!acquired) {
+                throw new FailedToAcquireLockException();
             }
         }
     }
 
+    private class DoThreadTryLockWithArgs extends DoThread {
+        private final long waitTimeMillis;
+
+        private DoThreadTryLockWithArgs(PriorityLock priorityLock, long waitTime) {
+            super(priorityLock);
+            this.waitTimeMillis = waitTime;
+        }
+        
+        @Override
+        void getLock() throws InterruptedException {
+            boolean acquired = priorityLock.tryLock(waitTimeMillis, TimeUnit.MILLISECONDS);
+            if (!acquired) {
+                throw new FailedToAcquireLockException();
+            }
+        }
+    }
+    
+    
+    private static class FailedToAcquireLockException extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+    }
+    
+    
+    private static class ThrowAtPrioritySevenReentrantLock extends ReentrantLock {
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        public void lock() {
+            sleep(50);
+            if (Thread.currentThread().getPriority() == 7) {
+                throw new IllegalArgumentException("priority 7 not allowed");
+            }
+            super.lock();
+        }
+
+        @Override
+        public void lockInterruptibly() throws InterruptedException {
+            if (Thread.currentThread().getPriority() == 7) {
+                throw new IllegalArgumentException("priority 7 not allowed");
+            }
+            super.lockInterruptibly();;
+        }
+
+        @Override
+        public boolean tryLock() {
+            if (Thread.currentThread().getPriority() == 7) {
+                throw new IllegalArgumentException("priority 7 not allowed");
+            }
+            return super.tryLock();
+        }
+
+        @Override
+        public boolean tryLock(long time, TimeUnit unit) throws InterruptedException {
+            if (Thread.currentThread().getPriority() == 7) {
+                throw new IllegalArgumentException("priority 7 not allowed");
+            }
+            return super.tryLock(time, unit);
+        }
+
+        @Override
+        public void unlock() {
+            super.unlock();
+        }
+
+        @Override
+        public Condition newCondition() {
+            return super.newCondition();
+        }        
+    }
+
+    
     private void logString(String message) {
         Thread currentThread = Thread.currentThread();
         System.out.println(

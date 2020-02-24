@@ -38,15 +38,23 @@ public class PriorityLock implements Lock {
         }
     }
 
-    private final ReentrantLock lock;
+    private final Lock lock;
     private final Level[] levels;
     private int originalPriority;
 
     public PriorityLock() {
-        lock = new ReentrantLock(true);
-        levels = new Level[Thread.MAX_PRIORITY];
+        this(false);
+    }
+    
+    public PriorityLock(boolean fair) {
+        this(new ReentrantLock(fair));
+    }
+    
+    PriorityLock(Lock lock) {
+        this.lock = lock;
+        this.levels = new Level[Thread.MAX_PRIORITY];
         for (int i = 0; i < Thread.MAX_PRIORITY; i++) {
-            levels[i] = new Level(lock);
+            this.levels[i] = new Level(lock);
         }
     }
 
@@ -62,7 +70,8 @@ public class PriorityLock implements Lock {
                 throw new CancellationException(e.getMessage());
             }
         } catch (RuntimeException | Error e) {
-            cleanupAndRethrowExceptionSafely(priority, e);
+            cleanup(priority, e);
+            throw e;
         }
         originalPriority = priority;
     }
@@ -79,8 +88,8 @@ public class PriorityLock implements Lock {
             removeThread(priority);
             throw e;
         } catch (RuntimeException | Error e) {
-            System.out.println("snaran: caught exception");
-            cleanupAndRethrowExceptionSafely(priority, e);
+            cleanup(priority, e);
+            throw e;
         }
         originalPriority = priority;
     }
@@ -105,7 +114,8 @@ public class PriorityLock implements Lock {
             }
             return acquired;
         } catch (RuntimeException | Error e) {
-            return cleanupAndRethrowExceptionSafely(priority, e);
+            cleanup(priority, e);
+            throw e;
         }
     }
 
@@ -138,7 +148,8 @@ public class PriorityLock implements Lock {
             removeThread(priority);
             return false;
         } catch (RuntimeException | Error e) {
-            return cleanupAndRethrowExceptionSafely(priority, e);
+            cleanup(priority, e);
+            throw e;
         }
     }
 
@@ -155,6 +166,11 @@ public class PriorityLock implements Lock {
     @Override
     public @Nonnull Condition newCondition() {
         return lock.newCondition();
+    }
+    
+    @Override
+    public String toString() {
+        return lock.toString();
     }
 
     private int addThread(Thread currentThread) {
@@ -184,20 +200,13 @@ public class PriorityLock implements Lock {
         return null;
     }
 
-    private boolean cleanupAndRethrowExceptionSafely(int priority, Throwable e) {
+    private void cleanup(int priority, Throwable e) {
         Condition condition = removeThread(priority);
         try {
             condition.signalAll();
         } catch (RuntimeException | Error e2) {
             e.addSuppressed(e2);
         }
-        if (e instanceof RuntimeException) {
-            throw (RuntimeException) e;
-        }
-        if (e instanceof Error) {
-            throw (Error) e;
-        }
-        throw new UnsupportedOperationException(e);
     }
     
     private @Nonnull Condition removeThread(int priority) {
