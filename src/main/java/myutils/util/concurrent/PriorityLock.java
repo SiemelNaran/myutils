@@ -14,8 +14,8 @@ import javax.annotation.Nonnull;
  * 
  * <ul>Here is how this class implements it:
  *   <li>This class has an internal ReentrantLock.
- *   <li>Threads have priorities between 1 and 10 inclusive, with 5 being the default priority.</li>
- *   <li>Thus we have 10 counters and 10 conditions based on the internal ReentrantLock.</li>
+ *   <li>In general, threads have priorities between 1 and 10 inclusive, with 5 being the default priority.
+ *           Thus a PriorityLock has 10 counters and 10 conditions based on the internal ReentrantLock.</li>
  *   <li>When a thread of priority N requests a lock,
  *           the lock makes a note that a thread of priority N is waiting for a lock by incrementing the counter for this priority.</li>
  *   <li>When a thread gets the internal lock, we check if there are any threads with higher priority in the queue (simply by checking if the count > 0</li>
@@ -42,15 +42,27 @@ public class PriorityLock implements Lock {
     private final Level[] levels;
     private int originalPriority;
 
+    /**
+     * Create a priority lock backed by a non-fair ReentrantLock.
+     */
     public PriorityLock() {
         this(false);
     }
     
+    /**
+     * Create a priority lock backed by a ReentrantLock.
+     */
     public PriorityLock(boolean fair) {
         this(new ReentrantLock(fair));
     }
     
-    PriorityLock(Lock lock) {
+    /**
+     * Create a priority lock backed by the given lock.
+     * Implementations must be sure that no two PriorityLock's share the same lock.
+     * 
+     * @param the internal lock
+     */
+    protected PriorityLock(Lock lock) {
         this.lock = lock;
         this.levels = new Level[Thread.MAX_PRIORITY];
         for (int i = 0; i < Thread.MAX_PRIORITY; i++) {
@@ -84,7 +96,6 @@ public class PriorityLock implements Lock {
             lock.lockInterruptibly();
             waitForHigherPriorityTasksToFinish(currentThread);
         } catch (InterruptedException e) {
-            System.out.println("snaran: caught Interruptedexception");
             removeThread(priority);
             throw e;
         } catch (RuntimeException | Error e) {
@@ -186,7 +197,6 @@ public class PriorityLock implements Lock {
             if (nextHigherPriorityIndex == null) {
                 break;
             }
-            System.out.println("snaran: " + Thread.currentThread().getName() + " awaiting on " + (nextHigherPriorityIndex + 1));
             levels[nextHigherPriorityIndex].condition.await();
         }
     }

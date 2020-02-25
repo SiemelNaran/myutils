@@ -13,7 +13,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
-
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -39,6 +38,7 @@ public class PriorityLockTest {
     
     @AfterAll
     static void printAllTestsFinished() {
+        System.out.println("--------------------------------------------------------------------------------");
         System.out.println("all tests finished");
     }
     
@@ -51,6 +51,14 @@ public class PriorityLockTest {
     void testMinAndMaxPriority() {
         assertEquals(1, Thread.MIN_PRIORITY);
         assertEquals(10, Thread.MAX_PRIORITY);
+    }
+
+    @Test
+    void testToString() {
+        PriorityLock priorityLock = new PriorityLock();
+        priorityLock.lock();
+        System.out.println(priorityLock.toString());
+        assertThat(priorityLock.toString(), Matchers.matchesRegex("^java.util.concurrent.locks.ReentrantLock@[a-f0-9]+\\[Locked by thread main\\]$"));
     }
 
     /**
@@ -285,7 +293,7 @@ public class PriorityLockTest {
      */
     @Test
     void testTryLock() throws InterruptedException {
-        PriorityLock priorityLock = new PriorityLock(true);
+        PriorityLock priorityLock = new PriorityLock(new ThrowAtPrioritySevenReentrantLock(true));
 
         DoThread doThread = new DoThreadTryLock(priorityLock);
 
@@ -296,8 +304,8 @@ public class PriorityLockTest {
         executor.schedule(() -> { doThread.action(4); }, 100, TimeUnit.MILLISECONDS);
         executor.schedule(() -> { doThread.action(5); }, 1200, TimeUnit.MILLISECONDS);
         executor.schedule(() -> { doThread.action(6); }, 1200, TimeUnit.MILLISECONDS);
-        executor.schedule(() -> { doThread.action(7); }, 1200, TimeUnit.MILLISECONDS);
         executor.schedule(() -> { doThread.action(8); }, 1200, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(9); }, 1200, TimeUnit.MILLISECONDS);
         executor.schedule(() -> { doThread.action(1); }, 2400, TimeUnit.MILLISECONDS);
 
         executor.shutdown();
@@ -308,10 +316,10 @@ public class PriorityLockTest {
                 Matchers.contains(
                         // thread with priority 4 runs first, and while it is running all others get added to the queue
                         "end thread with priority 4",
+                        "thread with priority 5 encountered exception myutils.util.concurrent.PriorityLockTest$FailedToAcquireLockException",
                         "thread with priority 6 encountered exception myutils.util.concurrent.PriorityLockTest$FailedToAcquireLockException",
-                        "thread with priority 7 encountered exception myutils.util.concurrent.PriorityLockTest$FailedToAcquireLockException",
                         "thread with priority 8 encountered exception myutils.util.concurrent.PriorityLockTest$FailedToAcquireLockException",
-                        "end thread with priority 5",
+                        "end thread with priority 9",
                         "end thread with priority 1"));
     }
 
@@ -363,7 +371,7 @@ public class PriorityLockTest {
      */
     @Test
     void testLockException() throws InterruptedException {
-        PriorityLock priorityLock = new PriorityLock(new ThrowAtPrioritySevenReentrantLock());
+        PriorityLock priorityLock = new PriorityLock(new ThrowAtPrioritySevenReentrantLock(false));
 
         DoThread doThread = new DoThreadLock(priorityLock);
 
@@ -394,7 +402,7 @@ public class PriorityLockTest {
      */
     @Test
     void testLockInterruptiblyException() throws InterruptedException {
-        PriorityLock priorityLock = new PriorityLock(new ThrowAtPrioritySevenReentrantLock());
+        PriorityLock priorityLock = new PriorityLock(new ThrowAtPrioritySevenReentrantLock(false));
 
         DoThread doThread = new DoThreadLockInterruptibly(priorityLock);
 
@@ -425,7 +433,7 @@ public class PriorityLockTest {
      */
     @Test
     void testTryLockWithException() throws InterruptedException {
-        PriorityLock priorityLock = new PriorityLock(new ThrowAtPrioritySevenReentrantLock());
+        PriorityLock priorityLock = new PriorityLock(new ThrowAtPrioritySevenReentrantLock(false));
 
         DoThread doThread = new DoThreadTryLock(priorityLock);
 
@@ -456,7 +464,7 @@ public class PriorityLockTest {
      */
     @Test
     void testTryLockWithArgsWithException() throws InterruptedException {
-        PriorityLock priorityLock = new PriorityLock(new ThrowAtPrioritySevenReentrantLock());
+        PriorityLock priorityLock = new PriorityLock(new ThrowAtPrioritySevenReentrantLock(false));
 
         DoThread doThread = new DoThreadTryLockWithArgs(priorityLock, 2000);
 
@@ -586,6 +594,10 @@ public class PriorityLockTest {
     private static class ThrowAtPrioritySevenReentrantLock extends ReentrantLock {
         private static final long serialVersionUID = 1L;
 
+        ThrowAtPrioritySevenReentrantLock(boolean fair) {
+            super(fair);
+        }
+        
         @Override
         public void lock() {
             sleep(50);
@@ -597,6 +609,7 @@ public class PriorityLockTest {
 
         @Override
         public void lockInterruptibly() throws InterruptedException {
+            sleep(50);
             if (Thread.currentThread().getPriority() == 7) {
                 throw new IllegalArgumentException("priority 7 not allowed");
             }
@@ -605,6 +618,7 @@ public class PriorityLockTest {
 
         @Override
         public boolean tryLock() {
+            sleep(50);
             if (Thread.currentThread().getPriority() == 7) {
                 throw new IllegalArgumentException("priority 7 not allowed");
             }
@@ -613,6 +627,7 @@ public class PriorityLockTest {
 
         @Override
         public boolean tryLock(long time, TimeUnit unit) throws InterruptedException {
+            sleep(50);
             if (Thread.currentThread().getPriority() == 7) {
                 throw new IllegalArgumentException("priority 7 not allowed");
             }
