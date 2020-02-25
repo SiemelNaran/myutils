@@ -1,5 +1,6 @@
 package myutils.util.concurrent;
 
+import java.util.Date;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -38,7 +39,7 @@ public class PriorityLock implements Lock {
         }
     }
 
-    private final Lock lock;
+    private final Lock internalLock;
     private final Level[] levels;
     private int originalPriority;
 
@@ -63,7 +64,7 @@ public class PriorityLock implements Lock {
      * @param the internal lock
      */
     protected PriorityLock(Lock lock) {
-        this.lock = lock;
+        this.internalLock = lock;
         this.levels = new Level[Thread.MAX_PRIORITY];
         for (int i = 0; i < Thread.MAX_PRIORITY; i++) {
             this.levels[i] = new Level(lock);
@@ -75,7 +76,7 @@ public class PriorityLock implements Lock {
         Thread currentThread = Thread.currentThread();
         int priority = addThread(currentThread);
         try {
-            lock.lock();
+            internalLock.lock();
             try {
                 waitForHigherPriorityTasksToFinish(currentThread);
             } catch (InterruptedException e) {
@@ -93,7 +94,7 @@ public class PriorityLock implements Lock {
         Thread currentThread = Thread.currentThread();
         int priority = addThread(currentThread);
         try {
-            lock.lockInterruptibly();
+            internalLock.lockInterruptibly();
             waitForHigherPriorityTasksToFinish(currentThread);
         } catch (InterruptedException e) {
             removeThread(priority);
@@ -110,11 +111,11 @@ public class PriorityLock implements Lock {
         Thread currentThread = Thread.currentThread();
         int priority = addThread(currentThread);
         try {
-            boolean acquired = lock.tryLock();
+            boolean acquired = internalLock.tryLock();
             if (acquired) {
                 Integer nextHigherPriority = computeNextHigherPriorityIndex(priority);
                 if (nextHigherPriority != null) {
-                    lock.unlock();
+                    internalLock.unlock();
                     acquired = false;
                     removeThread(priority);
                 } else {
@@ -140,10 +141,10 @@ public class PriorityLock implements Lock {
             do {
                 long now = System.currentTimeMillis();
                 try {
-                    if (lock.tryLock(time, unit)) {
+                    if (internalLock.tryLock(time, unit)) {
                         Integer nextHigherPriority = computeNextHigherPriorityIndex(priority);
                         if (nextHigherPriority != null) {
-                            lock.unlock();
+                            internalLock.unlock();
                         } else {
                             originalPriority = priority;
                             return true;
@@ -171,17 +172,17 @@ public class PriorityLock implements Lock {
         // if we called condition.signal() it would only wake up one thread, and the others would be waiting for the higher priority thread to finish,
         // which will never happen if this thread is the last of the higher priority ones.
         condition.signalAll();
-        lock.unlock();
+        internalLock.unlock();
     }
 
     @Override
     public @Nonnull Condition newCondition() {
-        return lock.newCondition();
+        return new PriorityLockCondition();
     }
     
     @Override
     public String toString() {
-        return lock.toString();
+        return internalLock.toString();
     }
 
     private int addThread(Thread currentThread) {
@@ -190,6 +191,19 @@ public class PriorityLock implements Lock {
         return currentThread.getPriority();
     }
 
+    /**
+     * Wait for tasks with priority higher that currentThread to finish.
+     * 
+     * <p>This functions finds the smallest priority higher than this one and awaits on that priority's condition. 
+     * 
+     * <p>Precondition: when this function is called the internal lock is locked by this thread.
+     * Postcondition:
+     *   (1) upon successful exit from this function this thread still holds the internal lock,
+     *   (2) upon exceptional exit from this function this thread does not hold the internal lock.
+     * 
+     * @return the current thread's priority
+     * @throws InterruptedException
+     */
     private void waitForHigherPriorityTasksToFinish(Thread currentThread) throws InterruptedException {
         int priority = currentThread.getPriority();
         while (true) {
@@ -197,7 +211,12 @@ public class PriorityLock implements Lock {
             if (nextHigherPriorityIndex == null) {
                 break;
             }
-            levels[nextHigherPriorityIndex].condition.await();
+            try {
+                levels[nextHigherPriorityIndex].condition.await();
+            } catch (InterruptedException | RuntimeException | Error e) {
+                internalLock.unlock();
+                throw e;
+            }
         }
     }
 
@@ -213,8 +232,15 @@ public class PriorityLock implements Lock {
     private void cleanup(int priority, Throwable e) {
         Condition condition = removeThread(priority);
         try {
-            condition.signalAll();
-        } catch (RuntimeException | Error e2) {
+            internalLock.lock();
+            try {
+                condition.signalAll();
+            } catch (RuntimeException | Error e2) {
+                e.addSuppressed(e2);
+            } finally {
+                internalLock.unlock();
+            }
+        } catch (RuntimeException | Error e2) { 
             e.addSuppressed(e2);
         }
     }
@@ -223,5 +249,56 @@ public class PriorityLock implements Lock {
         int index = priority - 1;
         levels[index].count.decrementAndGet();
         return levels[index].condition;
+    }
+    
+    
+    private class PriorityLockCondition implements Condition {
+        private final Condition internalCondition;
+        
+        private PriorityLockCondition() {
+            this.internalCondition = PriorityLock.this.internalLock.newCondition();
+        }
+        
+        @Override
+        public void await() throws InterruptedException {
+            Condition condition = removeThread(originalPriority);
+            condition.signalAll();
+            internalCondition.await();
+            PriorityLock.this.internalLock.unlock();
+            PriorityLock.this.lockInterruptibly();
+        }
+
+        @Override
+        public void awaitUninterruptibly() {
+            // TODO Auto-generated method stub
+        }
+
+        @Override
+        public long awaitNanos(long nanosTimeout) throws InterruptedException {
+            // TODO Auto-generated method stub
+            return 0;
+        }
+
+        @Override
+        public boolean await(long time, TimeUnit unit) throws InterruptedException {
+            // TODO Auto-generated method stub
+            return false;
+        }
+
+        @Override
+        public boolean awaitUntil(Date deadline) throws InterruptedException {
+            // TODO Auto-generated method stub
+            return false;
+        }
+
+        @Override
+        public void signal() {
+            internalCondition.signalAll();
+        }
+
+        @Override
+        public void signalAll() {
+            internalCondition.signalAll();
+        }
     }
 }

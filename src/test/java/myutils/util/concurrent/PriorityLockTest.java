@@ -101,6 +101,49 @@ public class PriorityLockTest {
 
     /**
      * This test starts 6 threads with different priorities, and each thread acquires a priority lock.
+     * One thread with a lower priority that is waiting on a thread with higher priority is cancelled.
+     * Verify that the threads waiting on the canceled thread finish.
+     */
+    @Test
+    void testEnoughThreadsWithCancellation() throws InterruptedException {
+        PriorityLock priorityLock = new PriorityLock();
+
+        DoThread doThread = new DoThreadLock(priorityLock);
+
+        AtomicInteger threadNumber = new AtomicInteger();
+        ScheduledExecutorService executor =
+                Executors.newScheduledThreadPool(7, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
+
+        executor.schedule(() -> { doThread.action(4); }, 100, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(5); }, 200, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(6); }, 300, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(5); }, 400, TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> future500 =
+        executor.schedule(() -> { doThread.action(6); }, 500, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(7); }, 600, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> {
+            logString("about to interrupt thread future500 of priority 6");
+            future500.cancel(true);
+        }, 700, TimeUnit.MILLISECONDS); 
+
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+        prettyPrintList("messages", doThread.getMessages());
+
+        assertThat(doThread.getMessages(),
+                   Matchers.contains(
+                           // thread with priority 4 runs first, and while it is running all others get added to the queue
+                           "end thread with priority 4",
+                           "end thread with priority 7",
+                           "thread with priority 6 encountered exception java.util.concurrent.CancellationException",
+                           "end thread with priority 6",
+                           "end thread with priority 5",
+                           "end thread with priority 5"));
+    }
+
+
+    /**
+     * This test starts 6 threads with different priorities, and each thread acquires a priority lock.
      * The test verifies that the first thread starts right away because there is nothing else in the queue.
      * But the executor running the threads only supports 3 threads at a time,
      * so the thread with the highest priority does not run next, because even though it is in the scheduled executor's queue,
@@ -155,7 +198,6 @@ public class PriorityLockTest {
      * This should not break other threads which are waiting on it to finish.
      */
     @Test
-    @SuppressWarnings("checkstyle:ParenPad")
     void testChangingThreadPriority() throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock();
 
@@ -165,12 +207,12 @@ public class PriorityLockTest {
         ScheduledExecutorService executor =
                 Executors.newScheduledThreadPool(6, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
 
-        executor.schedule(() -> { doThread.action(4   ); }, 100, TimeUnit.MILLISECONDS);
-        executor.schedule(() -> { doThread.action(5   ); }, 200, TimeUnit.MILLISECONDS);
-        executor.schedule(() -> { doThread.action(6   ); }, 300, TimeUnit.MILLISECONDS);
-        executor.schedule(() -> { doThread.action(5   ); }, 400, TimeUnit.MILLISECONDS);
-        executor.schedule(() -> { doThread.action(6   ); }, 500, TimeUnit.MILLISECONDS);
-        executor.schedule(() -> { doThread.action(7, 1); }, 600, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(4); }, 100, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(5); }, 200, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(6); }, 300, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(5); }, 400, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(6); }, 500, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(7, 1, null); }, 600, TimeUnit.MILLISECONDS);
 
         executor.shutdown();
         executor.awaitTermination(10, TimeUnit.SECONDS);
@@ -240,7 +282,7 @@ public class PriorityLockTest {
      */
     @Test
     void testExceptionWhileAcquireLockInterruptibly2() throws InterruptedException {
-        PriorityLock priorityLock = new PriorityLock();
+        PriorityLock priorityLock = new PriorityLock(true);
 
         DoThread doThread = new DoThreadLockInterruptibly(priorityLock);
 
@@ -273,6 +315,7 @@ public class PriorityLockTest {
         executor.awaitTermination(10, TimeUnit.SECONDS);
         prettyPrintList("messages", doThread.getMessages());
 
+        // TODO: the interrupted stuff occurs in different order each time
         assertThat(doThread.getMessages(),
                    Matchers.contains(
                            // thread with priority 4 runs first, and while it is running all others get added to the queue
@@ -489,19 +532,100 @@ public class PriorityLockTest {
     }
 
 
+    /**
+     * This test sets up 5 threads waiting on a condition.
+     * A 6th threads calls signal.
+     * The test verifies that the thread with the highest priority wins.
+     */
+    @Test
+    void testCondition() throws InterruptedException {
+        PriorityLock priorityLock = new PriorityLock(true);
+
+        DoThread doThread = new DoThreadLock(priorityLock);
+
+        AtomicInteger threadNumber = new AtomicInteger();
+        ScheduledExecutorService executor =
+                Executors.newScheduledThreadPool(6, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
+
+        executor.schedule(() -> { doThread.awaitAction(4, false); }, 100, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.awaitAction(5, false); }, 200, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.awaitAction(6, false); }, 300, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.awaitAction(7, false); }, 400, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.awaitAction(8, false); }, 500, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(6, 1, Signal.SIGNAL_ALL); }, 600, TimeUnit.MILLISECONDS);
+
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+        prettyPrintList("messages", doThread.getMessages());
+
+        assertThat(doThread.getMessages(),
+                   Matchers.contains(
+                           "end thread with priority 1",
+                           "end thread with priority 8",
+                           "end thread with priority 7",
+                           "end thread with priority 6",
+                           "end thread with priority 5",
+                           "end thread with priority 4"));
+    }
+
+    
+    /**
+     * This test sets up 3 threads waiting on a condition.
+     * Difference with the previous test is that the thread sleep for 1 second before calling await.
+     * A 4th threads calls signal.
+     * The test verifies that the thread with the highest priority wins.
+     */
+    @Test
+    void testConditionWithSleep() throws InterruptedException {
+        PriorityLock priorityLock = new PriorityLock(true);
+
+        DoThread doThread = new DoThreadLock(priorityLock);
+
+        AtomicInteger threadNumber = new AtomicInteger();
+        ScheduledExecutorService executor =
+                Executors.newScheduledThreadPool(4, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
+
+        executor.schedule(() -> { doThread.awaitAction(4, true); }, 100, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.awaitAction(5, true); }, 200, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.awaitAction(6, true); }, 300, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> { doThread.action(3, 1, Signal.SIGNAL_ALL); }, 400, TimeUnit.MILLISECONDS);
+
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+        prettyPrintList("messages", doThread.getMessages());
+
+        assertThat(doThread.getMessages(),
+                   Matchers.contains(
+                           "end thread with priority 1",
+                           "end thread with priority 6",
+                           "end thread with priority 5",
+                           "end thread with priority 4"));
+    }
+
+    
+    private enum Signal {
+        SIGNAL_ALL
+    };
+
     private abstract class DoThread {
         final PriorityLock priorityLock;
+        private final Condition condition;
         private final List<String> messages = Collections.synchronizedList(new ArrayList<>());
 
         private DoThread(PriorityLock priorityLock) {
             this.priorityLock = priorityLock;
+            this.condition = priorityLock.newCondition();
         }
 
         void action(int priority) {
-            action(priority, null);
+            action(priority, null, null);
         }
         
-        void action(int priority, Integer newPriority) {
+        void awaitAction(int priority, boolean shouldSleep) {
+            awaitAction(priority, shouldSleep, null);
+        }
+        
+        void action(int priority, Integer newPriority, Signal signal) {
             final Thread currentThread = Thread.currentThread();
             currentThread.setPriority(priority);
             logString("start");
@@ -514,6 +638,38 @@ public class PriorityLockTest {
                         logString("changing priority of thread from " + currentThread.getPriority() + " to " + newPriority);
                         currentThread.setPriority(newPriority);
                     }
+                    if (signal == Signal.SIGNAL_ALL) {
+                        logString("about to call condition.signalAll");
+                        condition.signalAll();
+                    }
+                    logString("end");
+                    messages.add("end thread with priority " + currentThread.getPriority());
+                } finally {
+                    priorityLock.unlock();
+                }
+            } catch (InterruptedException | RuntimeException | Error e) {
+                logString("caught exception " + e.toString());
+                messages.add("thread with priority " + currentThread.getPriority() + " encountered exception " + e.toString());
+            }
+        }
+        
+        void awaitAction(int priority, boolean shouldSleep, Integer newPriority) {
+            final Thread currentThread = Thread.currentThread();
+            currentThread.setPriority(priority);
+            logString("start");
+            try {
+                getLock();
+                try {
+                    logString("acquired lock");
+                    if (shouldSleep) {
+                        sleep(1000);
+                    }
+                    if (newPriority != null) {
+                        logString("changing priority of thread from " + currentThread.getPriority() + " to " + newPriority);
+                        currentThread.setPriority(newPriority);
+                    }
+                    logString("waiting on condition");
+                    condition.await();
                     logString("end");
                     messages.add("end thread with priority " + currentThread.getPriority());
                 } finally {
