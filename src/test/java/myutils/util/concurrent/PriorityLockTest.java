@@ -534,7 +534,7 @@ public class PriorityLockTest {
 
     /**
      * This test sets up 5 threads waiting on a condition.
-     * A 6th threads calls signal.
+     * A 6th threads has the lowest priority and calls signal.
      * The test verifies that the thread with the highest priority wins.
      */
     @Test
@@ -571,9 +571,10 @@ public class PriorityLockTest {
     
     /**
      * This test sets up 3 threads waiting on a condition.
-     * Difference with the previous test is that the thread sleep for 1 second before calling await.
-     * A 4th threads calls signal.
+     * A 4th threads has the lowest priority and calls signal.
      * The test verifies that the thread with the highest priority wins.
+     * Difference with the previous test is that the thread sleeps for 1 second before calling await,
+     * so this test proves that the call to await from removes the thread's priority from the wait tree so that lower priority tasks can finish.
      */
     @Test
     void testConditionWithSleep() throws InterruptedException {
@@ -609,7 +610,7 @@ public class PriorityLockTest {
 
     private abstract class DoThread {
         final PriorityLock priorityLock;
-        private final Condition condition;
+        final Condition condition;
         private final List<String> messages = Collections.synchronizedList(new ArrayList<>());
 
         private DoThread(PriorityLock priorityLock) {
@@ -669,7 +670,7 @@ public class PriorityLockTest {
                         currentThread.setPriority(newPriority);
                     }
                     logString("waiting on condition");
-                    condition.await();
+                    doAwait();
                     logString("end");
                     messages.add("end thread with priority " + currentThread.getPriority());
                 } finally {
@@ -682,6 +683,8 @@ public class PriorityLockTest {
         }
         
         abstract void getLock() throws InterruptedException;
+        
+        abstract void doAwait() throws InterruptedException;
         
         List<String> getMessages() {
             return messages;
@@ -697,6 +700,11 @@ public class PriorityLockTest {
         void getLock() {
             priorityLock.lock();
         }
+        
+        @Override
+        void doAwait() throws InterruptedException {
+            condition.awaitUninterruptibly();
+        }
     }
 
     private class DoThreadLockInterruptibly extends DoThread {
@@ -707,6 +715,11 @@ public class PriorityLockTest {
         @Override
         void getLock() throws InterruptedException {
             priorityLock.lockInterruptibly();
+        }
+        
+        @Override
+        void doAwait() throws InterruptedException {
+            condition.await();
         }
     }
 
@@ -719,6 +732,14 @@ public class PriorityLockTest {
         void getLock() {
             boolean acquired = priorityLock.tryLock();
             if (!acquired) {
+                throw new FailedToAcquireLockException();
+            }
+        }
+        
+        @Override
+        void doAwait() throws InterruptedException {
+            boolean failedToAcquire = condition.await(0, TimeUnit.MILLISECONDS);
+            if (failedToAcquire) {
                 throw new FailedToAcquireLockException();
             }
         }
@@ -736,6 +757,14 @@ public class PriorityLockTest {
         void getLock() throws InterruptedException {
             boolean acquired = priorityLock.tryLock(waitTimeMillis, TimeUnit.MILLISECONDS);
             if (!acquired) {
+                throw new FailedToAcquireLockException();
+            }
+        }
+        
+        @Override
+        void doAwait() throws InterruptedException {
+            boolean failedToAcquire = condition.await(waitTimeMillis, TimeUnit.MILLISECONDS);
+            if (failedToAcquire) {
                 throw new FailedToAcquireLockException();
             }
         }

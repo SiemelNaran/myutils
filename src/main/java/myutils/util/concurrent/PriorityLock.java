@@ -167,12 +167,18 @@ public class PriorityLock implements Lock {
 
     @Override
     public void unlock() {
-        Condition condition = removeThread(originalPriority);
-        // signal all threads waiting on this originalPriority to wake up so that each of them calls computeNextHigherPriority 
-        // if we called condition.signal() it would only wake up one thread, and the others would be waiting for the higher priority thread to finish,
-        // which will never happen if this thread is the last of the higher priority ones.
-        condition.signalAll();
+        signal();
         internalLock.unlock();
+    }
+    
+    /**
+     * signal all threads waiting on this originalPriority to wake up so that each of them calls computeNextHigherPriority 
+     * if we called condition.signal() it would only wake up one thread, and the others would be waiting for the higher priority thread to finish,
+     * which will never happen if this thread is the last of the higher priority ones.
+     */
+    private void signal() {
+        Condition condition = removeThread(originalPriority);
+        condition.signalAll();
     }
 
     @Override
@@ -261,8 +267,7 @@ public class PriorityLock implements Lock {
         
         @Override
         public void await() throws InterruptedException {
-            Condition condition = removeThread(originalPriority);
-            condition.signalAll();
+            PriorityLock.this.signal();
             internalCondition.await();
             PriorityLock.this.internalLock.unlock();
             PriorityLock.this.lockInterruptibly();
@@ -270,25 +275,50 @@ public class PriorityLock implements Lock {
 
         @Override
         public void awaitUninterruptibly() {
-            // TODO Auto-generated method stub
+            PriorityLock.this.signal();
+            internalCondition.awaitUninterruptibly();
+            PriorityLock.this.internalLock.unlock();
+            PriorityLock.this.lock();
         }
 
         @Override
         public long awaitNanos(long nanosTimeout) throws InterruptedException {
-            // TODO Auto-generated method stub
-            return 0;
+            throw new UnsupportedOperationException();
         }
 
         @Override
         public boolean await(long time, TimeUnit unit) throws InterruptedException {
-            // TODO Auto-generated method stub
+            Thread currentThread = Thread.currentThread();
+            time = unit.toMillis(time);
+            unit = TimeUnit.MILLISECONDS;
+            PriorityLock.this.signal();
+            int priority = currentThread.getPriority();
+            do {
+                long now = System.currentTimeMillis();
+                try {
+                    if (internalCondition.await(time, unit)) {
+                        return true;
+                    } else {
+                        Integer nextHigherPriority = computeNextHigherPriorityIndex(priority);
+                        if (nextHigherPriority == null) {
+                            addThread(currentThread);
+                            PriorityLock.this.originalPriority = priority;
+                            return false;
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    throw e;
+                }
+                long delta = System.currentTimeMillis() - now;
+                time -= delta;
+            } while (time > 0);
+            removeThread(priority);
             return false;
         }
 
         @Override
         public boolean awaitUntil(Date deadline) throws InterruptedException {
-            // TODO Auto-generated method stub
-            return false;
+            throw new UnsupportedOperationException();
         }
 
         @Override
@@ -299,6 +329,11 @@ public class PriorityLock implements Lock {
         @Override
         public void signalAll() {
             internalCondition.signalAll();
+        }
+        
+        @Override
+        public String toString() {
+            return internalCondition.toString();
         }
     }
 }
