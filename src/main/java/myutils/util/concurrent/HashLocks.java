@@ -117,7 +117,7 @@ public class HashLocks<LockType, LockStatisticsType> {
 
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, Boolean> eldest) {
-            return size() > collisionTracking.numStringsPerHashCode;
+            return size() > collisionTracking.getNumStringsPerHashCode();
         }
     }
     
@@ -162,7 +162,7 @@ public class HashLocks<LockType, LockStatisticsType> {
      * 
      * @param lock the timed reentrant lock
      * @param collisionTracking if not null then perform tracking to see how many keys, as defined by key.toString(), map to the lock.
-     * @return
+     * @return statistics for tracking a TimedReentrantLock
      */
     public static TimedReentrantLockStatistics toStatistics(TimedReentrantLock lock, @Nullable Set<String> collisionTracking) {
         return new TimedReentrantLockStatistics(lock, collisionTracking);
