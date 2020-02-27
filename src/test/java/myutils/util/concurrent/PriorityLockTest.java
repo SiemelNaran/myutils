@@ -58,7 +58,7 @@ public class PriorityLockTest {
         PriorityLock priorityLock = new PriorityLock();
         priorityLock.lock();
         System.out.println(priorityLock.toString());
-        assertThat(priorityLock.toString(), Matchers.matchesRegex("^java.util.concurrent.locks.ReentrantLock@[a-f0-9]+\\[Locked by thread main\\]$"));
+        assertThat(priorityLock.toString(), Matchers.matchesRegex("^java.util.concurrent.locks.ReentrantLock@[a-f0-9]+\\[Locked by thread main\\]\\[0,0,0,0,0,0,0,0,0,0\\]$"));
     }
 
     /**

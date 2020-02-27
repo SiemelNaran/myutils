@@ -1,8 +1,6 @@
 package myutils.util.concurrent;
 
 import java.util.Date;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -44,7 +42,8 @@ public class PriorityLock implements Lock {
      */
     private static class RemovePriorityAction {
         private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(runnable -> new Thread(runnable, "RemovePriorityActionThread"));
-        private static final LinkedBlockingQueue<RemovePriorityAction> REMOVE_THREAD_QUEUE = new LinkedBlockingQueue<RemovePriorityAction>();
+        private static final LinkedBlockingQueue<RemovePriorityAction> REMOVE_THREAD_QUEUE = new LinkedBlockingQueue<>();
+        private static volatile boolean SHUTDOWN = false;
         
         private final PriorityLock priorityLock;
         private final Level level;
@@ -56,11 +55,17 @@ public class PriorityLock implements Lock {
         
         static {
             RemovePriorityAction.EXECUTOR.submit(() -> {
-                while (true) {
-                    RemovePriorityAction action = REMOVE_THREAD_QUEUE.take();
-                    action.priorityLock.cleanupNow(action.level); 
+                while (!SHUTDOWN) {
+                    try {
+                        RemovePriorityAction action = REMOVE_THREAD_QUEUE.take();
+                        action.priorityLock.cleanupNow(action.level);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                 }
              });
+
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> SHUTDOWN = true));
         }
     }
 
@@ -123,7 +128,7 @@ public class PriorityLock implements Lock {
                 throw new CancellationException(e.getMessage());
             }
         } catch (RuntimeException | Error e) {
-            cleanup(priority, e);
+            cleanupQuickly(priority, e);
             throw e;
         }
         originalPriority = priority;
@@ -137,7 +142,7 @@ public class PriorityLock implements Lock {
             internalLock.lockInterruptibly();
             waitForHigherPriorityTasksToFinish(currentThread);
         } catch (InterruptedException | RuntimeException | Error e) {
-            cleanup(priority, e);
+            cleanupQuickly(priority, e);
             throw e;
         }
         originalPriority = priority;
@@ -149,21 +154,22 @@ public class PriorityLock implements Lock {
         int priority = addThread(currentThread);
         try {
             boolean acquired = internalLock.tryLock();
+            System.out.println("snaran: " + currentThread.getPriority() + " " + acquired);
             if (acquired) {
                 Integer nextHigherPriority = computeNextHigherPriorityIndex(priority);
                 if (nextHigherPriority != null) {
                     internalLock.unlock();
                     acquired = false;
-                    cleanup(priority, null);
+                    cleanupQuickly(priority, null);
                 } else {
                     originalPriority = priority;
                 }
             } else {
-                cleanup(priority, null);
+                cleanupQuickly(priority, null);
             }
             return acquired;
         } catch (RuntimeException | Error e) {
-            cleanup(priority, e);
+            cleanupQuickly(priority, e);
             throw e;
         }
     }
@@ -188,46 +194,55 @@ public class PriorityLock implements Lock {
                         }
                     }
                 } catch (InterruptedException e) {
-                    cleanup(priority, null);
+                    cleanupQuickly(priority, null);
                     throw e;
                 }
                 long delta = System.currentTimeMillis() - now;
                 time -= delta;
             } while (time > 0);
-            cleanup(priority, null);
+            cleanupQuickly(priority, null);
             return false;
         } catch (RuntimeException | Error e) {
-            cleanup(priority, e);
+            cleanupQuickly(priority, e);
             throw e;
         }
     }
 
     @Override
     public void unlock() {
-        cleanupFast(originalPriority);
+        cleanupImmediately();
         internalLock.unlock();
     }
-    
+
+    private int addThread(Thread currentThread) {
+        int index = currentThread.getPriority() - 1;
+        levels[index].count.incrementAndGet();
+        return currentThread.getPriority();
+    }
+
     /**
-     * Signal all threads waiting on this originalPriority to wake up so that each of them calls computeNextHigherPriority 
-     * if we called condition.signal() it would only wake up one thread, and the others would be waiting for the higher priority thread to finish,
-     * which will never happen if this thread is the last of the higher priority ones.
-     * 
-     * <p>Precondition: The internalLock is held by the current thread.
+     * Signal all threads waiting on this originalPriority to wake up so that each of them calls computeNextHigherPriority.
+     * Does not call unlock.
+     *
+     * <p>Precondition: The internalLock is held by the current thread. This function is called by unlock().
      */
-    private void cleanupFast(int priority) {
-        int index = priority - 1;
+    private void cleanupImmediately() {
+        int index = originalPriority - 1;
         levels[index].count.decrementAndGet();
         Condition condition = levels[index].condition;
+        // if we called condition.signal() it would only wake up one thread, and the others would be waiting for the higher priority thread to finish,
+        // which will never happen if this thread is the last of the higher priority ones.
         condition.signalAll();
     }
     
     /**
-     * A variation of cleanupFast that does not assume that the current thread holds the internal lock.
+     * A variation of cleanupImmediately that does not assume that the current thread holds the internal lock.
      * This implementation calls tryLock to acquire the internal lock quickly, followed by decrement and signalAll.
-     * If acquring the lock fails then add the cleanup operation to a queue so that the RemovePriorityActionThread can perform the cleanup.
+     * If acquring the lock fails then add the cleanup operation is pushed onto a queue so that the RemovePriorityActionThread can perform the cleanup.
+     *
+     * @param priority the priority to clean up. We cannot use originalPriority because it may not have been set (this function is called from catch blocks).
      */
-    private void cleanup(int priority, @Nullable Throwable e) {
+    private void cleanupQuickly(int priority, @Nullable Throwable e) {
         int index = priority - 1;
         Level level = levels[index]; 
         Condition condition = level.condition;
@@ -240,6 +255,7 @@ public class PriorityLock implements Lock {
                     internalLock.unlock();
                 }
             } else {
+                System.out.println("snaran: add to queue " + Thread.currentThread().getPriority());
                 RemovePriorityAction.REMOVE_THREAD_QUEUE.add(new RemovePriorityAction(this, level));
             }
         } catch (RuntimeException | Error e2) { 
@@ -254,7 +270,6 @@ public class PriorityLock implements Lock {
      * This implementation calls lock to acquire the internal lock, followed by decrement and signalAll.
      */
     private void cleanupNow(Level level) {
-        level.count.decrementAndGet();
         internalLock.lock();
         try {
             level.count.decrementAndGet();
@@ -273,13 +288,14 @@ public class PriorityLock implements Lock {
     
     @Override
     public String toString() {
-        return internalLock.toString();
-    }
-
-    private int addThread(Thread currentThread) {
-        int index = currentThread.getPriority() - 1;
-        levels[index].count.incrementAndGet();
-        return currentThread.getPriority();
+        StringBuilder builder = new StringBuilder(internalLock.toString());
+        builder.append('[');
+        for (int i = 0; i < Thread.MAX_PRIORITY; i++) {
+            builder.append(levels[i].count.get()).append(',');
+        }
+        builder.deleteCharAt(builder.length() - 1);
+        builder.append(']');
+        return builder.toString();
     }
 
     /**
@@ -292,8 +308,7 @@ public class PriorityLock implements Lock {
      *   (1) upon successful exit from this function this thread still holds the internal lock,
      *   (2) upon exceptional exit from this function this thread does not hold the internal lock.
      * 
-     * @return the current thread's priority
-     * @throws InterruptedException
+     * @throws InterruptedException if this thread is interrupted
      */
     private void waitForHigherPriorityTasksToFinish(Thread currentThread) throws InterruptedException {
         int priority = currentThread.getPriority();
@@ -327,21 +342,33 @@ public class PriorityLock implements Lock {
         private PriorityLockCondition() {
             this.internalCondition = PriorityLock.this.internalLock.newCondition();
         }
-        
+
+        /**
+         * Puts the current thread into a wait state until it is signalled.
+         *
+         * <p>This implementation first signals threads waiting on this thread to wake up and proceed,
+         * as a lower priority thread may signal the condition.
+         */
         @Override
         public void await() throws InterruptedException {
-            PriorityLock.this.signal();
+            PriorityLock.this.cleanupImmediately();
             internalCondition.await();
-            PriorityLock.this.internalLock.unlock();
-            PriorityLock.this.lockInterruptibly();
+            try {
+                PriorityLock.this.lockInterruptibly();
+            } finally {
+                PriorityLock.this.internalLock.unlock();
+            }
         }
 
         @Override
         public void awaitUninterruptibly() {
-            PriorityLock.this.signal();
+            PriorityLock.this.cleanupImmediately();
             internalCondition.awaitUninterruptibly();
-            PriorityLock.this.internalLock.unlock();
-            PriorityLock.this.lock();
+            try {
+                PriorityLock.this.lock();
+            } finally {
+                PriorityLock.this.internalLock.unlock();
+            }
         }
 
         @Override
@@ -351,37 +378,27 @@ public class PriorityLock implements Lock {
 
         @Override
         public boolean await(long time, TimeUnit unit) throws InterruptedException {
-            Thread currentThread = Thread.currentThread();
             time = unit.toMillis(time);
             unit = TimeUnit.MILLISECONDS;
-            PriorityLock.this.signal();
-            int priority = currentThread.getPriority();
-            do {
-                long now = System.currentTimeMillis();
-                try {
-                    if (internalCondition.await(time, unit)) {
-                        return true;
-                    } else {
-                        Integer nextHigherPriority = computeNextHigherPriorityIndex(priority);
-                        if (nextHigherPriority == null) {
-                            addThread(currentThread);
-                            PriorityLock.this.originalPriority = priority;
-                            return false;
-                        }
-                    }
-                } catch (InterruptedException e) {
-                    throw e;
-                }
+            PriorityLock.this.cleanupImmediately();
+            long now = System.currentTimeMillis();
+            if (!internalCondition.await(time, unit)) {
                 long delta = System.currentTimeMillis() - now;
-                time -= delta;
-            } while (time > 0);
-            removeThread(priority);
-            return false;
+                if (PriorityLock.this.tryLock(delta, TimeUnit.MILLISECONDS)) {
+                    return false;
+                }
+            }
+            return true;
         }
 
         @Override
         public boolean awaitUntil(Date deadline) throws InterruptedException {
-            throw new UnsupportedOperationException();
+            long now = System.currentTimeMillis();
+            long waitTimeMillis = deadline.getTime() - now;
+            if (waitTimeMillis < 0) {
+                return true;
+            }
+            return await(waitTimeMillis, TimeUnit.MILLISECONDS);
         }
 
         @Override
