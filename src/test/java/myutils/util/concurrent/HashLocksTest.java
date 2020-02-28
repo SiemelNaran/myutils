@@ -11,7 +11,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
-import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
@@ -20,7 +19,9 @@ import org.junit.jupiter.api.Test;
 public class HashLocksTest {
     @Test
     void testLocksWithCollisionTracking() {
-        var locks = HashLocks.create(3, () -> new TimedReentrantLock(false), HashLocks::toStatistics, HashLocks.CollisionTracking.newBuilder().build());
+        var locks = HashLocks.create(3,
+                                     () -> new TimedReentrantLock(false), HashLocks::toStatistics,
+                                     HashLocks.CollisionTracking.newBuilder().setNumStringsPerHashCode(3).build());
         Lock lock0 = locks.getLock(0);
         Lock lock1 = locks.getLock(1);
         Lock lock2 = locks.getLock(2);
@@ -48,6 +49,17 @@ public class HashLocksTest {
         assertEquals(Arrays.asList(false, false, false), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::isLocked).collect(Collectors.toList()));
         assertEquals(Arrays.asList(3, 3, 3), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::getUsage).collect(Collectors.toList()));
         // explanation: 3 since 0, 3, -3 have different values for toString() but all hash to lock0
+
+        Lock lock6 = locks.getLock(3);
+        Lock lock7 = locks.getLock(4);
+        Lock lock8 = locks.getLock(5);
+        assertSame(lock0, lock6);
+        assertSame(lock1, lock7);
+        assertSame(lock2, lock8);
+
+        assertEquals(Arrays.asList(false, false, false), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::isLocked).collect(Collectors.toList()));
+        assertEquals(Arrays.asList(3, 3, 3), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::getUsage).collect(Collectors.toList()));
+        // explanation: 3 since we track only 3 strings per lock
     }
     
     @Test
