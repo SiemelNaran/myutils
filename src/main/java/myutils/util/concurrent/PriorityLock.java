@@ -46,11 +46,11 @@ public class PriorityLock implements Lock {
         private static volatile boolean SHUTDOWN = false;
         
         private final PriorityLock priorityLock;
-        private final Level level;
+        private final int priority;
         
-        private RemovePriorityAction(PriorityLock priorityLock, Level level) {
+        private RemovePriorityAction(PriorityLock priorityLock, int priority) {
             this.priorityLock = priorityLock;
-            this.level = level;
+            this.priority = priority;
         }
         
         static {
@@ -58,7 +58,7 @@ public class PriorityLock implements Lock {
                 while (!SHUTDOWN) {
                     try {
                         RemovePriorityAction action = REMOVE_THREAD_QUEUE.take();
-                        action.priorityLock.cleanupNow(action.level);
+                        action.priorityLock.cleanupNow(action.priority);
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
@@ -69,23 +69,141 @@ public class PriorityLock implements Lock {
         }
     }
 
+    
     /**
-     * Helper POJO class that stores the number of threads waiting in each priority
-     * along with a Condition object for each priority.
+     * Helper class to manage a list of levels.  Used by both the PriorityLock and its Condition objects.
+     * 
+     * <p>The key functions in this class are
+     * waitForHigherPriorityTasksToFinish (to wait for tasks with a higher priority to finish), and
+     * cleanupImmediately (to remove this thread from the execution tree and signal threads waiting on this priority).
+     * 
+     * <p>The actual conditions are owned by the PriorityLock.
      */
-    private static class Level {
-        private final AtomicInteger count = new AtomicInteger();
-        private final Condition condition;
+    private static class LevelManager {
+        private final AtomicInteger[] counts;
+        private final Condition[] conditions;
 
-        private Level(Lock internalLock) {
-            condition = internalLock.newCondition();
+        private LevelManager(Condition[] conditions) {
+            this.counts = new AtomicInteger[Thread.MAX_PRIORITY];
+            for (int i = 0; i < Thread.MAX_PRIORITY; i++) {
+                this.counts[i] = new AtomicInteger();
+            }
+            this.conditions = conditions;
+        }
+        
+        private int addThread(Thread currentThread) {
+            int index = currentThread.getPriority() - 1;
+            counts[index].incrementAndGet();
+            return currentThread.getPriority();
+        }
+        
+        @Override
+        public String toString() {
+            StringBuilder builder = new StringBuilder(32);
+            builder.append('[');
+            for (int i = 0; i < Thread.MAX_PRIORITY; i++) {
+                builder.append(counts[i].get()).append(',');
+            }
+            builder.deleteCharAt(builder.length() - 1);
+            builder.append(']');
+            return builder.toString();
+        }
+
+        /**
+         * Signal all threads waiting on this originalPriority to wake up so that each of them calls computeNextHigherPriority.
+         * Does not call unlock.
+         *
+         * <p>Precondition: The internalLock is held by the current thread.
+         * <p>Postcondition: The internalLock is held by the current thread.
+         */
+        private void cleanupImmediately(int originalPriority) {
+            int index = originalPriority - 1;
+            counts[index].decrementAndGet();
+            // if we called condition.signal() it would only wake up one thread, and the others would be waiting for the higher priority thread to finish,
+            // which will never happen if this thread is the last of the higher priority ones.
+            conditions[index].signalAll();
+        }        
+
+        /**
+         * Wait for tasks with priority higher that currentThread to finish.
+         * 
+         * <p>This functions finds the smallest priority higher than this one and awaits on that priority's condition. 
+         * 
+         * <p>Precondition: when this function is called the internal lock is locked by this thread.
+         * Postcondition:
+         *   (1) upon successful exit from this function this thread still holds the internal lock,
+         *   (2) upon exceptional exit from this function this thread does not hold the internal lock.
+         * 
+         * @return true if this function actually waited
+         * @throws InterruptedException if this thread is interrupted
+         */
+        private boolean waitForHigherPriorityTasksToFinish(PriorityLock priorityLock) throws InterruptedException {
+            int priority = Thread.currentThread().getPriority();
+            while (true) {
+                Integer nextHigherPriorityIndex = computeNextHigherPriorityIndex(priority);
+                if (nextHigherPriorityIndex == null) {
+                    return false;
+                }
+                try {
+                    conditions[nextHigherPriorityIndex].await();
+                    return true;
+                } catch (InterruptedException | RuntimeException | Error e) {
+                    priorityLock.internalLock.unlock();
+                    throw e;
+                }
+            }
+        }
+
+        private Integer computeNextHigherPriorityIndex(int priority) {
+            for (int i = priority; i < Thread.MAX_PRIORITY; i++) {
+                if (counts[i].get() > 0) {
+                    return i;
+                }
+            }
+            return null;
+        }
+    }
+    
+    
+    private static class ThreadLockDetails {
+        private int originalPriority; // to save the original priority of the thread in case user changes it while running the thread
+        private long threadId;
+        private int holdCount;
+        
+        /**
+         * Set the member variables of the class.
+         * Should only be called after the internal lock is locked.
+         */
+        private void setAll(int originalPriority) {
+            this.originalPriority = originalPriority;
+            this.threadId = Thread.currentThread().getId();
+            this.holdCount = 1;
+        }
+        
+        private void clear() {
+            this.originalPriority = 0;
+            this.threadId = 0;
+            this.holdCount = 0;
+        }
+
+        public boolean isLockedByCurrentThread() {
+            return Thread.currentThread().getId() == threadId;
+        }
+
+        public void incrementHoldCount() {
+            ++holdCount;
+        }
+
+        public int decrementHoldCount() {
+            return --holdCount;
         }
     }
     
     
     private final Lock internalLock;
-    private final Level[] levels;
-    private int originalPriority; // to save the original priority of the thread in case user changes it while running the thread
+    private final Condition[] priorityLockConditions;
+    private final LevelManager levelManager;
+    private final ThreadLockDetails threadLockDetails = new ThreadLockDetails();
     
     
     /**
@@ -110,158 +228,165 @@ public class PriorityLock implements Lock {
      */
     protected PriorityLock(Lock internalLock) {
         this.internalLock = internalLock;
-        this.levels = new Level[Thread.MAX_PRIORITY];
+        this.priorityLockConditions = new Condition[Thread.MAX_PRIORITY];
         for (int i = 0; i < Thread.MAX_PRIORITY; i++) {
-            this.levels[i] = new Level(internalLock);
+            this.priorityLockConditions[i] = internalLock.newCondition();
         }
+        this.levelManager = new LevelManager(priorityLockConditions);
     }
 
     @Override
     public void lock() {
-        Thread currentThread = Thread.currentThread();
-        int priority = addThread(currentThread);
+        boolean alreadyLocked = threadLockDetails.isLockedByCurrentThread();
+        if (alreadyLocked) {
+            threadLockDetails.incrementHoldCount();
+            return;
+        }
+        boolean acquired = false;
+        int priority = addThread(Thread.currentThread());
         try {
             internalLock.lock();
             try {
-                waitForHigherPriorityTasksToFinish(currentThread);
+                acquired = true;
+                levelManager.waitForHigherPriorityTasksToFinish(this);
             } catch (InterruptedException e) {
                 throw new CancellationException(e.getMessage());
             }
         } catch (RuntimeException | Error e) {
-            cleanupQuickly(priority, e);
+            cleanupQuicklyOrQueueCleanupAction(acquired, priority, e);
             throw e;
         }
-        originalPriority = priority;
+        threadLockDetails.setAll(priority);
     }
 
     @Override
     public void lockInterruptibly() throws InterruptedException {
-        Thread currentThread = Thread.currentThread();
-        int priority = addThread(currentThread);
+        boolean alreadyLocked = threadLockDetails.isLockedByCurrentThread();
+        if (alreadyLocked) {
+            threadLockDetails.incrementHoldCount();
+            return;
+        }
+        boolean acquired = false;
+        int priority = addThread(Thread.currentThread());
         try {
             internalLock.lockInterruptibly();
-            waitForHigherPriorityTasksToFinish(currentThread);
+            acquired = true;
+            levelManager.waitForHigherPriorityTasksToFinish(this);
         } catch (InterruptedException | RuntimeException | Error e) {
-            cleanupQuickly(priority, e);
+            cleanupQuicklyOrQueueCleanupAction(acquired, priority, e);
             throw e;
         }
-        originalPriority = priority;
+        threadLockDetails.setAll(priority);
     }
 
     @Override
     public boolean tryLock() {
-        Thread currentThread = Thread.currentThread();
-        int priority = addThread(currentThread);
+        boolean alreadyLocked = threadLockDetails.isLockedByCurrentThread();
+        if (alreadyLocked) {
+            threadLockDetails.incrementHoldCount();
+            return true;
+        }
+        int priority = addThread(Thread.currentThread());
         try {
             boolean acquired = internalLock.tryLock();
-            System.out.println("snaran: " + currentThread.getPriority() + " " + acquired);
             if (acquired) {
-                Integer nextHigherPriority = computeNextHigherPriorityIndex(priority);
+                Integer nextHigherPriority = levelManager.computeNextHigherPriorityIndex(priority);
                 if (nextHigherPriority != null) {
                     internalLock.unlock();
                     acquired = false;
-                    cleanupQuickly(priority, null);
+                    cleanupQuicklyOrQueueCleanupAction(true, priority, null);
                 } else {
-                    originalPriority = priority;
+                    threadLockDetails.setAll(priority);
                 }
             } else {
-                cleanupQuickly(priority, null);
+                cleanupQuicklyOrQueueCleanupAction(false, priority, null);
             }
             return acquired;
         } catch (RuntimeException | Error e) {
-            cleanupQuickly(priority, e);
+            cleanupQuicklyOrQueueCleanupAction(false, priority, e);
             throw e;
         }
     }
 
     @Override
     public boolean tryLock(long time, TimeUnit unit) throws InterruptedException {
-        Thread currentThread = Thread.currentThread();
+        boolean alreadyLocked = threadLockDetails.isLockedByCurrentThread();
+        if (alreadyLocked) {
+            threadLockDetails.incrementHoldCount();
+            return true;
+        }
         time = unit.toMillis(time);
         unit = TimeUnit.MILLISECONDS;
-        int priority = addThread(currentThread);
+        int priority = addThread(Thread.currentThread());
         try {
             do {
                 long now = System.currentTimeMillis();
                 try {
                     if (internalLock.tryLock(time, unit)) {
-                        Integer nextHigherPriority = computeNextHigherPriorityIndex(priority);
+                        Integer nextHigherPriority = levelManager.computeNextHigherPriorityIndex(priority);
                         if (nextHigherPriority != null) {
                             internalLock.unlock();
                         } else {
-                            originalPriority = priority;
+                            threadLockDetails.setAll(priority);
                             return true;
                         }
                     }
                 } catch (InterruptedException e) {
-                    cleanupQuickly(priority, null);
+                    cleanupQuicklyOrQueueCleanupAction(false, priority, null);
                     throw e;
                 }
                 long delta = System.currentTimeMillis() - now;
                 time -= delta;
             } while (time > 0);
-            cleanupQuickly(priority, null);
+            cleanupQuicklyOrQueueCleanupAction(false, priority, null);
             return false;
         } catch (RuntimeException | Error e) {
-            cleanupQuickly(priority, e);
+            cleanupQuicklyOrQueueCleanupAction(false, priority, e);
             throw e;
         }
     }
 
     @Override
     public void unlock() {
-        cleanupImmediately();
-        internalLock.unlock();
+        if (threadLockDetails.decrementHoldCount() == 0) {
+            levelManager.cleanupImmediately(threadLockDetails.originalPriority);
+            threadLockDetails.clear();
+            internalLock.unlock();
+        }
     }
 
     private int addThread(Thread currentThread) {
-        int index = currentThread.getPriority() - 1;
-        levels[index].count.incrementAndGet();
-        return currentThread.getPriority();
+        return levelManager.addThread(currentThread);
     }
 
     /**
-     * Signal all threads waiting on this originalPriority to wake up so that each of them calls computeNextHigherPriority.
-     * Does not call unlock.
-     *
-     * <p>Precondition: The internalLock is held by the current thread. This function is called by unlock().
-     */
-    private void cleanupImmediately() {
-        int index = originalPriority - 1;
-        levels[index].count.decrementAndGet();
-        Condition condition = levels[index].condition;
-        // if we called condition.signal() it would only wake up one thread, and the others would be waiting for the higher priority thread to finish,
-        // which will never happen if this thread is the last of the higher priority ones.
-        condition.signalAll();
-    }
-    
-    /**
      * A variation of cleanupImmediately that does not assume that the current thread holds the internal lock.
      * This implementation calls tryLock to acquire the internal lock quickly, followed by decrement and signalAll.
-     * If acquring the lock fails then add the cleanup operation is pushed onto a queue so that the RemovePriorityActionThread can perform the cleanup.
+     * If acquiring the lock fails then add the cleanup operation is pushed onto a queue so that the RemovePriorityActionThread can perform the cleanup.
      *
+     * @param lockedByCallingFunction did the function calling this one lock the thread (used to determine whether to unlock the internal lock)
      * @param priority the priority to clean up. We cannot use originalPriority because it may not have been set (this function is called from catch blocks).
+     * @param e the exception
      */
-    private void cleanupQuickly(int priority, @Nullable Throwable e) {
-        int index = priority - 1;
-        Level level = levels[index]; 
-        Condition condition = level.condition;
-        try {
-            if (internalLock.tryLock()) {
-                try {
-                    level.count.decrementAndGet();
-                    condition.signalAll();
-                } finally {
-                    internalLock.unlock();
+    private void cleanupQuicklyOrQueueCleanupAction(boolean lockedByCallingFunction, int priority, @Nullable Throwable e) {
+        if (lockedByCallingFunction) {
+            try {
+                if (internalLock.tryLock()) {
+                    try {
+                        levelManager.cleanupImmediately(priority);
+                    } finally {
+                        internalLock.unlock();
+                    }
+                } else {
+                    RemovePriorityAction.REMOVE_THREAD_QUEUE.add(new RemovePriorityAction(this, priority));
                 }
-            } else {
-                System.out.println("snaran: add to queue " + Thread.currentThread().getPriority());
-                RemovePriorityAction.REMOVE_THREAD_QUEUE.add(new RemovePriorityAction(this, level));
+            } catch (RuntimeException | Error e2) { 
+                if (e != null) {
+                    e.addSuppressed(e2);
+                }
             }
-        } catch (RuntimeException | Error e2) { 
-            if (e != null) {
-                e.addSuppressed(e2);
-            }
+        } else {
+            levelManager.counts[priority - 1].decrementAndGet();
         }
     }
     
@@ -269,11 +394,10 @@ public class PriorityLock implements Lock {
      * A variation of cleanupFast that is intended to be called by the queue.
      * This implementation calls lock to acquire the internal lock, followed by decrement and signalAll.
      */
-    private void cleanupNow(Level level) {
+    private void cleanupNow(int priority) {
         internalLock.lock();
         try {
-            level.count.decrementAndGet();
-            level.condition.signalAll();
+            levelManager.cleanupImmediately(priority);
         } catch (RuntimeException | Error e2) {
             e2.printStackTrace();
         } finally {
@@ -289,70 +413,46 @@ public class PriorityLock implements Lock {
     @Override
     public String toString() {
         StringBuilder builder = new StringBuilder(internalLock.toString());
-        builder.append('[');
-        for (int i = 0; i < Thread.MAX_PRIORITY; i++) {
-            builder.append(levels[i].count.get()).append(',');
-        }
-        builder.deleteCharAt(builder.length() - 1);
-        builder.append(']');
+        builder.append(levelManager.toString());
         return builder.toString();
     }
 
     /**
-     * Wait for tasks with priority higher that currentThread to finish.
-     * 
-     * <p>This functions finds the smallest priority higher than this one and awaits on that priority's condition. 
-     * 
-     * <p>Precondition: when this function is called the internal lock is locked by this thread.
-     * Postcondition:
-     *   (1) upon successful exit from this function this thread still holds the internal lock,
-     *   (2) upon exceptional exit from this function this thread does not hold the internal lock.
-     * 
-     * @throws InterruptedException if this thread is interrupted
+     * Implementation of Condition for PriorityLock that ensures this thread is the thread with the highest priority
+     * when the await functions return.
      */
-    private void waitForHigherPriorityTasksToFinish(Thread currentThread) throws InterruptedException {
-        int priority = currentThread.getPriority();
-        while (true) {
-            Integer nextHigherPriorityIndex = computeNextHigherPriorityIndex(priority);
-            if (nextHigherPriorityIndex == null) {
-                break;
-            }
-            try {
-                levels[nextHigherPriorityIndex].condition.await();
-            } catch (InterruptedException | RuntimeException | Error e) {
-                internalLock.unlock();
-                throw e;
-            }
-        }
-    }
-
-    private Integer computeNextHigherPriorityIndex(int priority) {
-        for (int i = priority; i < Thread.MAX_PRIORITY; i++) {
-            if (levels[i].count.get() > 0) {
-                return i;
-            }
-        }
-        return null;
-    }
-
-    
     private class PriorityLockCondition implements Condition {
         private final Condition internalCondition;
+        private final LevelManager levelManager;
         
         private PriorityLockCondition() {
             this.internalCondition = PriorityLock.this.internalLock.newCondition();
+            this.levelManager = new LevelManager(PriorityLock.this.priorityLockConditions);
         }
 
         /**
-         * Puts the current thread into a wait state until it is signalled.
+         * Puts the current thread into a wait state until it is signaled.
          *
          * <p>This implementation first signals threads waiting on this thread to wake up and proceed,
          * as a lower priority thread may signal the condition.
          */
         @Override
         public void await() throws InterruptedException {
-            PriorityLock.this.cleanupImmediately();
+            PriorityLock.this.levelManager.cleanupImmediately(PriorityLock.this.threadLockDetails.originalPriority);
+            Thread currentThread = Thread.currentThread();
+            int priority = levelManager.addThread(currentThread);
             internalCondition.await();
+            try {
+                while (true) {
+                    boolean waited = levelManager.waitForHigherPriorityTasksToFinish(PriorityLock.this);
+                    if (!waited) {
+                        break;
+                    }
+                }
+                levelManager.cleanupImmediately(priority);
+            } catch (InterruptedException | RuntimeException | Error e) {
+                levelManager.cleanupImmediately(priority);
+            }
             try {
                 PriorityLock.this.lockInterruptibly();
             } finally {
@@ -360,10 +460,24 @@ public class PriorityLock implements Lock {
             }
         }
 
+
         @Override
         public void awaitUninterruptibly() {
-            PriorityLock.this.cleanupImmediately();
+            PriorityLock.this.levelManager.cleanupImmediately(PriorityLock.this.threadLockDetails.originalPriority);
+            Thread currentThread = Thread.currentThread();
+            int priority = levelManager.addThread(currentThread);
             internalCondition.awaitUninterruptibly();
+            try {
+                while (true) {
+                    boolean waited = levelManager.waitForHigherPriorityTasksToFinish(PriorityLock.this);
+                    if (!waited) {
+                        break;
+                    }
+                }
+                levelManager.cleanupImmediately(priority);
+            } catch (InterruptedException | RuntimeException | Error e) {
+                levelManager.cleanupImmediately(priority);
+            }
             try {
                 PriorityLock.this.lock();
             } finally {
@@ -380,7 +494,7 @@ public class PriorityLock implements Lock {
         public boolean await(long time, TimeUnit unit) throws InterruptedException {
             time = unit.toMillis(time);
             unit = TimeUnit.MILLISECONDS;
-            PriorityLock.this.cleanupImmediately();
+            PriorityLock.this.levelManager.cleanupImmediately(PriorityLock.this.threadLockDetails.originalPriority);
             long now = System.currentTimeMillis();
             if (!internalCondition.await(time, unit)) {
                 long delta = System.currentTimeMillis() - now;
@@ -413,7 +527,9 @@ public class PriorityLock implements Lock {
         
         @Override
         public String toString() {
-            return internalCondition.toString();
+            StringBuilder builder = new StringBuilder(internalCondition.toString());
+            builder.append(levelManager.toString());
+            return builder.toString();
         }
     }
 }
