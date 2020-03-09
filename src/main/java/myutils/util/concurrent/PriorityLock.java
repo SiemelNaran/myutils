@@ -2,9 +2,6 @@ package myutils.util.concurrent;
 
 import java.util.Date;
 import java.util.Optional;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
@@ -34,41 +31,6 @@ import javax.annotation.Nullable;
  * @see Thread#MAX_PRIORITY
  */
 public class PriorityLock implements Lock {
-    
-    /**
-     * Helper class to remove waiting thread's priority from the tree so that threads that depend on this priority can proceed.
-     * Reason for using a helper class along with a BlockingQueue is because removing a priority may be a long running operation
-     * as we have to acquire a lock on the internalLock in order to signal a condition object based on the internalLock.
-     */
-    private static class RemovePriorityAction {
-        private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(runnable -> new Thread(runnable, "RemovePriorityActionThread"));
-        private static final LinkedBlockingQueue<RemovePriorityAction> REMOVE_THREAD_QUEUE = new LinkedBlockingQueue<>();
-        private static volatile boolean SHUTDOWN = false;
-        
-        private final PriorityLock priorityLock;
-        private final int priority;
-        
-        private RemovePriorityAction(PriorityLock priorityLock, int priority) {
-            this.priorityLock = priorityLock;
-            this.priority = priority;
-        }
-        
-        static {
-            RemovePriorityAction.EXECUTOR.submit(() -> {
-                while (!SHUTDOWN) {
-                    try {
-                        RemovePriorityAction action = REMOVE_THREAD_QUEUE.take();
-                        action.priorityLock.cleanupNow(action.priority);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
-             });
-
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> SHUTDOWN = true));
-        }
-    }
-
     
     /**
      * Helper class to manage a list of levels.  Used by both the PriorityLock and its Condition objects.
@@ -395,21 +357,6 @@ public class PriorityLock implements Lock {
 
     private void removeThread(int priority) {
         levelManager.counts[priority - 1].decrementAndGet();
-    }
-    
-    /**
-     * A variation of cleanupFast that is intended to be called by the queue.
-     * This implementation calls lock to acquire the internal lock, followed by decrement and signalAll.
-     */
-    private void cleanupNow(int priority) {
-        internalLock.lock();
-        try {
-            levelManager.cleanupImmediately(priority, threadLockDetails);
-        } catch (RuntimeException | Error e2) {
-            e2.printStackTrace();
-        } finally {
-            internalLock.unlock();
-        }
     }
     
     @Override
