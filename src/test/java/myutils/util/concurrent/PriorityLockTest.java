@@ -799,10 +799,10 @@ public class PriorityLockTest {
                             "thread with priority 3 changed to 2", // at 1600
                             "end thread with priority 2", // at 1600
                             "end thread with priority 8", // at 2600
-                            "InterruptedException in await of thread with priority 5",
-                            "end thread with priority 5",
                             "end thread with priority 7",
                             "end thread with priority 6",
+                            "InterruptedException in await of thread with priority 5",
+                            "end thread with priority 5",
                             "end thread with priority 4")); // at 4600
         } else if (DoThreadTryLock.class.equals(clazz)) {
             assertThat(doThread.getMessages(),
@@ -820,10 +820,10 @@ public class PriorityLockTest {
                             "thread with priority 3 changed to 2", // at 1600
                             "end thread with priority 2", // at 1600
                             "end thread with priority 8", // at 2600
-                            "InterruptedException in await of thread with priority 5", // at 2600
-                            "end thread with priority 5", // at 2600
                             "end thread with priority 7", // will wait till 400+3000=3400, lock acquired at 2600, ends at 3600
                             "thread with priority 6 encountered exception myutils.util.concurrent.PriorityLockTest$AwaitReturnsFalseException", // will wait till 300+3000=3300
+                            "InterruptedException in await of thread with priority 5", // at 2600
+                            "end thread with priority 5", // at 2600
                             "end thread with priority 4")); // will wait till 100+4600=4700, lock acquired at 3600, ends at 4600
         } else {
             throw new UnsupportedOperationException();
@@ -906,6 +906,9 @@ public class PriorityLockTest {
                     }
                     logString("end");
                     messages.add("end thread with priority " + currentThread.getPriority());
+                } catch (RuntimeException e) {
+                    logString("caught exception " + e.toString());
+                    messages.add("thread with priority " + currentThread.getPriority() + " encountered exception " + e.toString());
                 } finally {
                     priorityLock.unlock();
                 }
