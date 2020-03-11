@@ -69,13 +69,15 @@ public class PriorityLock implements Lock {
          * Remove the thread with priority as 'originalPriority' from the tree.
          * Signal all threads waiting on 'originalPriority' to wake up so that each of them calls computeNextHigherPriority.
          * Does not call unlock.
+         *
+         * <ul>
+         *   <li>Precondition: The internalLock is held by the current thread.</li>
+         *   <li>Postcondition: The internalLock is still held by the current thread.</li>
+         * </ul>
          * 
          * @param originalPriority the priority of the thread when addThread was called,
          *                         as other threads are awaiting for this priority's condition object to be signaled
          * @param threadLockDetails not null when called from PriorityLock, null when called from PriorityLockCondition                         
-         *
-         * <p>Precondition: The internalLock is held by the current thread.
-         * <p>Postcondition: The internalLock is still held by the current thread.
          */
         private void removeThreadAndSignal(int originalPriority, @Nullable ThreadLockDetails threadLockDetails) {
             removeThreadOnly(originalPriority);
@@ -91,12 +93,14 @@ public class PriorityLock implements Lock {
          * Remove the thread with priority as 'originalPriority' from the tree.
          * Does not signal all threads waiting on 'originalPriority' to wake up so that each of them calls computeNextHigherPriority.
          * Does not call unlock.
+         *
+         * <ul>
+         *   <li>Precondition: The internalLock is held by the current thread.</li>
+         *   <li>Postcondition: The internalLock is still held by the current thread.</li>
+         * </ul>
          * 
          * @param originalPriority the priority of the thread when addThread was called,
          *                         as other threads are awaiting for this priority's condition object to be signaled
-         *
-         * <p>Precondition: The internalLock is held by the current thread.
-         * <p>Postcondition: The internalLock is still held by the current thread.
          */
         private void removeThreadOnly(int originalPriority) {
             int index = originalPriority - 1;
@@ -415,28 +419,6 @@ public class PriorityLock implements Lock {
             }
         }
 
-
-        @Override
-        public void awaitUninterruptibly() {
-            int holdCount = PriorityLock.this.threadLockDetails.holdCount;
-            PriorityLock.this.levelManager.removeThreadAndSignal(PriorityLock.this.threadLockDetails.originalPriority, PriorityLock.this.threadLockDetails);
-            int priority = levelManager.addThread(Thread.currentThread());
-            try {
-                internalCondition.awaitUninterruptibly();
-                levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(PriorityLock.this);
-                levelManager.removeThreadAndSignal(priority, null);
-                PriorityLock.this.lockAfterAwait(holdCount);
-            } catch (RuntimeException | Error e) {
-                levelManager.removeThreadAndSignal(priority, null);
-                throw e;
-            }
-        }
-
-        @Override
-        public long awaitNanos(long nanosTimeout) {
-            throw new UnsupportedOperationException();
-        }
-
         @Override
         public boolean await(long time, TimeUnit unit) throws InterruptedException {
             long now = System.currentTimeMillis();
@@ -466,6 +448,27 @@ public class PriorityLock implements Lock {
                 levelManager.removeThreadAndSignal(priority, null);
                 throw e;
             }
+        }
+
+        @Override
+        public void awaitUninterruptibly() {
+            int holdCount = PriorityLock.this.threadLockDetails.holdCount;
+            PriorityLock.this.levelManager.removeThreadAndSignal(PriorityLock.this.threadLockDetails.originalPriority, PriorityLock.this.threadLockDetails);
+            int priority = levelManager.addThread(Thread.currentThread());
+            try {
+                internalCondition.awaitUninterruptibly();
+                levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(PriorityLock.this);
+                levelManager.removeThreadAndSignal(priority, null);
+                PriorityLock.this.lockAfterAwait(holdCount);
+            } catch (RuntimeException | Error e) {
+                levelManager.removeThreadAndSignal(priority, null);
+                throw e;
+            }
+        }
+
+        @Override
+        public long awaitNanos(long nanosTimeout) {
+            throw new UnsupportedOperationException();
         }
 
         @Override
