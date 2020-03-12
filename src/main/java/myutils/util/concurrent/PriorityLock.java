@@ -33,12 +33,6 @@ public class PriorityLock implements Lock {
     
     /**
      * Helper class to manage a list of levels.  Used by both the PriorityLock and its Condition objects.
-     * 
-     * <p>The key functions in this class are
-     * waitForHigherPriorityTasksToFinish (to wait for tasks with a higher priority to finish), and
-     * cleanupImmediately (to remove this thread from the execution tree and signal threads waiting on this priority).
-     * 
-     * <p>The actual conditions are owned by the PriorityLock.
      */
     private static class LevelManager {
         private final AtomicInteger[] counts;

@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -461,7 +462,7 @@ public class PriorityLockTest {
         }, 300, TimeUnit.MILLISECONDS);
 
         executor.shutdown();
-        executor.awaitTermination(10_000, TimeUnit.SECONDS);
+        executor.awaitTermination(10, TimeUnit.SECONDS);
         prettyPrintList("messages", doThread.getMessages());
 
         if (DoThreadLock.class.equals(clazz) || DoThreadLockInterruptibly.class.equals(clazz) || DoThreadTryLockWith2000Timeout.class.equals(clazz)) {
@@ -536,7 +537,7 @@ public class PriorityLockTest {
         executor.schedule(() -> doThread.action(7), 300, TimeUnit.MILLISECONDS);
 
         executor.shutdown();
-        executor.awaitTermination(10_000, TimeUnit.SECONDS);
+        executor.awaitTermination(10, TimeUnit.SECONDS);
         prettyPrintList("messages", doThread.getMessages());
 
         if (DoThreadLock.class.equals(clazz) || DoThreadLockInterruptibly.class.equals(clazz) || DoThreadTryLockWith2000Timeout.class.equals(clazz)) {
@@ -628,7 +629,7 @@ public class PriorityLockTest {
     void testTryLock1() throws InterruptedException {
         System.out.println("availableProcessors=" + Runtime.getRuntime().availableProcessors());
 
-        PriorityLock priorityLock = new PriorityLock(new ThrowAtPrioritySevenReentrantLock(true));
+        PriorityLock priorityLock = new PriorityLock(true);
 
         DoThread doThread = new DoThreadTryLock(priorityLock);
 
@@ -670,7 +671,7 @@ public class PriorityLockTest {
     void testTryLock2() throws InterruptedException {
         System.out.println("availableProcessors=" + Runtime.getRuntime().availableProcessors());
 
-        PriorityLock priorityLock = new PriorityLock(new ThrowAtPrioritySevenReentrantLock(true));
+        PriorityLock priorityLock = new PriorityLock(true);
 
         DoThread doThread = new DoThreadTryLock(priorityLock);
 
@@ -706,13 +707,13 @@ public class PriorityLockTest {
 
 
     /**
-     * This test starts 3 threads with different priorities, and acquiring a lock on the second thread throws.
-     * The test verifies that the third thread still runs.
+     * This test starts 3 threads with different priorities, and acquiring a lock on one of them throws.
+     * The test verifies that the threads with lower priority still run.
      */
     @ParameterizedTest
     @ValueSource(classes = {DoThreadLock.class, DoThreadLockInterruptibly.class, DoThreadTryLock.class, DoThreadTryLockWith2000Timeout.class})
     void testLockException(Class<?> clazz) throws InterruptedException {
-        PriorityLock priorityLock = new PriorityLock(new ThrowAtPrioritySevenReentrantLock(false));
+        PriorityLock priorityLock = new PriorityLock(new ThrowAtPrioritySevenReentrantLock());
 
         DoThread doThread = createDoThread(clazz, priorityLock);
 
@@ -721,19 +722,28 @@ public class PriorityLockTest {
                 Executors.newScheduledThreadPool(3, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
 
         executor.schedule(() -> doThread.action(4), 100, TimeUnit.MILLISECONDS);
-        executor.schedule(() -> doThread.action(7), 1200, TimeUnit.MILLISECONDS);
-        executor.schedule(() -> doThread.action(6), 1300, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.action(6), 600, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.action(7), 700, TimeUnit.MILLISECONDS);
 
         executor.shutdown();
         executor.awaitTermination(10, TimeUnit.SECONDS);
         prettyPrintList("messages", doThread.getMessages());
 
-        assertThat(doThread.getMessages(),
-                   Matchers.contains(
-                           // thread with priority 4 runs first, and while it is running all others get added to the queue
-                           "end thread with priority 4",
-                           "thread with priority 7 encountered exception java.lang.IllegalArgumentException: priority 7 not allowed",
-                           "end thread with priority 6"));
+        if (DoThreadLock.class.equals(clazz) || DoThreadLockInterruptibly.class.equals(clazz) || DoThreadTryLockWith2000Timeout.class.equals(clazz)) {
+            assertThat(doThread.getMessages(),
+                    Matchers.contains(
+                            "thread with priority 7 encountered exception java.lang.IllegalArgumentException: priority 7 not allowed",
+                            "end thread with priority 4",
+                            "end thread with priority 6"));
+        } else if (DoThreadTryLock.class.equals(clazz)) {
+            assertThat(doThread.getMessages(),
+                    Matchers.contains(
+                            "thread with priority 6 encountered exception myutils.util.concurrent.PriorityLockTest$FailedToAcquireLockException",
+                            "thread with priority 7 encountered exception java.lang.IllegalArgumentException: priority 7 not allowed",
+                            "end thread with priority 4"));
+        } else {
+            throw new UnsupportedOperationException();
+        }
 
         assertThat(priorityLock.toString(), Matchers.endsWith("[0,0,0,0,0,0,0,0,0,0]"));
     }
@@ -758,7 +768,6 @@ public class PriorityLockTest {
         executor.schedule(() -> doThread.awaitAction(4, null, 4600L), 100, TimeUnit.MILLISECONDS);
         executor.schedule(() -> doThread.awaitAction(5, null, 3500L), 200, TimeUnit.MILLISECONDS);
         executor.schedule(() -> doThread.awaitAction(6, null, 3000L), 300, TimeUnit.MILLISECONDS);
-        // snaran
         executor.schedule(() -> doThread.awaitAction(7, 1, 3000L), 400, TimeUnit.MILLISECONDS);
         executor.schedule(() -> doThread.action(3, 2, Signal.SIGNAL_ALL), 600, TimeUnit.MILLISECONDS);
         executor.schedule(() -> doThread.action(8), 700, TimeUnit.MILLISECONDS);
@@ -892,6 +901,91 @@ public class PriorityLockTest {
     }
 
 
+    @Test
+    void testAwaitUntil() throws InterruptedException {
+        Date deadline = new Date(System.currentTimeMillis() + 4000);
+        PriorityLock priorityLock = new PriorityLock();
+                
+        DoThread doThread = createDoThread(DoThreadTryLockWith2000Timeout.class, priorityLock);
+
+        AtomicInteger threadNumber = new AtomicInteger();
+        ScheduledExecutorService executor =
+                Executors.newScheduledThreadPool(6, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
+
+        executor.schedule(() -> doThread.awaitAction(4, null, deadline), 100, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.awaitAction(5, null, deadline), 200, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.awaitAction(6, null, deadline), 300, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.awaitAction(7, 1, deadline), 400, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.action(3, 2, Signal.SIGNAL_ALL), 600, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.action(8), 700, TimeUnit.MILLISECONDS);
+
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+        prettyPrintList("messages", doThread.getMessages());
+
+        assertThat(doThread.getMessages(),
+                Matchers.contains(
+                        "thread with priority 3 changed to 2", // at 1600
+                        "end thread with priority 2", // at 1600
+                        "end thread with priority 8", // at 2600
+                        "thread with priority 7 changed to 1", // at 2600
+                        "end thread with priority 1", // at 3600
+                        "end thread with priority 6", // at 4600
+                        "thread with priority 5 encountered exception myutils.util.concurrent.PriorityLockTest$AwaitReturnsFalseException", // at 4600
+                        "thread with priority 4 encountered exception myutils.util.concurrent.PriorityLockTest$AwaitReturnsFalseException")); // at 4600
+
+        assertThat(priorityLock.toString(), Matchers.endsWith("[0,0,0,0,0,0,0,0,0,0]"));
+        assertThat(doThread.conditiontoString(), Matchers.endsWith("[0,0,0,0,0,0,0,0,0,0]"));
+    }
+
+
+    /**
+     * This test starts 3 threads with different priorities, and await on one of them throws.
+     * The test verifies that the threads with lower priority still run.
+     */
+    @ParameterizedTest
+    @ValueSource(classes = {DoThreadLock.class, DoThreadLockInterruptibly.class, DoThreadTryLock.class, DoThreadTryLockWith2000Timeout.class})
+    void testAwaitException(Class<?> clazz) throws InterruptedException {
+        PriorityLock priorityLock = new PriorityLock(new ThrowAtPrioritySevenReentrantAwait());
+
+        DoThread doThread = createDoThread(clazz, priorityLock);
+
+        AtomicInteger threadNumber = new AtomicInteger();
+        ScheduledExecutorService executor =
+                Executors.newScheduledThreadPool(4, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
+
+        executor.schedule(() -> doThread.awaitAction(4, null, 100L), 100, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.awaitAction(6, null, 100L), 600, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.awaitAction(7, null, 100L), 700, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.action(3, 2, Signal.SIGNAL_ALL), 1200, TimeUnit.MILLISECONDS);
+
+        executor.shutdown();
+        executor.awaitTermination(10_000, TimeUnit.SECONDS);
+        prettyPrintList("messages", doThread.getMessages());
+
+        if (DoThreadLock.class.equals(clazz) || DoThreadLockInterruptibly.class.equals(clazz) || DoThreadTryLockWith2000Timeout.class.equals(clazz)) {
+            assertThat(doThread.getMessages(),
+                    Matchers.contains(
+                            "thread with priority 3 changed to 2", 
+                            "end thread with priority 2", 
+                            "thread with priority 7 encountered exception java.lang.IllegalArgumentException: priority 7 not allowed",
+                            "end thread with priority 6",
+                            "end thread with priority 4"));
+        } else if (DoThreadTryLock.class.equals(clazz)) {
+            assertThat(doThread.getMessages(),
+                    Matchers.contains(
+                            "thread with priority 6 encountered exception myutils.util.concurrent.PriorityLockTest$FailedToAcquireLockException",
+                            "thread with priority 7 encountered exception java.lang.IllegalArgumentException: priority 7 not allowed",
+                            "end thread with priority 4"));
+        } else {
+            throw new UnsupportedOperationException();
+        }
+
+        assertThat(priorityLock.toString(), Matchers.endsWith("[0,0,0,0,0,0,0,0,0,0]"));
+        assertThat(doThread.conditiontoString(), Matchers.endsWith("[0,0,0,0,0,0,0,0,0,0]"));
+    }
+
+
     private enum Signal {
         SIGNAL_ALL
     }
@@ -989,9 +1083,48 @@ public class PriorityLockTest {
             }
         }
         
+        void awaitAction(int priority, Integer newPriority, Date deadline) {
+            final Thread currentThread = Thread.currentThread();
+            currentThread.setPriority(priority);
+            logString("start");
+            try {
+                getLock();
+                try {
+                    logString("acquired lock");
+                    logString("waiting on condition");
+                    try {
+                        doAwait(deadline);
+                        logString("await finished");
+                        if (newPriority != null) {
+                            logString("changing priority of thread from " + currentThread.getPriority() + " to " + newPriority);
+                            messages.add("thread with priority " + currentThread.getPriority() + " changed to " + newPriority);
+                            currentThread.setPriority(newPriority);
+                        }
+                        sleep(1000);
+                    } catch (InterruptedException e) {
+                        messages.add("InterruptedException in await of thread with priority " + currentThread.getPriority());
+                        logString("await finished with InterruptedException");
+                    }
+                    logString("end");
+                    messages.add("end thread with priority " + currentThread.getPriority());
+                } catch (RuntimeException e) {
+                    logString("caught exception " + e.toString());
+                    messages.add("thread with priority " + currentThread.getPriority() + " encountered exception " + e.toString());
+                } finally {
+                    priorityLock.unlock();
+                }
+            } catch (InterruptedException | RuntimeException e) {
+                logString("caught exception " + e.toString());
+                messages.add("thread with priority " + currentThread.getPriority() + " encountered exception " + e.toString());
+            }
+        }
+        
         abstract void getLock() throws InterruptedException;
         
         abstract void doAwait(Long waitTimeMillis) throws InterruptedException;
+        abstract void doAwait(Date deadline) throws InterruptedException;        
+        abstract void doAwaitNanos(long nanos) throws InterruptedException;
+        
         
         List<String> getMessages() {
             return messages;
@@ -1016,6 +1149,17 @@ public class PriorityLockTest {
         void doAwait(Long waitTimeMillis) {
             condition.awaitUninterruptibly();
         }
+        
+        
+        @Override
+        void doAwait(Date deadline) {
+            throw new UnsupportedOperationException();
+        }
+        
+        @Override
+        void doAwaitNanos(long nanos) {
+            throw new UnsupportedOperationException();
+        }
     }
 
     private class DoThreadLockInterruptibly extends DoThread {
@@ -1031,6 +1175,16 @@ public class PriorityLockTest {
         @Override
         void doAwait(Long waitTimeMillis) throws InterruptedException {
             condition.await();
+        }
+        
+        @Override
+        void doAwait(Date deadline) {
+            throw new UnsupportedOperationException();
+        }
+        
+        @Override
+        void doAwaitNanos(long nanos) {
+            throw new UnsupportedOperationException();
         }
     }
 
@@ -1055,6 +1209,16 @@ public class PriorityLockTest {
         @Override
         void doAwait(Long waitTimeMillis) {
             throw new UnsupportedOperationException("DoThreadTryLock.doAwait");
+        }
+        
+        @Override
+        void doAwait(Date deadline) {
+            throw new UnsupportedOperationException();
+        }
+        
+        @Override
+        void doAwaitNanos(long nanos) {
+            throw new UnsupportedOperationException();
         }
     }
 
@@ -1081,6 +1245,22 @@ public class PriorityLockTest {
                 throw new AwaitReturnsFalseException();
             }
         }
+        
+        @Override
+        void doAwait(Date deadline) throws InterruptedException {
+            boolean timedOut = !condition.awaitUntil(deadline);
+            if (timedOut) {
+                throw new AwaitReturnsFalseException();
+            }
+        }
+        
+        @Override
+        void doAwaitNanos(long nanos) throws InterruptedException {
+            long timeLeft = condition.awaitNanos(nanos);
+            if (timeLeft == 0) {
+                throw new AwaitReturnsFalseException();
+            }
+        }
 
         private long fallbackToDefault(Long input) {
             if (input != null) {
@@ -1103,13 +1283,13 @@ public class PriorityLockTest {
     private static class ThrowAtPrioritySevenReentrantLock extends ReentrantLock {
         private static final long serialVersionUID = 1L;
 
-        ThrowAtPrioritySevenReentrantLock(boolean fair) {
-            super(fair);
+        ThrowAtPrioritySevenReentrantLock() {
+            super();
         }
         
         @Override
         public void lock() {
-            sleep(50);
+            sleep(300);
             if (Thread.currentThread().getPriority() == 7) {
                 throw new IllegalArgumentException("priority 7 not allowed");
             }
@@ -1118,7 +1298,7 @@ public class PriorityLockTest {
 
         @Override
         public void lockInterruptibly() throws InterruptedException {
-            sleep(50);
+            sleep(300);
             if (Thread.currentThread().getPriority() == 7) {
                 throw new IllegalArgumentException("priority 7 not allowed");
             }
@@ -1127,7 +1307,7 @@ public class PriorityLockTest {
 
         @Override
         public boolean tryLock() {
-            sleep(50);
+            sleep(300);
             if (Thread.currentThread().getPriority() == 7) {
                 throw new IllegalArgumentException("priority 7 not allowed");
             }
@@ -1136,7 +1316,7 @@ public class PriorityLockTest {
 
         @Override
         public boolean tryLock(long time, TimeUnit unit) throws InterruptedException {
-            sleep(50);
+            sleep(300);
             if (Thread.currentThread().getPriority() == 7) {
                 throw new IllegalArgumentException("priority 7 not allowed");
             }
@@ -1153,7 +1333,82 @@ public class PriorityLockTest {
             return super.newCondition();
         }        
     }
-    
+
+    private static class ThrowAtPrioritySevenReentrantAwait extends ReentrantLock {
+        private static final long serialVersionUID = 1L;
+
+        ThrowAtPrioritySevenReentrantAwait() {
+            super();
+        }
+        
+        @Override
+        public @Nonnull Condition newCondition() {
+            return new ThrowAtPrioritySevenReentrantAwaitCondition(super.newCondition());
+        }
+        
+        private static class ThrowAtPrioritySevenReentrantAwaitCondition implements Condition {
+            private final Condition condition;
+
+            public ThrowAtPrioritySevenReentrantAwaitCondition(Condition condition) {
+                this.condition = condition;
+            }
+
+            @Override
+            public void await() throws InterruptedException {
+                condition.await();
+                if (Thread.currentThread().getPriority() == 7) {
+                    throw new IllegalArgumentException("priority 7 not allowed");
+                }
+            }
+
+            @Override
+            public void awaitUninterruptibly() {
+                condition.awaitUninterruptibly();
+                if (Thread.currentThread().getPriority() == 7) {
+                    throw new IllegalArgumentException("priority 7 not allowed");
+                }
+            }
+
+            @Override
+            public long awaitNanos(long nanosTimeout) throws InterruptedException {
+                long timeLeft = condition.awaitNanos(nanosTimeout);
+                if (Thread.currentThread().getPriority() == 7) {
+                    throw new IllegalArgumentException("priority 7 not allowed");
+                }
+                return timeLeft;
+            }
+
+            @Override
+            public boolean await(long time, TimeUnit unit) throws InterruptedException {
+                boolean acquired = condition.await(time, unit);
+                if (Thread.currentThread().getPriority() == 7) {
+                    throw new IllegalArgumentException("priority 7 not allowed");
+                }
+                return acquired;
+            }
+
+            @Override
+            public boolean awaitUntil(Date deadline) throws InterruptedException {
+                boolean acquired = condition.awaitUntil(deadline);
+                if (Thread.currentThread().getPriority() == 7) {
+                    throw new IllegalArgumentException("priority 7 not allowed");
+                }
+                return acquired;
+            }
+
+            @Override
+            public void signal() {
+                condition.signal();
+            }
+
+            @Override
+            public void signalAll() {
+                condition.signalAll();                
+            }
+            
+        }
+    }
+
     private DoThread createDoThread(Class<?> clazz, PriorityLock priorityLock) {
         if (DoThreadLock.class.equals(clazz)) {
             return new DoThreadLock(priorityLock);
