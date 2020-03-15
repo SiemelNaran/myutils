@@ -12,12 +12,12 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.stream.Collectors;
-
 import org.junit.jupiter.api.Test;
 
 
 public class HashLocksTest {
     @Test
+    @SuppressWarnings("checkstyle:indentation") // for argument2 to function HashLocks.create
     void testLocksWithCollisionTracking() {
         var locks = HashLocks.create(3,
                                      () -> new TimedReentrantLock(false), HashLocks::toStatistics,

@@ -37,10 +37,11 @@ public class TimedReentrantLockTest {
     @Test
     public void testLock() throws InterruptedException {
         AtomicInteger threadNumber = new AtomicInteger();
-        ScheduledExecutorService service = Executors.newScheduledThreadPool(2, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
+        ScheduledExecutorService service
+            = Executors.newScheduledThreadPool(2, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
         
         TimedReentrantLock lock = new TimedReentrantLock();
-        service.schedule(()-> {
+        service.schedule(() -> {
             logString("start thread 1");
             lock.lock();
             try {
@@ -52,7 +53,7 @@ public class TimedReentrantLockTest {
             logString("end thread 1");
         }, 300, TimeUnit.MILLISECONDS);
         
-        service.schedule(()-> {
+        service.schedule(() -> {
             logString("start thread 2");
             lock.lock();
             try {
@@ -76,10 +77,11 @@ public class TimedReentrantLockTest {
     @Test
     public void testLockInterruptibly() throws InterruptedException {
         AtomicInteger threadNumber = new AtomicInteger();
-        ScheduledExecutorService service = Executors.newScheduledThreadPool(3, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
+        ScheduledExecutorService service
+            = Executors.newScheduledThreadPool(3, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
         
         TimedReentrantLock lock = new TimedReentrantLock();
-        service.schedule(()-> {
+        service.schedule(() -> {
             logString("start thread 1");
             try {
                 lock.lockInterruptibly();
@@ -95,7 +97,7 @@ public class TimedReentrantLockTest {
             logString("end thread 1");
         }, 300, TimeUnit.MILLISECONDS);
         
-        ScheduledFuture<?> future = service.schedule(()-> {
+        ScheduledFuture<?> future = service.schedule(() -> {
             logString("start thread 2");
             try {
                 lock.lockInterruptibly();
@@ -111,7 +113,7 @@ public class TimedReentrantLockTest {
             logString("end thread 2");
         }, 500, TimeUnit.MILLISECONDS);
         
-        service.schedule(()-> {
+        service.schedule(() -> {
             logString("about to cancel thread 2");
             future.cancel(true);
         }, 700, TimeUnit.MILLISECONDS);
@@ -128,10 +130,11 @@ public class TimedReentrantLockTest {
     @Test
     public void testTryLock() throws InterruptedException {
         AtomicInteger threadNumber = new AtomicInteger();
-        ScheduledExecutorService service = Executors.newScheduledThreadPool(2, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
+        ScheduledExecutorService service
+            = Executors.newScheduledThreadPool(2, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
         
         TimedReentrantLock lock = new TimedReentrantLock();
-        service.schedule(()-> {
+        service.schedule(() -> {
             logString("start thread 1");
             boolean acquired = lock.tryLock();
             if (acquired) {
@@ -145,7 +148,7 @@ public class TimedReentrantLockTest {
             logString("end thread 1");
         }, 300, TimeUnit.MILLISECONDS);
         
-        service.schedule(()-> {
+        service.schedule(() -> {
             logString("start thread 2");
             boolean acquired = lock.tryLock();
             if (acquired) {
@@ -171,10 +174,11 @@ public class TimedReentrantLockTest {
     @Test
     public void testTryLockWithArgs() throws InterruptedException {
         AtomicInteger threadNumber = new AtomicInteger();
-        ScheduledExecutorService service = Executors.newScheduledThreadPool(3, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
+        ScheduledExecutorService service
+            = Executors.newScheduledThreadPool(3, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
         
         TimedReentrantLock lock = new TimedReentrantLock();
-        service.schedule(()-> {
+        service.schedule(() -> {
             logString("start thread 1");
             try {
                 boolean acquired = lock.tryLock(400, TimeUnit.MILLISECONDS);
@@ -192,7 +196,7 @@ public class TimedReentrantLockTest {
             logString("end thread 1");
         }, 300, TimeUnit.MILLISECONDS);
         
-        service.schedule(()-> {
+        service.schedule(() -> {
             logString("start thread 2");
             try {
                 boolean acquired = lock.tryLock(400, TimeUnit.MILLISECONDS);
