@@ -13,7 +13,7 @@ import java.util.concurrent.Future;
 public interface PriorityExecutorService extends ExecutorService {
     /**
      * Submit a callable of the given priority.
-     * The other version of this functions submits a callable with the default priority.
+     * The other version of this function (without the priority argument) submits a callable with the default priority.
      * 
      * @param <V> the type returned by the callable
      * @param priority the priority of the task, must be in the range [1, 10]
@@ -24,9 +24,8 @@ public interface PriorityExecutorService extends ExecutorService {
 
     /**
      * Submit a runnable of the given priority.
-     * The other version of this functions submits a runnable with the default priority.
+     * The other version of this function (without the priority argument) submits a runnable with the default priority.
      * 
-     * @param <V>
      * @param priority the priority of the task, must be in the range [1, 10]
      * @param task the callable
      * @return a future
@@ -35,7 +34,7 @@ public interface PriorityExecutorService extends ExecutorService {
 
     /**
      * Submit a runnable of the given priority.
-     * The other version of this functions submits a runnable with the default priority.
+     * The other version of this function (without the priority argument) submits a runnable with the default priority.
      * 
      * @param <V> the type of the result
      * @param priority the priority of the task, must be in the range [1, 10]
