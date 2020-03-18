@@ -1070,6 +1070,32 @@ public class PriorityLockTest {
     }
 
 
+    /**
+     * Test that we don't run into IndexOutOfBoundsException.
+     */
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
+    void testAllLevels(int level) throws InterruptedException {
+        PriorityLock priorityLock = new PriorityLock(true);
+
+        DoThread doThread = createDoThread(DoThreadLock.class, priorityLock);
+
+        AtomicInteger threadNumber = new AtomicInteger();
+        ScheduledExecutorService executor =
+                Executors.newScheduledThreadPool(2, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
+
+        executor.schedule(() -> doThread.awaitAction(level, null, new WaitArgMillis(0)), 0, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.action(level, null, Signal.SIGNAL_ALL), 100, TimeUnit.MILLISECONDS);
+
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+
+        assertThat(priorityLock.toString(), Matchers.endsWith("[0,0,0,0,0,0,0,0,0,0]"));
+        assertThat(doThread.conditiontoString(), Matchers.endsWith("[0,0,0,0,0,0,0,0,0,0]"));
+    }
+    
+    
+
     private enum Signal {
         SIGNAL,
         SIGNAL_ALL

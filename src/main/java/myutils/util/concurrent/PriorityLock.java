@@ -65,7 +65,7 @@ public class PriorityLock implements Lock {
         /**
          * Remove the thread with priority as 'originalPriority' from the tree.
          * Signal all threads waiting on 'originalPriority' to wake up so that each of them calls computeNextHigherPriority.
-         * Calls unlock.
+         * Does not call unlock.
          *
          * <ul>
          *   <li>Precondition: The internalLock is held by the current thread.</li>
@@ -100,8 +100,7 @@ public class PriorityLock implements Lock {
          *                         as other threads are awaiting for this priority's condition object to be signaled
          */
         private void removeThreadOnly(int originalPriority) {
-            int index = originalPriority - 1;
-            counts[index].decrementAndGet();
+            counts[originalPriority - 1].decrementAndGet();
         }
 
         /**
