@@ -111,12 +111,12 @@ public class PriorityLock implements Lock {
          * <p>Precondition: when this function is called the internal lock is locked by this thread.
          * Postcondition:
          *   (1) upon successful exit from this function this thread still holds the internal lock,
-         *   (2) upon exceptional exit from this function this thread holds the lock if unlockOnException is false.
+         *   (2) upon exceptional exit from this function this thread holds the lock if parameter priorityLock is not null.
          * 
-         * @param unlockOnException upon exceptional exit - true when called from PriorityLock, false when called from PriorityLockCondition
+         * @param priorityLock upon exceptional exit unlock PriorityLock- non null when called from PriorityLock, null when called from PriorityLockCondition
          * @throws InterruptedException if this thread is interrupted
          */
-        private void waitForHigherPriorityTasksToFinish(PriorityLock priorityLock, boolean unlockOnException) throws InterruptedException {
+        private void waitForHigherPriorityTasksToFinish(PriorityLock priorityLock) throws InterruptedException {
             int priority = Thread.currentThread().getPriority();
             while (true) {
                 Integer nextHigherPriorityIndex = computeNextHigherPriorityIndex(priority);
@@ -129,7 +129,7 @@ public class PriorityLock implements Lock {
                 try {
                     conditions[nextHigherPriorityIndex].await();
                 } catch (InterruptedException | RuntimeException | Error e) {
-                    if (unlockOnException) {
+                    if (priorityLock != null) {
                         priorityLock.internalLock.unlock();
                     }
                     throw e;
@@ -137,7 +137,7 @@ public class PriorityLock implements Lock {
             }
         }
 
-        private void waitUninterruptiblyForHigherPriorityTasksToFinish(PriorityLock priorityLock, boolean unlockOnException) {
+        private void waitUninterruptiblyForHigherPriorityTasksToFinish(PriorityLock priorityLock) {
             int priority = Thread.currentThread().getPriority();
             while (true) {
                 Integer nextHigherPriorityIndex = computeNextHigherPriorityIndex(priority);
@@ -147,7 +147,7 @@ public class PriorityLock implements Lock {
                 try {
                     conditions[nextHigherPriorityIndex].awaitUninterruptibly();
                 } catch (RuntimeException | Error e) {
-                    if (unlockOnException) {
+                    if (priorityLock != null) {
                         priorityLock.internalLock.unlock();
                     }
                     throw e;
@@ -243,7 +243,7 @@ public class PriorityLock implements Lock {
     
     /**
      * Create a priority lock backed by the given lock.
-     * Implementations must be sure that no two PriorityLock's share the same lock.
+     * Implementations must be sure that no two PriorityLock's share the same internal lock.
      * 
      * @param internalLock the internal lock
      */
@@ -255,7 +255,7 @@ public class PriorityLock implements Lock {
     private void lockAfterAwait(int holdCount) {
         int priority = levelManager.addThread(Thread.currentThread());
         threadLockDetails.setAll(priority, holdCount);
-        levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(this, false);
+        levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(null);
     }
 
     @Override
@@ -268,7 +268,7 @@ public class PriorityLock implements Lock {
         int priority = levelManager.addThread(Thread.currentThread());
         try {
             internalLock.lock();
-            levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(this, true);
+            levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(this);
         } catch (RuntimeException | Error e) {
             levelManager.removeThreadOnly(priority);
             throw e;
@@ -286,7 +286,7 @@ public class PriorityLock implements Lock {
         int priority = levelManager.addThread(Thread.currentThread());
         try {
             internalLock.lockInterruptibly();
-            levelManager.waitForHigherPriorityTasksToFinish(this, true);
+            levelManager.waitForHigherPriorityTasksToFinish(this);
         } catch (InterruptedException | RuntimeException | Error e) {
             levelManager.removeThreadOnly(priority);
             throw e;
@@ -407,10 +407,10 @@ public class PriorityLock implements Lock {
                 InterruptedException interruptedException = null;
                 try {
                     internalCondition.await();
-                    levelManager.waitForHigherPriorityTasksToFinish(PriorityLock.this, false);
+                    levelManager.waitForHigherPriorityTasksToFinish(null);
                 } catch (InterruptedException e) {
                     interruptedException = e;
-                    levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(PriorityLock.this, false);
+                    levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(null);
                 }
                 if (interruptedException != null) {
                     throw interruptedException;
@@ -431,29 +431,15 @@ public class PriorityLock implements Lock {
                 boolean acquired;
                 try {
                     acquired = internalCondition.await(time, unit);
-                    levelManager.waitForHigherPriorityTasksToFinish(PriorityLock.this, false);
+                    levelManager.waitForHigherPriorityTasksToFinish(null);
                 } catch (InterruptedException e) {
-                    levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(PriorityLock.this, false);
+                    levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(null);
                     throw e;
                 }
                 if (System.currentTimeMillis() > startTime + unit.toMillis(time)) {
                     acquired = false;
                 }
                 return acquired;
-            } finally {
-                levelManager.removeThreadAndSignal(priority, null);
-                PriorityLock.this.lockAfterAwait(holdCount);
-            }
-        }
-
-        @Override
-        public void awaitUninterruptibly() {
-            int holdCount = PriorityLock.this.threadLockDetails.holdCount;
-            PriorityLock.this.levelManager.removeThreadAndSignal(PriorityLock.this.threadLockDetails.originalPriority, PriorityLock.this.threadLockDetails);
-            int priority = levelManager.addThread(Thread.currentThread());
-            try {
-                internalCondition.awaitUninterruptibly();
-                levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(PriorityLock.this, false);
             } finally {
                 levelManager.removeThreadAndSignal(priority, null);
                 PriorityLock.this.lockAfterAwait(holdCount);
@@ -469,9 +455,9 @@ public class PriorityLock implements Lock {
             try {
                 try {
                     internalCondition.awaitNanos(nanosTimeout);
-                    levelManager.waitForHigherPriorityTasksToFinish(PriorityLock.this, false);
+                    levelManager.waitForHigherPriorityTasksToFinish(null);
                 } catch (InterruptedException e) {
-                    levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(PriorityLock.this, false);
+                    levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(null);
                     throw e;
                 }
                 long timeLeft = nanosTimeout - (System.nanoTime() - startTime);
@@ -479,6 +465,20 @@ public class PriorityLock implements Lock {
                     timeLeft = 0;
                 }
                 return timeLeft;
+            } finally {
+                levelManager.removeThreadAndSignal(priority, null);
+                PriorityLock.this.lockAfterAwait(holdCount);
+            }
+        }
+
+        @Override
+        public void awaitUninterruptibly() {
+            int holdCount = PriorityLock.this.threadLockDetails.holdCount;
+            PriorityLock.this.levelManager.removeThreadAndSignal(PriorityLock.this.threadLockDetails.originalPriority, PriorityLock.this.threadLockDetails);
+            int priority = levelManager.addThread(Thread.currentThread());
+            try {
+                internalCondition.awaitUninterruptibly();
+                levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(null);
             } finally {
                 levelManager.removeThreadAndSignal(priority, null);
                 PriorityLock.this.lockAfterAwait(holdCount);
