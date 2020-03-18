@@ -25,14 +25,12 @@ import javax.annotation.Nullable;
  *           and signal the condition object so that any threads waiting on this condition wake up and start running.</li>
  * </ul>
  * 
- * <p>An alternate design is to use MoreExecutors#newFixedPriorityThreadPool, which sets up a thread pool that processes
- * higher priority items first.
- * 
- * @see MoreExecutors#newFixedThreadPool
+ * <p>An alternate design is to use PriorityExecutorService, which isn an executor service that runs higher priority items first.
  * 
  * @see Thread#MIN_PRIORITY
  * @see Thread#NORM_PRIORITY
  * @see Thread#MAX_PRIORITY
+ * @see myutils.util.concurrent.MoreExecutors#newFixedPriorityThreadPool
  */
 public class PriorityLock implements Lock {
     
@@ -439,7 +437,7 @@ public class PriorityLock implements Lock {
                     levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(PriorityLock.this, false);
                     throw e;
                 }
-                if (acquired && System.currentTimeMillis() > startTime + unit.toMillis(time)) {
+                if (System.currentTimeMillis() > startTime + unit.toMillis(time)) {
                     acquired = false;
                 }
                 return acquired;

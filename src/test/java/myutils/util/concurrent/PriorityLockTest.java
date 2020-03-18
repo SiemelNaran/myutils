@@ -25,6 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 
@@ -571,7 +572,9 @@ public class PriorityLockTest {
      * and thus the threads with lower priorities will not wait for it to finish.
      * The test is an explanation of the order in which the tests run.
      *
-     * <p>An alternate design is to use MoreExecutors#newFixedPriorityThreadPool.
+     * <p>An alternate design is to use PriorityExecutorService.
+     * 
+     * @see MoreExecutorsTest#testNotEnoughThreads1()
      */
     @Test
     void testNotEnoughThreads() throws InterruptedException {
@@ -964,8 +967,9 @@ public class PriorityLockTest {
     }
 
 
-    @Test
-    void testAwaitNanos() throws InterruptedException {
+    @ParameterizedTest
+    @EnumSource(Signal.class)
+    void testAwaitNanos(Signal signal) throws InterruptedException {
         WaitArg nanos = new WaitArgNanos(TimeUnit.SECONDS.toNanos(4));
         PriorityLock priorityLock = new PriorityLock();
                 
@@ -982,7 +986,7 @@ public class PriorityLockTest {
         executor.schedule(() -> doThread.awaitAction(5, null, nanos), 250, TimeUnit.MILLISECONDS);
         executor.schedule(() -> doThread.awaitAction(6, null, nanos), 300, TimeUnit.MILLISECONDS);
         executor.schedule(() -> doThread.awaitAction(7, 1, nanos), 400, TimeUnit.MILLISECONDS);
-        executor.schedule(() -> doThread.action(3, 2, Signal.SIGNAL_ALL), 600, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.action(3, 2, signal), 600, TimeUnit.MILLISECONDS);
         executor.schedule(() -> doThread.action(8), 700, TimeUnit.MILLISECONDS);
         executor.schedule(() -> {
             logString("about to interrupt thread future200 of priority 4");
@@ -1067,6 +1071,7 @@ public class PriorityLockTest {
 
 
     private enum Signal {
+        SIGNAL,
         SIGNAL_ALL
     }
 
@@ -1105,9 +1110,19 @@ public class PriorityLockTest {
                         messages.add("thread with priority " + currentThread.getPriority() + " changed to " + newPriority);
                         currentThread.setPriority(newPriority);
                     }
-                    if (signal == Signal.SIGNAL_ALL) {
-                        logString("about to call condition.signalAll");
-                        condition.signalAll();
+                    if (signal != null) {
+                        switch (signal) {
+                            case SIGNAL:
+                                logString("about to call condition.signal");
+                                condition.signal();
+                                break;
+                            case SIGNAL_ALL:
+                                logString("about to call condition.signalAll");
+                                condition.signalAll();
+                                break;
+                            default:
+                                throw new UnsupportedOperationException();
+                        }
                     }
                     logString("end");
                     messages.add("end thread with priority " + currentThread.getPriority());
