@@ -1264,6 +1264,7 @@ public class PriorityLockTest {
             currentThread.setPriority(priority);
             logString("start " + priorityLock.toString() + " " + conditiontoString());
             try {
+                boolean threadDeath = false;
                 getLock(null);
                 try {
                     logString("acquired lock");
@@ -1283,14 +1284,20 @@ public class PriorityLockTest {
                     }
                     logString("end");
                     messages.add("end thread with priority " + currentThread.getPriority());
-                } catch (RuntimeException | ThreadDeath e) {
+                } catch (RuntimeException | PriorityLock.FailedToReacquireLockError e) {
                     logString("caught exception " + e.toString());
                     if (shouldLogCallstack(e)) {
                         e.printStackTrace(System.out);
                     }
                     messages.add("thread with priority " + currentThread.getPriority() + " encountered exception " + e.toString());
+                    if (e instanceof ThreadDeath) {
+                        threadDeath = true;
+                        
+                    }
                 } finally {
-                    priorityLock.unlock();
+                    if (!threadDeath) {
+                        priorityLock.unlock();
+                    }
                 }
             } catch (InterruptedException | RuntimeException e) {
                 logString("caught exception " + e.toString());
