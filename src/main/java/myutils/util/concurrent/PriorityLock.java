@@ -7,7 +7,6 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
-
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
@@ -457,48 +456,29 @@ public class PriorityLock implements Lock {
             this.levelManager = new LevelManager(awaitLock);
         }
 
-        private class AwaitManager {
-            private final int holdCount;
-            private int priority;
-            private boolean isLocked = false;
-            
-            AwaitManager() {
-                holdCount = PriorityLock.this.unlockForAwait();
-            }
-            
-            private void addThisThread() {
-                priority = PriorityLockCondition.this.levelManager.addThread(Thread.currentThread());
-            }
-            
-            private void onAwaitDone() throws InterruptedException {
-                levelManager.removeThreadAndSignal(priority, null);
+        private void genericAwait(InterruptedExceptionRunnable waitFunction) throws InterruptedException {
+            boolean isLocked = false;
+            int holdCount = PriorityLock.this.unlockForAwait();
+            try {
+                int priority = PriorityLockCondition.this.levelManager.addThread(Thread.currentThread());
+                awaitLock.lock();
                 try {
-                    PriorityLock.this.lockAfterAwait(holdCount);
-                    isLocked = true;
+                    waitFunction.run();
+                    levelManager.waitForHigherPriorityTasksToFinish(null);
                 } finally {
-                    if (priority == highestThread) {
-                        PriorityLock.this.levelManager.removeThreadOnly(highestThread);
-                        highestThread = 0;
+                    levelManager.removeThreadAndSignal(priority, null);
+                    try {
+                        PriorityLock.this.lockAfterAwait(holdCount);
+                        isLocked = true;
+                    } finally {
+                        if (priority == highestThread) {
+                            PriorityLock.this.levelManager.removeThreadOnly(highestThread);
+                            highestThread = 0;
+                        }
+                        awaitLock.unlock();
                     }
-                    awaitLock.unlock();
                 }
-            }
-            
-            private void onAwaitDoneUninterruptibly() {
-                levelManager.removeThreadAndSignal(priority, null);
-                try {
-                    PriorityLock.this.lockAfterAwaitWithoutInterrupt(holdCount);
-                    isLocked = true;
-                } finally {
-                    if (priority == highestThread) {
-                        PriorityLock.this.levelManager.removeThreadOnly(highestThread);
-                        highestThread = 0;
-                    }
-                    awaitLock.unlock();
-                }
-            }
-            
-            private void onException(Throwable e) {
+            } catch (RuntimeException | Error e) {
                 if (!isLocked && !(e instanceof ThreadDeath)) {
                     if (highestThread > 0) {
                         PriorityLock.this.levelManager.removeThreadOnly(highestThread);
@@ -506,28 +486,40 @@ public class PriorityLock implements Lock {
                     }
                     PriorityLock.this.lockAfterAwaitWithoutInterrupt(holdCount);
                 }
+                throw e;
             }
         }
-        
-        /**
-         * Puts the current thread into a wait state until it is signaled.
-         * 
-         * @throws FailedToReacquireLockError if the function failed to re-acquire the PriorityLock.
-         */
-        @Override
-        public void await() throws InterruptedException {
-            AwaitManager manager = new AwaitManager();
+
+        private void genericAwaitWithoutInterrupt() {
+            boolean isLocked = false;
+            int holdCount = PriorityLock.this.unlockForAwait();
             try {
-                manager.addThisThread();
+                int priority = PriorityLockCondition.this.levelManager.addThread(Thread.currentThread());
                 awaitLock.lock();
                 try {
-                    awaitCondition.await();
-                    levelManager.waitForHigherPriorityTasksToFinish(null);
+                    awaitCondition.awaitUninterruptibly();
+                    levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(null);
                 } finally {
-                    manager.onAwaitDone();
+                    levelManager.removeThreadAndSignal(priority, null);
+                    try {
+                        PriorityLock.this.lockAfterAwaitWithoutInterrupt(holdCount);
+                        isLocked = true;
+                    } finally {
+                        if (priority == highestThread) {
+                            PriorityLock.this.levelManager.removeThreadOnly(highestThread);
+                            highestThread = 0;
+                        }
+                        awaitLock.unlock();
+                    }
                 }
-            } catch (RuntimeException | Error e ) {
-                manager.onException(e);
+            } catch (RuntimeException | Error e) {
+                if (!isLocked && !(e instanceof ThreadDeath)) {
+                    if (highestThread > 0) {
+                        PriorityLock.this.levelManager.removeThreadOnly(highestThread);
+                        highestThread = 0;
+                    }
+                    PriorityLock.this.lockAfterAwaitWithoutInterrupt(holdCount);
+                }
                 throw e;
             }
         }
@@ -538,22 +530,19 @@ public class PriorityLock implements Lock {
          * @throws FailedToReacquireLockError if the function failed to re-acquire the PriorityLock.
          */
         @Override
+        public void await() throws InterruptedException {
+            genericAwait(() -> awaitCondition.await());
+        }
+
+        /**
+         * Puts the current thread into a wait state until it is signaled.
+         * 
+         * @throws FailedToReacquireLockError if the function failed to re-acquire the PriorityLock.
+         */
+        @Override
         public boolean await(long time, TimeUnit unit) throws InterruptedException {
             long startTime = System.currentTimeMillis();
-            AwaitManager manager = new AwaitManager();
-            try {
-                manager.addThisThread();
-                awaitLock.lock();
-                try {
-                    awaitCondition.await(time, unit);
-                    levelManager.waitForHigherPriorityTasksToFinish(null);
-                } finally {
-                    manager.onAwaitDone();
-                }
-            } catch (RuntimeException | Error e ) {
-                manager.onException(e);
-                throw e;
-            }
+            genericAwait(() -> awaitCondition.await(time, unit));
             return System.currentTimeMillis() < startTime + unit.toMillis(time);
         }
 
@@ -565,20 +554,7 @@ public class PriorityLock implements Lock {
         @Override
         public long awaitNanos(long nanosTimeout) throws InterruptedException {
             long startTime = System.nanoTime();
-            AwaitManager manager = new AwaitManager();
-            try {
-                manager.addThisThread();
-                awaitLock.lock();
-                try {
-                    awaitCondition.awaitNanos(nanosTimeout);
-                    levelManager.waitForHigherPriorityTasksToFinish(null);
-                } finally {
-                    manager.onAwaitDone();
-                }
-            } catch (RuntimeException | Error e ) {
-                manager.onException(e);
-                throw e;
-            }
+            genericAwait(() -> awaitCondition.awaitNanos(nanosTimeout));
             long timeLeft = nanosTimeout - (System.nanoTime() - startTime);
             return timeLeft;
         }
@@ -590,20 +566,7 @@ public class PriorityLock implements Lock {
          */
         @Override
         public void awaitUninterruptibly() {
-            AwaitManager manager = new AwaitManager();
-            try {
-                manager.addThisThread();
-                awaitLock.lock();
-                try {
-                    awaitCondition.awaitUninterruptibly();
-                    levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(null);
-                } finally {
-                    manager.onAwaitDoneUninterruptibly();
-                }
-            } catch (RuntimeException | Error e ) {
-                manager.onException(e);
-                throw e;
-            }
+            genericAwaitWithoutInterrupt();
         }
 
         /**
@@ -649,12 +612,18 @@ public class PriorityLock implements Lock {
     }
     
     
+    private interface InterruptedExceptionRunnable {
+        void run() throws InterruptedException;
+    }
+    
+
     /**
      * Exception thrown when the await function is unable to re-acquire the lock.
      */
     public static class FailedToReacquireLockError extends ThreadDeath {
         private static final long serialVersionUID = 1L;
         
-        private FailedToReacquireLockError() { }
+        private FailedToReacquireLockError() {            
+        }
     }
 }

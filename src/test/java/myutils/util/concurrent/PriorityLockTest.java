@@ -112,7 +112,11 @@ public class PriorityLockTest {
      * This should not break other threads which are waiting on it to finish.
      */
     @ParameterizedTest
-    @ValueSource(classes = {DoThreadLock.class, DoThreadLockInterruptibly.class, DoThreadTryLock.class, DoThreadTryLockWithTimeoutMillis.class})
+    @ValueSource(classes = {
+            DoThreadLock.class,
+            DoThreadLockInterruptibly.class,
+            DoThreadTryLock.class,
+            DoThreadTryLockWithTimeoutMillis.class})
     void testLock(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock(true);
 
@@ -185,7 +189,12 @@ public class PriorityLockTest {
      * Verify that the threads waiting on the canceled thread finish.
      */
     @ParameterizedTest
-    @ValueSource(classes = {DoThreadLock.class, DoThreadLockInterruptibly.class, DoThreadTryLock.class, DoThreadTryLockWithTimeoutMillis.class})
+    @ValueSource(classes = {
+            DoThreadLock.class,
+            DoThreadLockInterruptibly.class,
+            DoThreadTryLock.class,
+            DoThreadTryLockWithTimeoutMillis.class})
+    @SuppressWarnings("checkstyle:LineLength")
     void testLockWithCancellation1(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock();
 
@@ -270,7 +279,12 @@ public class PriorityLockTest {
      * So it does not run, and all the other threads run in order.
      */
     @ParameterizedTest
-    @ValueSource(classes = {DoThreadLock.class, DoThreadLockInterruptibly.class, DoThreadTryLock.class, DoThreadTryLockWithTimeoutMillis.class})
+    @ValueSource(classes = {
+            DoThreadLock.class,
+            DoThreadLockInterruptibly.class,
+            DoThreadTryLock.class,
+            DoThreadTryLockWithTimeoutMillis.class})
+    @SuppressWarnings("checkstyle:LineLength")
     void testLockWithCancellation2(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock();
 
@@ -352,7 +366,12 @@ public class PriorityLockTest {
      * So only the first two threads run.
      */
     @ParameterizedTest
-    @ValueSource(classes = {DoThreadLock.class, DoThreadLockInterruptibly.class, DoThreadTryLock.class, DoThreadTryLockWithTimeoutMillis.class})
+    @ValueSource(classes = {
+            DoThreadLock.class,
+            DoThreadLockInterruptibly.class,
+            DoThreadTryLock.class,
+            DoThreadTryLockWithTimeoutMillis.class})
+    @SuppressWarnings("checkstyle:LineLength")
     void testLockWithCancellation3(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock(true);
 
@@ -444,7 +463,11 @@ public class PriorityLockTest {
      * Verify that all threads finish.
      */
     @ParameterizedTest
-    @ValueSource(classes = {DoThreadLock.class, DoThreadLockInterruptibly.class, DoThreadTryLock.class, DoThreadTryLockWithTimeoutMillis.class})
+    @ValueSource(classes = {
+            DoThreadLock.class,
+            DoThreadLockInterruptibly.class,
+            DoThreadTryLock.class,
+            DoThreadTryLockWithTimeoutMillis.class})
     void testLockThreadThatIsAlreadyLocked1(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock();
 
@@ -520,7 +543,11 @@ public class PriorityLockTest {
      * The first thread has lower priority and acquires the lock twice.
      */
     @ParameterizedTest
-    @ValueSource(classes = {DoThreadLock.class, DoThreadLockInterruptibly.class, DoThreadTryLock.class, DoThreadTryLockWithTimeoutMillis.class})
+    @ValueSource(classes = {
+            DoThreadLock.class,
+            DoThreadLockInterruptibly.class,
+            DoThreadTryLock.class,
+            DoThreadTryLockWithTimeoutMillis.class})
     void testLockThreadThatIsAlreadyLocked2(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock();
 
@@ -738,7 +765,11 @@ public class PriorityLockTest {
      * The test verifies that the threads with lower priority still run.
      */
     @ParameterizedTest
-    @ValueSource(classes = {DoThreadLock.class, DoThreadLockInterruptibly.class, DoThreadTryLock.class, DoThreadTryLockWithTimeoutMillis.class})
+    @ValueSource(classes = {
+            DoThreadLock.class,
+            DoThreadLockInterruptibly.class,
+            DoThreadTryLock.class,
+            DoThreadTryLockWithTimeoutMillis.class})
     void testLockException(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock(() -> new ThrowAtPrioritySevenLock());
 
@@ -782,7 +813,12 @@ public class PriorityLockTest {
      * The test verifies that the thread with the highest priority wins.
      */
     @ParameterizedTest
-    @ValueSource(classes = {DoThreadLock.class, DoThreadLockInterruptibly.class, DoThreadTryLock.class, DoThreadTryLockWithTimeoutMillis.class, DoThreadTryLockWithTimeoutNanos.class})
+    @ValueSource(classes = {
+            DoThreadLock.class,
+            DoThreadLockInterruptibly.class,
+            DoThreadTryLock.class,
+            DoThreadTryLockWithTimeoutMillis.class,
+            DoThreadTryLockWithTimeoutNanos.class})
     void testAwait(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock(true);
 
@@ -850,7 +886,9 @@ public class PriorityLockTest {
      * but another thread of higher priority not tied to the condition is running, so acquired will be false after all.
      */
     @ParameterizedTest
-    @ValueSource(classes = {DoThreadTryLockWithTimeoutMillis.class, DoThreadTryLockWithTimeoutNanos.class})
+    @ValueSource(classes = {
+            DoThreadTryLockWithTimeoutMillis.class,
+            DoThreadTryLockWithTimeoutNanos.class})
     void testAwaitReturnFalse(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock();
                 
@@ -894,7 +932,13 @@ public class PriorityLockTest {
      * Same as the above except that some threads are cancelled.
      */
     @ParameterizedTest
-    @ValueSource(classes = {DoThreadLock.class, DoThreadLockInterruptibly.class, DoThreadTryLock.class, DoThreadTryLockWithTimeoutMillis.class, DoThreadTryLockWithTimeoutNanos.class})
+    @ValueSource(classes = {
+            DoThreadLock.class,
+            DoThreadLockInterruptibly.class,
+            DoThreadTryLock.class,
+            DoThreadTryLockWithTimeoutMillis.class,
+            DoThreadTryLockWithTimeoutNanos.class})
+    @SuppressWarnings("checkstyle:LineLength")
     void testAwaitWithInterrupt(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock(true);
 
@@ -1043,7 +1087,12 @@ public class PriorityLockTest {
      * The test verifies that the threads with lower priority still run.
      */
     @ParameterizedTest
-    @ValueSource(classes = {DoThreadLock.class, DoThreadLockInterruptibly.class, DoThreadTryLock.class, DoThreadTryLockWithTimeoutMillis.class, DoThreadTryLockWithTimeoutNanos.class})
+    @ValueSource(classes = {
+            DoThreadLock.class,
+            DoThreadLockInterruptibly.class,
+            DoThreadTryLock.class,
+            DoThreadTryLockWithTimeoutMillis.class,
+            DoThreadTryLockWithTimeoutNanos.class})
     void testAwaitException(Class<?> clazz) throws InterruptedException {
         WaitArg millis = new WaitArgMillis(5000);
         PriorityLock priorityLock = new PriorityLock(() -> new ThrowAtPrioritySevenAwait());
@@ -1063,7 +1112,8 @@ public class PriorityLockTest {
         executor.awaitTermination(10, TimeUnit.SECONDS);
         prettyPrintList("messages", doThread.getMessages());
 
-        if (DoThreadLock.class.equals(clazz) || DoThreadLockInterruptibly.class.equals(clazz) || DoThreadTryLockWithTimeoutMillis.class.equals(clazz) || DoThreadTryLockWithTimeoutNanos.class.equals(clazz)) {
+        if (DoThreadLock.class.equals(clazz) || DoThreadLockInterruptibly.class.equals(clazz) || DoThreadTryLockWithTimeoutMillis.class.equals(clazz)
+                || DoThreadTryLockWithTimeoutNanos.class.equals(clazz)) {
             assertThat(doThread.getMessages(),
                     Matchers.contains(
                             "thread with priority 3 changed to 2", 
@@ -1094,7 +1144,9 @@ public class PriorityLockTest {
      * The test verifies that the threads with lower priority still run.
      */
     @ParameterizedTest
-    @ValueSource(classes = {DoThreadLock.class, DoThreadLockInterruptibly.class})
+    @ValueSource(classes = {
+            DoThreadLock.class,
+            DoThreadLockInterruptibly.class})
     void testAwaitExceptionOnReacquire(Class<?> clazz) throws InterruptedException {
         WaitArg millis = new WaitArgMillis(5000);
         PriorityLock priorityLock = new PriorityLock(() -> new ThrowAtPrioritySevenLock2());
@@ -1331,8 +1383,8 @@ public class PriorityLockTest {
                     || (e instanceof DoNotLogCallStack)
                     || (e instanceof UnsupportedOperationException)
                     || (e instanceof PriorityLock.FailedToReacquireLockError)) {
-                    return false;
-                }
+                return false;
+            }
             Throwable cause = e.getCause();
             if (cause == null) {
                 break;
@@ -1546,6 +1598,7 @@ public class PriorityLockTest {
     
     private static class ThrowAtPrioritySevenException extends RuntimeException implements DoNotLogCallStack {        
         private static final long serialVersionUID = 1L;
+        
         ThrowAtPrioritySevenException() {
             super("priority 7 not allowed");
         }
@@ -1748,7 +1801,10 @@ public class PriorityLockTest {
     
     private static class SleepInterruptedException extends RuntimeException implements DoNotLogCallStack {
         private static final long serialVersionUID = 1L;
-        SleepInterruptedException(InterruptedException cause) { super(cause); }
+        
+        SleepInterruptedException(InterruptedException cause) {
+            super(cause);
+        }
     }
 
     /**
