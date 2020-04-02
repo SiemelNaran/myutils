@@ -482,14 +482,14 @@ public class PriorityLock implements Lock {
             int holdCount = PriorityLock.this.unlockForAwait();
             int priority = levelManager.addThread(Thread.currentThread());
             try {
-                while (true) {
+                for (boolean done = false; !done; ) {
                     try {
                         levelManager.waitUninterruptiblyForSignal(priority);
                         levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(null);
                     } finally {
                         if (signalCount > 0) {
                             signalCount--;
-                            break;
+                            done = true;
                         }
                     }
                 }
@@ -520,18 +520,18 @@ public class PriorityLock implements Lock {
             int holdCount = PriorityLock.this.unlockForAwait();
             int priority = levelManager.addThread(Thread.currentThread());
             try {
-                while (true) {
+                for (boolean done = false; !done; ) {
                     try {
-                        levelManager.waitForSignal(priority);
-                    } catch (InterruptedException e) {
-                        interruptedException = e;
-                    }
-                    try {
+                        try {
+                            levelManager.waitForSignal(priority);
+                        } catch (InterruptedException e) {
+                            interruptedException = e;
+                        }
                         levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(null);
                     } finally {
                         if (signalCount > 0) {
                             signalCount--;
-                            break;
+                            done = true;
                         }
                     }
                 }

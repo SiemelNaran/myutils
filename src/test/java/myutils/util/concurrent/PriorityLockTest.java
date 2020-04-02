@@ -1346,15 +1346,16 @@ public class PriorityLockTest {
 
         AtomicInteger threadNumber = new AtomicInteger();
         ScheduledExecutorService executor =
-                Executors.newScheduledThreadPool(6, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
+                Executors.newScheduledThreadPool(7, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
 
         executor.schedule(() -> doThread.awaitAction(4, null, millis), 100, TimeUnit.MILLISECONDS);
-        executor.schedule(() -> doThread.awaitAction(6, null, millis), 200, TimeUnit.MILLISECONDS);
-        executor.schedule(() -> doThread.awaitAction(7, null, millis), 300, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.awaitAction(7, null, millis), 200, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.awaitAction(5, null, millis), 300, TimeUnit.MILLISECONDS);
         executor.schedule(() -> doThread.action(3, 2, null, Signal.SIGNAL_ALL), 500, TimeUnit.MILLISECONDS);
         executor.schedule(() -> doThread.action(9, null, null, null), 600, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.action(9, null, null, null), 650, TimeUnit.MILLISECONDS);
         executor.schedule(() -> {
-            // thread with priority 7: await is called at 300
+            // thread with priority 7: await is called at 200
             // thread with priority 7: signaled at 1500, calls await again at 1500 (in order to wait for thread priority 9 to finish)
             // make this 2nd await throw in order to get code coverage in code in lockUninterruptiblyAfterAwait
            logString("about to make ThrowAtPrioritySevenAwait throw an exception when await is called");
