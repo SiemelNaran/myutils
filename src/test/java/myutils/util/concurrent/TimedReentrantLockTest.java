@@ -3,16 +3,21 @@ package myutils.util.concurrent;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Date;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Condition;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 
 public class TimedReentrantLockTest {
@@ -37,9 +42,7 @@ public class TimedReentrantLockTest {
     
     @Test
     public void testLock() throws InterruptedException {
-        AtomicInteger threadNumber = new AtomicInteger();
-        ScheduledExecutorService service
-            = Executors.newScheduledThreadPool(2, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
+        ScheduledExecutorService service = Executors.newScheduledThreadPool(2, myThreadFactory());
         
         TimedReentrantLock lock = new TimedReentrantLock();
         service.schedule(() -> {
@@ -84,9 +87,7 @@ public class TimedReentrantLockTest {
 
     @Test
     public void testLockInterruptibly() throws InterruptedException {
-        AtomicInteger threadNumber = new AtomicInteger();
-        ScheduledExecutorService service
-            = Executors.newScheduledThreadPool(3, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
+        ScheduledExecutorService service = Executors.newScheduledThreadPool(3, myThreadFactory());
         
         TimedReentrantLock lock = new TimedReentrantLock();
         service.schedule(() -> {
@@ -151,9 +152,7 @@ public class TimedReentrantLockTest {
 
     @Test
     public void testTryLock() throws InterruptedException {
-        AtomicInteger threadNumber = new AtomicInteger();
-        ScheduledExecutorService service
-            = Executors.newScheduledThreadPool(2, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
+        ScheduledExecutorService service = Executors.newScheduledThreadPool(2, myThreadFactory());
         
         TimedReentrantLock lock = new TimedReentrantLock();
         service.schedule(() -> {
@@ -202,9 +201,7 @@ public class TimedReentrantLockTest {
 
     @Test
     public void testTryLockWithArgs() throws InterruptedException {
-        AtomicInteger threadNumber = new AtomicInteger();
-        ScheduledExecutorService service
-            = Executors.newScheduledThreadPool(3, runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A')));
+        ScheduledExecutorService service = Executors.newScheduledThreadPool(3, myThreadFactory());
         
         TimedReentrantLock lock = new TimedReentrantLock();
         service.schedule(() -> {
@@ -257,6 +254,87 @@ public class TimedReentrantLockTest {
         assertEquals(300, lock.getTotalIdleTime().toMillis(), 40.0); // as lock waiting from time 0ms to 300ms when thread 1 starts
     }
     
+    @FunctionalInterface
+    private interface AwaitFunction {
+        void accept(Condition condition) throws InterruptedException;
+    }
+    
+    @SuppressWarnings("checkstyle:indentation")
+    private static final AwaitFunction[] AWAIT_FUNCTIONS = {
+        condition -> condition.awaitUninterruptibly(),
+        condition -> condition.await(),
+        condition -> condition.await(250, TimeUnit.MILLISECONDS),
+        condition -> condition.awaitNanos(TimeUnit.MILLISECONDS.toNanos(250)),
+        condition -> condition.awaitUntil(new Date(System.currentTimeMillis() + 250))
+    };
+    
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2, 3, 4})
+    public void testAwait(int awaitFunctionIndex) throws InterruptedException {
+        AwaitFunction awaitFunction = AWAIT_FUNCTIONS[awaitFunctionIndex];
+        
+        ScheduledExecutorService service = Executors.newScheduledThreadPool(3, myThreadFactory());
+        
+        TimedReentrantLock lock = new TimedReentrantLock();
+        Condition condition = lock.newCondition();
+        
+        
+        ScheduledFuture<?> thread1 = service.schedule(() -> {
+            logString("start thread 1");
+            lock.lock();
+            try {
+                logString("acquired lock in thread 1");
+                sleep(500);
+                logString("about to await in thread 1");
+                try {
+                    awaitFunction.accept(condition);
+                } catch (InterruptedException e) {
+                    logString("caught InterruptedException in thread 1");
+                }
+                logString("await done in thread 1");
+                if (Thread.interrupted()) {
+                    logString("thread 1 is interrupted, clearing interrupted flag");
+                }
+                sleep(500);
+            } finally {
+                lock.unlock();
+            }
+            logString("end thread 1");
+        }, 300, TimeUnit.MILLISECONDS);
+        
+        service.schedule(() -> {
+            logString("start thread 2");
+            lock.lock();
+            try {
+                logString("acquired lock in thread 2");
+                sleep(1000);
+                condition.signal();
+            } finally {
+                lock.unlock();
+            }
+            logString("end thread 2");
+        }, 1000, TimeUnit.MILLISECONDS);
+        
+        service.schedule(() -> {
+            logString("start thread 3");
+            logString("about to interrupt thread 1");
+            thread1.cancel(true);
+            logString("end thread 3");
+        }, 1500, TimeUnit.MILLISECONDS);
+        
+        service.shutdown();
+        service.awaitTermination(10, TimeUnit.SECONDS);
+        
+        assertEquals(1200, lock.getTotalWaitTime().toMillis(), 40.0); // thread 1 starts waiting at 300+500=800ms and acquires lock at 2000ms
+        assertEquals(2000, lock.getTotalLockRunningTime().toMillis(), 40.0); // each thread runs for 1000, set net 2000ms
+        assertEquals(500, lock.getTotalIdleTime().toMillis(), 40.0); // as lock waiting from time 0ms to 300ms, and 800ms to 1000ms
+    }
+    
+
+    private static ThreadFactory myThreadFactory() {
+        AtomicInteger threadNumber = new AtomicInteger();
+        return runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A'));
+    }
     
     private static void sleep(long millis) {
         try {
