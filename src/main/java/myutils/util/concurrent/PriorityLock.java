@@ -288,39 +288,19 @@ public class PriorityLock implements Lock {
     /**
      * Locks this thread after a call to await.
      * After the call to internalCondition.await, internaLock is locked by this thread, so we cannot call internalLock.lock.
-     */
-    private void lockAfterAwait(int holdCount, boolean wasSignalled) throws InterruptedException {
-        int priority = wasSignalled ? Thread.currentThread().getPriority() : levelManager.addThread(Thread.currentThread());
-        try {
-            levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(this);
-        } catch (RuntimeException | Error e) {
-            levelManager.removeThreadOnly(priority);
-            Error exception = new FailedToReacquireLockError();
-            exception.addSuppressed(e);
-            throw exception;
-        }
-        threadLockDetails.setAll(priority, holdCount);
-        if (Thread.currentThread().isInterrupted()) {
-            throw new InterruptedException();
-        }
-    }
-
-    /**
-     * Locks this thread after a call to await.
-     * After the call to internalCondition.await, internaLock is locked by this thread, so we cannot call internalLock.lock.
      * @param wasSignalled 
      */
     private void lockUninterruptiblyAfterAwait(int holdCount, boolean wasSignalled) {
         int priority = wasSignalled ? Thread.currentThread().getPriority() : levelManager.addThread(Thread.currentThread());
         try {
-            levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(this);
+            levelManager.waitUninterruptiblyForHigherPriorityTasksToFinish(null);
         } catch (RuntimeException | Error e) {
-            levelManager.removeThreadOnly(priority);
-            Error exception = new FailedToReacquireLockError();
+            Error exception = new MaybeNotHighestThreadAfterAwaitError();
             exception.addSuppressed(e);
             throw exception;
+        } finally {
+            threadLockDetails.setAll(priority, holdCount);
         }
-        threadLockDetails.setAll(priority, holdCount);
     }
 
     @Override
@@ -637,12 +617,14 @@ public class PriorityLock implements Lock {
     
     
     /**
-     * Exception thrown when the await function is unable to re-acquire the lock.
+     * Exception thrown when the await function fails to wait for the highest priority thread re-acquire the lock.
+     * When this exception is thrown, the priority lock is locked by the current thread,
+     * but the current thread is not the one with the highest priority.
      */
-    public static class FailedToReacquireLockError extends ThreadDeath {
+    public static class MaybeNotHighestThreadAfterAwaitError extends ThreadDeath {
         private static final long serialVersionUID = 1L;
         
-        private FailedToReacquireLockError() {            
+        private MaybeNotHighestThreadAfterAwaitError() {            
         }
     }
 }
