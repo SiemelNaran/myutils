@@ -1,7 +1,9 @@
 package myutils.util.concurrent;
 
 import java.time.Duration;
+import java.util.Date;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 
@@ -71,8 +73,87 @@ public class TimedReentrantLock extends ReentrantLock {
 
     @Override
     public void unlock() {
-        totalLockRunningTime += System.currentTimeMillis() - lockStartTime;
+        setRunningTimeOnUnlock(System.currentTimeMillis());
         super.unlock();
+    }
+    
+    @Override
+    public Condition newCondition() {
+        return new InternalCondition(super.newCondition());
+    }
+    
+    private class InternalCondition implements Condition {
+        private final Condition internalCondition;
+
+        public InternalCondition(Condition internalCondition) {
+            this.internalCondition = internalCondition;
+        }
+
+        @Override
+        public void awaitUninterruptibly() {
+            setRunningTimeOnUnlock(System.currentTimeMillis());
+            setStartTime();
+            try {
+                internalCondition.awaitUninterruptibly();
+            } finally {
+                setTimesOnAcquireLock();
+            }
+        }
+
+        @Override
+        public void await() throws InterruptedException {
+            setRunningTimeOnUnlock(System.currentTimeMillis());
+            setStartTime();
+            try {
+                internalCondition.await();
+            } finally {
+                setTimesOnAcquireLock();
+            }
+        }
+
+        @Override
+        public boolean await(long time, TimeUnit unit) throws InterruptedException {
+            setRunningTimeOnUnlock(System.currentTimeMillis());
+            setStartTime();
+            try {
+                return internalCondition.await(time, unit);
+            } finally {
+                setTimesOnAcquireLock();
+            }
+        }
+
+        @Override
+        public long awaitNanos(long nanosTimeout) throws InterruptedException {
+            setRunningTimeOnUnlock(System.currentTimeMillis());
+            setStartTime();
+            try {
+                return internalCondition.awaitNanos(nanosTimeout);
+            } finally {
+                setTimesOnAcquireLock();
+            }
+        }
+
+        @Override
+        public boolean awaitUntil(Date deadline) throws InterruptedException {
+            setRunningTimeOnUnlock(System.currentTimeMillis());
+            setStartTime();
+            try {
+                return internalCondition.awaitUntil(deadline);
+            } finally {
+                setTimesOnAcquireLock();
+            }
+        }
+
+        @Override
+        public void signal() {
+            internalCondition.signal();            
+        }
+
+        @Override
+        public void signalAll() {
+            internalCondition.signalAll();            
+        }
+        
     }
     
     private final void setStartTime() {
@@ -88,7 +169,11 @@ public class TimedReentrantLock extends ReentrantLock {
     private void setWaitTimeOnAcquireLock(long now) {
         totalWaitTime += now - startTime.get();
     }
-
+    
+    private void setRunningTimeOnUnlock(long now) {
+        totalLockRunningTime += System.currentTimeMillis() - lockStartTime;
+    }
+    
     public final Duration getTotalWaitTime() {
         return Duration.ofMillis(totalWaitTime);
     }
