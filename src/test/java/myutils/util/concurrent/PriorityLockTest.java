@@ -74,8 +74,8 @@ public class PriorityLockTest {
         Condition condition = priorityLock.newCondition();
         System.out.println(priorityLock.toString());
         System.out.println(condition.toString());
-        assertThat(priorityLock.toString(), Matchers.matchesRegex("^java.util.concurrent.locks.ReentrantLock@[a-f0-9]+\\[Locked by thread main\\]\\[0,0,0,0,0,0,0,0,0,1\\]$"));
-        assertThat(condition.toString(), Matchers.matchesRegex("^java.util.concurrent.locks.AbstractQueuedSynchronizer\\$ConditionObject@[a-f0-9]+\\[0,0,0,0,0,0,0,0,0,0\\]$"));
+        assertThat(priorityLock.toString(), Matchers.matchesRegex("^java.util.concurrent.locks.ReentrantLock@[a-f0-9]+\\[Locked by thread main\\] levels=\\[0,0,0,0,0,0,0,0,0,1\\]$"));
+        assertThat(condition.toString(), Matchers.matchesRegex("^java.util.concurrent.locks.AbstractQueuedSynchronizer\\$ConditionObject@[a-f0-9]+ levels=\\[0,0,0,0,0,0,0,0,0,0\\], signalCount=0$"));
     }
     
     
@@ -847,6 +847,7 @@ public class PriorityLockTest {
         if (signal == Signal.SIGNAL) {
             assertThat(doThread.getMessages(),
                     Matchers.contains(
+                            "about to signal in thread with priority 2", // at 1600
                             "thread with priority 3 changed to 2", // at 1600
                             "end thread with priority 2", // at 1600
                             "thread with priority 9 changed to 1", // at 1600
@@ -861,6 +862,7 @@ public class PriorityLockTest {
         } else if (signal == Signal.SIGNAL_ALL) {
             assertThat(doThread.getMessages(),
                     Matchers.contains(
+                            "about to signal in thread with priority 2", // at 1600
                             "thread with priority 3 changed to 2", // at 1600
                             "end thread with priority 2", // at 1600
                             "thread with priority 9 changed to 1", // at 1600
@@ -939,6 +941,7 @@ public class PriorityLockTest {
         if (DoThreadLock.class.equals(clazz)) {
             assertThat(doThread.getMessages(),
                     Matchers.contains(
+                            "about to signal in thread with priority 3",
                             "thread with priority 3 changed to 2", // at 1600
                             "end thread with priority 2", // at 1600
                             "thread with priority 9 changed to 1", // at 1600
@@ -952,6 +955,7 @@ public class PriorityLockTest {
         } else if (DoThreadLockInterruptibly.class.equals(clazz)) {
             assertThat(doThread.getMessages(),
                     Matchers.contains(
+                            "about to signal in thread with priority 2",
                             "thread with priority 3 changed to 2", // at 1600
                             "end thread with priority 2", // at 1600
                             "thread with priority 9 changed to 1", // at 1600
@@ -1009,6 +1013,7 @@ public class PriorityLockTest {
             assertThat(doThread.getMessages(),
                     Matchers.contains(
                             "thread with priority 3 changed to 2", // at 1600
+                            "about to signalAll in thread with priority 2", // at 1600
                             "end thread with priority 2", // at 1600
                             "thread with priority 9 changed to 1", // at 1600
                             "end thread with priority 1", // at 2600
@@ -1025,11 +1030,13 @@ public class PriorityLockTest {
                             "thread with priority 9 encountered exception java.lang.UnsupportedOperationException: DoThreadTryLock.doAwait",
                             "thread with priority 8 encountered exception myutils.util.concurrent.PriorityLockTest$FailedToAcquireLockException",
                             "thread with priority 3 changed to 2",
+                            "about to signalAll in thread with priority 2", // at 1600
                             "end thread with priority 2"));
         } else if (DoThreadTryLockWithTimeoutMillis.class.equals(clazz) || DoThreadTryLockWithTimeoutNanos.class.equals(clazz)) {
             assertThat(doThread.getMessages(),
                     Matchers.contains(
                             "thread with priority 3 changed to 2", // at 1600
+                            "about to signalAll in thread with priority 2", // at 1600
                             "end thread with priority 2", // at 1600
                             "thread with priority 9 changed to 1",
                             "end thread with priority 1", // will wait till 400+3000=3400, lock acquired at 1600, ends at 2600
@@ -1081,6 +1088,7 @@ public class PriorityLockTest {
         assertThat(doThread.getMessages(),
                 Matchers.contains(
                         "end thread with priority 5", // at 1300
+                        "about to signalAll in thread with priority 10",
                         "end thread with priority 10", // at 2300
                         "end thread with priority 9", // at 3300
                         "end thread with priority 8", // at 4300
@@ -1140,6 +1148,7 @@ public class PriorityLockTest {
             assertThat(doThread.getMessages(),
                     Matchers.contains(
                             "thread with priority 3 changed to 2", // at 1600
+                            "about to signalAll in thread with priority 2", // at 1600
                             "end thread with priority 2", // at 1600
                             "end thread with priority 8", // at 2600
                             "thread with priority 7 changed to 1",
@@ -1152,6 +1161,7 @@ public class PriorityLockTest {
             assertThat(doThread.getMessages(),
                     Matchers.contains(
                             "thread with priority 3 changed to 2", // at 1600
+                            "about to signalAll in thread with priority 2", // at 1600
                             "end thread with priority 2", // at 1600
                             "end thread with priority 8", // at 2600
                             "thread with priority 7 changed to 1",
@@ -1172,11 +1182,13 @@ public class PriorityLockTest {
                             "thread with priority 7 encountered exception java.lang.UnsupportedOperationException: DoThreadTryLock.doAwait",
                             "thread with priority 8 encountered exception myutils.util.concurrent.PriorityLockTest$FailedToAcquireLockException",
                             "thread with priority 3 changed to 2",
+                            "about to signalAll in thread with priority 2", // at 1600
                             "end thread with priority 2"));
         } else if (DoThreadTryLockWithTimeoutMillis.class.equals(clazz) || DoThreadTryLockWithTimeoutNanos.class.equals(clazz)) {
             assertThat(doThread.getMessages(),
                     Matchers.contains(
                             "thread with priority 3 changed to 2", // at 1600
+                            "about to signalAll in thread with priority 2", // at 1600
                             "end thread with priority 2", // at 1600
                             "end thread with priority 8", // at 2600
                             "thread with priority 7 changed to 1",
@@ -1232,6 +1244,7 @@ public class PriorityLockTest {
         assertThat(doThread.getMessages(),
                 Matchers.contains(
                         "thread with priority 3 changed to 2", // at 1600
+                        "about to signalAll in thread with priority 2", // at 1600
                         "end thread with priority 2", // at 1600
                         "end thread with priority 8", // at 2600
                         "thread with priority 7 changed to 1", // at 2600
@@ -1279,6 +1292,7 @@ public class PriorityLockTest {
                 Matchers.contains(
                         "thread with priority 7 encountered exception myutils.util.concurrent.PriorityLockTest$ThrowAtPrioritySevenException: priority 7 not allowed",
                         "thread with priority 3 changed to 2", 
+                        "about to signalAll in thread with priority 2",
                         "end thread with priority 2",
                         "end thread with priority 5",
                         "end thread with priority 4"));
@@ -1319,6 +1333,7 @@ public class PriorityLockTest {
         assertThat(doThread.getMessages(),
                 Matchers.contains(
                         "thread with priority 3 changed to 2", 
+                        "about to signalAll in thread with priority 2",
                         "end thread with priority 2",
                         "thread with priority 7 encountered exception myutils.util.concurrent.PriorityLockTest$ThrowAtPrioritySevenException: priority 7 not allowed",
                         "end thread with priority 5",
@@ -1359,11 +1374,11 @@ public class PriorityLockTest {
             priorityLock.lock();
             try {
                 sleep(1000);
-                logString("about to signal both condition objects");
+                logString("* about to signalAll both conditions");
+                doThread1.messages.add("about to signalAll both conditions in thread with priority " + Thread.currentThread().getPriority());
                 doThread1.condition.signalAll();
                 doThread2.condition.signalAll();
-                logString("signaled both condition objects");
-                doThread1.getMessages().add("signalling both conditions");
+                logString("signalled both conditions");
             } finally {
                 priorityLock.unlock();
                 logString("unlock after signal");
@@ -1387,7 +1402,7 @@ public class PriorityLockTest {
 
         assertThat(doThread1.getMessages(),
                 Matchers.contains(
-                        "signalling both conditions", 
+                        "about to signalAll both conditions in thread with priority 3", 
                         "end thread with priority 3",
                         "end thread with priority 10",
                         "thread with priority 7 encountered exception myutils.util.concurrent.PriorityLock$MaybeNotHighestThreadAfterAwaitError",
@@ -1448,11 +1463,13 @@ public class PriorityLockTest {
                     if (signal != null) {
                         switch (signal) {
                             case SIGNAL:
-                                logString("about to call condition.signal");
+                                logString("* about to call condition.signal");
+                                messages.add("about to signal in thread with priority " + currentThread.getPriority());
                                 condition.signal();
                                 break;
                             case SIGNAL_ALL:
-                                logString("about to call condition.signalAll");
+                                logString("* about to call condition.signalAll");
+                                messages.add("about to signalAll in thread with priority " + currentThread.getPriority());
                                 condition.signalAll();
                                 break;
                             default:
