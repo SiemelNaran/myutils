@@ -82,14 +82,12 @@ public class PriorityLock implements Lock {
          *                         as other threads are awaiting for this priority's condition object to be signaled
          * @param threadLockDetails not null when called from PriorityLock, null when called from PriorityLockCondition                         
          */
-        private void removeThreadAndSignal(int originalPriority, @Nullable ThreadLockDetails threadLockDetails) {
+        private void removeThreadAndSignal(int originalPriority, @Nonnull ThreadLockDetails threadLockDetails) {
             // if we called condition.signal() it would only wake up one thread, and the others would be waiting for the higher priority thread to finish,
             // which will never happen if this thread is the last of the higher priority ones.
             conditions[originalPriority - 1].signalAll();
             removeThreadOnly(originalPriority);
-            if (threadLockDetails != null) {
-                threadLockDetails.clear();
-            }
+            threadLockDetails.clear();
         }
 
         private int removeThreadAndSignalHighest(int originalPriority, boolean existsThreadWaitingOnOriginalPriority) {
@@ -100,7 +98,7 @@ public class PriorityLock implements Lock {
                 priorityToSignal = Math.max(priorityToSignal, originalPriority);
             }
             if (priorityToSignal > 0) {
-                conditions[priorityToSignal - 1].signalAll();
+                conditions[priorityToSignal - 1].signalAll(); // CodeCoverage: always true, maybe keep as defensive code
             }
             return priorityToLock;
         }
@@ -135,28 +133,26 @@ public class PriorityLock implements Lock {
          * @param priorityLock upon exceptional exit unlock PriorityLock- non null when called from PriorityLock, null when called from PriorityLockCondition
          * @return true if this function actually waited
          */
-        private void waitForHigherPriorityTasksToFinish(PriorityLock priorityLock) throws InterruptedException {
+        private void waitForHigherPriorityTasksToFinish(@Nonnull PriorityLock priorityLock) throws InterruptedException {
             int priority = Thread.currentThread().getPriority();
             while (true) {
                 Integer nextHigherPriorityIndex = computeNextHigherPriorityIndex(priority);
                 if (nextHigherPriorityIndex == null) {
                     if (Thread.currentThread().isInterrupted()) {
-                        throw new InterruptedException(); // coverage
+                        throw new InterruptedException();
                     }
                     return;
                 }
                 try {
                     conditions[nextHigherPriorityIndex].await();
                 } catch (InterruptedException | RuntimeException | Error e) {
-                    if (priorityLock != null) {
-                        priorityLock.internalLock.unlock();
-                    }
+                    priorityLock.internalLock.unlock();
                     throw e;
                 }
             }
         }
 
-        private void waitUninterruptiblyForHigherPriorityTasksToFinish(PriorityLock priorityLock) {
+        private void waitUninterruptiblyForHigherPriorityTasksToFinish(@Nullable PriorityLock priorityLock) {
             int priority = Thread.currentThread().getPriority();
             while (true) {
                 Integer nextHigherPriorityIndex = computeNextHigherPriorityIndex(priority);
@@ -166,8 +162,8 @@ public class PriorityLock implements Lock {
                 try {
                     conditions[nextHigherPriorityIndex].awaitUninterruptibly();
                 } catch (RuntimeException | Error e) {
-                    if (priorityLock != null) { // coverage never hit 4 lines
-                        priorityLock.internalLock.unlock();
+                    if (priorityLock != null) {
+                        priorityLock.internalLock.unlock(); // CodeCoverage: never hit
                     }
                     throw e;
                 }
@@ -213,7 +209,7 @@ public class PriorityLock implements Lock {
                     return i + 1;
                 }
             }
-            return 0;
+            return 0; // coverage: never hit
         }
 
         @Override
@@ -507,7 +503,7 @@ public class PriorityLock implements Lock {
                     signaledThreadPriority = 0;
                     if (signalCount > 0) {
                         int priorityToLock = levelManager.removeThreadAndSignalHighest(priority, waitingOn[priority - 1] > 0);
-                        if (priorityToLock != 0) {
+                        if (priorityToLock != 0) { // coverage: condition always true - do we need this as defensive programming?
                             PriorityLock.this.levelManager.addThread(priorityToLock);
                             signaledThreadPriority = priorityToLock;
                         }
@@ -552,7 +548,7 @@ public class PriorityLock implements Lock {
                     signaledThreadPriority = 0;
                     if (signalCount > 0) {
                         int priorityToLock = levelManager.removeThreadAndSignalHighest(priority, waitingOn[priority - 1] > 0);
-                        if (priorityToLock != 0) {
+                        if (priorityToLock != 0) { // coverage: condition always true - do we need this as defensive programming?
                             PriorityLock.this.levelManager.addThread(priorityToLock);
                             signaledThreadPriority = priorityToLock;
                         }
