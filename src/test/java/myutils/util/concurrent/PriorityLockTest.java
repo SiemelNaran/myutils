@@ -18,6 +18,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Stream;
+
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import org.hamcrest.Matchers;
@@ -27,7 +29,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 
@@ -962,6 +966,13 @@ public class PriorityLockTest {
     }
 
     
+    private static Stream<Arguments> provideArgsForTestSignalAllAndAddWaiters() {
+        return Stream.of(Arguments.of(DoThreadLock.class, 2000L),
+                         Arguments.of(DoThreadLock.class, 1000L),
+                         Arguments.of(DoThreadLockInterruptibly.class, 2000L),
+                         Arguments.of(DoThreadLockInterruptibly.class, 1000L));
+    }
+    
     /**
      * This thread sets up 3 waiting threads of priorities 4, 5, 6 and calls signalAll.
      * While priority 6 is running, add a new thread of priority 7.
@@ -969,12 +980,12 @@ public class PriorityLockTest {
      * but this test shows that only 6, 5, 7 get woken up.  thread 4 is never signaled.
      */
     @ParameterizedTest
-    @ValueSource(longs = {2000,1000})
-    void testSignalAllAndAddWaiters(long timeAtWhichToAddThread7) throws InterruptedException {
+    @MethodSource("provideArgsForTestSignalAllAndAddWaiters")
+    void testSignalAllAndAddWaiters(Class<?> clazz, long timeAtWhichToAddThread7) throws InterruptedException {
         WaitArg unused = new WaitArgMillis(TimeUnit.SECONDS.toMillis(4));
         PriorityLock priorityLock = new PriorityLock();
                 
-        DoThread doThread = new DoThreadLock(priorityLock);
+        DoThread doThread = createDoThread(clazz, priorityLock);
         ScheduledExecutorService executor = Executors.newScheduledThreadPool(5, myThreadFactory());
 
         executor.schedule(() -> doThread.awaitAction(4, null, unused), 100, TimeUnit.MILLISECONDS);

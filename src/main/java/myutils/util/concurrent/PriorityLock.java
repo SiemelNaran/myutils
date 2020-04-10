@@ -488,7 +488,9 @@ public class PriorityLock implements Lock {
                 for (boolean done = false; !done; ) {
                     try {
                         levelManager.waitUninterruptiblyForSignal(priority);
-                        levelManager.waitUninterruptiblyForHigherPriorityTasksToFinishFromAwait(waitingOn);
+                        if (priority < signaledThreadPriority) {
+                            levelManager.waitUninterruptiblyForHigherPriorityTasksToFinishFromAwait(waitingOn);
+                        }
                     } finally {
                         if (signalCount > 0) {
                             signalCount--;
@@ -530,7 +532,9 @@ public class PriorityLock implements Lock {
                         } catch (InterruptedException e) {
                             interruptedException = e;
                         }
-                        levelManager.waitUninterruptiblyForHigherPriorityTasksToFinishFromAwait(waitingOn);
+                        if (priority < signaledThreadPriority) {
+                            levelManager.waitUninterruptiblyForHigherPriorityTasksToFinishFromAwait(waitingOn);
+                        }
                     } finally {
                         if (signalCount > 0) {
                             signalCount--;
