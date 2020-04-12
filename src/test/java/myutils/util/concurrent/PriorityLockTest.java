@@ -1122,7 +1122,7 @@ public class PriorityLockTest {
         PriorityLock priorityLock = new PriorityLock();
                 
         DoThread doThread = createDoThread(DoThreadLockInterruptibly.class, priorityLock);
-        ScheduledExecutorService executor = Executors.newScheduledThreadPool(11, myThreadFactory());
+        ScheduledExecutorService executor = Executors.newScheduledThreadPool(1, myThreadFactory());
 
         executor.schedule(() -> doThread.action(3, 2, null, Signal.SIGNAL), 600, TimeUnit.MILLISECONDS);
 
@@ -1135,6 +1135,41 @@ public class PriorityLockTest {
                         "thread with priority 3 changed to 2", // at 1600
                         "about to signal in thread with priority 2",
                         "end thread with priority 2")); // at 1600
+
+        assertThat(priorityLock.toString(), Matchers.endsWith("[0,0,0,0,0,0,0,0,0,0]"));
+        assertThat(doThread.conditiontoString(), Matchers.endsWith("levels=[0,0,0,0,0,0,0,0,0,0], signalCount=0"));
+    }
+
+    
+    @Test
+    void testSignalTwiceWithOneAwait() throws InterruptedException {
+        PriorityLock priorityLock = new PriorityLock();
+                
+        DoThread doThread = createDoThread(DoThreadLockInterruptibly.class, priorityLock);
+        ScheduledExecutorService executor = Executors.newScheduledThreadPool(2, myThreadFactory());
+        WaitArg unused = new WaitArgMillis(TimeUnit.SECONDS.toMillis(4));
+
+        executor.schedule(() -> doThread.awaitAction(8, null, unused), 100, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> {
+            logString("about to signal condition 2 times");
+            doThread.getMessages().add("about to signal 2 times");
+            priorityLock.lock();
+            try {
+                doThread.condition.signal();
+                doThread.condition.signal();
+            } finally {
+                priorityLock.unlock();
+            }
+        }, 600, TimeUnit.MILLISECONDS);
+
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+        prettyPrintList("messages", doThread.getMessages());
+
+        assertThat(doThread.getMessages(),
+                Matchers.contains(
+                        "about to signal 2 times",
+                        "end thread with priority 8")); // at 1600
 
         assertThat(priorityLock.toString(), Matchers.endsWith("[0,0,0,0,0,0,0,0,0,0]"));
         assertThat(doThread.conditiontoString(), Matchers.endsWith("levels=[0,0,0,0,0,0,0,0,0,0], signalCount=0"));
@@ -1695,7 +1730,7 @@ public class PriorityLockTest {
          * @param newPriority if not null the new priority of the thread after await returns. Used to verify that threads waiting on the original thread are signaled.
          * @param waitArg the timeout parameter to await - only applicable for DoThreadTryLockWith2000Timeout
          */
-        void awaitAction(int priority, Integer newPriority, WaitArg waitArg) {
+        void awaitAction(int priority, Integer newPriority, @Nonnull WaitArg waitArg) {
             final Thread currentThread = Thread.currentThread();
             currentThread.setPriority(priority);
             logString("start " + priorityLock.toString() + " " + conditiontoString());
