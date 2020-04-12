@@ -186,6 +186,22 @@ public class PriorityLock implements Lock {
             }
         }
         
+        private void waitInterruptiblyForHigherPriorityTasksToFinishFromAwait(int[] waitingOn) throws InterruptedException {
+            int priority = Thread.currentThread().getPriority();
+            while (true) {
+                Integer nextHigherPriorityIndex = computeNextHigherPriorityIndex(priority);
+                if (nextHigherPriorityIndex == null) {
+                    return;
+                }
+                waitingOn[nextHigherPriorityIndex]++;
+                try {
+                    conditions[nextHigherPriorityIndex].await();
+                } finally {
+                    waitingOn[nextHigherPriorityIndex]--;
+                }
+            }
+        }
+        
         private void waitForSignal(int priority) throws InterruptedException {
             conditions[priority - 1].await();
         }
@@ -271,6 +287,7 @@ public class PriorityLock implements Lock {
     
     
     private final Lock internalLock;
+    private final boolean allowEarlyInterruptFromAwait;
     private final LevelManager levelManager;
     private final ThreadLockDetails threadLockDetails = new ThreadLockDetails();
 
@@ -286,24 +303,55 @@ public class PriorityLock implements Lock {
      * Create a priority lock backed by a ReentrantLock.
      */
     public PriorityLock(boolean fair) {
-        this(() -> new ReentrantLock(fair));
+        this(new PriorityLockNamedParams().setInternalReentrantLockCreator(fair));
     }
     
     /**
-     * Create a priority lock backed by the given lock.
-     * Implementations must be sure that no two PriorityLock's share the same internal lock.
-     * 
-     * @param internalLock the internal lock
+     * Create a priority lock.
      */
-    protected PriorityLock(Supplier<Lock> internalLockCreator) {
-        this.internalLock = internalLockCreator.get();
+    public PriorityLock(PriorityLockNamedParams params) {
+        this.internalLock = params.internalLockCreator.get();
+        this.allowEarlyInterruptFromAwait = params.allowEarlyInterruptFromAwait;
         this.levelManager = new LevelManager(internalLock);
+    }
+    
+    protected static class PriorityLockNamedParams {
+        private static final Supplier<Lock> NONFAIR_REENTRANT_LOCK_CREATOR = () -> new ReentrantLock();
+        private static final Supplier<Lock> FAIR_REENTRANT_LOCK_CREATOR = () -> new ReentrantLock(true);
+
+        private Supplier<Lock> internalLockCreator = NONFAIR_REENTRANT_LOCK_CREATOR;
+        private boolean allowEarlyInterruptFromAwait;
+        
+        public static PriorityLockNamedParams create() {
+            return new PriorityLockNamedParams();
+        }
+        
+        private PriorityLockNamedParams() {
+        }
+        
+        public PriorityLockNamedParams setInternalReentrantLockCreator(boolean fair) {
+            return setInternalLockCreator(fair ? FAIR_REENTRANT_LOCK_CREATOR : NONFAIR_REENTRANT_LOCK_CREATOR);
+        }
+        
+        /**
+         * Implementations must be sure that no two PriorityLock's share the same internal lock.
+         */
+        public PriorityLockNamedParams setInternalLockCreator(Supplier<Lock> internalLockCreator) {
+            this.internalLockCreator = internalLockCreator;
+            return this;
+        }
+        
+        public PriorityLockNamedParams setAllowEarlyInterruptFromAwait(boolean allowEarlyInterruptFromAwait) {
+            this.allowEarlyInterruptFromAwait = allowEarlyInterruptFromAwait;
+            return this;
+        }
     }
 
     /**
      * Locks this thread after a call to await.
      * After the call to internalCondition.await, internaLock is locked by this thread, so we cannot call internalLock.lock.
-     * @param wasSignalled 
+     *
+     * @param wasSignalled true if the current thread was explicitly signaled by a call to condition.signal. 
      */
     private void lockUninterruptiblyAfterAwait(int holdCount, boolean wasSignalled) {
         int priority = wasSignalled ? Thread.currentThread().getPriority() : levelManager.addThread(Thread.currentThread());
@@ -318,11 +366,22 @@ public class PriorityLock implements Lock {
         }
     }
 
-    private void lockAfterAwait(int holdCount, boolean wasSignalled) throws InterruptedException {
-        lockUninterruptiblyAfterAwait(holdCount, wasSignalled);
-        if (Thread.interrupted()) {
-            throw new InterruptedException();
+    private void lockInterruptiblyAfterAwait(int holdCount, boolean wasSignalled) throws InterruptedException {
+        int priority = wasSignalled ? Thread.currentThread().getPriority() : levelManager.addThread(Thread.currentThread());
+        try {
+            levelManager.waitForHigherPriorityTasksToFinish(null);
+        } catch (RuntimeException | Error e) {
+            Error exception = new MaybeNotHighestThreadAfterAwaitError();
+            exception.addSuppressed(e);
+            throw exception;
+        } finally {
+            threadLockDetails.setAll(priority, holdCount);
         }
+    }
+
+    private void resetAfterAwait(int holdCount, boolean wasSignalled) throws InterruptedException {
+        int priority = wasSignalled ? Thread.currentThread().getPriority() : levelManager.addThread(Thread.currentThread());
+        threadLockDetails.setAll(priority, holdCount);
     }
 
     @Override
@@ -444,7 +503,7 @@ public class PriorityLock implements Lock {
 
     @Override
     public @Nonnull Condition newCondition() {
-        return new PriorityLockCondition();
+        return new PriorityLockCondition(allowEarlyInterruptFromAwait);
     }
     
     @Override
@@ -468,12 +527,14 @@ public class PriorityLock implements Lock {
      * </ul>
      */
     private class PriorityLockCondition implements Condition {
+        private final boolean allowEarlyInterruptFromAwait;
         private final LevelManager levelManager;
         private final int[] waitingOn = new int[Thread.MAX_PRIORITY];
         private int signalCount;
         private int signaledThreadPriority;
         
-        private PriorityLockCondition() {
+        private PriorityLockCondition(boolean allowEarlyInterruptFromAwait) {
+            this.allowEarlyInterruptFromAwait = allowEarlyInterruptFromAwait;
             this.levelManager = new LevelManager(PriorityLock.this.internalLock);
         }
 
@@ -500,7 +561,8 @@ public class PriorityLock implements Lock {
                 }
             } finally {
                 try {
-                    PriorityLock.this.lockUninterruptiblyAfterAwait(holdCount, signaledThreadPriority == priority);
+                    boolean wasSignaled = signaledThreadPriority == priority;
+                    PriorityLock.this.lockUninterruptiblyAfterAwait(holdCount, wasSignaled);
                 } finally {
                     signaledThreadPriority = 0;
                     if (signalCount > 0) {
@@ -531,9 +593,21 @@ public class PriorityLock implements Lock {
                             levelManager.waitForSignal(priority);
                         } catch (InterruptedException e) {
                             interruptedException = e;
+                            if (allowEarlyInterruptFromAwait) {
+                                throw e;
+                            }
                         }
                         if (priority < signaledThreadPriority) {
-                            levelManager.waitUninterruptiblyForHigherPriorityTasksToFinishFromAwait(waitingOn);
+                            if (allowEarlyInterruptFromAwait) {
+                                try {
+                                    levelManager.waitInterruptiblyForHigherPriorityTasksToFinishFromAwait(waitingOn);
+                                } catch (InterruptedException e) {
+                                    interruptedException = e;
+                                    throw e;
+                                }
+                            } else {
+                                levelManager.waitUninterruptiblyForHigherPriorityTasksToFinishFromAwait(waitingOn);
+                            }
                         }
                     } finally {
                         if (signalCount > 0) {
@@ -547,17 +621,33 @@ public class PriorityLock implements Lock {
                 }
             } finally {
                 try {
-                    PriorityLock.this.lockAfterAwait(holdCount, signaledThreadPriority == priority);
-                } finally {
-                    signaledThreadPriority = 0;
-                    if (signalCount > 0) {
-                        int priorityToLock = levelManager.removeThreadAndSignalHighest(priority, waitingOn[priority - 1] > 0);
-                        if (priorityToLock != 0) { // coverage: condition always true - do we need this as defensive programming?
-                            PriorityLock.this.levelManager.addThread(priorityToLock);
-                            signaledThreadPriority = priorityToLock;
+                    boolean wasSignaled = signaledThreadPriority == priority;
+                    if (allowEarlyInterruptFromAwait) {
+                        if (interruptedException == null) {
+                            PriorityLock.this.lockInterruptiblyAfterAwait(holdCount, wasSignaled);
+                        } else {
+                            PriorityLock.this.resetAfterAwait(holdCount, wasSignaled);
                         }
                     } else {
+                        PriorityLock.this.lockUninterruptiblyAfterAwait(holdCount, wasSignaled);
+                        if (Thread.interrupted()) {
+                            throw new InterruptedException();
+                        }
+                    }
+                } finally {
+                    if (allowEarlyInterruptFromAwait && interruptedException != null && priority < signaledThreadPriority) {
                         levelManager.removeThreadOnly(priority);
+                    } else {
+                        signaledThreadPriority = 0;
+                        if (signalCount > 0) {
+                            int priorityToLock = levelManager.removeThreadAndSignalHighest(priority, waitingOn[priority - 1] > 0);
+                            if (priorityToLock != 0) { // coverage: condition always true - do we need this as defensive programming?
+                                PriorityLock.this.levelManager.addThread(priorityToLock);
+                                signaledThreadPriority = priorityToLock;
+                            }
+                        } else {
+                            levelManager.removeThreadOnly(priority);
+                        }
                     }
                 }
             }
