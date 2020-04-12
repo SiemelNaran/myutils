@@ -2,6 +2,7 @@ package myutils.util.concurrent;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -114,11 +115,13 @@ public class PriorityLockTest {
         PriorityLock priorityLock = new PriorityLock();
         Thread.currentThread().setPriority(10);
         priorityLock.lock();
-        Condition condition = priorityLock.newCondition();
+        PriorityLock.PriorityLockCondition condition = priorityLock.newCondition();
         System.out.println(priorityLock.toString());
         System.out.println(condition.toString());
         assertThat(priorityLock.toString(), Matchers.matchesRegex("^myutils.util.concurrent.PriorityLock@[a-f0-9]+ levels=\\[0,0,0,0,0,0,0,0,0,1\\]$"));
         assertThat(condition.toString(), Matchers.matchesRegex("^myutils.util.concurrent.PriorityLock\\$PriorityLockCondition@[a-f0-9]+ levels=\\[0,0,0,0,0,0,0,0,0,0\\], signalCount=0$"));
+        assertEquals(10, priorityLock.highestPriorityThread());
+        assertNull(condition.highestPriorityThread());
     }
     
     

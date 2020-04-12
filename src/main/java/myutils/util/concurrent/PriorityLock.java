@@ -502,13 +502,17 @@ public class PriorityLock implements Lock {
     }
 
     @Override
-    public @Nonnull Condition newCondition() {
+    public @Nonnull PriorityLockCondition newCondition() {
         return new PriorityLockCondition(allowEarlyInterruptFromAwait);
     }
     
     @Override
     public String toString() {
         return getClass().getName() + "@" + hashCode() + " " + levelManager.toString();
+    }
+    
+    public Integer highestPriorityThread() {
+        return nullIfZero(levelManager.computeHighestPriority());
     }
 
     /**
@@ -526,7 +530,7 @@ public class PriorityLock implements Lock {
      *   <li>If there are none, then we re-acquire the lock</li>.
      * </ul>
      */
-    private class PriorityLockCondition implements Condition {
+    class PriorityLockCondition implements Condition {
         private final boolean allowEarlyInterruptFromAwait;
         private final LevelManager levelManager;
         private final int[] waitingOn = new int[Thread.MAX_PRIORITY];
@@ -729,6 +733,15 @@ public class PriorityLock implements Lock {
         public String toString() {
             return getClass().getName() + "@" + hashCode() + " " + levelManager.toString() + ", signalCount=" + signalCount;
         }
+        
+        public Integer highestPriorityThread() {
+            return nullIfZero(levelManager.computeHighestPriority());
+        }
+    }
+    
+    
+    private static Integer nullIfZero(int val) {
+        return val == 0 ? null : val;
     }
     
     
