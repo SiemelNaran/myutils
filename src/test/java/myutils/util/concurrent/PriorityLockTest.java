@@ -23,7 +23,6 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-
 import myutils.util.concurrent.PriorityLock.PriorityLockCondition;
 import myutils.util.concurrent.PriorityLock.PriorityLockNamedParams;
 import org.hamcrest.Matchers;
@@ -1759,12 +1758,12 @@ public class PriorityLockTest {
         }, 500, TimeUnit.MILLISECONDS);
         executor.schedule(() -> doThread1.action(10, null, null, null), 600, TimeUnit.MILLISECONDS);
         executor.schedule(() -> {
-           // thread with priority 7: await is called at 200
-           // thread with priority 7: signaled at 1500, lockUninterruptiblyAfterAwait awaits on priority 9 to finish
-           // thread with priority 9: signaled at 1500 
-           // make lockUninterruptiblyAfterAwait in priority 7 throw in order to get code coverage in code in lockUninterruptiblyAfterAwait
-           logString("about to make ThrowAtPrioritySevenAwait throw an exception when await is called");
-           internalLock.setShouldThrow(true);
+            // thread with priority 7: await is called at 200
+            // thread with priority 7: signaled at 1500, lockUninterruptiblyAfterAwait awaits on priority 9 to finish
+            // thread with priority 9: signaled at 1500 
+            // make lockUninterruptiblyAfterAwait in priority 7 throw in order to get code coverage in code in lockUninterruptiblyAfterAwait
+            logString("about to make ThrowAtPrioritySevenAwait throw an exception when await is called");
+            internalLock.setShouldThrow(true);
         }, 1400, TimeUnit.MILLISECONDS);
 
         executor.shutdown();

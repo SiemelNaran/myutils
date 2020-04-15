@@ -1,6 +1,7 @@
 package myutils.util.concurrent;
 
 import java.util.Date;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
@@ -310,7 +311,7 @@ public class PriorityLock implements Lock {
      * Create a priority lock.
      */
     public PriorityLock(PriorityLockNamedParams params) {
-        this.internalLock = params.internalLockCreator.get();
+        this.internalLock = Objects.requireNonNull(params.internalLockCreator.get());
         this.allowEarlyInterruptFromAwait = params.allowEarlyInterruptFromAwait;
         this.levelManager = new LevelManager(internalLock);
     }
@@ -329,18 +330,33 @@ public class PriorityLock implements Lock {
         private PriorityLockNamedParams() {
         }
         
+        /**
+         * Set the internal lock creator to be a function that creates a ReentrantLock.
+         * 
+         * @param fair is this a fair lock
+         */
         public PriorityLockNamedParams setInternalReentrantLockCreator(boolean fair) {
             return setInternalLockCreator(fair ? FAIR_REENTRANT_LOCK_CREATOR : NONFAIR_REENTRANT_LOCK_CREATOR);
         }
         
         /**
-         * Implementations must be sure that no two PriorityLock's share the same internal lock.
+         * Set the internal lock creator to be a function that returns a custom lock.
+         * Implementations must be sure that no two PriorityLock objects share the same internal lock.
          */
-        public PriorityLockNamedParams setInternalLockCreator(Supplier<Lock> internalLockCreator) {
+        public PriorityLockNamedParams setInternalLockCreator(@Nonnull Supplier<Lock> internalLockCreator) {
             this.internalLockCreator = internalLockCreator;
             return this;
         }
         
+        /**
+         * Set whether to allow await functions to throw InterruptedException upon receiving an InterruptedException.
+         * For example, if a thread with a lower priority is waiting for a thread with much higher priority to finish,
+         * and the thread with lower priority is interrupted,
+         * then upon the thread with much higher priority getting unlocked, the thread with lower priority encounters an InterruptedException.
+         * 
+         * @param allowEarlyInterruptFromAwait false (the default) means wait for threads with higher priority to finish before throwing an InterruptedException<br/>
+         *                                     true means throw InterruptedException right away
+         */
         public PriorityLockNamedParams setAllowEarlyInterruptFromAwait(boolean allowEarlyInterruptFromAwait) {
             this.allowEarlyInterruptFromAwait = allowEarlyInterruptFromAwait;
             return this;
@@ -525,7 +541,8 @@ public class PriorityLock implements Lock {
      *           make a note that a thread of priority N is waiting for a signal by incrementing the counter for this priority, and
      *           await on the condition object of level N to be signaled (which unlocks the lock so that other threads can proceed).</li>
      *   <li>Calling signal signals the highest priority thread -- i.e. calls signalAll on the highest condition and increments signalCount by 1.</li>
-     *   <li>Calling signalAll signals the highest priority thread -- i.e. calls signalAll on the highest condition and increments signalCount by the number of threads in this conditino object.</li>
+     *   <li>Calling signalAll signals the highest priority thread --
+     *           i.e. calls signalAll on the highest condition and increments signalCount by the number of threads in this condition object.</li>
      *   <li>When a thread returns from await, we check if there are any threads with higher priority in the queue (simply by checking if the count > 0</li>
      *   <li>If there is, then we await on that priority's condition.</li>
      *   <li>Decrement signalCount by 1.</li>
