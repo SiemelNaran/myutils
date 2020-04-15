@@ -700,19 +700,8 @@ public class PriorityLock implements Lock {
          */
         @Override
         public void signal() {
-            for (int priority = Thread.MAX_PRIORITY; priority >= Thread.MIN_PRIORITY; priority--) {
-                int index = priority - 1;
-                int times = levelManager.counts[index].get();
-                if (times > 0) {
-                    if (signalCount == 0) {
-                        levelManager.conditions[index].signal();
-                        PriorityLock.this.levelManager.addThread(priority);
-                        signaledThreadPriority = priority;
-                    }
-                    signalCount += 1;
-                    break;
-                }
-            }
+            int maxPossible = commonSignal();
+            signalCount = Math.min(signalCount + 1, maxPossible);
         }
 
         /**
@@ -720,18 +709,27 @@ public class PriorityLock implements Lock {
          */
         @Override
         public void signalAll() {
+            int maxPossible = commonSignal();
+            signalCount = maxPossible;
+        }
+        
+        private int commonSignal() {
+            int maxPossible = 0;
+            boolean shouldSignal = signalCount == 0;
             for (int priority = Thread.MAX_PRIORITY; priority >= Thread.MIN_PRIORITY; priority--) {
                 int index = priority - 1;
                 int times = levelManager.counts[index].get();
                 if (times > 0) {
-                    if (signalCount == 0) {
+                    if (shouldSignal) {
                         levelManager.conditions[index].signal();
                         PriorityLock.this.levelManager.addThread(priority);
                         signaledThreadPriority = priority;
+                        shouldSignal = false;
                     }
-                    signalCount += times;
+                    maxPossible += times;
                 }
             }
+            return maxPossible;
         }
         
         @Override
