@@ -97,8 +97,7 @@ public class PriorityLock implements Lock {
             if (existsThreadWaitingOnOriginalPriority) {
                 priorityToSignal = Math.max(priorityToSignal, originalPriority);
             }
-            System.out.println("snaran " + priorityToSignal);
-            if (priorityToSignal > 0) { // CodeCoverage: always true
+            if (priorityToSignal > 0) {
                 conditions[priorityToSignal - 1].signalAll();
             }
             return priorityToLock;
@@ -163,8 +162,8 @@ public class PriorityLock implements Lock {
                 try {
                     conditions[nextHigherPriorityIndex].awaitUninterruptibly();
                 } catch (RuntimeException | Error e) {
-                    if (priorityLock != null) {
-                        priorityLock.internalLock.unlock(); // CodeCoverage: never hit
+                    if (priorityLock != null) { // CodeCoverage: never hit
+                        priorityLock.internalLock.unlock();
                     }
                     throw e;
                 }
@@ -187,7 +186,6 @@ public class PriorityLock implements Lock {
             }
         }
         
-        // CodeCoverage: this function never hit
         private void waitInterruptiblyForHigherPriorityTasksToFinishFromAwait(int[] waitingOn) throws InterruptedException {
             int priority = Thread.currentThread().getPriority();
             while (true) {
@@ -558,8 +556,8 @@ public class PriorityLock implements Lock {
                 for (boolean done = false; !done; ) {
                     try {
                         levelManager.waitUninterruptiblyForSignal(priority);
-                        if (priority < signaledThreadPriority) {
-                            levelManager.waitUninterruptiblyForHigherPriorityTasksToFinishFromAwait(waitingOn); // CodeCoverage: never hit
+                        if (priority < signaledThreadPriority) { // CodeCoverage: never hit
+                            levelManager.waitUninterruptiblyForHigherPriorityTasksToFinishFromAwait(waitingOn);
                         }
                     } finally {
                         if (signalCount > 0) {
@@ -575,7 +573,7 @@ public class PriorityLock implements Lock {
                 } finally {
                     signaledThreadPriority = 0;
                     if (signalCount > 0) {
-                        int priorityToLock = levelManager.removeThreadAndSignalHighest(priority, waitingOn[priority - 1] > 0);
+                        int priorityToLock = levelManager.removeThreadAndSignalHighest(priority, waitingOn[priority - 1] > 0); // CodeCoverage: partially hit
                         if (priorityToLock != 0) { // CodeCoverage: always true
                             PriorityLock.this.levelManager.addThread(priorityToLock);
                             signaledThreadPriority = priorityToLock;
@@ -607,7 +605,9 @@ public class PriorityLock implements Lock {
                             }
                         }
                         if (priority < signaledThreadPriority) {
-                            if (allowEarlyInterruptFromAwait) { // CodeCoverage: never hit
+                            // this condition will normally be false as signal/signalAll signal the highest thread
+                            // but due to the phenomenon of spurious wakeup, a lower priority thread may wake up before it is signaled
+                            if (allowEarlyInterruptFromAwait) {
                                 try {
                                     levelManager.waitInterruptiblyForHigherPriorityTasksToFinishFromAwait(waitingOn);
                                 } catch (InterruptedException e) {

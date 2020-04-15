@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -22,6 +23,8 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+
+import myutils.util.concurrent.PriorityLock.PriorityLockCondition;
 import myutils.util.concurrent.PriorityLock.PriorityLockNamedParams;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
@@ -1397,7 +1400,7 @@ public class PriorityLockTest {
 
 
     /**
-     * Same as the above except that some threads are cancelled and cancelled threads throw a special InterruptedException as soon as possible.
+     * Same as the above except that some threads are cancelled and the cancelled threads throw InterruptedException as soon as possible.
      */
     @Test
     @SuppressWarnings("checkstyle:LineLength")
@@ -1449,6 +1452,142 @@ public class PriorityLockTest {
     }
 
 
+    /**
+     * Test await with the caveat that one thread is coerced into waking up early, a phenomenon called spurious wakeup.
+     * This test obtains code coverage on the lines around
+     *     but due to the phenomenon of spurious wakeup, a lower priority thread may wake up before it is signaled
+     */
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testAwaitWithSpuriousWakeup(boolean allowEarlyInterruptFromAwait) throws InterruptedException {
+        PriorityLock priorityLock = new PriorityLock(PriorityLockNamedParams.create()
+                                                         .setInternalReentrantLockCreator(true)
+                                                         .setAllowEarlyInterruptFromAwait(allowEarlyInterruptFromAwait));
+
+        DoThread doThread = createDoThread(DoThreadLockInterruptibly.class, priorityLock);
+        WaitArg unused = new WaitArgMillis(TimeUnit.SECONDS.toMillis(4));
+        ScheduledExecutorService executor = Executors.newScheduledThreadPool(8, myThreadFactory());
+
+        Condition condition3 = GetInternalConditionObjectByReflection.condition3((PriorityLockCondition) doThread.condition);
+
+        executor.schedule(() -> doThread.awaitAction(3, null, unused), 100, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.awaitAction(4, null, unused), 200, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.awaitAction(5, null, unused), 250, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.awaitAction(6, null, unused), 300, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.awaitAction(8, null, unused), 400, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.action(3, 2, null, Signal.SIGNAL_ALL), 600, TimeUnit.MILLISECONDS); // this sets signaledThreadPriority to 8
+        executor.schedule(() -> {
+            // attempt to wake up thread3 at 650ms
+            // on my machine, this thread only gets to run at 4600ms
+            // and the spurious thread wakes up at 5600ms
+            logString("schedule spurious wakeup: about to signal thread 3 which would normally be signaled at 6600 condition3.hashCode=" + condition3.hashCode());
+            priorityLock.lock();
+            try {
+                condition3.signal();
+            } finally {
+                priorityLock.unlock();
+            }
+            logString("end schedule spurious wakeup");
+        }, 650, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.action(9), 700, TimeUnit.MILLISECONDS);
+
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+        prettyPrintList("messages", doThread.getMessages());
+
+        assertThat(doThread.getMessages(),
+                Matchers.contains(
+                        "thread with priority 3 changed to 2", // at 1600
+                        "about to signalAll in thread with priority 2", // at 1600
+                        "end thread with priority 2", // at 1600
+                        "end thread with priority 9", // at 2600
+                        "end thread with priority 8", // at 3600
+                        "end thread with priority 6", // at 4600
+                        "end thread with priority 5", // at 5600
+                        "end thread with priority 4", // at 6600
+                        "end thread with priority 3")); // at 7600
+
+        assertThat(priorityLock.toString(), Matchers.endsWith("[0,0,0,0,0,0,0,0,0,0]"));
+        assertThat(doThread.conditiontoString(), Matchers.endsWith("levels=[0,0,0,0,0,0,0,0,0,0], signalCount=0"));
+    }
+
+    /**
+     * Same as the above except that the thread that encountered spurious wakeup is interrupted.
+     */
+    @Test
+    void testAwaitWithSpuriousWakeupAndInterrupt() throws InterruptedException {
+        PriorityLock priorityLock = new PriorityLock(PriorityLockNamedParams.create()
+                                                         .setInternalReentrantLockCreator(true)
+                                                         .setAllowEarlyInterruptFromAwait(true));
+
+        DoThread doThread = createDoThread(DoThreadLockInterruptibly.class, priorityLock);
+        WaitArg unused = new WaitArgMillis(TimeUnit.SECONDS.toMillis(4));
+        ScheduledExecutorService executor = Executors.newScheduledThreadPool(9, myThreadFactory());
+
+        Condition condition3 = GetInternalConditionObjectByReflection.condition3((PriorityLockCondition) doThread.condition);
+
+        ScheduledFuture<?> future100 =
+        executor.schedule(() -> doThread.awaitAction(3, null, unused), 100, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.awaitAction(4, null, unused), 200, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.awaitAction(5, null, unused), 250, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.awaitAction(6, null, unused), 300, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.awaitAction(8, null, unused), 400, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.action(3, 2, null, Signal.SIGNAL_ALL), 600, TimeUnit.MILLISECONDS); // this sets signaledThreadPriority to 8
+        executor.schedule(() -> {
+            logString("schedule spurious wakeup: about to signal thread 3 which would normally be signaled at 6600 condition3.hashCode=" + condition3.hashCode());
+            priorityLock.lock();
+            try {
+                condition3.signal();
+            } finally {
+                priorityLock.unlock();
+            }
+            logString("end schedule spurious wakeup");
+        }, 650, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.action(9), 700, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> {
+            logString("about to interrupt thread future100 of priority 3");
+            future100.cancel(true);
+        }, 5000, TimeUnit.MILLISECONDS);
+
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+        prettyPrintList("messages", doThread.getMessages());
+
+        assertThat(doThread.getMessages(),
+                Matchers.contains(
+                        "thread with priority 3 changed to 2", // at 1600
+                        "about to signalAll in thread with priority 2", // at 1600
+                        "end thread with priority 2", // at 1600
+                        "end thread with priority 9", // at 2600
+                        "end thread with priority 8", // at 3600
+                        "end thread with priority 6", // at 4600
+                        "end thread with priority 5", // at 5600
+                        "InterruptedException in await of thread with priority 3", // at 5600
+                        "end thread with priority 3", // at 5600
+                        "end thread with priority 4")); // at 6600
+        
+        assertThat(priorityLock.toString(), Matchers.endsWith("[0,0,0,0,0,0,0,0,0,0]"));
+        assertThat(doThread.conditiontoString(), Matchers.endsWith("levels=[0,0,0,0,0,0,0,0,0,0], signalCount=0"));
+    }
+
+    private static class GetInternalConditionObjectByReflection {
+        private static Condition condition3(Condition priorityLockCondition) {
+            try {
+                Class<?> classLevelManager = Class.forName("myutils.util.concurrent.PriorityLock$LevelManager");
+                Field fieldLevelManager = PriorityLock.PriorityLockCondition.class.getDeclaredField("levelManager");
+                Field fieldConditions = classLevelManager.getDeclaredField("conditions");
+                fieldLevelManager.setAccessible(true);
+                fieldConditions.setAccessible(true);
+                Object levelManager = fieldLevelManager.get(priorityLockCondition);
+                Condition[] conditions = (Condition[]) fieldConditions.get(levelManager);
+                return conditions[2];
+            } catch (ClassNotFoundException | NoSuchFieldException | IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    
     @Test
     void testAwaitUntil() throws InterruptedException {
         WaitArg deadline = new WaitArgDeadline(new Date(System.currentTimeMillis() + 4000));
