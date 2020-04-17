@@ -163,7 +163,7 @@ public class PriorityLock implements Lock {
                 try {
                     conditions[nextHigherPriorityIndex].awaitUninterruptibly();
                 } catch (RuntimeException | Error e) {
-                    if (priorityLock != null) { // CodeCoverage: never hit
+                    if (priorityLock != null) {
                         priorityLock.internalLock.unlock();
                     }
                     throw e;
@@ -203,14 +203,6 @@ public class PriorityLock implements Lock {
             }
         }
         
-        private void waitForSignal(int priority) throws InterruptedException {
-            conditions[priority - 1].await();
-        }
-
-        private void waitUninterruptiblyForSignal(int priority) {
-            conditions[priority - 1].awaitUninterruptibly();
-        }
-
         private Integer computeNextHigherPriorityIndex(int priority) {
             for (int i = priority; i < Thread.MAX_PRIORITY; i++) {
                 if (counts[i].get() > 0) {
@@ -549,6 +541,10 @@ public class PriorityLock implements Lock {
      *   <li>Then add this thread to the PriorityLock and re-acquire the lock (as we must wait for higher priority threads in the PriorityLock to run).</li>.
      *   <li>Signal the highest priority thread in this condition object.</li>
      * </ul>
+     * 
+     * <p>A key difference with PriorityLock is that
+     * PriorityLock waits for a condition of a higher thread priority to be signaled,
+     * whereas PriorityLockCondition waits for a condition of this thread priority to be signaled.
      */
     class PriorityLockCondition implements Condition {
         private final boolean allowEarlyInterruptFromAwait;
@@ -572,7 +568,7 @@ public class PriorityLock implements Lock {
             try {
                 for (boolean done = false; !done; ) {
                     try {
-                        levelManager.waitUninterruptiblyForSignal(priority);
+                        levelManager.conditions[priority - 1].awaitUninterruptibly();
                         if (priority < signaledThreadPriority) { // CodeCoverage: never hit
                             levelManager.waitUninterruptiblyForHigherPriorityTasksToFinishFromAwait(waitingOn);
                         }
@@ -614,7 +610,7 @@ public class PriorityLock implements Lock {
                 for (boolean done = false; !done; ) {
                     try {
                         try {
-                            levelManager.waitForSignal(priority);
+                            levelManager.conditions[priority - 1].await();
                         } catch (InterruptedException e) {
                             interruptedException = e;
                             if (allowEarlyInterruptFromAwait) {
