@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -149,6 +150,9 @@ public class PriorityLockTest {
         assertThat(doThread.conditiontoString(), Matchers.endsWith("levels=[0,0,0,0,0,0,0,0,0,0], signalCount=0"));
     }
     
+
+    // ------------------------------------------------------------------------------------------------
+    // lock tests
 
     /**
      * This test starts 6 threads with different priorities, and each thread acquires a priority lock.
@@ -865,7 +869,7 @@ public class PriorityLockTest {
             DoThreadLockInterruptibly.class,
             DoThreadTryLock.class,
             DoThreadTryLockWithTimeoutMillis.class})
-    void testLockException(Class<?> clazz) throws InterruptedException {
+    void testLockException1(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock(PriorityLockNamedParams.create().setInternalLockCreator(() -> new ThrowAtPrioritySevenLock()));
 
         DoThread doThread = createDoThread(clazz, priorityLock);
@@ -897,6 +901,59 @@ public class PriorityLockTest {
 
         assertThat(priorityLock.toString(), Matchers.endsWith("[0,0,0,0,0,0,0,0,0,0]"));
     }
+    
+    
+    /**
+     * This test starts 3 threads with different priorities, and acquiring a lock does not itself throw, but waiting for the higher priority thread to finish throws.
+     * The test verifies that the threads with lower priority still run.
+     */
+    @ParameterizedTest
+    @ValueSource(classes = {
+            DoThreadLock.class,
+            DoThreadLockInterruptibly.class,
+            DoThreadTryLock.class,
+            DoThreadTryLockWithTimeoutMillis.class})
+    void testLockException2(Class<?> clazz) throws InterruptedException {
+        PriorityLock priorityLock
+            = new PriorityLock(PriorityLockNamedParams.create()
+                                   .setInternalLockCreator(() -> new ThrowAtPrioritySevenAwait(/*fair*/ true, /*shouldThrow*/ true, /*throwAfter*/ true)));
+
+        DoThread doThread = createDoThread(clazz, priorityLock);
+        ScheduledExecutorService executor = Executors.newScheduledThreadPool(4, myThreadFactory());
+
+        executor.schedule(() -> doThread.action(4), 100, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.action(3), 500, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.action(7), 600, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.action(8), 700, TimeUnit.MILLISECONDS);
+
+        executor.shutdown();
+        executor.awaitTermination(10_000, TimeUnit.SECONDS);
+        prettyPrintList("messages", doThread.getMessages());
+
+        if (DoThreadLock.class.equals(clazz) || DoThreadLockInterruptibly.class.equals(clazz) || DoThreadTryLockWithTimeoutMillis.class.equals(clazz)) {
+            assertThat(doThread.getMessages(),
+                    Matchers.contains(
+                            "end thread with priority 4",
+                            "end thread with priority 7",
+                            "thread with priority 7 encountered exception myutils.util.concurrent.PriorityLockTest$ThrowAtPrioritySevenAwait: priority 7 not allowed",
+                            "end thread with priority 6",
+                            "end thread with priority 3"));
+        } else if (DoThreadTryLock.class.equals(clazz)) {
+            assertThat(doThread.getMessages(),
+                    Matchers.contains(
+                            "thread with priority 6 encountered exception myutils.util.concurrent.PriorityLockTest$FailedToAcquireLockException",
+                            "thread with priority 7 encountered exception myutils.util.concurrent.PriorityLockTest$ThrowAtPrioritySevenException: priority 7 not allowed",
+                            "end thread with priority 4"));
+        } else {
+            throw new UnsupportedOperationException();
+        }
+
+        assertThat(priorityLock.toString(), Matchers.endsWith("[0,0,0,0,0,0,0,0,0,0]"));
+    }
+    
+    
+    // ------------------------------------------------------------------------------------------------
+    // await tests
 
 
     @ParameterizedTest
@@ -971,7 +1028,7 @@ public class PriorityLockTest {
     }
 
     
-    private static Stream<Arguments> provideArgsForTestSignalAllAndAddWaiters() {
+    private static Stream<Arguments> provideArgsFor_testSignalAllAndAddWaiters() {
         return Stream.of(Arguments.of(DoThreadLock.class, 2000L),
                          Arguments.of(DoThreadLock.class, 1000L),
                          Arguments.of(DoThreadLockInterruptibly.class, 2000L),
@@ -985,7 +1042,7 @@ public class PriorityLockTest {
      * but this test shows that only 6, 5, 7 get woken up.  thread 4 is never signaled.
      */
     @ParameterizedTest
-    @MethodSource("provideArgsForTestSignalAllAndAddWaiters")
+    @MethodSource("provideArgsFor_testSignalAllAndAddWaiters")
     void testSignalAllAndAddWaiters(Class<?> clazz, long timeAtWhichToAddThread7) throws InterruptedException {
         WaitArg unused = new WaitArgMillis(TimeUnit.SECONDS.toMillis(4));
         PriorityLock priorityLock = new PriorityLock();
@@ -1465,29 +1522,30 @@ public class PriorityLockTest {
 
         DoThread doThread = createDoThread(DoThreadLockInterruptibly.class, priorityLock);
         WaitArg unused = new WaitArgMillis(TimeUnit.SECONDS.toMillis(4));
-        ScheduledExecutorService executor = Executors.newScheduledThreadPool(8, myThreadFactory());
+        ScheduledExecutorService executor = Executors.newScheduledThreadPool(9, myThreadFactory());
 
-        Condition condition3 = GetInternalConditionObjectByReflection.condition3((PriorityLockCondition) doThread.condition);
+        GetInternalConditionByReflection spuriousHelper = new GetInternalConditionByReflection(doThread.condition);
 
         executor.schedule(() -> doThread.awaitAction(3, null, unused), 100, TimeUnit.MILLISECONDS);
         executor.schedule(() -> doThread.awaitAction(4, null, unused), 200, TimeUnit.MILLISECONDS);
         executor.schedule(() -> doThread.awaitAction(5, null, unused), 250, TimeUnit.MILLISECONDS);
         executor.schedule(() -> doThread.awaitAction(6, null, unused), 300, TimeUnit.MILLISECONDS);
-        executor.schedule(() -> doThread.awaitAction(8, null, unused), 400, TimeUnit.MILLISECONDS);
-        executor.schedule(() -> doThread.action(3, 2, null, Signal.SIGNAL_ALL), 600, TimeUnit.MILLISECONDS); // this sets signaledThreadPriority to 8
+        executor.schedule(() -> doThread.awaitAction(8, null, unused), 300, TimeUnit.MILLISECONDS);
         executor.schedule(() -> {
-            // attempt to wake up thread3 at 650ms
-            // on my machine, this thread only gets to run at 4600ms
-            // and the spurious thread wakes up at 5600ms
-            logString("schedule spurious wakeup: about to signal thread 3 which would normally be signaled at 6600 condition3.hashCode=" + condition3.hashCode());
+            logString("schedule spurious wakeup: about to signal thread 3 which would normally be signaled at 6600");
             priorityLock.lock();
             try {
-                condition3.signal();
+                spuriousHelper.simulateSpuriousSignal(true);
             } finally {
                 priorityLock.unlock();
             }
             logString("end schedule spurious wakeup");
-        }, 650, TimeUnit.MILLISECONDS);
+        }, 400, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> {
+            logString("restore SignaledThreadPriority to zero");
+            spuriousHelper.restoreSignaledThreadPriority();
+        }, 550, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.action(3, 2, null, Signal.SIGNAL_ALL), 600, TimeUnit.MILLISECONDS); // this sets signaledThreadPriority to 8
         executor.schedule(() -> doThread.action(9), 700, TimeUnit.MILLISECONDS);
 
         executor.shutdown();
@@ -1521,32 +1579,36 @@ public class PriorityLockTest {
 
         DoThread doThread = createDoThread(DoThreadLockInterruptibly.class, priorityLock);
         WaitArg unused = new WaitArgMillis(TimeUnit.SECONDS.toMillis(4));
-        ScheduledExecutorService executor = Executors.newScheduledThreadPool(9, myThreadFactory());
+        ScheduledExecutorService executor = Executors.newScheduledThreadPool(10, myThreadFactory());
 
-        Condition condition3 = GetInternalConditionObjectByReflection.condition3((PriorityLockCondition) doThread.condition);
+        GetInternalConditionByReflection spuriousHelper = new GetInternalConditionByReflection(doThread.condition);
 
         ScheduledFuture<?> future100 =
         executor.schedule(() -> doThread.awaitAction(3, null, unused), 100, TimeUnit.MILLISECONDS);
         executor.schedule(() -> doThread.awaitAction(4, null, unused), 200, TimeUnit.MILLISECONDS);
         executor.schedule(() -> doThread.awaitAction(5, null, unused), 250, TimeUnit.MILLISECONDS);
         executor.schedule(() -> doThread.awaitAction(6, null, unused), 300, TimeUnit.MILLISECONDS);
-        executor.schedule(() -> doThread.awaitAction(8, null, unused), 400, TimeUnit.MILLISECONDS);
-        executor.schedule(() -> doThread.action(3, 2, null, Signal.SIGNAL_ALL), 600, TimeUnit.MILLISECONDS); // this sets signaledThreadPriority to 8
+        executor.schedule(() -> doThread.awaitAction(8, null, unused), 300, TimeUnit.MILLISECONDS);
         executor.schedule(() -> {
-            logString("schedule spurious wakeup: about to signal thread 3 which would normally be signaled at 6600 condition3.hashCode=" + condition3.hashCode());
+            logString("schedule spurious wakeup: about to signal thread 3 which would normally be signaled at 6600");
             priorityLock.lock();
             try {
-                condition3.signal();
+                spuriousHelper.simulateSpuriousSignal(true);
             } finally {
                 priorityLock.unlock();
             }
             logString("end schedule spurious wakeup");
-        }, 650, TimeUnit.MILLISECONDS);
+        }, 400, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> {
+            logString("restore SignaledThreadPriority to zero");
+            spuriousHelper.restoreSignaledThreadPriority();
+        }, 550, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.action(3, 2, null, Signal.SIGNAL_ALL), 600, TimeUnit.MILLISECONDS); // this sets signaledThreadPriority to 8
         executor.schedule(() -> doThread.action(9), 700, TimeUnit.MILLISECONDS);
         executor.schedule(() -> {
             logString("about to interrupt thread future100 of priority 3");
             future100.cancel(true);
-        }, 5000, TimeUnit.MILLISECONDS);
+        }, 1000, TimeUnit.MILLISECONDS);
 
         executor.shutdown();
         executor.awaitTermination(10, TimeUnit.SECONDS);
@@ -1558,20 +1620,30 @@ public class PriorityLockTest {
                         "about to signalAll in thread with priority 2", // at 1600
                         "end thread with priority 2", // at 1600
                         "end thread with priority 9", // at 2600
+                        "InterruptedException in await of thread with priority 3", // at 2600
+                        "end thread with priority 3", // at 2600
                         "end thread with priority 8", // at 3600
                         "end thread with priority 6", // at 4600
                         "end thread with priority 5", // at 5600
-                        "InterruptedException in await of thread with priority 3", // at 5600
-                        "end thread with priority 3", // at 5600
                         "end thread with priority 4")); // at 6600
         
         assertThat(priorityLock.toString(), Matchers.endsWith("[0,0,0,0,0,0,0,0,0,0]"));
         assertThat(doThread.conditiontoString(), Matchers.endsWith("levels=[0,0,0,0,0,0,0,0,0,0], signalCount=0"));
     }
 
-    private static class GetInternalConditionObjectByReflection {
-        private static Condition condition3(Condition priorityLockCondition) {
+    private static class GetInternalConditionByReflection {
+        private final Condition priorityLockCondition;
+        private final Field signaledThreadPriority; // priorityLockCondition.signaledThreadPriority
+        private final Condition internalCondition3; // priorityLockCondition.levelManager.conditions[2]
+        private Optional<Integer> originalSignaledThreadPriority = Optional.empty();
+        
+        GetInternalConditionByReflection(Condition priorityLockCondition) {
+            this.priorityLockCondition = priorityLockCondition;
+
             try {
+                signaledThreadPriority = PriorityLockCondition.class.getDeclaredField("signaledThreadPriority");
+                signaledThreadPriority.setAccessible(true);
+
                 Class<?> classLevelManager = Class.forName("myutils.util.concurrent.PriorityLock$LevelManager");
                 Field fieldLevelManager = PriorityLock.PriorityLockCondition.class.getDeclaredField("levelManager");
                 Field fieldConditions = classLevelManager.getDeclaredField("conditions");
@@ -1579,10 +1651,32 @@ public class PriorityLockTest {
                 fieldConditions.setAccessible(true);
                 Object levelManager = fieldLevelManager.get(priorityLockCondition);
                 Condition[] conditions = (Condition[]) fieldConditions.get(levelManager);
-                return conditions[2];
+                internalCondition3 = conditions[2];
             } catch (ClassNotFoundException | NoSuchFieldException | IllegalAccessException e) {
                 throw new RuntimeException(e);
             }
+        }
+        
+        void simulateSpuriousSignal(boolean setSignaledThreadPriorityToBeHigher) {
+            if (setSignaledThreadPriorityToBeHigher) {
+                try {
+                    originalSignaledThreadPriority = Optional.of((int) signaledThreadPriority.get(priorityLockCondition));
+                    signaledThreadPriority.set(priorityLockCondition, 11);
+                } catch (IllegalArgumentException | IllegalAccessException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            internalCondition3.signal();
+        }
+        
+        void restoreSignaledThreadPriority() {
+            originalSignaledThreadPriority.ifPresent(priority -> {
+                try {
+                    signaledThreadPriority.set(priorityLockCondition, priority);
+                } catch (IllegalArgumentException | IllegalAccessException e) {
+                    throw new RuntimeException(e);
+                }
+            });
         }
     }
 
@@ -1719,18 +1813,26 @@ public class PriorityLockTest {
 
 
 
+    
+    private static Stream<Arguments> provideArgsFor_testAwaitException3() {
+        return Stream.of(Arguments.of(DoThreadLock.class, false),
+                         Arguments.of(DoThreadLock.class, false),
+                         Arguments.of(DoThreadLockInterruptibly.class, true),
+                         Arguments.of(DoThreadLockInterruptibly.class, true));
+    }
+    
     /**
      * This test starts 3 threads with different priorities, and lockUninterruptiblyAfterAwait throws an exception.
      * The test verifies that the threads with lower priority still run.
      */
     @ParameterizedTest
-    @ValueSource(classes = {
-            DoThreadLock.class,
-            DoThreadLockInterruptibly.class})
-    void testAwaitException3(Class<?> clazz) throws InterruptedException {
+    @MethodSource("provideArgsFor_testAwaitException3")
+    void testAwaitException3(Class<?> clazz, boolean allowEarlyInterruptFromAwait) throws InterruptedException {
         WaitArg millis = new WaitArgMillis(5000);
         ThrowAtPrioritySevenAwait internalLock = new ThrowAtPrioritySevenAwait(/*fair*/ true, /*shouldThrow*/ false, /*throwAfter*/ false);
-        PriorityLock priorityLock = new PriorityLock(PriorityLockNamedParams.create().setInternalLockCreator(() -> internalLock));
+        PriorityLock priorityLock = new PriorityLock(PriorityLockNamedParams.create()
+                                                         .setInternalLockCreator(() -> internalLock)
+                                                         .setAllowEarlyInterruptFromAwait(allowEarlyInterruptFromAwait));
 
         DoThread doThread1 = createDoThread(clazz, priorityLock);
         DoThread doThread2 = createDoThread(clazz, priorityLock);

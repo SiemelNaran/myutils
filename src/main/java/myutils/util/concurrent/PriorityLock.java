@@ -98,7 +98,7 @@ public class PriorityLock implements Lock {
             if (existsThreadWaitingOnOriginalPriority) {
                 priorityToSignal = Math.max(priorityToSignal, originalPriority);
             }
-            if (priorityToSignal > 0) {
+            if (priorityToSignal > 0) { // CodeCoverage: always true (as this function only called when signalCount > 0, implying that there is a thread to signal)
                 conditions[priorityToSignal - 1].signalAll();
             }
             return priorityToLock;
@@ -386,7 +386,7 @@ public class PriorityLock implements Lock {
         int priority = wasSignalled ? Thread.currentThread().getPriority() : levelManager.addThread(Thread.currentThread()); // CodeCoverage: only true branch hit
         try {
             levelManager.waitForHigherPriorityTasksToFinish(null);
-        } catch (RuntimeException | Error e) { // CodeCoverage: never hit
+        } catch (RuntimeException | Error e) {
             Error exception = new MaybeNotHighestThreadAfterAwaitError();
             exception.addSuppressed(e);
             throw exception;
