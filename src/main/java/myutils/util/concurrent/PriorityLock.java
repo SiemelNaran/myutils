@@ -9,9 +9,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 
 /**
@@ -243,6 +245,43 @@ public class PriorityLock implements Lock {
         }
     }
    
+    static class InitSignalWaitingThread {
+        private static int THREAD_PRIORITY = 5;
+        private static int INITIAL_DELAY_MILLIS = 1_000;
+        private static int SECOND_DELAY_MILLIS = 2_000;
+        private static int MAX_DELAY_MILLIS = 21_000;
+        private static int TIME_TO_ACQUIRE_INTERNAL_LOCK_MILLIS = 1;
+        private static int MAX_RETRIES = 5;
+        private static Consumer<Throwable> ON_FAIL_TO_SIGNAL_WAITING_THREAD = unused -> { };
+        
+        public static void setThreadPriority(int threadPriority) {
+            THREAD_PRIORITY = threadPriority;
+        }
+        
+        public static void setInitialDelayMillis(int initialDelayMillis) {
+            INITIAL_DELAY_MILLIS = initialDelayMillis;
+        }
+        
+        public static void setSecondDelayMillis(int secondDelayMillis) {
+            SECOND_DELAY_MILLIS = secondDelayMillis;
+        }
+        
+        public static void setMaxDelayMillis(int maxDelayMillis) {
+            MAX_DELAY_MILLIS = maxDelayMillis;
+        }
+        
+        public static void setTimeToAcquireInternalLockMillis(int timeToAcquireInternalLockMillis) {
+            TIME_TO_ACQUIRE_INTERNAL_LOCK_MILLIS = timeToAcquireInternalLockMillis;
+        }
+        
+        public static void setMaxRetries(int maxRetries) {
+            MAX_RETRIES = maxRetries;
+        }
+        
+        public static void setOnFailToSignalWaitingThread(@Nullable Consumer<Throwable> onFailToSignalWaitingThread) {
+            ON_FAIL_TO_SIGNAL_WAITING_THREAD = onFailToSignalWaitingThread != null ? onFailToSignalWaitingThread : unused -> { };
+        }
+    }
     
     /**
      * Helper class to signal waiting threads.
@@ -252,21 +291,16 @@ public class PriorityLock implements Lock {
      */
     private static class SignalWaitingThread {
         private static final Logger LOGGER = Logger.getLogger(SignalWaitingThread.class.getName());
-        private static final int INITIAL_DELAY_MILLIS = 1_000;
-        private static final int SECOND_DELAY_MILLIS = 2_000;
-        private static final int MAX_DELAY_MILLIS = 21_000;
-        private static final int TIME_TO_ACQUIRE_INTERNAL_LOCK_MILLIS = 1;
-        private static final int MAX_RETRIES = 5;
         
         private static final ScheduledExecutorService EXECUTOR = Executors.newScheduledThreadPool(1, runnable -> {            
-            Thread thread = new Thread(runnable, "SignalConditionActionThread");
-            thread.setPriority(5);
+            Thread thread = new Thread(runnable, SignalWaitingThread.class.getSimpleName());
+            thread.setPriority(InitSignalWaitingThread.THREAD_PRIORITY);
             thread.setDaemon(true);
             return thread;
         });
 
         static void addSignalWaitingThread(PriorityLock priorityLock, int priority) {
-            doAddSignalWaitingThread(priorityLock, priority, 0, INITIAL_DELAY_MILLIS, SECOND_DELAY_MILLIS);
+            doAddSignalWaitingThread(priorityLock, priority, 0, InitSignalWaitingThread.INITIAL_DELAY_MILLIS, InitSignalWaitingThread.SECOND_DELAY_MILLIS);
         }
         
         /**
@@ -283,7 +317,7 @@ public class PriorityLock implements Lock {
         static void doAddSignalWaitingThread(PriorityLock priorityLock, int priority, int retryCount, int delay, int nextDelay) {
             EXECUTOR.schedule(() -> {
                 try {
-                    boolean acquired = priorityLock.internalLock.tryLock(TIME_TO_ACQUIRE_INTERNAL_LOCK_MILLIS, TimeUnit.MILLISECONDS);
+                    boolean acquired = priorityLock.internalLock.tryLock(InitSignalWaitingThread.TIME_TO_ACQUIRE_INTERNAL_LOCK_MILLIS, TimeUnit.MILLISECONDS);
                     if (acquired) {
                         try {
                             priorityLock.levelManager.conditions[priority - 1].signalAll();
@@ -295,11 +329,12 @@ public class PriorityLock implements Lock {
                     }
                 } catch (InterruptedException | RuntimeException | Error e) {
                     int nextRetryCount = retryCount + 1;
-                    if (nextRetryCount <= MAX_RETRIES) {
-                        int nextNextDelay = nextDelay < MAX_DELAY_MILLIS ? delay + nextDelay : nextDelay;
+                    if (nextRetryCount <= InitSignalWaitingThread.MAX_RETRIES) {
+                        int nextNextDelay = nextDelay < InitSignalWaitingThread.MAX_DELAY_MILLIS ? delay + nextDelay : nextDelay;
                         doAddSignalWaitingThread(priorityLock, priority, nextRetryCount, nextDelay, nextNextDelay);
                     } else {
-                        LOGGER.warning("Failed to signal after waiting thread after " + MAX_RETRIES + " attempts: " + e.toString());
+                        LOGGER.warning("Failed to signal after waiting thread after " + InitSignalWaitingThread.MAX_RETRIES + " attempts: " + e.toString());
+                        InitSignalWaitingThread.ON_FAIL_TO_SIGNAL_WAITING_THREAD.accept(e);
                     }
                 }
             }, delay, TimeUnit.MILLISECONDS);

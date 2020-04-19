@@ -872,7 +872,7 @@ public class PriorityLockTest {
      */
     @ParameterizedTest
     @MethodSource("provideArgsFor_testLockException1")
-    void testLockException1(Class<?> clazz, boolean throwAfter) throws InterruptedException {
+    void testLockExceptionOnLock(Class<?> clazz, boolean throwAfter) throws InterruptedException {
         PriorityLock priorityLock
             = new PriorityLock(PriorityLockNamedParams.create()
                                   .setInternalLockCreator(() -> new ThrowAtPrioritySevenLock(/*fair*/ true, /*shouldThrow*/ true, throwAfter)));
@@ -925,6 +925,64 @@ public class PriorityLockTest {
         assertThat(priorityLock.toString(), Matchers.endsWith("[0,0,0,0,0,0,0,0,0,0]"));
     }
     
+    /**
+     * This test starts 3 threads with different priorities, and acquiring a lock on one of them throws.
+     * Trying to signal the failing thread fails after 5 retries, so the thread with lower priority is never signaled, and never runs.
+     */
+    @Test
+    void testLockExceptionOnLockTimeout() throws InterruptedException {
+        PriorityLock priorityLock = new PriorityLock(PriorityLockNamedParams.create()
+                                                                            .setInternalLockCreator(() -> new ThrowAtPrioritySevenLock(/*fair*/ true, /*shouldThrow*/ true, /*throwAfter*/ true)));
+
+        DoThread doThread = createDoThread(DoThreadLock.class, priorityLock);
+        
+        PriorityLock.InitSignalWaitingThread.setThreadPriority(7);
+        PriorityLock.InitSignalWaitingThread.setInitialDelayMillis(100);
+        PriorityLock.InitSignalWaitingThread.setSecondDelayMillis(200);
+        PriorityLock.InitSignalWaitingThread.setMaxDelayMillis(800);
+        PriorityLock.InitSignalWaitingThread.setTimeToAcquireInternalLockMillis(10);
+        PriorityLock.InitSignalWaitingThread.setMaxRetries(6);
+        PriorityLock.InitSignalWaitingThread.setOnFailToSignalWaitingThread(e -> doThread.messages.add("failed to signal condition #7: " + e.toString()));        
+        
+        ScheduledExecutorService executor = Executors.newScheduledThreadPool(5, myThreadFactory());
+
+        executor.schedule(() -> doThread.action(4), 100, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.action(6), 600, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> doThread.action(7), 700, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> {
+            logString("just before retry 6 to signal condition #7");
+            doThread.messages.add("just before retry 6 to signal condition #7");
+        }, 4500, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> {
+            logString("just after retry 6 to signal condition #7");
+            doThread.messages.add("just after retry 6 to signal condition #7");
+        }, 4700, TimeUnit.MILLISECONDS);
+
+        executor.shutdown();
+        executor.awaitTermination(10, TimeUnit.SECONDS);
+        prettyPrintList("messages", doThread.getMessages());
+
+        PriorityLock.InitSignalWaitingThread.setThreadPriority(5);
+        PriorityLock.InitSignalWaitingThread.setInitialDelayMillis(1_000);
+        PriorityLock.InitSignalWaitingThread.setSecondDelayMillis(2_000);
+        PriorityLock.InitSignalWaitingThread.setMaxDelayMillis(21_000);
+        PriorityLock.InitSignalWaitingThread.setTimeToAcquireInternalLockMillis(1000);
+        PriorityLock.InitSignalWaitingThread.setMaxRetries(5);
+        PriorityLock.InitSignalWaitingThread.setOnFailToSignalWaitingThread(null);
+
+        assertThat(doThread.getMessages(),
+                Matchers.contains(
+                        "end thread with priority 4", // at 1100
+                        "thread with priority 7 encountered exception myutils.util.concurrent.PriorityLockTest$ThrowAtPrioritySevenException: priority 7 not allowed",
+                        "just before retry 6 to signal condition #7",
+                        "failed to signal condition #7: myutils.util.concurrent.PriorityLockTest$ThrowAtPrioritySevenException: priority 7 not allowed",
+                        "just after retry 6 to signal condition #7")); // at 1100
+        // tries to signal condition #7 (so that #6 can wake up) at
+        // 1200, 1400, 1700, 2200, 3000, 3800, 4600 
+
+        assertThat(priorityLock.toString(), Matchers.endsWith("[0,0,0,0,0,1,0,0,0,0]"));
+    }
+    
     
     /**
      * This test starts 3 threads with different priorities, and acquiring a lock does not itself throw, but waiting for the higher priority thread to finish throws.
@@ -936,7 +994,7 @@ public class PriorityLockTest {
             DoThreadLockInterruptibly.class,
             DoThreadTryLock.class,
             DoThreadTryLockWithTimeoutMillis.class})
-    void testLockException2(Class<?> clazz) throws InterruptedException {
+    void testLockExceptionOnAwait(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock
             = new PriorityLock(PriorityLockNamedParams.create()
                                    .setInternalLockCreator(() -> new ThrowAtPrioritySevenAwait(/*fair*/ true, /*shouldThrow*/ true, /*throwAfter*/ true)));
