@@ -31,8 +31,14 @@
     </module>
 
     <module name="LineLength">
+        <property name="id" value="LineLengthMain"/>
         <property name="max" value="180"/>
-        <property name="ignorePattern" value="^package.*|^import.*|a href|href|http://|https://|ftp://"/>
+        <property name="ignorePattern" value="^package.*|^import.*|href|http://|https://|ftp://"/>
+    </module>
+    <module name="LineLength">
+        <property name="id" value="LineLengthTest"/>
+        <property name="max" value="240"/>
+        <property name="ignorePattern" value="^package.*|^import.*|href|http://|https://|ftp://"/>
     </module>
 
     <module name="TreeWalker">

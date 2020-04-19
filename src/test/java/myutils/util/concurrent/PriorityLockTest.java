@@ -113,7 +113,6 @@ public class PriorityLockTest {
      * Test that toString prints out the value of internal lock toString followed by the counts of each level.
      */
     @Test
-    @SuppressWarnings("checkstyle:LineLength")
     void testToString() {
         PriorityLock priorityLock = new PriorityLock();
         Thread.currentThread().setPriority(10);
@@ -317,7 +316,6 @@ public class PriorityLockTest {
             DoThreadLockInterruptibly.class,
             DoThreadTryLock.class,
             DoThreadTryLockWithTimeoutMillis.class})
-    @SuppressWarnings("checkstyle:LineLength")
     void testLockWithCancellation1(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock();
 
@@ -404,7 +402,6 @@ public class PriorityLockTest {
             DoThreadLockInterruptibly.class,
             DoThreadTryLock.class,
             DoThreadTryLockWithTimeoutMillis.class})
-    @SuppressWarnings("checkstyle:LineLength")
     void testLockWithCancellation2(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock();
 
@@ -488,7 +485,6 @@ public class PriorityLockTest {
             DoThreadLockInterruptibly.class,
             DoThreadTryLock.class,
             DoThreadTryLockWithTimeoutMillis.class})
-    @SuppressWarnings("checkstyle:LineLength")
     void testLockWithCancellation3(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock(true);
 
@@ -1129,7 +1125,6 @@ public class PriorityLockTest {
     @ValueSource(classes = {
             DoThreadLock.class,
             DoThreadLockInterruptibly.class})
-    @SuppressWarnings("checkstyle:LineLength")
     void testSignalOnly(Class<?> clazz) throws InterruptedException {
         WaitArg unused = new WaitArgMillis(TimeUnit.SECONDS.toMillis(4));
         PriorityLock priorityLock = new PriorityLock();
@@ -1400,7 +1395,6 @@ public class PriorityLockTest {
             DoThreadTryLock.class,
             DoThreadTryLockWithTimeoutMillis.class,
             DoThreadTryLockWithTimeoutNanos.class})
-    @SuppressWarnings("checkstyle:LineLength")
     void testAwaitWithInterrupt(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock(true);
 
@@ -1495,7 +1489,6 @@ public class PriorityLockTest {
      * Same as the above except that some threads are cancelled and the cancelled threads throw InterruptedException as soon as possible.
      */
     @Test
-    @SuppressWarnings("checkstyle:LineLength")
     void testAwaitWithEarlyInterrupt() throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock(PriorityLockNamedParams.create()
                                                          .setInternalReentrantLockCreator(true)
