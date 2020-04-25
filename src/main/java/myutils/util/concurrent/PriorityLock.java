@@ -274,7 +274,7 @@ public class PriorityLock implements Lock {
         private static volatile int INITIAL_DELAY_MILLIS = 1_000;
         private static volatile int SECOND_DELAY_MILLIS = 2_000;
         private static volatile int MAX_DELAY_MILLIS = 21_000;
-        private static volatile int TIME_TO_ACQUIRE_INTERNAL_LOCK_MILLIS = 1;
+        private static volatile int TIME_TO_ACQUIRE_INTERNAL_LOCK_MILLIS = 100;
         private static volatile int MAX_RETRIES = 5;
         private static Consumer<Throwable> ON_FAIL_TO_SIGNAL_WAITING_THREAD = unused -> { };
         
@@ -308,7 +308,7 @@ public class PriorityLock implements Lock {
         
         static int getNumberOfThreadsToSignal() {
             ScheduledThreadPoolExecutor executor = (ScheduledThreadPoolExecutor) SignalWaitingThread.EXECUTOR;
-            return executor.getQueue().size();
+            return executor.getActiveCount() + executor.getQueue().size();
         }
     }
     
@@ -323,7 +323,6 @@ public class PriorityLock implements Lock {
         
         private static final ScheduledExecutorService EXECUTOR = Executors.newScheduledThreadPool(1, runnable -> {            
             Thread thread = new Thread(runnable, SignalWaitingThread.class.getSimpleName());
-            thread.setPriority(InitSignalWaitingThread.THREAD_PRIORITY);
             thread.setDaemon(true);
             return thread;
         });
@@ -345,8 +344,8 @@ public class PriorityLock implements Lock {
          */
         static void doAddSignalWaitingThread(PriorityLock priorityLock, int priority, int retryCount, int delay, int nextDelay) {
             EXECUTOR.schedule(() -> {
+                Thread.currentThread().setPriority(InitSignalWaitingThread.THREAD_PRIORITY);
                 try {
-                    System.out.println("snaran: signal " + priority + " " + retryCount);
                     boolean acquired = priorityLock.internalLock.tryLock(InitSignalWaitingThread.TIME_TO_ACQUIRE_INTERNAL_LOCK_MILLIS, TimeUnit.MILLISECONDS);
                     if (acquired) {
                         try {

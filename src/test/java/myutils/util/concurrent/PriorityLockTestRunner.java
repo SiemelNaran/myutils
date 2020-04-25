@@ -18,7 +18,6 @@ public class PriorityLockTestRunner {
     public static void main(String[] args) throws InterruptedException {
         String basename = PriorityLockTest.class.getName();
         LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request().selectors(
-                //selectMethod(basename + "#testAwaitWithInterrupt(java.lang.Class)"),
                 selectMethod(basename + "#testLockExceptionOnAwait(java.lang.Class)"),
                 selectMethod(basename + "#testSignalTwiceWithOneAwait()"),
                 selectMethod(basename + "#testLockExceptionOnLockTimeout")
@@ -28,6 +27,5 @@ public class PriorityLockTestRunner {
         SummaryGeneratingListener listener = new SummaryGeneratingListener();
         launcher.registerTestExecutionListeners(listener);
         launcher.execute(request);
-        Thread.sleep(10_000);
     }
 }
