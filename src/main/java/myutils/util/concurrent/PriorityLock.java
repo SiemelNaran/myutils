@@ -4,6 +4,7 @@ import java.util.Date;
 import java.util.Objects;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
@@ -197,7 +198,7 @@ public class PriorityLock implements Lock {
          * <p>When the highest priority thread finishes, it normally signals the next highest priority thread to wake up.
          * So for example if a thread with priority 7 finishes, and a thread of priority 6 is waiting, the implementation signals condition #6.
          *
-         * <p>Due to spurious wakeup, a thread that is awoken not be the highest priority one,
+         * <p>Due to spurious wakeup, a thread that wakes up may not be the highest priority one,
          * so in our example thread 6 may wake up when it is not the highest priority thread.
          * In this case we call waitForHigherPriorityTasksToFinishFromAwait.
          * When the thread with higher priority, or thread 7 in our example, finishes, it must signal condition #7.
@@ -304,6 +305,11 @@ public class PriorityLock implements Lock {
         public static void setOnFailToSignalWaitingThread(@Nullable Consumer<Throwable> onFailToSignalWaitingThread) {
             ON_FAIL_TO_SIGNAL_WAITING_THREAD = onFailToSignalWaitingThread != null ? onFailToSignalWaitingThread : unused -> { };
         }
+        
+        static int getNumberOfThreadsToSignal() {
+            ScheduledThreadPoolExecutor executor = (ScheduledThreadPoolExecutor) SignalWaitingThread.EXECUTOR;
+            return executor.getQueue().size();
+        }
     }
     
     /**
@@ -340,6 +346,7 @@ public class PriorityLock implements Lock {
         static void doAddSignalWaitingThread(PriorityLock priorityLock, int priority, int retryCount, int delay, int nextDelay) {
             EXECUTOR.schedule(() -> {
                 try {
+                    System.out.println("snaran: signal " + priority + " " + retryCount);
                     boolean acquired = priorityLock.internalLock.tryLock(InitSignalWaitingThread.TIME_TO_ACQUIRE_INTERNAL_LOCK_MILLIS, TimeUnit.MILLISECONDS);
                     if (acquired) {
                         try {
@@ -793,19 +800,6 @@ public class PriorityLock implements Lock {
             }
         }
 
-        private void signalHighestFromFinallyBlock(int priority) {
-            signaledThreadPriority = 0;
-            if (signalCount > 0) {
-                int priorityToLock = levelManager.removeThreadAndSignalHighest(priority, waitingOn[priority - 1] > 0);
-                if (priorityToLock != 0) { // CodeCoverage: always true
-                    PriorityLock.this.levelManager.addThread(priorityToLock);
-                    signaledThreadPriority = priorityToLock;
-                }
-            } else {
-                levelManager.removeThreadOnly(priority);
-            }
-        }
-
         /**
          * Puts the current thread into a wait state until it is signaled.
          */
@@ -835,6 +829,19 @@ public class PriorityLock implements Lock {
             long now = System.currentTimeMillis();
             long waitTimeMillis = deadline.getTime() - now;
             return await(waitTimeMillis, TimeUnit.MILLISECONDS);
+        }
+
+        private void signalHighestFromFinallyBlock(int priority) {
+            signaledThreadPriority = 0;
+            if (signalCount > 0) {
+                int priorityToLock = levelManager.removeThreadAndSignalHighest(priority, waitingOn[priority - 1] > 0);
+                if (priorityToLock != 0) { // CodeCoverage: always true
+                    PriorityLock.this.levelManager.addThread(priorityToLock);
+                    signaledThreadPriority = priorityToLock;
+                }
+            } else {
+                levelManager.removeThreadOnly(priority);
+            }
         }
 
         /**
