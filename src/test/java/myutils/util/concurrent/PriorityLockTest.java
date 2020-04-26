@@ -23,8 +23,8 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import myutils.TestUtil;
 import myutils.LogFailureToConsoleTestWatcher;
+import myutils.TestUtil;
 import myutils.util.concurrent.PriorityLock.PriorityLockCondition;
 import myutils.util.concurrent.PriorityLock.PriorityLockNamedParams;
 import org.hamcrest.Matchers;
@@ -74,7 +74,7 @@ public class PriorityLockTest {
     /**
      * This test shows that ReentrantLock does not run threads with the highest priority first.
      */
-    @ParameterizedTest(name= TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(booleans = {false, true})
     void testReentrantLock(boolean fair) throws InterruptedException {
         ReentrantLock reentrantLock = new ReentrantLock(fair);
@@ -141,7 +141,7 @@ public class PriorityLockTest {
     /**
      * Test that we don't run into IndexOutOfBoundsException.
      */
-    @ParameterizedTest(name= TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(ints = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
     void testAllLevels(int level) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock(true);
@@ -170,7 +170,7 @@ public class PriorityLockTest {
      * There is one catch: While the thread with the highest priority is running we change its priority.
      * This should not break other threads which are waiting on it to finish.
      */
-    @ParameterizedTest(name= TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(classes = {
             DoThreadLock.class,
             DoThreadLockInterruptibly.class,
@@ -320,7 +320,7 @@ public class PriorityLockTest {
      * One thread with a lower priority that is waiting on a thread with higher priority is cancelled.
      * Verify that the threads waiting on the canceled thread finish.
      */
-    @ParameterizedTest(name= TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(classes = {
             DoThreadLock.class,
             DoThreadLockInterruptibly.class,
@@ -406,7 +406,7 @@ public class PriorityLockTest {
      * i.e. it receives an InterruptedExcedption while in ReentrantLock::lockInterruptibly.
      * So it does not run, and all the other threads run in order.
      */
-    @ParameterizedTest(name= TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(classes = {
             DoThreadLock.class,
             DoThreadLockInterruptibly.class,
@@ -489,7 +489,7 @@ public class PriorityLockTest {
      * i.e. they receive an InterruptedExcedption while in Condition::await.
      * So only the first two threads run.
      */
-    @ParameterizedTest(name= TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(classes = {
             DoThreadLock.class,
             DoThreadLockInterruptibly.class,
@@ -582,7 +582,7 @@ public class PriorityLockTest {
      * The thread with the higher priority changes its priority and locks the thread again.
      * Verify that all threads finish.
      */
-    @ParameterizedTest(name= TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(classes = {
             DoThreadLock.class,
             DoThreadLockInterruptibly.class,
@@ -659,7 +659,7 @@ public class PriorityLockTest {
      * This test starts 2 threads with different priorities, and each thread acquires a priority lock.
      * The first thread has lower priority and acquires the lock twice.
      */
-    @ParameterizedTest(name= TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(classes = {
             DoThreadLock.class,
             DoThreadLockInterruptibly.class,
@@ -880,7 +880,7 @@ public class PriorityLockTest {
      * This test starts 3 threads with different priorities, and acquiring a lock on one of them throws.
      * The test verifies that the threads with lower priority still run.
      */
-    @ParameterizedTest(name= TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @MethodSource("provideArgsFor_testLockExceptionOnLock")
     void testLockExceptionOnLock(Class<?> clazz, boolean throwAfter) throws InterruptedException {
         PriorityLock priorityLock
@@ -941,20 +941,20 @@ public class PriorityLockTest {
      */
     @Test
     void testLockExceptionOnLockTimeout() throws InterruptedException {
-        assertEquals(0, PriorityLock.InitSignalWaitingThread.getNumberOfThreadsToSignal());
+        assertEquals(0, PriorityLock.SignalWaitingThread.getNumberOfThreadsToSignal());
         
         PriorityLock priorityLock = new PriorityLock(PriorityLockNamedParams.create()
                                                                             .setInternalLockCreator(() -> new ThrowAtPrioritySevenLock(/*fair*/ true, /*shouldThrow*/ true, /*throwAfter*/ true)));
 
         DoThread doThread = createDoThread(DoThreadLock.class, priorityLock);
         
-        PriorityLock.InitSignalWaitingThread.setThreadPriority(7);
-        PriorityLock.InitSignalWaitingThread.setInitialDelayMillis(100);
-        PriorityLock.InitSignalWaitingThread.setSecondDelayMillis(200);
-        PriorityLock.InitSignalWaitingThread.setMaxDelayMillis(800);
-        PriorityLock.InitSignalWaitingThread.setTimeToAcquireInternalLockMillis(10);
-        PriorityLock.InitSignalWaitingThread.setMaxRetries(6);
-        PriorityLock.InitSignalWaitingThread.setOnFailToSignalWaitingThread(e -> doThread.messages.add("failed to signal condition #7: " + e.toString()));        
+        PriorityLock.SignalWaitingThread.setThreadPriority(7);
+        PriorityLock.SignalWaitingThread.setInitialDelayMillis(100);
+        PriorityLock.SignalWaitingThread.setSecondDelayMillis(200);
+        PriorityLock.SignalWaitingThread.setMaxDelayMillis(800);
+        PriorityLock.SignalWaitingThread.setTimeToAcquireInternalLockMillis(10);
+        PriorityLock.SignalWaitingThread.setMaxRetries(6);
+        PriorityLock.SignalWaitingThread.setOnFailToSignalWaitingThread(e -> doThread.messages.add("failed to signal condition #7: " + e.toString()));
         
         ScheduledExecutorService executor = Executors.newScheduledThreadPool(5, myThreadFactory());
 
@@ -974,13 +974,13 @@ public class PriorityLockTest {
         executor.awaitTermination(10, TimeUnit.SECONDS);
         prettyPrintList("messages", doThread.getMessages());
 
-        PriorityLock.InitSignalWaitingThread.setThreadPriority(5);
-        PriorityLock.InitSignalWaitingThread.setInitialDelayMillis(1_000);
-        PriorityLock.InitSignalWaitingThread.setSecondDelayMillis(2_000);
-        PriorityLock.InitSignalWaitingThread.setMaxDelayMillis(21_000);
-        PriorityLock.InitSignalWaitingThread.setTimeToAcquireInternalLockMillis(1000);
-        PriorityLock.InitSignalWaitingThread.setMaxRetries(5);
-        PriorityLock.InitSignalWaitingThread.setOnFailToSignalWaitingThread(null);
+        PriorityLock.SignalWaitingThread.setThreadPriority(5);
+        PriorityLock.SignalWaitingThread.setInitialDelayMillis(1_000);
+        PriorityLock.SignalWaitingThread.setSecondDelayMillis(2_000);
+        PriorityLock.SignalWaitingThread.setMaxDelayMillis(21_000);
+        PriorityLock.SignalWaitingThread.setTimeToAcquireInternalLockMillis(1000);
+        PriorityLock.SignalWaitingThread.setMaxRetries(5);
+        PriorityLock.SignalWaitingThread.setOnFailToSignalWaitingThread(null);
 
         // snaran: test fail
         assertThat(doThread.getMessages(),
@@ -1002,7 +1002,7 @@ public class PriorityLockTest {
      * This test starts 3 threads with different priorities, and acquiring a lock does not itself throw, but waiting for the higher priority thread to finish throws.
      * The test verifies that the threads with lower priority still run.
      */
-    @ParameterizedTest(name= TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(classes = {
             DoThreadLock.class,
             DoThreadLockInterruptibly.class,
@@ -1060,7 +1060,7 @@ public class PriorityLockTest {
     // await tests
 
 
-    @ParameterizedTest(name= TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @EnumSource(Signal.class)
     void testSignalAndSignalAll(Signal signal) throws InterruptedException {
         WaitArg nanos = new WaitArgMillis(TimeUnit.SECONDS.toMillis(4));
@@ -1145,7 +1145,7 @@ public class PriorityLockTest {
      * One might expect that the 3 original threads would be signaled as they were the ones running when signalAll was called,
      * but this test shows that only 6, 5, 7 get woken up.  thread 4 is never signaled.
      */
-    @ParameterizedTest(name= TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @MethodSource("provideArgsFor_testSignalAllAndAddWaiters")
     void testSignalAllAndAddWaiters(Class<?> clazz, long timeAtWhichToAddThread7) throws InterruptedException {
         WaitArg unused = new WaitArgMillis(TimeUnit.SECONDS.toMillis(4));
@@ -1193,7 +1193,7 @@ public class PriorityLockTest {
     }
 
     
-    @ParameterizedTest(name= TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(classes = {
             DoThreadLock.class,
             DoThreadLockInterruptibly.class})
@@ -1343,7 +1343,7 @@ public class PriorityLockTest {
      * A 5th threads has the lowest priority and calls signal.
      * The test verifies that the thread with the highest priority wins.
      */
-    @ParameterizedTest(name= TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(classes = {
             DoThreadLock.class,
             DoThreadLockInterruptibly.class,
@@ -1416,7 +1416,7 @@ public class PriorityLockTest {
      * Here the internal call to await finishes before the elapsed time so acquired would be true,
      * but another thread of higher priority not tied to the condition is running, so acquired will be false after all.
      */
-    @ParameterizedTest(name= TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(classes = {
             DoThreadTryLockWithTimeoutMillis.class,
             DoThreadTryLockWithTimeoutNanos.class})
@@ -1460,7 +1460,7 @@ public class PriorityLockTest {
     /**
      * Same as the above except that some threads are cancelled.
      */
-    @ParameterizedTest(name= TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(classes = {
             DoThreadLock.class,
             DoThreadLockInterruptibly.class,
@@ -1614,7 +1614,7 @@ public class PriorityLockTest {
      * This test obtains code coverage on the lines around
      *     but due to the phenomenon of spurious wakeup, a lower priority thread may wake up before it is signaled
      */
-    @ParameterizedTest(name= TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(booleans = {false, true})
     void testAwaitWithSpuriousWakeup(boolean allowEarlyInterruptFromAwait) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock(PriorityLockNamedParams.create()
@@ -1837,7 +1837,7 @@ public class PriorityLockTest {
      * This test starts 3 threads with different priorities, and await on one of them throws as soon as await is called.
      * The test verifies that the threads with lower priority still run.
      */
-    @ParameterizedTest(name= TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(classes = {
             DoThreadLock.class,
             DoThreadLockInterruptibly.class})
@@ -1878,7 +1878,7 @@ public class PriorityLockTest {
      * This test starts 3 threads with different priorities, and await on one of them throws as soon at the end of await.
      * The test verifies that the threads with lower priority still run.
      */
-    @ParameterizedTest(name= TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(classes = {
             DoThreadLock.class,
             DoThreadLockInterruptibly.class})
@@ -1927,7 +1927,7 @@ public class PriorityLockTest {
      * This test starts 3 threads with different priorities, and lockUninterruptiblyAfterAwait throws an exception.
      * The test verifies that the threads with lower priority still run.
      */
-    @ParameterizedTest(name= TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @MethodSource("provideArgsFor_testAwaitException3")
     void testAwaitException3(Class<?> clazz, boolean allowEarlyInterruptFromAwait) throws InterruptedException {
         WaitArg millis = new WaitArgMillis(5000);

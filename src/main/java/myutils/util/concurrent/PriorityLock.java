@@ -97,10 +97,10 @@ public class PriorityLock implements Lock {
 
         /**
          * Remove the thread with priority as 'originalPriority' from the tree.
-         * If the internal lock is locked, signals all threads waiting on 'originalPriority' to wake up.
-         *   This path is called if waitForHigherPriorityTasksToFinish throws a RuntimeException.
          * If the internal lock is not locked, schedule a future task to signal waiting threads.
          *   This path is hit if internalLock.lock throws a RuntimeException.
+         * If the internal lock is locked, signals all threads waiting on 'originalPriority' to wake up.
+         *   This path is called if waitForHigherPriorityTasksToFinish throws a RuntimeException.
          * Calls unlock if internalLocked is true.
          *
          * @param priorityLock the priority lock whose condition is to be signaled
@@ -123,9 +123,10 @@ public class PriorityLock implements Lock {
          * Does not call unlock.
          *
          * @param originalPriority the priority of the thread when lock/await was called.
-         * @param existsThreadWaitingOnOriginalPriority true if there exists a thread in this level manager waiting on a thread of 'originalPriority'
-         *
+         * @param existsThreadWaitingOnOriginalPriority true if there exists a thread in this level  manager waiting on a thread of 'originalPriority'.
+         *                                              Used to deal with spurious wakeup in await
          * @return the priority that was signaled, or 0 if no condition was signaled
+         * @see LevelManager#waitForHigherPriorityTasksToFinishFromAwait
          */
         private int removeThreadAndSignalHighest(int originalPriority, boolean existsThreadWaitingOnOriginalPriority) {
             removeThreadOnly(originalPriority);
@@ -268,8 +269,18 @@ public class PriorityLock implements Lock {
             return builder.toString();
         }
     }
-   
-    static class InitSignalWaitingThread {
+
+    /**
+     * Helper class to signal waiting threads.
+     * Called when lock fails to acquire the internal lock and must signal waiting threads,
+     * which it cannot do because the call to signal requires the internal lock to be locked by the current thread. 
+     * Reason for using an executor is because we retry acquiring the lock in the background several times.
+     */
+    static class SignalWaitingThread {
+        private static final Logger LOGGER = Logger.getLogger(SignalWaitingThread.class.getName());
+
+        // public functions =>
+
         private static volatile int THREAD_PRIORITY = 5;
         private static volatile int INITIAL_DELAY_MILLIS = 1_000;
         private static volatile int SECOND_DELAY_MILLIS = 2_000;
@@ -277,58 +288,52 @@ public class PriorityLock implements Lock {
         private static volatile int TIME_TO_ACQUIRE_INTERNAL_LOCK_MILLIS = 100;
         private static volatile int MAX_RETRIES = 5;
         private static Consumer<Throwable> ON_FAIL_TO_SIGNAL_WAITING_THREAD = unused -> { };
-        
+
         public static void setThreadPriority(int threadPriority) {
             THREAD_PRIORITY = threadPriority;
         }
-        
+
         public static void setInitialDelayMillis(int initialDelayMillis) {
             INITIAL_DELAY_MILLIS = initialDelayMillis;
         }
-        
+
         public static void setSecondDelayMillis(int secondDelayMillis) {
             SECOND_DELAY_MILLIS = secondDelayMillis;
         }
-        
+
         public static void setMaxDelayMillis(int maxDelayMillis) {
             MAX_DELAY_MILLIS = maxDelayMillis;
         }
-        
+
         public static void setTimeToAcquireInternalLockMillis(int timeToAcquireInternalLockMillis) {
             TIME_TO_ACQUIRE_INTERNAL_LOCK_MILLIS = timeToAcquireInternalLockMillis;
         }
-        
+
         public static void setMaxRetries(int maxRetries) {
             MAX_RETRIES = maxRetries;
         }
-        
+
         public static void setOnFailToSignalWaitingThread(@Nullable Consumer<Throwable> onFailToSignalWaitingThread) {
             ON_FAIL_TO_SIGNAL_WAITING_THREAD = onFailToSignalWaitingThread != null ? onFailToSignalWaitingThread : unused -> { };
         }
-        
+
+        // package private functions =>
+
         static int getNumberOfThreadsToSignal() {
             ScheduledThreadPoolExecutor executor = (ScheduledThreadPoolExecutor) SignalWaitingThread.EXECUTOR;
             return executor.getActiveCount() + executor.getQueue().size();
         }
-    }
-    
-    /**
-     * Helper class to signal waiting threads.
-     * Called when lock fails to acquire the internal lock and must signal waiting threads,
-     * which it cannot do because the call to signal requires the internal lock to be locked by the current thread. 
-     * Reason for using an executor is because we retry acquiring the lock in the background several times.
-     */
-    private static class SignalWaitingThread {
-        private static final Logger LOGGER = Logger.getLogger(SignalWaitingThread.class.getName());
-        
-        private static final ScheduledExecutorService EXECUTOR = Executors.newScheduledThreadPool(1, runnable -> {            
+
+        // private functions =>
+
+        private static final ScheduledExecutorService EXECUTOR = Executors.newScheduledThreadPool(1, runnable -> {
             Thread thread = new Thread(runnable, SignalWaitingThread.class.getSimpleName());
             thread.setDaemon(true);
             return thread;
         });
 
-        static void addSignalWaitingThread(PriorityLock priorityLock, int priority) {
-            doAddSignalWaitingThread(priorityLock, priority, 0, InitSignalWaitingThread.INITIAL_DELAY_MILLIS, InitSignalWaitingThread.SECOND_DELAY_MILLIS);
+        private static void addSignalWaitingThread(PriorityLock priorityLock, int priority) {
+            doAddSignalWaitingThread(priorityLock, priority, 0, INITIAL_DELAY_MILLIS, SECOND_DELAY_MILLIS);
         }
         
         /**
@@ -342,11 +347,13 @@ public class PriorityLock implements Lock {
          * @param delay the time at which to schedule
          * @param nextDelay the time at which to schedule if there is an exception
          */
-        static void doAddSignalWaitingThread(PriorityLock priorityLock, int priority, int retryCount, int delay, int nextDelay) {
+        private static void doAddSignalWaitingThread(PriorityLock priorityLock, int priority, int retryCount, int delay, int nextDelay) {
             EXECUTOR.schedule(() -> {
-                Thread.currentThread().setPriority(InitSignalWaitingThread.THREAD_PRIORITY);
+                // ideally set the thread priority in the threadFactory argument to EXECUTOR = Executors.newScheduledThreadPool
+                // but JVM resets the thread priority to 5 (at least in Java 11)
+                Thread.currentThread().setPriority(THREAD_PRIORITY);
                 try {
-                    boolean acquired = priorityLock.internalLock.tryLock(InitSignalWaitingThread.TIME_TO_ACQUIRE_INTERNAL_LOCK_MILLIS, TimeUnit.MILLISECONDS);
+                    boolean acquired = priorityLock.internalLock.tryLock(TIME_TO_ACQUIRE_INTERNAL_LOCK_MILLIS, TimeUnit.MILLISECONDS);
                     if (acquired) {
                         try {
                             priorityLock.levelManager.conditions[priority - 1].signalAll();
@@ -358,12 +365,12 @@ public class PriorityLock implements Lock {
                     }
                 } catch (InterruptedException | RuntimeException | Error e) {
                     int nextRetryCount = retryCount + 1;
-                    if (nextRetryCount <= InitSignalWaitingThread.MAX_RETRIES) {
-                        int nextNextDelay = nextDelay < InitSignalWaitingThread.MAX_DELAY_MILLIS ? delay + nextDelay : nextDelay;
+                    if (nextRetryCount <= MAX_RETRIES) {
+                        int nextNextDelay = nextDelay < MAX_DELAY_MILLIS ? delay + nextDelay : nextDelay;
                         doAddSignalWaitingThread(priorityLock, priority, nextRetryCount, nextDelay, nextNextDelay);
                     } else {
-                        LOGGER.warning("Failed to signal after waiting thread after " + InitSignalWaitingThread.MAX_RETRIES + " attempts: " + e.toString());
-                        InitSignalWaitingThread.ON_FAIL_TO_SIGNAL_WAITING_THREAD.accept(e);
+                        LOGGER.warning("Failed to signal after waiting thread after " + MAX_RETRIES + " attempts: " + e.toString());
+                        ON_FAIL_TO_SIGNAL_WAITING_THREAD.accept(e);
                     }
                 }
             }, delay, TimeUnit.MILLISECONDS);
@@ -376,9 +383,10 @@ public class PriorityLock implements Lock {
 
     
     private static class ThreadLockDetails {
+        // all 3 member variables below are only changed while internalLock is locked =>
         private volatile int originalPriority; // to save the original priority of the thread in case user changes it while running the thread
         private volatile long threadId;
-        private int holdCount;
+        private int holdCount; // IntelliJ gives warnings on ++holdCount and --holdCount if make this volatile
 
         /**
          * Set the member variables of the class.
@@ -481,11 +489,10 @@ public class PriorityLock implements Lock {
         }
         
         /**
-         * Set whether to allow await functions to throw InterruptedException upon receiving an InterruptedException.
+         * Set whether to allow await functions to throw InterruptedException upon receiving an InterruptedException right away.
          * For example, if a thread with a lower priority is waiting for a thread with much higher priority to finish,
-         * and the thread with lower priority is interrupted,
-         * then upon the thread with much higher priority getting unlocked, the thread with lower priority encounters an InterruptedException.
-         * 
+         * and the thread with lowest priority is interrupted, should we throw an InterruptedException right away or wait for higher priority threads to finish?
+         *
          * @param allowEarlyInterruptFromAwait false (the default) means wait for threads with higher priority to finish before throwing an InterruptedException<br/>
          *                                     true means throw InterruptedException right away
          */
@@ -688,10 +695,12 @@ public class PriorityLock implements Lock {
      * PriorityLock waits for a condition of a higher thread priority to be signaled,
      * whereas PriorityLockCondition waits for a condition of this thread priority to be signaled.
      */
+    // VisibleForTesting
     class PriorityLockCondition implements Condition {
         private final boolean allowEarlyInterruptFromAwait;
         private final LevelManager levelManager;
         private final int[] waitingOn = new int[Thread.MAX_PRIORITY];
+        // next 2 member variables below are only changed while internalLock is locked =>
         private int signalCount;
         private int signaledThreadPriority;
         
@@ -737,6 +746,7 @@ public class PriorityLock implements Lock {
         @Override
         public void await() throws InterruptedException {
             InterruptedException interruptedException = null;
+            Throwable caughtException = null;
             int holdCount = PriorityLock.this.unlockForAwait();
             int priority = levelManager.addThread(Thread.currentThread());
             try {
@@ -774,6 +784,9 @@ public class PriorityLock implements Lock {
                 if (interruptedException != null) {
                     throw interruptedException;
                 }
+            } catch (InterruptedException | RuntimeException | Error e) {
+                caughtException = e;
+                throw e;
             } finally {
                 try {
                     boolean wasSignaled = signaledThreadPriority == priority;
@@ -786,7 +799,11 @@ public class PriorityLock implements Lock {
                     } else {
                         PriorityLock.this.lockUninterruptiblyAfterAwait(holdCount, wasSignaled);
                         if (Thread.interrupted()) {
-                            throw new InterruptedException();
+                            interruptedException = new InterruptedException();
+                            if (caughtException != null) {
+                                interruptedException.addSuppressed(caughtException);
+                            }
+                            throw interruptedException;
                         }
                     }
                 } finally {

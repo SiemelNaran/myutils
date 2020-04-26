@@ -227,7 +227,6 @@ public class SerializableScheduledExecutorServiceTest {
     }
 
     @Test
-    @SuppressWarnings("checkstyle:MethodLength")
     void testSerializableRunnable() throws InterruptedException, IOException, ClassNotFoundException, RecreateRunnableFailedException {
         Runnable runnableOne = new TestSerializableRunnable(1);
         Runnable runnableTwo = new TestSerializableRunnable(2);

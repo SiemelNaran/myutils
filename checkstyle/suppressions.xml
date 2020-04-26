@@ -6,15 +6,10 @@
 
 <suppressions>
     <suppress files="/src/test" checks="MethodLength"/> <!-- some tests are detailed and over 75 lines -->
-    <!--
     <suppress files="/src/test" checks="VariableDeclarationUsageDistance"/>
-    -->
-    <!--
-    <suppress files="/src/test" checks="LeftCurly"/> <!- - so can write lambda blocks on one line -->
-    <!--
-    <suppress files="/src/test" checks="OneStatementPerLine"/> <!- - so can write lambda blocks on one line -->
-    <!--
-    <suppress files="/src/test" checks="AbbreviationAsWordInName"/> <!- - for classes like PLUS, MINUS -->
+    <suppress files="/src/test" checks="LeftCurly"/>
+    <suppress files="/src/test" checks="OneStatementPerLine"/>
+    <suppress files="/src/test" checks="AbbreviationAsWordInName"/>
 
     <suppress files="/src/test" id="LineLengthMain"/>
     <suppress files="/src/main" id="LineLengthTest"/>
