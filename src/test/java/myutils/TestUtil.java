@@ -5,9 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.concurrent.Callable;
+import org.junit.jupiter.params.ParameterizedTest;
 
 
 public class TestUtil {
+    
+    public static final String PARAMETRIZED_TEST_DISPLAY_NAME = ParameterizedTest.DISPLAY_NAME_PLACEHOLDER + " [" + ParameterizedTest.INDEX_PLACEHOLDER + "]";
+
 
     /**
      * Assert that the desired exception is thrown.
