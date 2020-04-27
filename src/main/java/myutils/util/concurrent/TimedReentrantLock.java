@@ -33,28 +33,34 @@ public class TimedReentrantLock extends ReentrantLock {
     
     @Override
     public void lock() {
-        setStartTime();
+        boolean alreadyLocked = setStartTimeIfNotLocked();
         super.lock();
-        setTimesOnAcquireLock();
+        if (!alreadyLocked) {
+            setTimesOnAcquireLock();
+        }
     }
     
     @Override
     public void lockInterruptibly() throws InterruptedException {
-        setStartTime();
+        boolean alreadyLocked = setStartTimeIfNotLocked();
         try {
             super.lockInterruptibly();
-            setTimesOnAcquireLock();
+            if (!alreadyLocked) {
+                setTimesOnAcquireLock();
+            }
         } catch (InterruptedException e) {
-            setWaitTimeOnAcquireLock(System.currentTimeMillis());
+            if (!alreadyLocked) {
+                setWaitTimeOnAcquireLock(System.currentTimeMillis());
+            }
             throw e;
         }
     }
     
     @Override
     public boolean tryLock() {
-        setStartTime();
+        boolean alreadyLocked = setStartTimeIfNotLocked();
         boolean acquired = super.tryLock();
-        if (acquired) {
+        if (acquired && !alreadyLocked) {
             setTimesOnAcquireLock();
         }
         return acquired;
@@ -62,20 +68,25 @@ public class TimedReentrantLock extends ReentrantLock {
 
     @Override
     public boolean tryLock(long timeout, TimeUnit unit) throws InterruptedException {
-        setStartTime();
+        boolean alreadyLocked = setStartTimeIfNotLocked();
         boolean acquired = super.tryLock(timeout, unit);
-        if (acquired) {
-            setTimesOnAcquireLock();
-        } else {
-            setWaitTimeOnAcquireLock(System.currentTimeMillis());
+        if (!alreadyLocked) {
+            if (acquired) {
+                setTimesOnAcquireLock();
+            } else {
+                setWaitTimeOnAcquireLock(System.currentTimeMillis());
+            }
         }
         return acquired;
     }
 
     @Override
     public void unlock() {
-        setRunningTimeOnUnlock();
+        long delta = setRunningTimeOnUnlock();
         super.unlock();
+        if (isHeldByCurrentThread()) {
+            totalLockRunningTime -= delta;
+        }
     }
     
     @Override
@@ -93,7 +104,7 @@ public class TimedReentrantLock extends ReentrantLock {
         @Override
         public void awaitUninterruptibly() {
             setRunningTimeOnUnlock();
-            setStartTime();
+            setStartTimeWhenLocked();
             try {
                 internalCondition.awaitUninterruptibly();
             } finally {
@@ -104,7 +115,7 @@ public class TimedReentrantLock extends ReentrantLock {
         @Override
         public void await() throws InterruptedException {
             setRunningTimeOnUnlock();
-            setStartTime();
+            setStartTimeWhenLocked();
             try {
                 internalCondition.await();
             } finally {
@@ -115,7 +126,7 @@ public class TimedReentrantLock extends ReentrantLock {
         @Override
         public boolean await(long time, TimeUnit unit) throws InterruptedException {
             setRunningTimeOnUnlock();
-            setStartTime();
+            setStartTimeWhenLocked();
             try {
                 return internalCondition.await(time, unit);
             } finally {
@@ -126,7 +137,7 @@ public class TimedReentrantLock extends ReentrantLock {
         @Override
         public long awaitNanos(long nanosTimeout) throws InterruptedException {
             setRunningTimeOnUnlock();
-            setStartTime();
+            setStartTimeWhenLocked();
             try {
                 return internalCondition.awaitNanos(nanosTimeout);
             } finally {
@@ -137,7 +148,7 @@ public class TimedReentrantLock extends ReentrantLock {
         @Override
         public boolean awaitUntil(@Nonnull Date deadline) throws InterruptedException {
             setRunningTimeOnUnlock();
-            setStartTime();
+            setStartTimeWhenLocked();
             try {
                 return internalCondition.awaitUntil(deadline);
             } finally {
@@ -156,11 +167,33 @@ public class TimedReentrantLock extends ReentrantLock {
         }
         
     }
-    
-    private void setStartTime() {
+
+    /**
+     * Called from lock functions.
+     * If this.isHeldByCurrentThread is false then set startTime to now.
+     * This is used to set totalWaitTime upon the lock getting acquired.
+     *
+     * @return this.isHeldByCurrentThread
+     */
+    private boolean setStartTimeIfNotLocked() {
+        if (isHeldByCurrentThread()) {
+            return true;
+        } else {
+            startTime.set(System.currentTimeMillis());
+            return false;
+        }
+    }
+
+    /**
+     * Called from await functions.
+     * Set startTime to now.
+     * This is used to set totalWaitTime upon the lock getting acquired.
+     */
+    private void setStartTimeWhenLocked() {
+        assert(isHeldByCurrentThread());
         startTime.set(System.currentTimeMillis());
     }
-    
+
     private void setTimesOnAcquireLock() {
         long now = System.currentTimeMillis();
         setWaitTimeOnAcquireLock(now);
@@ -171,8 +204,10 @@ public class TimedReentrantLock extends ReentrantLock {
         totalWaitTime += now - startTime.get();
     }
     
-    private void setRunningTimeOnUnlock() {
-        totalLockRunningTime += System.currentTimeMillis() - lockStartTime;
+    private long setRunningTimeOnUnlock() {
+        long delta = System.currentTimeMillis() - lockStartTime;
+        totalLockRunningTime += delta;
+        return delta;
     }
     
     public final Duration getTotalWaitTime() {

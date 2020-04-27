@@ -58,11 +58,11 @@ public class TimedReentrantLockTest {
         TimedReentrantLock lock = new TimedReentrantLock();
         service.schedule(() -> {
             logString("start thread 1");
-            lock.lock();
+            lock.lock(); // sets lockStartTime to 300
             try {
                 logString("acquired lock in thread 1");
                 sleep(500);
-                lock.lock();
+                lock.lock(); // does not set lockStartTime to 800 as lock is already locked
                 try {
                     logString("reacquired lock in thread 1");
                     sleep(500);
@@ -70,11 +70,17 @@ public class TimedReentrantLockTest {
                     try {
                         sleep(500);
                     } finally {
-                        lock.unlock();
+                        logString("about to unlock in thread 1");
+                        lock.unlock(); // runningTime unchanged since locked is locked twice
                     }
                 }
             } finally {
-                lock.unlock();
+                try {
+                    sleep(500);
+                } finally {
+                    logString("about to unlock in thread 1");
+                    lock.unlock(); // runningTime += 2300-300=2000
+                }
             }
             logString("end thread 1");
         }, 300, TimeUnit.MILLISECONDS);
@@ -94,8 +100,8 @@ public class TimedReentrantLockTest {
         service.shutdown();
         service.awaitTermination(10, TimeUnit.SECONDS);
         
-        assertEquals(1300, lock.getTotalWaitTime().toMillis(), 40.0); // thread 1 ends at 1800, thread 2 waiting from 500, so waitTime=1800-500=1300
-        assertEquals(2500, lock.getTotalLockRunningTime().toMillis(), 40.0); // each thread runs for 1000, set net 2000ms
+        assertEquals(1800, lock.getTotalWaitTime().toMillis(), 40.0); // thread 1 ends at 2300, thread 2 waiting from 500, so waitTime=2300-500=1800
+        assertEquals(3000, lock.getTotalLockRunningTime().toMillis(), 40.0); // thread 1 runs for 2000ms, thread 2 runs for 1000ms
         assertEquals(300, lock.getTotalIdleTime().toMillis(), 40.0); // as lock waiting from time 0ms to 300ms when thread 1 starts
     }
     
@@ -108,22 +114,28 @@ public class TimedReentrantLockTest {
         service.schedule(() -> {
             logString("start thread 1");
             try {
-                lock.lockInterruptibly();
+                lock.lockInterruptibly(); // sets lockStartTime to 300
                 try {
                     logString("acquired lock in thread 1");
                     sleep(500);
-                    lock.lock();
+                    lock.lock(); // does not set lockStartTime to 800 as lock is already locked
                     try {
                         logString("reacquired lock in thread 1");
                         sleep(500);
                     } finally {
-                        lock.unlock();
+                        try {
+                            sleep(500);
+                        } finally {
+                            logString("about to unlock in thread 1");
+                            lock.unlock(); // runningTime += 2300-300=2000
+                        }
                     }
                 } finally {
                     try {
                         sleep(500);
                     } finally {
-                        lock.unlock();
+                        logString("about to unlock in thread 1");
+                        lock.unlock(); // runningTime += 2300-300=2000
                     }
                 }
             } catch (InterruptedException e) {
@@ -141,7 +153,7 @@ public class TimedReentrantLockTest {
                     sleep(500);
                     lock.lock();
                     try {
-                        logString("reacquired lock in thread 1");
+                        logString("reacquired lock in thread 2");
                         sleep(500);
                     } finally {
                         lock.unlock();
@@ -164,7 +176,7 @@ public class TimedReentrantLockTest {
         service.awaitTermination(10, TimeUnit.SECONDS);
         
         assertEquals(200, lock.getTotalWaitTime().toMillis(), 40.0); // thread 2 cancelled at 700 so never runs, and waited only from time 500ms to time 700ms
-        assertEquals(1000, lock.getTotalLockRunningTime().toMillis(), 40.0); // only thread1 runs
+        assertEquals(2000, lock.getTotalLockRunningTime().toMillis(), 40.0); // only thread 1 runs
         assertEquals(300, lock.getTotalIdleTime().toMillis(), 40.0); // as lock waiting from time 0ms to 300ms when thread 1 starts
     }
     
@@ -176,20 +188,30 @@ public class TimedReentrantLockTest {
         TimedReentrantLock lock = new TimedReentrantLock();
         service.schedule(() -> {
             logString("start thread 1");
-            boolean acquired = lock.tryLock();
+            boolean acquired = lock.tryLock(); // sets lockStartTime to 300
             if (acquired) {
                 logString("acquired lock in thread 1");
                 try {
                     sleep(500);
-                    assertTrue(lock.tryLock());
+                    assertTrue(lock.tryLock()); // does not set lockStartTime to 800 as lock is already locked
                     try {
                         logString("reacquired lock in thread 1");
                         sleep(500);
                     } finally {
-                        lock.unlock();
+                        try {
+                            sleep(500);
+                        } finally {
+                            logString("about to unlock in thread 1");
+                            lock.unlock(); // runningTime += 2300-300=2000
+                        }
                     }
                 } finally {
-                    lock.unlock();
+                    try {
+                        sleep(500);
+                    } finally {
+                        logString("about to unlock in thread 1");
+                        lock.unlock(); // runningTime += 2300-300=2000
+                    }
                 }
             }
             logString("end thread 1");
@@ -213,7 +235,7 @@ public class TimedReentrantLockTest {
         service.awaitTermination(10, TimeUnit.SECONDS);
         
         assertEquals(0, lock.getTotalWaitTime().toMillis(), 10.0); // because tryLock returns right away it never increments waitTime
-        assertEquals(1000, lock.getTotalLockRunningTime().toMillis(), 40.0); // because only thread 1 runs for 500ms 
+        assertEquals(2000, lock.getTotalLockRunningTime().toMillis(), 40.0); // because only thread 1 runs
         assertEquals(300, lock.getTotalIdleTime().toMillis(), 40.0); // as lock waiting from time 0ms to 300ms when thread 1 starts
     }
 
@@ -226,20 +248,30 @@ public class TimedReentrantLockTest {
         service.schedule(() -> {
             logString("start thread 1");
             try {
-                boolean acquired = lock.tryLock(400, TimeUnit.MILLISECONDS);
+                boolean acquired = lock.tryLock(400, TimeUnit.MILLISECONDS); // sets lockStartTime to 300
                 if (acquired) {
                     logString("acquired lock in thread 1");
                     try {
                         sleep(500);
-                        assertTrue(lock.tryLock());
+                        assertTrue(lock.tryLock()); // does not set lockStartTime to 800 as lock is already locked
                         try {
                             logString("reacquired lock in thread 1");
                             sleep(500);
                         } finally {
-                            lock.unlock();
+                            try {
+                                sleep(500);
+                            } finally {
+                                logString("about to unlock in thread 1");
+                                lock.unlock(); // runningTime += 2300-300=2000
+                            }
                         }
                     } finally {
-                        lock.unlock();
+                        try {
+                            sleep(500);
+                        } finally {
+                            logString("about to unlock in thread 1");
+                            lock.unlock(); // runningTime += 2300-300=2000
+                        }
                     }
                 }
             } catch (InterruptedException e) {
@@ -269,7 +301,7 @@ public class TimedReentrantLockTest {
         service.awaitTermination(10, TimeUnit.SECONDS);
         
         assertEquals(400, lock.getTotalWaitTime().toMillis(), 40.0); // as lock2 starts waiting at 300ms and waits till 700ms before throwing, so wait time is 400ms 
-        assertEquals(1000, lock.getTotalLockRunningTime().toMillis(), 40.0);
+        assertEquals(2000, lock.getTotalLockRunningTime().toMillis(), 40.0);
         assertEquals(300, lock.getTotalIdleTime().toMillis(), 40.0); // as lock waiting from time 0ms to 300ms when thread 1 starts
     }
     
