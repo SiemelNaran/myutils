@@ -1,5 +1,6 @@
 package myutils.util.concurrent;
 
+import javax.annotation.*;
 import java.time.Duration;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
@@ -73,12 +74,12 @@ public class TimedReentrantLock extends ReentrantLock {
 
     @Override
     public void unlock() {
-        setRunningTimeOnUnlock(System.currentTimeMillis());
+        setRunningTimeOnUnlock();
         super.unlock();
     }
     
     @Override
-    public Condition newCondition() {
+    public @Nonnull Condition newCondition() {
         return new InternalCondition(super.newCondition());
     }
     
@@ -91,7 +92,7 @@ public class TimedReentrantLock extends ReentrantLock {
 
         @Override
         public void awaitUninterruptibly() {
-            setRunningTimeOnUnlock(System.currentTimeMillis());
+            setRunningTimeOnUnlock();
             setStartTime();
             try {
                 internalCondition.awaitUninterruptibly();
@@ -102,7 +103,7 @@ public class TimedReentrantLock extends ReentrantLock {
 
         @Override
         public void await() throws InterruptedException {
-            setRunningTimeOnUnlock(System.currentTimeMillis());
+            setRunningTimeOnUnlock();
             setStartTime();
             try {
                 internalCondition.await();
@@ -113,7 +114,7 @@ public class TimedReentrantLock extends ReentrantLock {
 
         @Override
         public boolean await(long time, TimeUnit unit) throws InterruptedException {
-            setRunningTimeOnUnlock(System.currentTimeMillis());
+            setRunningTimeOnUnlock();
             setStartTime();
             try {
                 return internalCondition.await(time, unit);
@@ -124,7 +125,7 @@ public class TimedReentrantLock extends ReentrantLock {
 
         @Override
         public long awaitNanos(long nanosTimeout) throws InterruptedException {
-            setRunningTimeOnUnlock(System.currentTimeMillis());
+            setRunningTimeOnUnlock();
             setStartTime();
             try {
                 return internalCondition.awaitNanos(nanosTimeout);
@@ -134,8 +135,8 @@ public class TimedReentrantLock extends ReentrantLock {
         }
 
         @Override
-        public boolean awaitUntil(Date deadline) throws InterruptedException {
-            setRunningTimeOnUnlock(System.currentTimeMillis());
+        public boolean awaitUntil(@Nonnull Date deadline) throws InterruptedException {
+            setRunningTimeOnUnlock();
             setStartTime();
             try {
                 return internalCondition.awaitUntil(deadline);
@@ -156,7 +157,7 @@ public class TimedReentrantLock extends ReentrantLock {
         
     }
     
-    private final void setStartTime() {
+    private void setStartTime() {
         startTime.set(System.currentTimeMillis());
     }
     
@@ -170,7 +171,7 @@ public class TimedReentrantLock extends ReentrantLock {
         totalWaitTime += now - startTime.get();
     }
     
-    private void setRunningTimeOnUnlock(long now) {
+    private void setRunningTimeOnUnlock() {
         totalLockRunningTime += System.currentTimeMillis() - lockStartTime;
     }
     
