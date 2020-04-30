@@ -39,8 +39,7 @@ public class TestUtil {
      * @throws AssertionError if assertion fails
      */
     @SuppressWarnings("unchecked")
-    public static <T, U> U assertExceptionFromCallable(Callable<T> callable, Class<U> expectedException,
-            String expectedMessage) {
+    public static <T, U> U assertExceptionFromCallable(Callable<T> callable, Class<U> expectedException, String expectedMessage) {
         try {
             callable.call();
             fail("Expected exception " + expectedException.getSimpleName() + ", but got no exception");
