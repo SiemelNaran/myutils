@@ -49,9 +49,7 @@ public class TimedReentrantLock extends ReentrantLock {
                 setTimesOnAcquireLock();
             }
         } catch (InterruptedException e) {
-            if (!alreadyLocked) {
-                setWaitTimeOnAcquireLock(System.currentTimeMillis());
-            }
+            setWaitTimeOnAcquireLock(System.currentTimeMillis());
             throw e;
         }
     }

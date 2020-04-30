@@ -48,6 +48,7 @@ public class TimedReentrantLockTest {
     @AfterAll
     static void printAllTestsFinished() {
         Duration timeTaken = Duration.ofMillis(System.currentTimeMillis() - startOfAllTests);
+        System.out.println("--------------------------------------------------------------------------------");
         System.out.println("all tests finished in " + timeTaken);
     }
     
@@ -118,7 +119,7 @@ public class TimedReentrantLockTest {
                 try {
                     logString("acquired lock in thread 1");
                     sleep(500);
-                    lock.lock(); // does not set lockStartTime to 800 as lock is already locked
+                    lock.lockInterruptibly(); // does not set lockStartTime to 800 as lock is already locked
                     try {
                         logString("reacquired lock in thread 1");
                         sleep(500);
@@ -253,7 +254,7 @@ public class TimedReentrantLockTest {
                     logString("acquired lock in thread 1");
                     try {
                         sleep(500);
-                        assertTrue(lock.tryLock()); // does not set lockStartTime to 800 as lock is already locked
+                        assertTrue(lock.tryLock(400, TimeUnit.MILLISECONDS)); // does not set lockStartTime to 800 as lock is already locked
                         try {
                             logString("reacquired lock in thread 1");
                             sleep(500);
@@ -321,7 +322,7 @@ public class TimedReentrantLockTest {
     
     @ParameterizedTest
     @ValueSource(ints = {0, 1, 2, 3, 4})
-    public void testAwait(int awaitFunctionIndex) throws InterruptedException {
+    public void testAllAwaitFunctions(int awaitFunctionIndex) throws InterruptedException {
         AwaitFunction awaitFunction = AWAIT_FUNCTIONS[awaitFunctionIndex];
         
         ScheduledExecutorService service = Executors.newScheduledThreadPool(3, myThreadFactory());
@@ -377,7 +378,74 @@ public class TimedReentrantLockTest {
         service.awaitTermination(10, TimeUnit.SECONDS);
         
         assertEquals(1200, lock.getTotalWaitTime().toMillis(), 40.0); // thread 1 starts waiting at 300+500=800ms and acquires lock at 2000ms
-        assertEquals(2000, lock.getTotalLockRunningTime().toMillis(), 40.0); // each thread runs for 1000, set net 2000ms
+        assertEquals(2000, lock.getTotalLockRunningTime().toMillis(), 40.0); // each thread runs for 1000, so net 2000ms
+        assertEquals(500, lock.getTotalIdleTime().toMillis(), 40.0); // as lock waiting from time 0ms to 300ms, and 800ms to 1000ms
+    }
+    
+    /**
+     * Same as above test except that we only test condition.await().
+     * In the previous test thread1 calls await and is interrupted while waiting for a signal.
+     * Here the thread is interrupted after it is signaled.
+     * We also call signalAll to get code coverage in signalAll.
+     */
+    @Test
+    public void testAwait() throws InterruptedException {
+        AwaitFunction awaitFunction = AWAIT_FUNCTIONS[1];
+        
+        ScheduledExecutorService service = Executors.newScheduledThreadPool(3, myThreadFactory());
+        
+        TimedReentrantLock lock = new TimedReentrantLock();
+        Condition condition = lock.newCondition();
+        
+        
+        ScheduledFuture<?> thread1 = service.schedule(() -> {
+            logString("start thread 1");
+            lock.lock();
+            try {
+                logString("acquired lock in thread 1");
+                sleep(500);
+                logString("about to await in thread 1");
+                try {
+                    awaitFunction.accept(condition);
+                } catch (InterruptedException e) {
+                    logString("caught InterruptedException in thread 1");
+                }
+                logString("await done in thread 1");
+                if (Thread.interrupted()) {
+                    logString("thread 1 is interrupted, clearing interrupted flag");
+                }
+                sleep(500);
+            } finally {
+                lock.unlock();
+            }
+            logString("end thread 1");
+        }, 300, TimeUnit.MILLISECONDS);
+        
+        service.schedule(() -> {
+            logString("start thread 2");
+            lock.lock();
+            try {
+                logString("acquired lock in thread 2");
+                sleep(1000);
+                condition.signalAll();
+            } finally {
+                lock.unlock();
+            }
+            logString("end thread 2");
+        }, 1000, TimeUnit.MILLISECONDS);
+        
+        service.schedule(() -> {
+            logString("start thread 3");
+            logString("about to interrupt thread 1");
+            thread1.cancel(true);
+            logString("end thread 3");
+        }, 2500, TimeUnit.MILLISECONDS);
+        
+        service.shutdown();
+        service.awaitTermination(10, TimeUnit.SECONDS);
+        
+        assertEquals(1200, lock.getTotalWaitTime().toMillis(), 40.0); // thread 1 starts waiting at 300+500=800ms and acquires lock at 2000ms
+        assertEquals(2000, lock.getTotalLockRunningTime().toMillis(), 40.0); // each thread runs for 1000, so net 2000ms
         assertEquals(500, lock.getTotalIdleTime().toMillis(), 40.0); // as lock waiting from time 0ms to 300ms, and 800ms to 1000ms
     }
     
