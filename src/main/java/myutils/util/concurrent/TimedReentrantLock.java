@@ -1,11 +1,11 @@
 package myutils.util.concurrent;
 
-import javax.annotation.*;
 import java.time.Duration;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import javax.annotation.Nonnull;
 
 
 /**
@@ -188,7 +188,7 @@ public class TimedReentrantLock extends ReentrantLock {
      * This is used to set totalWaitTime upon the lock getting acquired.
      */
     private void setStartTimeWhenLocked() {
-        assert(isHeldByCurrentThread());
+        assert isHeldByCurrentThread();
         startTime.set(System.currentTimeMillis());
     }
 
