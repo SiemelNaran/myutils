@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 
 
-public class MoreExecutorsTest {
+public class PriorityThreadPoolExecutorTest {
     long startOfTime;
 
     @BeforeEach
@@ -93,7 +93,7 @@ public class MoreExecutorsTest {
                            "end thread with priority 8",
                            "end thread with priority 7"));
         
-        assertThat(futures.stream().map(MoreExecutorsTest::getFromFuture).collect(Collectors.toList()),
+        assertThat(futures.stream().map(PriorityThreadPoolExecutorTest::getFromFuture).collect(Collectors.toList()),
                    Matchers.contains("44", "55", "66", "77", "88", "99"));
     }
     
@@ -124,7 +124,7 @@ public class MoreExecutorsTest {
                            "end thread with priority 8",
                            "end thread with priority 7"));
         
-        assertThat(futures.stream().map(MoreExecutorsTest::getFromFuture).collect(Collectors.toList()),
+        assertThat(futures.stream().map(PriorityThreadPoolExecutorTest::getFromFuture).collect(Collectors.toList()),
                    Matchers.contains("44", "55", "66", "77", "88", "99"));
     }
     
