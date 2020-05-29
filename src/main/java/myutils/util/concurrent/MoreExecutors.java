@@ -35,11 +35,10 @@ public class MoreExecutors {
      * except that scheduled tasks don't run until advanceTime is called.
      * 
      * @param corePoolSize the number of threads in the real executor used to actually run jobs
-     * @param threadFactory the thread factory
      * @param startTime the initial time. Will typically be System.currentTimeMillis(), but can set to something else for unit tests.
      */
     public static ScheduledExecutorService newTestScheduledThreadPool(int corePoolSize, long startTime) {
-        return new ScheduledThreadPoolTestExecutor(corePoolSize, Executors.defaultThreadFactory(), startTime);
+        return new TestScheduledThreadPoolExecutor(corePoolSize, Executors.defaultThreadFactory(), startTime);
     }
 
     /**
@@ -52,22 +51,22 @@ public class MoreExecutors {
      * @param startTime the initial time. Will typically be System.currentTimeMillis(), but can set to something else for unit tests.
      */
     public static ScheduledExecutorService newTestScheduledThreadPool(int corePoolSize, ThreadFactory threadFactory, long startTime) {
-        return new ScheduledThreadPoolTestExecutor(corePoolSize, threadFactory, startTime);
+        return new TestScheduledThreadPoolExecutor(corePoolSize, threadFactory, startTime);
     }
     
     /**
      * Advance the time to the given time, executing all runnables up till the given time.
      * 
-     * <p>The purpose of this static function is so that code can call ScheduledThreadPoolTestExecutor.advanceTime(service, time, unit)
-     * and it calls the real advanceTime if service is a myutils.util.concurrent.ScheduledThreadPoolTestExecutor,
+     * <p>The purpose of this static function is so that code can call TestScheduledThreadPoolExecutor.advanceTime(service, time, unit)
+     * and it calls the real advanceTime if service is a myutils.util.concurrent.TestScheduledThreadPoolExecutor,
      * and waits for the desired time if service is a java.util.concurrent.ScheduledThreadPoolExecutor.
      * 
      * @throws CompletionException if this thread is interrupted with the cause as the InterruptedException
-     * @see ScheduledThreadPoolTestExecutor#advanceTime(long, TimeUnit)
+     * @see TestScheduledThreadPoolExecutor#advanceTime(long, TimeUnit)
      */
     public static void advanceTime(ScheduledExecutorService service, long time, TimeUnit unit) {
-        if (service instanceof ScheduledThreadPoolTestExecutor) {
-            ScheduledThreadPoolTestExecutor testService = (ScheduledThreadPoolTestExecutor) service;
+        if (service instanceof TestScheduledThreadPoolExecutor) {
+            TestScheduledThreadPoolExecutor testService = (TestScheduledThreadPoolExecutor) service;
             testService.advanceTime(time, unit);
         } else {
             long millis = unit.toMillis(time);
@@ -82,12 +81,12 @@ public class MoreExecutors {
     
     /**
      * Return the time at which the current thread spawned from a schedule executor service runs.
-     * If called for a thread spawned from ScheduledThreadPoolTestExecutor return the time at which the thread is scheduled to run.
+     * If called for a thread spawned from TestScheduledThreadPoolExecutor return the time at which the thread is scheduled to run.
      * If called for a thread spawned from the regular java.util.concurrent.ScheduledThreadPoolExecutor or such then return System.currentTimeMillis().
      */
     public static long currentTimeMillis(ScheduledExecutorService service) {
-        if (service instanceof ScheduledThreadPoolTestExecutor) {
-            ScheduledThreadPoolTestExecutor testService = (ScheduledThreadPoolTestExecutor) service; 
+        if (service instanceof TestScheduledThreadPoolExecutor) {
+            TestScheduledThreadPoolExecutor testService = (TestScheduledThreadPoolExecutor) service; 
             return testService.currentTimeMillis();
         } else {
             return System.currentTimeMillis();

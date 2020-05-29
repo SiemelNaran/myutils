@@ -32,8 +32,14 @@ import myutils.util.MultimapUtils;
  * In a real scheduled executor, scheduled tasks run when the system clock advances to the time when the task is scheduled to run.
  * In this test scheduled executor, scheduled tasks never run, but they run once advanceTime is called.
  * This allow us to write unit tests that run scheduled tasks immediately.
+ * 
+ * <p>It is expected that unit tests will create a TestScheduledThreadPoolExecutor and call advanceTime as needed,
+ * whereas actual code will create a real ScheduledExecutorService. This could be accomplished for example with Guice.
+ * 
+ * <p>Test code could very well use a direct executor that runs tasks synchronously, so this class is only useful
+ * for the cases where that approach does not work.
  */
-public class ScheduledThreadPoolTestExecutor implements ScheduledExecutorService {
+public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService {
     private final ExecutorService realExecutor;
     private final SortedMap<Long /*millis*/, Collection<TestScheduledFutureTask<?>>> scheduledTasks = new TreeMap<>();
     private final List<TestScheduledFutureTask<?>> recurringTasksToReschedule = new ArrayList<>(); // TODO: do we need this variable?
@@ -49,7 +55,7 @@ public class ScheduledThreadPoolTestExecutor implements ScheduledExecutorService
      * @param threadFactory the thread factory
      * @param startTime the initial time. Will typically be System.currentTimeMillis(), but can set to something else for unit tests.
      */
-    public ScheduledThreadPoolTestExecutor(int corePoolSize, ThreadFactory threadFactory, long startTime) {
+    public TestScheduledThreadPoolExecutor(int corePoolSize, ThreadFactory threadFactory, long startTime) {
         realExecutor = Executors.newFixedThreadPool(corePoolSize, threadFactory);
         nowMillis = startTime;
     }
@@ -205,18 +211,18 @@ public class ScheduledThreadPoolTestExecutor implements ScheduledExecutorService
     }
     
     private static class TestScheduledFutureTask<T> extends FutureTask<T> implements RunnableScheduledFuture<T>, Callable<Void> {
-        private @Nullable ScheduledThreadPoolTestExecutor executor;
+        private @Nullable TestScheduledThreadPoolExecutor executor;
         private final long periodMillis; // zero means non recurring, positive means scheduleAtFixedRate, negative means scheduleWithFixedDelay
         private long timeMillis;
         
-        private TestScheduledFutureTask(@Nonnull ScheduledThreadPoolTestExecutor executor, Runnable runnable, long triggerTimeMillis, long periodMillis) {
+        private TestScheduledFutureTask(@Nonnull TestScheduledThreadPoolExecutor executor, Runnable runnable, long triggerTimeMillis, long periodMillis) {
             super(runnable, null);
             this.executor = executor;
             this.periodMillis = periodMillis;
             this.timeMillis = executor.nowMillis + triggerTimeMillis;
         }
 
-        private TestScheduledFutureTask(@Nonnull ScheduledThreadPoolTestExecutor executor, Callable<T> callable, long triggerTimeMillis, long periodMillis) {
+        private TestScheduledFutureTask(@Nonnull TestScheduledThreadPoolExecutor executor, Callable<T> callable, long triggerTimeMillis, long periodMillis) {
             super(callable);
             this.executor = executor;
             this.periodMillis = periodMillis;

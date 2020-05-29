@@ -37,7 +37,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 
 @ExtendWith(LogFailureToConsoleTestWatcher.class)
-public class ScheduledTestExecutorServiceTest {
+public class TestScheduledExecutorServiceTest {
     long startOfTime;
 
     @BeforeAll
