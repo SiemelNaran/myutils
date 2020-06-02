@@ -1,11 +1,14 @@
 package myutils.util.concurrent;
 
+import static java.lang.Math.abs;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.ExecutionException;
@@ -19,6 +22,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
@@ -43,6 +47,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     private final ExecutorService realExecutor;
     private final SortedMap<Long /*millis*/, Collection<TestScheduledFutureTask<?>>> scheduledTasks = new TreeMap<>();
     private final Lock taskFinishedLock = new ReentrantLock();
+    private final Condition taskFinishedCondition = taskFinishedLock.newCondition();
     private final ThreadLocal<Long> currentTimeMillis = new ThreadLocal<>();
     private long nowMillis;
     private boolean shutdown;
@@ -60,7 +65,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     }
 
     // Overrides:
-    
+
     /**
      * {@inheritDoc}
      * 
@@ -214,10 +219,11 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
         return new TestScheduledFutureTask<T>(this, callable, triggerTime, period);
     }
     
-    private static class TestScheduledFutureTask<T> extends FutureTask<T> implements RunnableScheduledFuture<T>, Callable<Void> {
+    private static class TestScheduledFutureTask<T> extends FutureTask<T> implements RunnableScheduledFuture<T> {
         private @Nullable TestScheduledThreadPoolExecutor executor;
         private final long periodMillis; // zero means non recurring, positive means scheduleAtFixedRate, negative means scheduleWithFixedDelay
         private long timeMillis;
+        private volatile Future<?> realFuture;
         
         private TestScheduledFutureTask(@Nonnull TestScheduledThreadPoolExecutor executor, Runnable runnable, long triggerTimeMillis, long periodMillis) {
             super(runnable, null);
@@ -233,6 +239,14 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
             this.timeMillis = executor.nowMillis + triggerTimeMillis;
         }
         
+        private boolean isRunning() {
+            return realFuture != null;
+        }
+
+        private void setRealFuture(Future<?> realFuture) {
+            this.realFuture = realFuture;
+        }
+
         private void clearExecutor() {
             executor = null;
         }
@@ -258,8 +272,11 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
         @Override
         public boolean cancel(boolean mayInterruptIfRunning) {
             boolean cancelled = super.cancel(mayInterruptIfRunning);
+            if (realFuture != null) {
+                cancelled &= realFuture.cancel(mayInterruptIfRunning);
+            }
             if (executor != null) {
-                executor.remove(this);
+                executor.remove(this, timeMillis + abs(periodMillis));
             }
             return cancelled;
         }
@@ -273,36 +290,33 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
             }
         }
 
-        
         private void runNormal() {
             executor.setCurrentTimeMillis(timeMillis);
             if (!isPeriodic()) {
                 super.run();
             } else {
                 if (periodMillis > 0) {
-                    if (super.runAndReset()) {
-                        executor.move(this, timeMillis + periodMillis);
-                    }
+                    super.runAndReset();
                 } else {
                     long startTimeNanos = System.nanoTime();
                     if (super.runAndReset()) {
                         long timeTakenNanos = System.nanoTime() - startTimeNanos;
                         long timeTakenMillis = timeTakenNanos / 1_000_000;
-                        executor.move(this, timeMillis + timeTakenMillis - periodMillis);
+                        executor.addTimeTakenForScheduleWithFixedDelay(this, timeMillis - periodMillis, timeTakenMillis);
                     }
                 }
             }
+            realFuture = null;
             executor.setCurrentTimeMillis(null);
+            executor.signalMainLoopInAdvanceTime();
         }
         
+        /**
+         * The purpose of this function is to run the runnable when the user calls shutdownNow and then runs the runnables
+         * in the list returned by shutdownNow.
+         */
         private void runDetached() {
             super.run();
-        }
-
-        @Override
-        public Void call() {
-            run();
-            return null;
         }
     }
 
@@ -332,32 +346,45 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     }
     
     private void doAdvanceTime(final Long waitUntilMillis) throws InterruptedException {
+        List<Future<?>> futures = new ArrayList<>();
         while (true) {
-            Collection<TestScheduledFutureTask<?>> tasksToRun = extractAndClearTasksToRun();
+            TasksToRun tasksToRun = extractAndClearTasksToRun();
             if (tasksToRun == null) {
-                break;
-            }
-            try {
-                if (waitUntilMillis == null) {
-                    invokeAll(tasksToRun);
-                } else {
-                    long timeMillis = tasksToRun.iterator().next().timeMillis;
-                    long waitMillis = waitUntilMillis - timeMillis;
-                    System.out.println("snaran " + waitMillis);
-                    invokeAll(tasksToRun, waitMillis, TimeUnit.MILLISECONDS);
-
+                if (futures.isEmpty()) {
+                    break;
                 }
-            } finally {
+            } else {
+                long timeMillis = tasksToRun.timeMillis;
+                for (var task : tasksToRun.tasks) {
+                    if (!task.isRunning()) {
+                        task.timeMillis = timeMillis;
+                        reschedulePeriodicTask(task);
+                        var future = realExecutor.submit(task);
+                        task.setRealFuture(future);
+                        futures.add(future);
+                    } else {
+                        addBackPeriodicTaskThatIsStillRunning(task, timeMillis);
+                    }
+                }
             }
+            waitForSignal(waitUntilMillis, futures);
+            futures.removeIf(Future::isDone);
+        }
+        
+        if (waitUntilMillis == null) {
+            awaitAll(futures);
+        } else {
+            awaitAll(futures, waitUntilMillis);
         }
     }
 
+
     /**
      * Return all tasks to run at the next scheduled time, or null if there are no tasks.
-     * The returned list will never be empty.
-     * Removes the tasks from this.scheduledTasks, so must be called while this object is synchronized.
+     * The returned list will never be empty if it is not null.
+     * Reschedules periodic tasks now so that ordering can be guaranteed.
      */
-    private @Nullable Collection<TestScheduledFutureTask<?>> extractAndClearTasksToRun() {
+    private @Nullable TasksToRun extractAndClearTasksToRun() {
         taskFinishedLock.lock();
         try {
             var timeIter = scheduledTasks.entrySet().iterator();
@@ -365,42 +392,142 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
                 return null;
             }
             var entry = timeIter.next();
-            if (entry.getKey() > nowMillis) {
+            long timeMillis = entry.getKey();
+            if (timeMillis > nowMillis) {
                 return null;
             }
             Collection<TestScheduledFutureTask<?>> tasksToRun = entry.getValue(); // will never be empty
             timeIter.remove();
-            return tasksToRun;
+            return new TasksToRun(timeMillis, tasksToRun);
         } finally {
             taskFinishedLock.unlock();
+        }
+    }
+    
+    private static class TasksToRun {
+        private final long timeMillis;
+        private final @Nonnull Collection<TestScheduledFutureTask<?>> tasks; // also not empty
+        
+        TasksToRun(long timeMillis, @Nonnull Collection<TestScheduledFutureTask<?>> tasks) {
+            this.timeMillis = timeMillis;
+            this.tasks = tasks;
+        }
+    }
+    
+    /**
+     * Before we start a periodic task we reschedule it so that when this task is finished we run the proper task.
+     * For example, suppose task A starts at 300ms and runs again at 950ms, and task B starts at 300ms and runs at 500ms.
+     * If we reschedule a task after it ends, then after the task at 300ms ends we reschedule the next one to run at 950ms,
+     * and it will run right away because either B is running or has been not been rescheduled yet after it ended, giving the next instance of A a chance to run.
+     * But if we reschedule tasks before they start, then after the task at 300ms ends we pick up the task at 500ms (which is the next instance of task A).
+     */
+    private void reschedulePeriodicTask(TestScheduledFutureTask<?> task) {
+        if (shutdown) {
+            return;
+        }
+        if (task.isPeriodic()) {
+            long newTimeMillis = task.timeMillis + abs(task.periodMillis);
+            MultimapUtils<Long, TestScheduledFutureTask<?>> multimap = new MultimapUtils<>(scheduledTasks, ArrayList::new);
+            multimap.put(newTimeMillis, task); // note that the nowTimeMillis is out of sync with task.timeMillis
+        }
+    }
+    
+    private void addBackPeriodicTaskThatIsStillRunning(TestScheduledFutureTask<?> task, long existingTimeMillis) {
+        if (shutdown) {
+            return;
+        }
+        if (task.isPeriodic()) {
+            MultimapUtils<Long, TestScheduledFutureTask<?>> multimap = new MultimapUtils<>(scheduledTasks, ArrayList::new);
+            multimap.put(existingTimeMillis, task); // note that the existingTimeMillis is out of sync with task.timeMillis
+        }
+    }
+    
+    private void waitForSignal(Long waitUntilMillis, List<Future<?>> futures) throws InterruptedException {
+        taskFinishedLock.lock();
+        try {
+            while (futures.stream().noneMatch(Future::isDone)) {
+                taskFinishedCondition.await();
+            }
+        } finally {
+            taskFinishedLock.unlock();
+        }
+    }
+
+    /**
+     * Wait for all futures to finish.
+     *
+     * @throws CancellationException if any of the futures were cancelled
+     * @throws InterruptedException if this thread was interrupted
+     */
+    private void awaitAll(List<Future<?>> futures) throws InterruptedException {
+        for (var future : futures) {
+            try {
+                future.get();
+            } catch (CancellationException | ExecutionException ignored) {
+            }
+        }
+    }
+
+    private void awaitAll(List<Future<?>> futures, long waitUntilMillis) throws InterruptedException {
+        boolean cancelled = false;
+        for (var future : futures) {
+            try {
+                long timeout = waitUntilMillis - System.currentTimeMillis();
+                future.get(timeout, TimeUnit.MILLISECONDS);
+            } catch (CancellationException | ExecutionException ignored) {
+            } catch (TimeoutException ignored) {
+                break;
+            }
+        }
+        if (cancelled) {
+            throw new CancellationException();
         }
     }
 
     /**
      * User called scheduledFuture.cancel() so remove the future task from the scheduled task map.
-     * This function is not called from TestScheduledFutureTask.run() so it should synchronize.
      */
-    private synchronized boolean remove(TestScheduledFutureTask<?> task) {
-        MultimapUtils<Long, TestScheduledFutureTask<?>> multimap = new MultimapUtils<>(scheduledTasks, ArrayList::new);
-        return multimap.remove(task.timeMillis, task);
-    }
-
-    /**
-     * A period task just ran is is being rescheduled to run at a future time.
-     * This function is initially called from advanceTime, so the task has already been removed from the tasks map.
-     * This function is called from TestScheduledFutureTask.run() so do not synchronize as this would cause a deadlock.
-     */
-    private void move(TestScheduledFutureTask<?> task, long newTimeMillis) {
+    private boolean remove(TestScheduledFutureTask<?> task, long nextScheduledMillis) {
         taskFinishedLock.lock();
         try {
-            task.timeMillis = newTimeMillis;
             MultimapUtils<Long, TestScheduledFutureTask<?>> multimap = new MultimapUtils<>(scheduledTasks, ArrayList::new);
-            multimap.put(task.timeMillis, task);
+            return multimap.remove(nextScheduledMillis, task);
         } finally {
             taskFinishedLock.unlock();
         }
     }
 
+    /**
+     * A periodic task with fixed delay just ran.
+     * The scheduledTasks map already contains the next instance of this task assuming it ran for 0ms.
+     * Reschedule the task to add the time taken.
+     * This function is called from TestScheduledFutureTask.run() so do not synchronize as this would cause a deadlock.
+     */
+    private void addTimeTakenForScheduleWithFixedDelay(TestScheduledFutureTask<?> task, long nextScheduledMillis, long timeTakenMillis) {
+        taskFinishedLock.lock();
+        try {
+            if (!shutdown) {
+                MultimapUtils<Long, TestScheduledFutureTask<?>> multimap = new MultimapUtils<>(scheduledTasks, ArrayList::new);
+                multimap.remove(nextScheduledMillis, task);
+                multimap.put(nextScheduledMillis + timeTakenMillis, task);
+            }
+        } finally {
+            taskFinishedLock.unlock();
+        }
+    }
+    
+    /**
+     * Notify the main loop that a task is done.
+     */
+    private void signalMainLoopInAdvanceTime() {
+        taskFinishedLock.lock();
+        try {
+            taskFinishedCondition.signal();
+        } finally {
+            taskFinishedLock.unlock();
+        }
+    }
+    
     private void setCurrentTimeMillis(Long timeMillis) {
         currentTimeMillis.set(timeMillis);
     }
