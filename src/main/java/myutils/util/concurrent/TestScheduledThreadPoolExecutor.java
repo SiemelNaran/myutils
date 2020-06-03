@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.ExecutionException;
@@ -389,13 +388,6 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
             futures.removeIf(Future::isDone);
         }
         
-        if (originalWaitNanos == null) {
-            awaitAll(futures);
-        } else {
-            long waitMillis = nanosLeft;
-            awaitAll(futures, waitMillis);
-        }
-        
         return new AdvanceTimeResult(nanosLeft);
     }
 
@@ -497,36 +489,6 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
             return timeLeft;
         } finally {
             taskFinishedLock.unlock();
-        }
-    }
-
-    /**
-     * Wait for all futures to finish.
-     *
-     * @throws CancellationException if any of the futures were cancelled
-     * @throws InterruptedException if this thread was interrupted
-     */
-    private void awaitAll(List<Future<?>> futures) throws InterruptedException {
-        for (var future : futures) {
-            try {
-                future.get();
-            } catch (CancellationException | ExecutionException ignored) {
-            }
-        }
-    }
-
-    private void awaitAll(List<Future<?>> futures, long waitMillis) throws InterruptedException {
-        boolean cancelled = false;
-        for (var future : futures) {
-            try {
-                future.get(waitMillis, TimeUnit.MILLISECONDS);
-            } catch (CancellationException | ExecutionException ignored) {
-            } catch (TimeoutException ignored) {
-                break;
-            }
-        }
-        if (cancelled) {
-            throw new CancellationException();
         }
     }
 
