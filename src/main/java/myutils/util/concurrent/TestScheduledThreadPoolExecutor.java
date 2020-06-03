@@ -45,7 +45,7 @@ import myutils.util.MultimapUtils;
 public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService {
     private final ExecutorService realExecutor;
     private final SortedMap<Long /*millis*/, Collection<TestScheduledFutureTask<?>>> scheduledTasks = new TreeMap<>();
-    private final Lock taskFinishedLock = new ReentrantLock();
+    private final Lock taskFinishedLock = new ReentrantLock(); // lock this when changing scheduledTasks (and function is not synchronized)
     private final Condition taskFinishedCondition = taskFinishedLock.newCondition();
     private final ThreadLocal<Long> currentTimeMillis = new ThreadLocal<>();
     private long nowMillis;
@@ -341,13 +341,8 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     
     private synchronized AdvanceTimeResult advanceTimeWithException(long time, TimeUnit unit, boolean waitForever) throws InterruptedException {
         long originalNowMillis = nowMillis;
-        taskFinishedLock.lock();
-        try {
-            long timeMillis = unit.toMillis(time);
-            nowMillis += timeMillis;
-        } finally {
-            taskFinishedLock.unlock();
-        }
+        long timeMillis = unit.toMillis(time);
+        nowMillis += timeMillis;
         return doAdvanceTime(originalNowMillis, waitForever ? null : unit.toNanos(time));
     }
     
@@ -525,7 +520,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     }
     
     /**
-     * Notify the main loop that a task is done.
+     * Notify the main loop in doAdvanceTime that a task is done.
      */
     private void signalMainLoopInAdvanceTime() {
         taskFinishedLock.lock();
