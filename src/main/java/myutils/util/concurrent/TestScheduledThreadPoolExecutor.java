@@ -114,16 +114,14 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
 
     @Override
     public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
-        long startTime = System.nanoTime();
-        advanceTimeWithException(timeout, unit, false);
+        AdvanceTimeResult advanceTimeResult = advanceTimeWithException(timeout, unit, false);
         boolean finishedAllTasks = scheduledTasks.isEmpty();
         if (!realExecutor.isShutdown()) {
             // shutdown() does not call realExecutor.shutdown() in order to let jobs already submitted to this executor service to run
             // so call it now
             realExecutor.shutdown();
         }
-        long timeTakenNanos = System.nanoTime() - startTime;
-        finishedAllTasks &= realExecutor.awaitTermination(unit.toNanos(timeout) - timeTakenNanos, TimeUnit.NANOSECONDS);
+        finishedAllTasks &= realExecutor.awaitTermination(advanceTimeResult.nanosLeft, TimeUnit.NANOSECONDS);
         return finishedAllTasks;
     }
 
@@ -334,7 +332,16 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
         }
     }
     
-    private synchronized void advanceTimeWithException(long time, TimeUnit unit, boolean waitForever) throws InterruptedException {
+    private static class AdvanceTimeResult {
+        private final long nanosLeft;
+        
+        AdvanceTimeResult(long nanosLeft) {
+            this.nanosLeft = nanosLeft;
+        }
+    }
+    
+    private synchronized AdvanceTimeResult advanceTimeWithException(long time, TimeUnit unit, boolean waitForever) throws InterruptedException {
+        long originalNowMillis = nowMillis;
         taskFinishedLock.lock();
         try {
             long timeMillis = unit.toMillis(time);
@@ -342,12 +349,16 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
         } finally {
             taskFinishedLock.unlock();
         }
-        doAdvanceTime(waitForever ? null : System.currentTimeMillis() + unit.toMillis(time));
+        return doAdvanceTime(originalNowMillis, waitForever ? null : unit.toNanos(time));
     }
     
-    private void doAdvanceTime(final Long waitUntilMillis) throws InterruptedException {
-        List<Future<?>> futures = new ArrayList<>();
-        while (true) {
+    private AdvanceTimeResult doAdvanceTime(final long originalNowMillis, final Long originalWaitNanos) throws InterruptedException {
+        List<Future<?>> futures = new ArrayList<>(); // used to guard against spurious wakeup
+        
+        long timeOfLastFutureMillis = originalNowMillis;
+        long nanosLeft = originalWaitNanos != null ? originalWaitNanos : Long.MAX_VALUE;
+        
+        while (nanosLeft > 0) {
             TasksToRun tasksToRun = extractAndClearTasksToRun();
             if (tasksToRun == null) {
                 if (futures.isEmpty()) {
@@ -356,6 +367,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
             } else {
                 long timeMillis = tasksToRun.timeMillis;
                 for (var task : tasksToRun.tasks) {
+                    timeOfLastFutureMillis = timeMillis;
                     if (!task.isRunning()) {
                         task.timeMillis = timeMillis;
                         reschedulePeriodicTask(task);
@@ -367,15 +379,24 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
                     }
                 }
             }
-            waitForSignal(waitUntilMillis, futures);
+            if (originalWaitNanos == null) {
+                waitForSignal(futures);
+            } else {
+                long offsetMillis = timeOfLastFutureMillis - originalNowMillis;
+                nanosLeft = originalWaitNanos - TimeUnit.MILLISECONDS.toNanos(offsetMillis); 
+                nanosLeft = waitForSignal(futures, nanosLeft);
+            }
             futures.removeIf(Future::isDone);
         }
         
-        if (waitUntilMillis == null) {
+        if (originalWaitNanos == null) {
             awaitAll(futures);
         } else {
-            awaitAll(futures, waitUntilMillis);
+            long waitMillis = nanosLeft;
+            awaitAll(futures, waitMillis);
         }
+        
+        return new AdvanceTimeResult(nanosLeft);
     }
 
 
@@ -383,6 +404,13 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
      * Return all tasks to run at the next scheduled time, or null if there are no tasks.
      * The returned list will never be empty if it is not null.
      * Reschedules periodic tasks now so that ordering can be guaranteed.
+     * 
+     * Example:
+     * - task A starts at 300ms, takes 60ms, and repeats every 400ms
+     * - task B starts at 900ms, takes 60ms
+     * - user calls advanceTime(1000ms)
+     * - this function returns task A and also reschedules the next instance of task A as 700ms
+     * - thus when task A finishes the next task pulled from the scheduledTasks tree map is tasks A
      */
     private @Nullable TasksToRun extractAndClearTasksToRun() {
         taskFinishedLock.lock();
@@ -414,13 +442,6 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
         }
     }
     
-    /**
-     * Before we start a periodic task we reschedule it so that when this task is finished we run the proper task.
-     * For example, suppose task A starts at 300ms and runs again at 950ms, and task B starts at 300ms and runs at 500ms.
-     * If we reschedule a task after it ends, then after the task at 300ms ends we reschedule the next one to run at 950ms,
-     * and it will run right away because either B is running or has been not been rescheduled yet after it ended, giving the next instance of A a chance to run.
-     * But if we reschedule tasks before they start, then after the task at 300ms ends we pick up the task at 500ms (which is the next instance of task A).
-     */
     private void reschedulePeriodicTask(TestScheduledFutureTask<?> task) {
         if (shutdown) {
             return;
@@ -432,6 +453,18 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
         }
     }
     
+    /**
+     * We just finished a task that ran at earlier time, and the next task fetched by extractAndClearTasksToRun is one that is still running, so add it back to scheduledTasks.
+     * 
+     * Example:
+     * - task A starts at 300ms, takes 60ms and repeats every 400ms
+     * - task B starts at 300ms, takes 0ms
+     * - user calls advanceTime(1000ms)
+     * - task A is rescheduled to 700ms and runs
+     * - task B runs
+     * - when task B is finished is finds the next task to run is task A (at 700ms) and removes A from this.scheduledTasks,
+     *       but since the instance of the task at 300ms is still running, add A at 700ms back to this.scheduledTasks
+     */
     private void addBackPeriodicTaskThatIsStillRunning(TestScheduledFutureTask<?> task, long existingTimeMillis) {
         if (shutdown) {
             return;
@@ -442,12 +475,26 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
         }
     }
     
-    private void waitForSignal(Long waitUntilMillis, List<Future<?>> futures) throws InterruptedException {
+    private boolean waitForSignal(List<Future<?>> futures) throws InterruptedException {
         taskFinishedLock.lock();
         try {
-            while (futures.stream().noneMatch(Future::isDone)) {
+            boolean timedOut = false;
+            while (!timedOut && futures.stream().noneMatch(Future::isDone)) {
                 taskFinishedCondition.await();
             }
+            return timedOut;
+        } finally {
+            taskFinishedLock.unlock();
+        }
+    }
+
+    private long waitForSignal(List<Future<?>> futures, long timeLeft) throws InterruptedException {
+        taskFinishedLock.lock();
+        try {
+            while (timeLeft > 0 && futures.stream().noneMatch(Future::isDone)) {
+                timeLeft = taskFinishedCondition.awaitNanos(timeLeft);
+            }
+            return timeLeft;
         } finally {
             taskFinishedLock.unlock();
         }
@@ -468,12 +515,11 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
         }
     }
 
-    private void awaitAll(List<Future<?>> futures, long waitUntilMillis) throws InterruptedException {
+    private void awaitAll(List<Future<?>> futures, long waitMillis) throws InterruptedException {
         boolean cancelled = false;
         for (var future : futures) {
             try {
-                long timeout = waitUntilMillis - System.currentTimeMillis();
-                future.get(timeout, TimeUnit.MILLISECONDS);
+                future.get(waitMillis, TimeUnit.MILLISECONDS);
             } catch (CancellationException | ExecutionException ignored) {
             } catch (TimeoutException ignored) {
                 break;
