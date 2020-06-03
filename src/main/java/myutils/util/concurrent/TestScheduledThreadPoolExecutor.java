@@ -68,7 +68,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     /**
      * {@inheritDoc}
      * 
-     * Cancels periodic tasks that have not started. Non periodic tasks will run at the next scheduled time.
+     * <p>Cancels periodic tasks that have not started. Non periodic tasks will run at the next scheduled time.
      */
     @Override
     public synchronized void shutdown() {
@@ -392,7 +392,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
      * The returned list will never be empty if it is not null.
      * Reschedules periodic tasks now so that ordering can be guaranteed.
      * 
-     * Example:
+     * <p>Example:
      * - task A starts at 300ms, takes 60ms, and repeats every 400ms
      * - task B starts at 900ms, takes 60ms
      * - user calls advanceTime(1000ms)
@@ -443,7 +443,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     /**
      * We just finished a task that ran at earlier time, and the next task fetched by extractAndClearTasksToRun is one that is still running, so add it back to scheduledTasks.
      * 
-     * Example:
+     * <p>Example:
      * - task A starts at 300ms, takes 60ms and repeats every 400ms
      * - task B starts at 300ms, takes 0ms
      * - user calls advanceTime(1000ms)
