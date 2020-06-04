@@ -70,9 +70,9 @@ public class TestScheduledExecutorServiceTest {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         ScheduledExecutorService service = Executors.newScheduledThreadPool(1, myThreadFactory());
         service.schedule(() -> addWord(service, words, "apple"), 300, TimeUnit.MILLISECONDS);
-        service.schedule(() -> { addWord(service, words, "antelope"); }, 300, TimeUnit.MILLISECONDS);
+        service.schedule(() -> addWord(service, words, "antelope"), 300, TimeUnit.MILLISECONDS);
         service.schedule(() -> { addWord(service, words, "banana"); return "callable"; }, 1, TimeUnit.SECONDS);
-        service.schedule(() -> { addWord(service, words, "carrot"); }, 2500, TimeUnit.MILLISECONDS);
+        service.schedule(() -> addWord(service, words, "carrot"), 2500, TimeUnit.MILLISECONDS);
 
         switch (waitUnit) {
             case "millis":
@@ -80,8 +80,9 @@ public class TestScheduledExecutorServiceTest {
                 break;
                 
             case "nanos":
-                MoreExecutors.advanceTime(service, 1_001_000_000, TimeUnit.NANOSECONDS);
+                MoreExecutors.advanceTime(service, 1_002_000_000, TimeUnit.NANOSECONDS);
                 // if argument to advanceTime is 1_000_100_000 then "1000:banana" does not run
+                // even for 1_000_100_000 "1000:banana" does not always run
                 break;
                 
             default:
@@ -107,11 +108,11 @@ public class TestScheduledExecutorServiceTest {
     void testSchedule() throws InterruptedException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         ScheduledExecutorService service = MoreExecutors.newTestScheduledThreadPool(1, myThreadFactory(), startOfTime);
-        service.schedule(() -> { addWord(service, words, "apple"); }, 300, TimeUnit.MILLISECONDS);
-        service.schedule(() -> { addWord(service, words, "antelope"); }, 300, TimeUnit.MILLISECONDS);
+        service.schedule(() -> addWord(service, words, "apple"), 300, TimeUnit.MILLISECONDS);
+        service.schedule(() -> addWord(service, words, "antelope"), 300, TimeUnit.MILLISECONDS);
         service.schedule(() -> { addWord(service, words, "banana"); return "callable"; }, 1, TimeUnit.SECONDS);
-        service.schedule(() -> { addWord(service, words, "carrot"); }, 2500, TimeUnit.MILLISECONDS);
-        ScheduledFuture<?> future2700 = service.schedule(() -> { addWord(service, words, "dragon fruit"); }, 2700, TimeUnit.MILLISECONDS);
+        service.schedule(() -> addWord(service, words, "carrot"), 2500, TimeUnit.MILLISECONDS);
+        ScheduledFuture<?> future2700 = service.schedule(() -> addWord(service, words, "dragon fruit"), 2700, TimeUnit.MILLISECONDS);
         
         assertThat(words, Matchers.empty());
         
@@ -217,7 +218,7 @@ public class TestScheduledExecutorServiceTest {
         service.shutdown();
         service.awaitTermination(10, TimeUnit.MILLISECONDS);
         assertTrue(service.isShutdown());
-        assertFalse(service.isTerminated(), () -> "TestScheduledThreadPoolExecutor is not terminated is because it is still running the addWord text");
+        assertFalse(service.isTerminated(), "TestScheduledThreadPoolExecutor is not terminated is because it is still running the addWord text");
     }
     
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
@@ -245,10 +246,12 @@ public class TestScheduledExecutorServiceTest {
     void testScheduleWithFixedDelay() throws InterruptedException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         ScheduledExecutorService service = MoreExecutors.newTestScheduledThreadPool(1, myThreadFactory(), startOfTime);
-        service.scheduleWithFixedDelay(() -> { addWord(service, words, "fixedDelay", 60); }, 300, 200, TimeUnit.MILLISECONDS);
+        service.scheduleWithFixedDelay(() -> addWord(service, words, "fixedDelay", 60), 300, 200, TimeUnit.MILLISECONDS);
         MoreExecutors.advanceTime(service, 1, TimeUnit.SECONDS);
         System.out.println("actual: " + words);
-        assertThat(words, Matchers.contains("360:fixedDelay", "620:fixedDelay", "880:fixedDelay"));
+        var roundedWords = roundDownToNearestTwenty(words);
+        System.out.println("actual: " + roundedWords);
+        assertThat(roundedWords, Matchers.contains("360:fixedDelay", "620:fixedDelay", "880:fixedDelay"));
         
         assertFalse(service.isShutdown());
         assertFalse(service.isTerminated());
@@ -263,10 +266,10 @@ public class TestScheduledExecutorServiceTest {
     void testMixed() throws InterruptedException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         ScheduledExecutorService service = MoreExecutors.newTestScheduledThreadPool(4, myThreadFactory(), startOfTime);
-        service.schedule(() -> { addWord(service, words, "apple"); }, 300, TimeUnit.MILLISECONDS);
-        service.scheduleAtFixedRate(() -> { addWord(service, words, "fixedRate", 60); }, 300, 200, TimeUnit.MILLISECONDS);
+        service.schedule(() -> addWord(service, words, "apple"), 300, TimeUnit.MILLISECONDS);
+        service.scheduleAtFixedRate(() -> addWord(service, words, "fixedRate", 60), 300, 200, TimeUnit.MILLISECONDS);
         service.schedule(() -> { addWord(service, words, "banana"); return "callable"; }, 800, TimeUnit.MILLISECONDS);
-        service.schedule(() -> { addWord(service, words, "carrot"); }, 960, TimeUnit.MILLISECONDS);
+        service.schedule(() -> addWord(service, words, "carrot"), 960, TimeUnit.MILLISECONDS);
         
         assertThat(words, Matchers.empty());
         
@@ -289,8 +292,8 @@ public class TestScheduledExecutorServiceTest {
     void testScheduleAtFixedRate_DifferentTimeToExecute() throws InterruptedException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         ScheduledExecutorService service = MoreExecutors.newTestScheduledThreadPool(1, myThreadFactory(), startOfTime);
-        service.scheduleAtFixedRate(() -> { addWord(service, words, "fixedRateFast", 10); }, 300, 200, TimeUnit.MILLISECONDS);
-        service.scheduleAtFixedRate(() -> { addWord(service, words, "fixedRateSlow", 180); }, 300, 200, TimeUnit.MILLISECONDS);
+        service.scheduleAtFixedRate(() -> addWord(service, words, "fixedRateFast", 10), 300, 200, TimeUnit.MILLISECONDS);
+        service.scheduleAtFixedRate(() -> addWord(service, words, "fixedRateSlow", 180), 300, 200, TimeUnit.MILLISECONDS);
         MoreExecutors.advanceTime(service, 1, TimeUnit.SECONDS);
         System.out.println("actual: " + words);
         assertThat(words, Matchers.contains(
@@ -310,8 +313,8 @@ public class TestScheduledExecutorServiceTest {
     void testScheduleAtFixedRate_DifferentFrequency() throws InterruptedException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         ScheduledExecutorService service = MoreExecutors.newTestScheduledThreadPool(1, myThreadFactory(), startOfTime);
-        service.scheduleAtFixedRate(() -> { addWord(service, words, "fixedRate", 60); }, 300, 200, TimeUnit.MILLISECONDS);
-        service.scheduleAtFixedRate(() -> { addWord(service, words, "fixedRateLessFrequent", 60); }, 300, 650, TimeUnit.MILLISECONDS);
+        service.scheduleAtFixedRate(() -> addWord(service, words, "fixedRate", 60), 300, 200, TimeUnit.MILLISECONDS);
+        service.scheduleAtFixedRate(() -> addWord(service, words, "fixedRateLessFrequent", 60), 300, 650, TimeUnit.MILLISECONDS);
         MoreExecutors.advanceTime(service, 1, TimeUnit.SECONDS);
         System.out.println("actual: " + words);
         assertThat(words, Matchers.contains("360:fixedRate", "360:fixedRateLessFrequent", "560:fixedRate", "760:fixedRate", "960:fixedRate", "1010:fixedRateLessFrequent"));
@@ -330,11 +333,11 @@ public class TestScheduledExecutorServiceTest {
     void testEndingExecutorService(String methodSequence) throws InterruptedException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         ScheduledExecutorService service = MoreExecutors.newTestScheduledThreadPool(1, myThreadFactory(), startOfTime);
-        service.schedule(() -> { addWord(service, words, "apple"); }, 300, TimeUnit.MILLISECONDS);
-        service.schedule(() -> { addWord(service, words, "antelope"); }, 300, TimeUnit.MILLISECONDS);
-        service.scheduleAtFixedRate(() -> { addWord(service, words, "fixedRate", 60); }, 300, 200, TimeUnit.MILLISECONDS);
+        service.schedule(() -> addWord(service, words, "apple"), 300, TimeUnit.MILLISECONDS);
+        service.schedule(() -> addWord(service, words, "antelope"), 300, TimeUnit.MILLISECONDS);
+        service.scheduleAtFixedRate(() -> addWord(service, words, "fixedRate", 60), 300, 200, TimeUnit.MILLISECONDS);
         service.schedule(() -> { addWord(service, words, "banana"); return "callable"; }, 1, TimeUnit.SECONDS);
-        service.schedule(() -> { addWord(service, words, "carrot"); }, 2500, TimeUnit.MILLISECONDS);
+        service.schedule(() -> addWord(service, words, "carrot"), 2500, TimeUnit.MILLISECONDS);
         
         assertFalse(service.isShutdown());
         assertFalse(service.isTerminated());
@@ -396,10 +399,10 @@ public class TestScheduledExecutorServiceTest {
     void testImmediateFunctions() throws InterruptedException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         ScheduledExecutorService service = MoreExecutors.newTestScheduledThreadPool(1, startOfTime);
-        service.submit(() -> { addWord(service, words, "apple"); });
-        service.submit(() -> { addWord(service, words, "banana"); }, "runnable");
+        service.submit(() -> addWord(service, words, "apple"));
+        service.submit(() -> addWord(service, words, "banana"), "runnable");
         service.submit(() -> { addWord(service, words, "carrot"); return "callable"; });
-        service.execute(() -> { addWord(service, words, "dragon fruit"); });
+        service.execute(() -> addWord(service, words, "dragon fruit"));
         Thread.sleep(100); // wait for tasks to finish
         System.out.println("actual: " + words);
         
@@ -501,7 +504,7 @@ public class TestScheduledExecutorServiceTest {
             throw e;
         }
     }
-    
+
     /**
      * Return an array like [323:apple, 324:antelope, 1021:banana] to [300:apple, 300:antelope, 1000:banana].
      */
@@ -511,6 +514,21 @@ public class TestScheduledExecutorServiceTest {
             String[] parts = word.split(":");
             long time = Long.parseLong(parts[0]);
             long rounded = ((time + 50) / 100) * 100;
+            String result = rounded + ":" + parts[1];
+            results.add(result);
+        }
+        return results;
+    }
+
+    /**
+     * Return an array like [360:fixedDelay, 624:fixedDelay, 889:fixedDelay] to [360:fixedDelay, 620:fixedDelay, 880:fixedDelay].
+     */
+    private List<String> roundDownToNearestTwenty(List<String> words) {
+        List<String> results = new ArrayList<>(words.size());
+        for (String word : words) {
+            String[] parts = word.split(":");
+            long time = Long.parseLong(parts[0]);
+            long rounded = (time/ 20) * 20;
             String result = rounded + ":" + parts[1];
             results.add(result);
         }

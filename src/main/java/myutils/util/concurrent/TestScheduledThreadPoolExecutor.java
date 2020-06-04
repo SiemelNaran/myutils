@@ -88,10 +88,10 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     }
     
     @Override
-    public synchronized List<Runnable> shutdownNow() {
+    public synchronized @Nonnull List<Runnable> shutdownNow() {
         List<Runnable> scheduledNotStartedTasks =
                 scheduledTasks.values().stream()
-                                       .flatMap(listNextRunnable -> listNextRunnable.stream())
+                                       .flatMap(Collection::stream)
                                        .peek(TestScheduledFutureTask::clearExecutor)
                                        .collect(Collectors.toList());
         scheduledTasks.clear();
@@ -112,7 +112,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     }
 
     @Override
-    public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
+    public boolean awaitTermination(long timeout, @Nonnull TimeUnit unit) throws InterruptedException {
         AdvanceTimeResult advanceTimeResult = advanceTimeWithException(timeout, unit, false);
         boolean finishedAllTasks = scheduledTasks.isEmpty();
         if (!realExecutor.isShutdown()) {
@@ -127,49 +127,49 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     // Overrides that forward to realExecutor:
     
     @Override
-    public Future<?> submit(Runnable task) {
+    public @Nonnull Future<?> submit(@Nonnull Runnable task) {
         return realExecutor.submit(task);
     }
 
     @Override
-    public <T> Future<T> submit(Runnable task, T result) {
+    public @Nonnull <T> Future<T> submit(@Nonnull Runnable task, T result) {
         return realExecutor.submit(task, result);
     }
 
     @Override
-    public <T> Future<T> submit(Callable<T> task) {
+    public @Nonnull <T> Future<T> submit(@Nonnull Callable<T> task) {
         return realExecutor.submit(task);
     }
 
     @Override
-    public <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks) throws InterruptedException {
+    public @Nonnull <T> List<Future<T>> invokeAll(@Nonnull Collection<? extends Callable<T>> tasks) throws InterruptedException {
         return realExecutor.invokeAll(tasks);
     }
 
     @Override
-    public <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks, long timeout, TimeUnit unit) throws InterruptedException {
+    public @Nonnull <T> List<Future<T>> invokeAll(@Nonnull Collection<? extends Callable<T>> tasks, long timeout, @Nonnull TimeUnit unit) throws InterruptedException {
         return realExecutor.invokeAll(tasks, timeout, unit);
     }
 
     @Override
-    public <T> T invokeAny(Collection<? extends Callable<T>> tasks) throws InterruptedException, ExecutionException {
+    public @Nonnull <T> T invokeAny(@Nonnull Collection<? extends Callable<T>> tasks) throws InterruptedException, ExecutionException {
         return realExecutor.invokeAny(tasks);
     }
 
     @Override
-    public <T> T invokeAny(Collection<? extends Callable<T>> tasks, long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+    public <T> T invokeAny(@Nonnull Collection<? extends Callable<T>> tasks, long timeout, @Nonnull TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
         return realExecutor.invokeAny(tasks, timeout, unit);
     }
 
     @Override
-    public void execute(Runnable command) {
+    public void execute(@Nonnull Runnable command) {
         realExecutor.execute(command);
     }
     
     // Overrides of schedule functions:
 
     @Override
-    public synchronized ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
+    public synchronized @Nonnull ScheduledFuture<?> schedule(@Nonnull Runnable command, long delay, @Nonnull TimeUnit unit) {
         long delayMillis = unit.toMillis(delay);
         TestScheduledFutureTask<?> task = newTaskFor(command, delayMillis, 0);
         MultimapUtils<Long, TestScheduledFutureTask<?>> multimap = new MultimapUtils<>(scheduledTasks, ArrayList::new);
@@ -178,16 +178,16 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     }
 
     @Override
-    public synchronized <V> ScheduledFuture<V> schedule(Callable<V> callable, long delay, TimeUnit unit) {
+    public synchronized @Nonnull <V> ScheduledFuture<V> schedule(@Nonnull Callable<V> callable, long delay, @Nonnull TimeUnit unit) {
         long delayMillis = unit.toMillis(delay);
-        TestScheduledFutureTask<V> task = newTaskFor(callable, delayMillis, 0);
+        TestScheduledFutureTask<V> task = newTaskFor(callable, delayMillis);
         MultimapUtils<Long, TestScheduledFutureTask<?>> multimap = new MultimapUtils<>(scheduledTasks, ArrayList::new);
         multimap.put(task.timeMillis, task);
         return task;
     }
 
     @Override
-    public synchronized ScheduledFuture<?> scheduleAtFixedRate(Runnable command, long initialDelay, long period, TimeUnit unit) {
+    public synchronized @Nonnull ScheduledFuture<?> scheduleAtFixedRate(@Nonnull Runnable command, long initialDelay, long period, @Nonnull TimeUnit unit) {
         long initialDelayMillis = unit.toMillis(initialDelay);
         long periodMillis = unit.toMillis(period);
         TestScheduledFutureTask<?> task = newTaskFor(command, initialDelayMillis, periodMillis);
@@ -197,7 +197,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     }
 
     @Override
-    public synchronized ScheduledFuture<?> scheduleWithFixedDelay(Runnable command, long initialDelay, long delay, TimeUnit unit) {
+    public synchronized @Nonnull ScheduledFuture<?> scheduleWithFixedDelay(@Nonnull Runnable command, long initialDelay, long delay, @Nonnull TimeUnit unit) {
         long initialDelayMillis = unit.toMillis(initialDelay);
         long delayMillis = unit.toMillis(delay);
         TestScheduledFutureTask<?> task = newTaskFor(command, initialDelayMillis, -delayMillis);
@@ -208,12 +208,12 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     
     // Private functions:
 
-    private TestScheduledFutureTask<Void> newTaskFor(Runnable runnable, long triggerTime, long period) {
-        return new TestScheduledFutureTask<Void>(this, runnable, triggerTime, period);
+    private @Nonnull TestScheduledFutureTask<Void> newTaskFor(Runnable runnable, long triggerTime, long period) {
+        return new TestScheduledFutureTask<>(this, runnable, triggerTime, period);
     }
     
-    private <T> TestScheduledFutureTask<T> newTaskFor(Callable<T> callable, long triggerTime, long period) {
-        return new TestScheduledFutureTask<T>(this, callable, triggerTime, period);
+    private @Nonnull <T> TestScheduledFutureTask<T> newTaskFor(Callable<T> callable, long triggerTime) {
+        return new TestScheduledFutureTask<>(this, callable, triggerTime, 0);
     }
     
     private static class TestScheduledFutureTask<T> extends FutureTask<T> implements RunnableScheduledFuture<T> {
@@ -249,7 +249,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
         }
         
         @Override
-        public long getDelay(TimeUnit unit) {
+        public long getDelay(@Nonnull TimeUnit unit) {
             if (executor == null) {
                 return 0;
             }
@@ -288,6 +288,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
         }
 
         private void runNormal() {
+            assert(executor != null); // to avoid IntelliJ warning
             executor.setCurrentTimeMillis(timeMillis);
             if (!isPeriodic()) {
                 super.run();
@@ -323,7 +324,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
      * 
      * @throws CompletionException if this thread is interrupted with the cause as the InterruptedException
      */
-    public synchronized void advanceTime(long time, TimeUnit unit) {
+    public synchronized void advanceTime(long time, @Nonnull TimeUnit unit) {
         try {
             advanceTimeWithException(time, unit, true);
         } catch (InterruptedException e) {
@@ -339,7 +340,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
         }
     }
     
-    private synchronized AdvanceTimeResult advanceTimeWithException(long time, TimeUnit unit, boolean waitForever) throws InterruptedException {
+    private synchronized AdvanceTimeResult advanceTimeWithException(long time, @Nonnull TimeUnit unit, boolean waitForever) throws InterruptedException {
         long originalNowMillis = nowMillis;
         long timeMillis = unit.toMillis(time);
         nowMillis += timeMillis;
@@ -462,20 +463,18 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
         }
     }
     
-    private boolean waitForSignal(List<Future<?>> futures) throws InterruptedException {
+    private void waitForSignal(@Nonnull List<Future<?>> futures) throws InterruptedException {
         taskFinishedLock.lock();
         try {
-            boolean timedOut = false;
-            while (!timedOut && futures.stream().noneMatch(Future::isDone)) {
+            while (futures.stream().noneMatch(Future::isDone)) {
                 taskFinishedCondition.await();
             }
-            return timedOut;
         } finally {
             taskFinishedLock.unlock();
         }
     }
 
-    private long waitForSignal(List<Future<?>> futures, long timeLeft) throws InterruptedException {
+    private long waitForSignal(@Nonnull List<Future<?>> futures, long timeLeft) throws InterruptedException {
         taskFinishedLock.lock();
         try {
             while (timeLeft > 0 && futures.stream().noneMatch(Future::isDone)) {
@@ -490,11 +489,11 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     /**
      * User called scheduledFuture.cancel() so remove the future task from the scheduled task map.
      */
-    private boolean remove(TestScheduledFutureTask<?> task, long nextScheduledMillis) {
+    private void remove(@Nonnull TestScheduledFutureTask<?> task, long nextScheduledMillis) {
         taskFinishedLock.lock();
         try {
             MultimapUtils<Long, TestScheduledFutureTask<?>> multimap = new MultimapUtils<>(scheduledTasks, ArrayList::new);
-            return multimap.remove(nextScheduledMillis, task);
+            multimap.remove(nextScheduledMillis, task);
         } finally {
             taskFinishedLock.unlock();
         }
