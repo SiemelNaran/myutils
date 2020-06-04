@@ -327,7 +327,28 @@ public class TestScheduledExecutorServiceTest {
         assertTrue(service.isShutdown());
         assertTrue(service.isTerminated());
     }
-    
+
+    @Test
+    void testScheduleAtFixedRate_TaskTakesLongerThanPeriod_TwoThreads() throws InterruptedException {
+        List<String> words = Collections.synchronizedList(new ArrayList<>());
+        ScheduledExecutorService service = MoreExecutors.newTestScheduledThreadPool(2, myThreadFactory(), startOfTime);
+        service.scheduleAtFixedRate(() -> addWord(service, words, "fixedRateSlow", 400), 300, 200, TimeUnit.MILLISECONDS);
+        service.scheduleAtFixedRate(() -> addWord(service, words, "fixedRateFast", 10), 400, 100, TimeUnit.MILLISECONDS);
+        MoreExecutors.advanceTime(service, 1, TimeUnit.SECONDS);
+        System.out.println("actual: " + words);
+        assertThat(words, Matchers.contains(
+                "410:fixedRateFast", "510:fixedRateFast", "610:fixedRateFast", "700:fixedRateSlow", "710:fixedRateFast",
+                "810:fixedRateFast", "910:fixedRateFast", "1010:fixedRateFast"));
+
+        assertFalse(service.isShutdown());
+        assertFalse(service.isTerminated());
+
+        service.shutdown();
+        assertTrue(service.awaitTermination(10, TimeUnit.MILLISECONDS));
+        assertTrue(service.isShutdown());
+        assertTrue(service.isTerminated());
+    }
+
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(strings = { "awaitTermination", "shutdown", "shutdownAll" })
     void testEndingExecutorService(String methodSequence) throws InterruptedException {
