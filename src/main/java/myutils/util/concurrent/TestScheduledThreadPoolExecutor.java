@@ -158,7 +158,8 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     }
 
     @Override
-    public <T> T invokeAny(@Nonnull Collection<? extends Callable<T>> tasks, long timeout, @Nonnull TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+    public <T> T invokeAny(@Nonnull Collection<? extends Callable<T>> tasks, long timeout, @Nonnull TimeUnit unit)
+            throws InterruptedException, ExecutionException, TimeoutException {
         return realExecutor.invokeAny(tasks, timeout, unit);
     }
 
@@ -285,7 +286,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
         }
 
         private void runNormal() {
-            assert(executor != null); // to avoid IntelliJ warning
+            assert executor != null; // to avoid IntelliJ warning about NullPointerException
             executor.setCurrentTimeMillis(timeMillis);
             if (!isPeriodic()) {
                 super.run();
@@ -293,10 +294,10 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
                 long realStartNanos = System.nanoTime();
                 if (periodMillis > 0) {
                     if (super.runAndReset()) {
-	                    long timeTakenNanos = System.nanoTime() - realStartNanos;
-	                    long timeTakenMillis = TimeUnit.NANOSECONDS.toMillis(timeTakenNanos); 
-	                    long nextScheduledMillis = timeMillis + (timeTakenMillis > periodMillis ? timeTakenMillis : periodMillis);
-	                    executor.reschedule(this, nextScheduledMillis);
+                        long timeTakenNanos = System.nanoTime() - realStartNanos;
+                        long timeTakenMillis = TimeUnit.NANOSECONDS.toMillis(timeTakenNanos); 
+                        long nextScheduledMillis = timeMillis + (timeTakenMillis > periodMillis ? timeTakenMillis : periodMillis);
+                        executor.reschedule(this, nextScheduledMillis);
                     }
                 } else {
                     if (super.runAndReset()) {

@@ -577,7 +577,7 @@ public class TestScheduledExecutorServiceTest {
         for (String word : words) {
             String[] parts = word.split(":");
             long time = Long.parseLong(parts[0]);
-            long rounded = (time/ 20) * 20;
+            long rounded = (time / 20) * 20;
             String result = rounded + ":" + parts[1];
             results.add(result);
         }
