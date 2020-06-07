@@ -12,7 +12,6 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
@@ -45,7 +44,7 @@ import myutils.util.MultimapUtils;
  * for the cases where that approach does not work.
  */
 public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService {
-    private final ExecutorService realExecutor;
+    private final ThreadPoolExecutor realExecutor;
     private final SortedMap<Long /*millis*/, Collection<TestScheduledFutureTask<?>>> scheduledTasks = new TreeMap<>();
     private final Lock taskFinishedLock = new ReentrantLock(); // lock this when changing scheduledTasks (and function is not synchronized)
     private final Condition taskFinishedCondition = taskFinishedLock.newCondition();
@@ -61,7 +60,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
      * @param startTime the initial time. Will typically be System.currentTimeMillis(), but can set to something else for unit tests.
      */
     public TestScheduledThreadPoolExecutor(int corePoolSize, ThreadFactory threadFactory, long startTime) {
-        realExecutor = Executors.newFixedThreadPool(corePoolSize, threadFactory);
+        realExecutor = (ThreadPoolExecutor) Executors.newFixedThreadPool(corePoolSize, threadFactory);
         nowMillis = startTime;
     }
 
@@ -354,7 +353,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     private AdvanceTimeResult doAdvanceTime(final long originalNowMillis, final Long originalWaitNanos) throws InterruptedException {
         List<Future<?>> futures = new ArrayList<>(); // used to guard against spurious wakeup
         
-        int corePoolSize = ((ThreadPoolExecutor) realExecutor).getCorePoolSize();
+        int corePoolSize = realExecutor.getCorePoolSize();
         long timeOfLastFutureMillis = originalNowMillis;
         long nanosLeft = originalWaitNanos != null ? originalWaitNanos : Long.MAX_VALUE;
         

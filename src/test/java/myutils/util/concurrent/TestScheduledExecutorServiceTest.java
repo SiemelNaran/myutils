@@ -104,6 +104,25 @@ public class TestScheduledExecutorServiceTest {
     }
     
     @Test
+    void testEmptyExecutor() throws InterruptedException {
+        List<String> words = Collections.synchronizedList(new ArrayList<>());
+        ScheduledExecutorService service = MoreExecutors.newTestScheduledThreadPool(1, myThreadFactory(), startOfTime);
+        
+        MoreExecutors.advanceTime(service, 1, TimeUnit.SECONDS);
+        System.out.println("actual: " + words);
+        assertThat(words, Matchers.empty());
+        
+        assertFalse(service.isShutdown());
+        assertFalse(service.isTerminated());
+        
+        service.shutdown();
+        service.shutdown(); // second call to shutdown has no effect
+        assertTrue(service.awaitTermination(10, TimeUnit.MILLISECONDS));
+        assertTrue(service.isShutdown());
+        assertTrue(service.isTerminated());
+    }
+    
+    @Test
     void testSchedule() throws InterruptedException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         ScheduledExecutorService service = MoreExecutors.newTestScheduledThreadPool(1, myThreadFactory(), startOfTime);
