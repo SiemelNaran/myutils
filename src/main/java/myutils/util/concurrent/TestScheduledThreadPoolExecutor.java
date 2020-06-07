@@ -238,10 +238,6 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
             this.timeMillis = executor.nowMillis + triggerTimeMillis;
         }
         
-        private boolean isRunning() {
-            return realFuture != null;
-        }
-
         private void setRealFuture(Future<?> realFuture) {
             this.realFuture = realFuture;
         }
@@ -297,19 +293,18 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
             } else {
                 long realStartNanos = System.nanoTime();
                 if (periodMillis > 0) {
-                    super.runAndReset();
-                    long timeTakenNanos = System.nanoTime() - realStartNanos;
-                    long timeTakenMillis = TimeUnit.NANOSECONDS.toMillis(timeTakenNanos); 
-                    if (timeTakenMillis > periodMillis) {
-                        long nextScheduledMillis = timeMillis + periodMillis;
-                        executor.move(this, nextScheduledMillis, timeTakenMillis - periodMillis);
+                    if (super.runAndReset()) {
+	                    long timeTakenNanos = System.nanoTime() - realStartNanos;
+	                    long timeTakenMillis = TimeUnit.NANOSECONDS.toMillis(timeTakenNanos); 
+	                    long nextScheduledMillis = timeMillis + (timeTakenMillis > periodMillis ? timeTakenMillis : periodMillis);
+	                    executor.reschedule(this, nextScheduledMillis);
                     }
                 } else {
                     if (super.runAndReset()) {
                         long timeTakenNanos = System.nanoTime() - realStartNanos;
-                        long timeTakenMillis = timeTakenNanos / 1_000_000;
-                        long nextScheduledMillis = timeMillis - periodMillis;
-                        executor.move(this, nextScheduledMillis, timeTakenMillis);
+                        long timeTakenMillis = TimeUnit.NANOSECONDS.toMillis(timeTakenNanos); 
+                        long nextScheduledMillis = timeMillis - periodMillis + timeTakenMillis;
+                        executor.reschedule(this, nextScheduledMillis);
                     }
                 }
             }
@@ -374,8 +369,6 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
                 var timeMillis = taskAtTime.timeMillis;
                 var task = taskAtTime.task;
                 timeOfLastFutureMillis = timeMillis;
-                task.timeMillis = timeMillis;
-                reschedulePeriodicTask(task);
                 var future = realExecutor.submit(task);
                 task.setRealFuture(future);
                 futures.add(future);
@@ -397,14 +390,6 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     /**
      * Return all tasks to run at the next scheduled times.
      * 
-     * <p>Reschedules periodic tasks now so that ordering can be guaranteed.
-     * Example:
-     * - task A starts at 300ms, takes 60ms, and repeats every 400ms
-     * - task B starts at 900ms, takes 60ms
-     * - user calls advanceTime(1000ms)
-     * - this function returns task A and also reschedules the next instance of task A as 700ms
-     * - thus when task A finishes the next task pulled from the scheduledTasks tree map is tasks A
-     * 
      * @param numTasks maximum number of tasks to retrieve.
      */
     private @Nonnull Collection<TaskAtTime> extractAndClearTasksToRun(int numTasks) {
@@ -421,9 +406,6 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
                 Collection<TestScheduledFutureTask<?>> tasks = entry.getValue(); // will never be empty
                 for (var taskIter = tasks.iterator(); !done && taskIter.hasNext(); ) {
                     var task = taskIter.next();
-                    if (task.isRunning()) {
-                        continue;
-                    }
                     tasksToRun.add(new TaskAtTime(timeMillis, task));
                     taskIter.remove();
                     if (tasksToRun.size() == numTasks) {
@@ -447,17 +429,6 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
         TaskAtTime(long timeMillis, @Nonnull TestScheduledFutureTask<?> task) {
             this.timeMillis = timeMillis;
             this.task = task;
-        }
-    }
-    
-    private void reschedulePeriodicTask(TestScheduledFutureTask<?> task) {
-        if (shutdown) {
-            return;
-        }
-        if (task.isPeriodic()) {
-            long newTimeMillis = task.timeMillis + abs(task.periodMillis);
-            MultimapUtils<Long, TestScheduledFutureTask<?>> multimap = new MultimapUtils<>(scheduledTasks, ArrayList::new);
-            multimap.put(newTimeMillis, task); // note that the nowTimeMillis is out of sync with task.timeMillis
         }
     }
     
@@ -498,18 +469,16 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     }
 
     /**
-     * A periodic task with fixed delay just ran, or a periodic task at fixed rate taking more than the period just ran.
-     * The scheduledTasks map already contains the next instance of this task assuming it ran for 0ms.
-     * Reschedule the task to the new value.
+     * A periodic task just finished, so reschedule it to run at a later time.
      * This function is called from TestScheduledFutureTask.run() so do not synchronize as this would cause a deadlock.
      */
-    private void move(TestScheduledFutureTask<?> task, long nextScheduledMillis, long adjustmentMillis) {
+    private void reschedule(TestScheduledFutureTask<?> task, long nextScheduledMillis) {
         taskFinishedLock.lock();
         try {
             if (!shutdown) {
                 MultimapUtils<Long, TestScheduledFutureTask<?>> multimap = new MultimapUtils<>(scheduledTasks, ArrayList::new);
-                multimap.remove(nextScheduledMillis, task);
-                multimap.put(nextScheduledMillis + adjustmentMillis, task);
+                task.timeMillis = nextScheduledMillis;
+                multimap.put(nextScheduledMillis, task);
             }
         } finally {
             taskFinishedLock.unlock();
