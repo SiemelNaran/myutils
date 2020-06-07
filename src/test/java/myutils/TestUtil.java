@@ -22,7 +22,7 @@ public class TestUtil {
     /**
      * Same as Thread.sleep, except throws a RuntimeException instead of InterruptedException.
      * 
-     * @throws SleepInterruptedException if current thread is interrupted.
+     * @throws SleepInterruptedException if current thread is interrupted. SleepInterruptedException is a RuntimeException.
      */
     public static void sleep(long millis) {
         try {

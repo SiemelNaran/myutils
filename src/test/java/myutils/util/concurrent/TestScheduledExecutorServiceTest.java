@@ -22,7 +22,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import myutils.LogFailureToConsoleTestWatcher;
 import myutils.TestUtil;
-import myutils.TestUtil.SleepInterruptedException;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -265,7 +264,7 @@ public class TestScheduledExecutorServiceTest {
     @Test
     void testMixed() throws InterruptedException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
-        ScheduledExecutorService service = MoreExecutors.newTestScheduledThreadPool(4, myThreadFactory(), startOfTime);
+        ScheduledExecutorService service = MoreExecutors.newTestScheduledThreadPool(1, myThreadFactory(), startOfTime);
         service.schedule(() -> addWord(service, words, "apple"), 300, TimeUnit.MILLISECONDS);
         service.scheduleAtFixedRate(() -> addWord(service, words, "fixedRate", 60), 300, 200, TimeUnit.MILLISECONDS);
         service.schedule(() -> { addWord(service, words, "banana"); return "callable"; }, 800, TimeUnit.MILLISECONDS);
@@ -333,12 +332,22 @@ public class TestScheduledExecutorServiceTest {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         ScheduledExecutorService service = MoreExecutors.newTestScheduledThreadPool(2, myThreadFactory(), startOfTime);
         service.scheduleAtFixedRate(() -> addWord(service, words, "fixedRateSlow", 400), 300, 200, TimeUnit.MILLISECONDS);
-        service.scheduleAtFixedRate(() -> addWord(service, words, "fixedRateFast", 10), 400, 100, TimeUnit.MILLISECONDS);
+        service.scheduleAtFixedRate(() -> addWord(service, words, "fixedRate", 60), 400, 100, TimeUnit.MILLISECONDS);
         MoreExecutors.advanceTime(service, 1, TimeUnit.SECONDS);
         System.out.println("actual: " + words);
-        assertThat(words, Matchers.contains(
-                "410:fixedRateFast", "510:fixedRateFast", "610:fixedRateFast", "700:fixedRateSlow", "710:fixedRateFast",
-                "810:fixedRateFast", "910:fixedRateFast", "1010:fixedRateFast"));
+        var roundedWords = roundDownToNearestTwenty(words);
+        System.out.println("actual: " + roundedWords);
+        assertThat(roundedWords, Matchers.contains(
+                "460:fixedRate", // realTime = 60ms
+                "560:fixedRate", // realTime = 120ms
+                "660:fixedRate", // realTime = 180ms
+                "760:fixedRate", // realTime = 240ms
+                "860:fixedRate", // realTime = 300ms
+                "960:fixedRate", // realTime = 360ms
+                "700:fixedRateSlow", // realTime = 400ms
+                "1060:fixedRate", // realTime = 420ms
+                "1100:fixedRateSlow" // realTime = 800ms (task would have started at 500ms, but started at 700ms as fixedRateSlow takes longer than the period
+        ));
 
         assertFalse(service.isShutdown());
         assertFalse(service.isTerminated());
@@ -513,15 +522,15 @@ public class TestScheduledExecutorServiceTest {
         long startTimeMillis = System.currentTimeMillis();
         long timeBeforeSleep = MoreExecutors.currentTimeMillis(service) - startOfTime;
         try {
-            System.out.println(timeBeforeSleep + ": started " + word);
+            System.out.println(timeBeforeSleep + ": started " + word + " (realSleepMillis=" + realSleepMillis + ')');
             TestUtil.sleep(realSleepMillis);
             long timeAfterSleep = timeBeforeSleep + realSleepMillis;
             list.add(timeAfterSleep + ":" + word);
             System.out.println(timeAfterSleep + ": added " + word);
-        } catch (SleepInterruptedException e) {
+        } catch (RuntimeException e) {
             long deltaMillis = System.currentTimeMillis() - startTimeMillis;
             long timeException = deltaMillis - startTimeMillis;
-            System.out.println(timeException + ": caught SleepInterruptedException");
+            System.out.println(timeException + ": caught " + e.getClass().getSimpleName());
             throw e;
         }
     }
