@@ -125,7 +125,7 @@ public class SerializableScheduledExecutorServiceTest {
         final ByteArrayOutputStream bos = new ByteArrayOutputStream();
 
         {
-            SerializableScheduledExecutorService service = new SerializableScheduledThreadPoolExecutor(1);
+            SerializableScheduledExecutorService service = MoreExecutors.newSerializableScheduledThreadPool(1);
             service.schedule(runnableOne, 600, TimeUnit.MILLISECONDS);
             service.schedule(runnableOne, 1610, TimeUnit.MILLISECONDS);
             final ScheduledFuture<?> future1620 = service.schedule(runnableOne, 1620, TimeUnit.MILLISECONDS); // cancelled below
@@ -178,7 +178,7 @@ public class SerializableScheduledExecutorServiceTest {
             ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
             SerializableScheduledExecutorService.UnfinishedTasks tasks = (SerializableScheduledExecutorService.UnfinishedTasks) ois.readObject();
             
-            SerializableScheduledExecutorService service = new SerializableScheduledThreadPoolExecutor(1);
+            SerializableScheduledExecutorService service = MoreExecutors.newSerializableScheduledThreadPool(1);
             service.importUnfinishedTasks(tasks);
             
             Thread.sleep(1000);
@@ -236,7 +236,7 @@ public class SerializableScheduledExecutorServiceTest {
         final ByteArrayOutputStream bos = new ByteArrayOutputStream();
 
         {
-            SerializableScheduledExecutorService service = new SerializableScheduledThreadPoolExecutor(1);
+            SerializableScheduledExecutorService service = MoreExecutors.newSerializableScheduledThreadPool(1);
             service.schedule(runnableOne, 600, TimeUnit.MILLISECONDS);
             service.schedule(runnableOne, 1610, TimeUnit.MILLISECONDS);
             ScheduledFuture<?> future1620 = service.schedule(runnableOne, 1620, TimeUnit.MILLISECONDS); // cancelled below
@@ -284,7 +284,7 @@ public class SerializableScheduledExecutorServiceTest {
             ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
             SerializableScheduledExecutorService.UnfinishedTasks tasks = (SerializableScheduledExecutorService.UnfinishedTasks) ois.readObject();
             
-            SerializableScheduledExecutorService service = new SerializableScheduledThreadPoolExecutor(1);
+            SerializableScheduledExecutorService service = MoreExecutors.newSerializableScheduledThreadPool(1);
             service.importUnfinishedTasks(tasks);
             
             Thread.sleep(1000);
@@ -353,7 +353,7 @@ public class SerializableScheduledExecutorServiceTest {
         final ByteArrayOutputStream bos = new ByteArrayOutputStream();
 
         {
-            SerializableScheduledExecutorService service = new SerializableScheduledThreadPoolExecutor(1);
+            SerializableScheduledExecutorService service = MoreExecutors.newSerializableScheduledThreadPool(1);
             service.schedule(callableOne, 610, TimeUnit.MILLISECONDS);
             service.schedule(callableOne, 1610, TimeUnit.MILLISECONDS);
             ScheduledFuture<Integer> future620 = service.schedule(callableTwo, 620, TimeUnit.MILLISECONDS);
@@ -407,7 +407,7 @@ public class SerializableScheduledExecutorServiceTest {
             ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
             SerializableScheduledExecutorService.UnfinishedTasks tasks = (SerializableScheduledExecutorService.UnfinishedTasks) ois.readObject();
             
-            SerializableScheduledExecutorService service = new SerializableScheduledThreadPoolExecutor(1);
+            SerializableScheduledExecutorService service = MoreExecutors.newSerializableScheduledThreadPool(1);
             Map<Class<?>, List<ScheduledFuture<?>>> futures
                     = service.importUnfinishedTasks(tasks,
                                                     Arrays.asList(TestSerializableCallable.class));
@@ -517,7 +517,7 @@ public class SerializableScheduledExecutorServiceTest {
         Callable<Integer> callable4 = () -> 13;
 
         {
-            SerializableScheduledExecutorService service = new SerializableScheduledThreadPoolExecutor(1);
+            SerializableScheduledExecutorService service = MoreExecutors.newSerializableScheduledThreadPool(1);
             ((SerializableScheduledThreadPoolExecutor) service).logIfCannotSerialize(Level.WARNING);
             service.scheduleAtFixedRate(runnable1, 1410, 100, TimeUnit.MILLISECONDS);
             service.scheduleAtFixedRate(runnable2, 1420, 100, TimeUnit.MILLISECONDS);
@@ -618,7 +618,7 @@ public class SerializableScheduledExecutorServiceTest {
         final ByteArrayOutputStream bos = new ByteArrayOutputStream();
 
         {
-            SerializableScheduledExecutorService service = new SerializableScheduledThreadPoolExecutor(1);
+            SerializableScheduledExecutorService service = MoreExecutors.newSerializableScheduledThreadPool(1);
             service.scheduleAtFixedRate(runnableOne, 710, 800, TimeUnit.MILLISECONDS);
             service.scheduleAtFixedRate(runnableTwo, 720, 800, TimeUnit.MILLISECONDS);
             service.schedule(callableOne, 1530, TimeUnit.MILLISECONDS);
@@ -647,7 +647,7 @@ public class SerializableScheduledExecutorServiceTest {
             ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
             SerializableScheduledExecutorService.UnfinishedTasks tasks = (SerializableScheduledExecutorService.UnfinishedTasks) ois.readObject();
             
-            SerializableScheduledExecutorService service = new SerializableScheduledThreadPoolExecutor(1);
+            SerializableScheduledExecutorService service = MoreExecutors.newSerializableScheduledThreadPool(1);
             RecreateRunnableFailedException exception = TestUtil.assertExceptionFromCallable(
                 () -> { service.importUnfinishedTasks(tasks); return null; },
                 RecreateRunnableFailedException.class);
@@ -692,7 +692,7 @@ public class SerializableScheduledExecutorServiceTest {
             TestRunnableThatExceptionsOut.staticCounter.set(0);
             TestRunnableThatExceptionsOut runnableOne = new TestRunnableThatExceptionsOut();
             
-            SerializableScheduledExecutorService service = new SerializableScheduledThreadPoolExecutor(1);
+            SerializableScheduledExecutorService service = MoreExecutors.newSerializableScheduledThreadPool(1);
             service.scheduleAtFixedRate(runnableOne, 100, 200, TimeUnit.MILLISECONDS);
             
             Thread.sleep(1000);
@@ -728,7 +728,7 @@ public class SerializableScheduledExecutorServiceTest {
                        .map(serializableRunnable -> (TestRunnableThatExceptionsOut) serializableRunnable)
                        .get();
 
-            SerializableScheduledExecutorService service = new SerializableScheduledThreadPoolExecutor(1);
+            SerializableScheduledExecutorService service = MoreExecutors.newSerializableScheduledThreadPool(1);
             service.importUnfinishedTasks(tasks);
             
             Thread.sleep(1000);

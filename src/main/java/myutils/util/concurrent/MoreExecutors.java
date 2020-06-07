@@ -30,6 +30,23 @@ public class MoreExecutors {
     
     
     /**
+     * Create a serializable scheduled executor service.
+     * If scheduled tasks inherit from SerializableRunnable or SerializableCallable, the executor can serialize/export unfinished tasks.
+     */
+    public static SerializableScheduledExecutorService newSerializableScheduledThreadPool(int corePoolSize) {
+        return new SerializableScheduledThreadPoolExecutor(corePoolSize);
+    }
+    
+    /**
+     * Create a serializable scheduled executor service.
+     * If scheduled tasks inherit from SerializableRunnable or SerializableCallable, the executor can serialize/export unfinished tasks.
+     */
+    public static SerializableScheduledExecutorService newSerializableScheduledThreadPool(int corePoolSize, ThreadFactory threadFactory) {
+        return new SerializableScheduledThreadPoolExecutor(corePoolSize, threadFactory);
+    }
+    
+    
+    /**
      * Create a scheduled executor service for testing.
      * Similar to {@link java.util.concurrent.Executors#newScheduledThreadPool}
      * except that scheduled tasks don't run until advanceTime is called.

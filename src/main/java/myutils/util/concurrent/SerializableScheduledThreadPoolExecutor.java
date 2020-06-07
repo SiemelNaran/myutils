@@ -37,21 +37,21 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
     
     // constructors
     
-    SerializableScheduledThreadPoolExecutor(int corePoolSize) {
+    public SerializableScheduledThreadPoolExecutor(int corePoolSize) {
         super(corePoolSize);
     }
 
-    SerializableScheduledThreadPoolExecutor(int corePoolSize,
+    public SerializableScheduledThreadPoolExecutor(int corePoolSize,
                                          ThreadFactory threadFactory) {
         super(corePoolSize, threadFactory);
     }
 
-    SerializableScheduledThreadPoolExecutor(int corePoolSize,
+    public SerializableScheduledThreadPoolExecutor(int corePoolSize,
                                          RejectedExecutionHandler handler) {
         super(corePoolSize, handler);
     }
 
-    SerializableScheduledThreadPoolExecutor(int corePoolSize,
+    public SerializableScheduledThreadPoolExecutor(int corePoolSize,
                                          ThreadFactory threadFactory,
                                          RejectedExecutionHandler handler) {
         super(corePoolSize, threadFactory, handler);
