@@ -46,18 +46,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 public class PriorityLockTest {
     long startOfTime;
     
-    @BeforeEach
-    void setStartOfTime(TestInfo testInfo) {
-        startOfTime = System.currentTimeMillis();
-        System.out.println("--------------------------------------------------------------------------------");
-        System.out.println("test started: " + testInfo.getDisplayName());
-    }
-    
-    @AfterEach
-    void printTestFinished(TestInfo testInfo) {
-        System.out.println("test finished: " + testInfo.getDisplayName());
-    }
-    
     @BeforeAll
     static void onStartAllTests() {
         System.out.println("start all tests");
@@ -68,6 +56,18 @@ public class PriorityLockTest {
     static void printAllTestsFinished() {
         System.out.println("--------------------------------------------------------------------------------");
         System.out.println("all tests finished");
+    }
+    
+    @BeforeEach
+    void setStartOfTime(TestInfo testInfo) {
+        startOfTime = System.currentTimeMillis();
+        System.out.println("--------------------------------------------------------------------------------");
+        System.out.println("test started: " + testInfo.getDisplayName());
+    }
+    
+    @AfterEach
+    void printTestFinished(TestInfo testInfo) {
+        System.out.println("test finished: " + testInfo.getDisplayName());
     }
     
 
