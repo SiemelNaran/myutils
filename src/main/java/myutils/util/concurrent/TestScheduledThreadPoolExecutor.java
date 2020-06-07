@@ -358,15 +358,14 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
         long nanosLeft = originalWaitNanos != null ? originalWaitNanos : Long.MAX_VALUE;
         
         while (nanosLeft > 0) {
-            Collection<TaskAtTime> tasksToRun = extractAndClearTasksToRun(max(corePoolSize - futures.size(), 0));
+            Collection<TestScheduledFutureTask<?>> tasksToRun = extractAndClearTasksToRun(max(corePoolSize - futures.size(), 0));
             if (tasksToRun.isEmpty()) {
                 if (futures.isEmpty()) {
                     break;
                 }
             }
-            for (var taskAtTime : tasksToRun) {
-                var timeMillis = taskAtTime.timeMillis;
-                var task = taskAtTime.task;
+            for (var task : tasksToRun) {
+                var timeMillis = task.timeMillis;
                 timeOfLastFutureMillis = timeMillis;
                 var future = realExecutor.submit(task);
                 task.setRealFuture(future);
@@ -391,10 +390,10 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
      * 
      * @param numTasks maximum number of tasks to retrieve.
      */
-    private @Nonnull Collection<TaskAtTime> extractAndClearTasksToRun(int numTasks) {
+    private @Nonnull Collection<TestScheduledFutureTask<?>> extractAndClearTasksToRun(int numTasks) {
         taskFinishedLock.lock();
         try {
-            Collection<TaskAtTime> tasksToRun = new ArrayList<>();
+            Collection<TestScheduledFutureTask<?>> tasksToRun = new ArrayList<>();
             boolean done = numTasks == 0;
             for (var timeIter = scheduledTasks.entrySet().iterator(); !done && timeIter.hasNext(); ) {
                 var entry = timeIter.next();
@@ -405,7 +404,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
                 Collection<TestScheduledFutureTask<?>> tasks = entry.getValue(); // will never be empty
                 for (var taskIter = tasks.iterator(); !done && taskIter.hasNext(); ) {
                     var task = taskIter.next();
-                    tasksToRun.add(new TaskAtTime(timeMillis, task));
+                    tasksToRun.add(task);
                     taskIter.remove();
                     if (tasksToRun.size() == numTasks) {
                         done = true;
@@ -418,16 +417,6 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
             return tasksToRun;
         } finally {
             taskFinishedLock.unlock();
-        }
-    }
-    
-    private static class TaskAtTime {
-        private final long timeMillis;
-        private final @Nonnull TestScheduledFutureTask<?> task;
-        
-        TaskAtTime(long timeMillis, @Nonnull TestScheduledFutureTask<?> task) {
-            this.timeMillis = timeMillis;
-            this.task = task;
         }
     }
     
