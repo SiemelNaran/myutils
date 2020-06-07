@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -44,7 +45,8 @@ public class TestUtil {
     /**
      * Given a list of Future, call get on each item and return a list of T.
      * 
-     * @throws CompletionException if we encounter a checked exception while calling future.get()
+     * @throws CancellationException if any future was cancelled
+     * @throws CompletionException if any future encountered an ExecutionException or InterruptedException
      */
     public static <T> List<T> toList(Collection<Future<T>> collection) {
         List<T> list = new ArrayList<>(collection.size());

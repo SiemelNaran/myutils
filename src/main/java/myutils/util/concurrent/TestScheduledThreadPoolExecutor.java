@@ -35,18 +35,20 @@ import myutils.util.MultimapUtils;
  * A scheduled executor service for testing.
  * In a real scheduled executor, scheduled tasks run when the system clock advances to the time when the task is scheduled to run.
  * In this test scheduled executor, scheduled tasks never run, but they run once advanceTime is called.
- * This allow us to write unit tests that run scheduled tasks immediately.
+ * This allows us to write unit tests that run scheduled tasks immediately.
  * 
  * <p>It is expected that unit tests will create a TestScheduledThreadPoolExecutor and call advanceTime as needed,
  * whereas actual code will create a real ScheduledExecutorService. This could be accomplished for example with Guice.
  * 
  * <p>Test code could very well use a direct executor that runs tasks synchronously, so this class is only useful
  * for the cases where that approach does not work.
+ * 
+ * <p>Note that the implementation stores tasks by milliseconds, so the resolution of tasks is milliseconds.
  */
 public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService {
     private final ThreadPoolExecutor realExecutor;
     private final SortedMap<Long /*millis*/, Collection<TestScheduledFutureTask<?>>> scheduledTasks = new TreeMap<>();
-    private final Lock taskFinishedLock = new ReentrantLock(); // lock this when changing scheduledTasks (and function is not synchronized)
+    private final Lock taskFinishedLock = new ReentrantLock(); // lock this when changing scheduledTasks (not used when function is synchronized)
     private final Condition taskFinishedCondition = taskFinishedLock.newCondition();
     private final ThreadLocal<Long> currentTimeMillis = new ThreadLocal<>();
     private long nowMillis;
@@ -112,6 +114,12 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
         return shutdown && scheduledTasks.isEmpty() && realExecutor.isTerminated();
     }
 
+    
+    /**
+     * {@inheritDoc}
+     * 
+     * <p>Unlike advanceTime, this function returns on or before the desired time has elapsed.
+     */
     @Override
     public boolean awaitTermination(long timeout, @Nonnull TimeUnit unit) throws InterruptedException {
         AdvanceTimeResult advanceTimeResult = advanceTimeWithException(timeout, unit, false);
@@ -296,7 +304,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
                     if (super.runAndReset()) {
                         long timeTakenNanos = System.nanoTime() - realStartNanos;
                         long timeTakenMillis = TimeUnit.NANOSECONDS.toMillis(timeTakenNanos); 
-                        long nextScheduledMillis = timeMillis + (timeTakenMillis > periodMillis ? timeTakenMillis : periodMillis);
+                        long nextScheduledMillis = timeMillis + max(timeTakenMillis, periodMillis);
                         executor.reschedule(this, nextScheduledMillis);
                     }
                 } else {
