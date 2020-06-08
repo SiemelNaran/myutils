@@ -103,8 +103,7 @@ class StackTraceCompletableFuture<T> extends CompletableFuture<T> {
         return new StackTraceCompletableFuture<Object>(null, CompletableFuture.anyOf(cfs));
     }
 
-    //
-    // Overrides of functions in CompletionStage<T>
+    // Java 9
     
     @Override
     public <U> StackTraceCompletableFuture<U> newIncompleteFuture() {
@@ -116,6 +115,29 @@ class StackTraceCompletableFuture<T> extends CompletableFuture<T> {
         return new StackTraceCompletableFuture<T>(stackTraces, future.copy());
     }
 
+    @Override
+    public CompletableFuture<T> completeAsync(Supplier<? extends T> supplier) {
+        return new StackTraceCompletableFuture<T>(stackTraces, future.completeAsync(supplier));
+    }
+    
+    @Override
+    public CompletableFuture<T> completeAsync(Supplier<? extends T> supplier, Executor executor) {
+        return new StackTraceCompletableFuture<T>(stackTraces, future.completeAsync(supplier, executor));
+    }
+    
+    @Override
+    public StackTraceCompletableFuture<T> orTimeout(long timeout, TimeUnit unit) {
+        return new StackTraceCompletableFuture<T>(stackTraces, future.orTimeout(timeout, unit));
+    }
+    
+    @Override
+    public CompletableFuture<T> completeOnTimeout(T value, long timeout, TimeUnit unit) {
+        return new StackTraceCompletableFuture<T>(stackTraces, future.completeOnTimeout(value, timeout, unit));
+    }
+    
+    //
+    // Overrides of functions in CompletionStage<T>
+    
     @Override
     public <U> StackTraceCompletableFuture<U> thenApply(Function<? super T, ? extends U> fn) {
         return new StackTraceCompletableFuture<U>(stackTraces, future.thenApply(fn));
@@ -306,26 +328,33 @@ class StackTraceCompletableFuture<T> extends CompletableFuture<T> {
         return this;
     }    
     
-    @Override
-    public StackTraceCompletableFuture<T> orTimeout(long timeout, TimeUnit unit) {
-        return new StackTraceCompletableFuture<T>(stackTraces, future.orTimeout(timeout, unit));
-    }
+    // java 12
     
     @Override
-    public CompletableFuture<T> completeOnTimeout(T value, long timeout, TimeUnit unit) {
-        return new StackTraceCompletableFuture<T>(stackTraces, future.completeOnTimeout(value, timeout, unit));
-    }
-    
-    @Override
-    public CompletableFuture<T> completeAsync(Supplier<? extends T> supplier) {
-        return new StackTraceCompletableFuture<T>(stackTraces, future.completeAsync(supplier));
-    }
-    
-    @Override
-    public CompletableFuture<T> completeAsync(Supplier<? extends T> supplier, Executor executor) {
-        return new StackTraceCompletableFuture<T>(stackTraces, future.completeAsync(supplier, executor));
+    public CompletableFuture<T> exceptionallyAsync(Function<Throwable, ? extends T> fn) {
+        return new StackTraceCompletableFuture<T>(stackTraces, future.exceptionallyAsync(fn));
     }
 
+    @Override
+    public CompletableFuture<T> exceptionallyAsync(Function<Throwable, ? extends T> fn, Executor executor) {
+        return new StackTraceCompletableFuture<T>(stackTraces, future.exceptionallyAsync(fn, executor));
+    }
+    
+    @Override
+    public CompletableFuture<T> exceptionallyCompose(Function<Throwable, ? extends CompletionStage<T>> fn) {
+        return new StackTraceCompletableFuture<T>(stackTraces, future.exceptionallyCompose(fn));
+    }
+
+    @Override
+    public CompletableFuture<T> exceptionallyComposeAsync(Function<Throwable, ? extends CompletionStage<T>> fn) {
+        return new StackTraceCompletableFuture<T>(stackTraces, future.exceptionallyComposeAsync(fn));
+    }
+
+    @Override
+    public CompletableFuture<T> exceptionallyComposeAsync(Function<Throwable, ? extends CompletionStage<T>> fn, Executor executor) {
+        return new StackTraceCompletableFuture<T>(stackTraces, future.exceptionallyComposeAsync(fn, executor));
+    }
+    
     //
     // Overrides of functions in Future<T>
     

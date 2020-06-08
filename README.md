@@ -26,13 +26,3 @@ Shell scripts
 
 - *multifile.sh*: Copy files that contain <sourceSubstring> to a similar filename where <sourceSubstring> is replaced by <dest>.
 
-
-Running tests
--------------
-
-The tests only pass on Java 8.  If you have many versions of Java, remember to specify the Java version, for example:
-
-```
-export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/jre/
-mvn clean test
-```
