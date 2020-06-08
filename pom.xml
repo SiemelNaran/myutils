@@ -87,7 +87,9 @@
                     <version>3.8.0</version>
                     <configuration>
                         <release>13</release>
-                        <compilerArgs>--enable-preview</compilerArgs>
+                        <compilerArgs>
+                            <arg>-Xlint:preview</arg>
+                        </compilerArgs>
                     </configuration>
                 </plugin>
                 <plugin>
@@ -95,7 +97,7 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.0.0-M3</version>
                     <configuration>
-                        <argLine>--enable-preview</argLine>
+                        <argLine></argLine>
                     </configuration>
                 </plugin>
             </plugins>
