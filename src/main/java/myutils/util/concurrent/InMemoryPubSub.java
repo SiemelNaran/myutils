@@ -27,11 +27,11 @@ public class InMemoryPubSub {
     private final Queue<Subscriber> masterList = new ArrayDeque<>();
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition notEmpty = lock.newCondition();
-    private final SubscriptionEventExceptionHandler subscriptionEventExceptionHandler;
+    private final SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler;
 
-    public InMemoryPubSub(int corePoolSize, SubscriptionEventExceptionHandler subscriptionEventExceptionHandler) {
+    public InMemoryPubSub(int corePoolSize, SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler) {
         executorService = Executors.newFixedThreadPool(corePoolSize, createThreadFactory());
-        this.subscriptionEventExceptionHandler = subscriptionEventExceptionHandler;
+        this.subscriptionMessageExceptionHandler = subscriptionMessageExceptionHandler;
         startThreads();
         Runtime.getRuntime().addShutdownHook(generateShutdownThread());
     }
@@ -60,10 +60,7 @@ public class InMemoryPubSub {
                 for (var subscriber : subscribers) {
                     if (subscriber.subscriberClass.isInstance(message)) {
                         CloneableObject<?> copy = (CloneableObject<?>) message.clone();
-                        subscriber.addEvent(copy);
-                        masterList.add(subscriber);
-                        notEmpty.signal();
-
+                        subscriber.addMessage(copy);
                     }
                 }
             } finally {
@@ -77,12 +74,12 @@ public class InMemoryPubSub {
         }
     }
 
-    public static class Subscriber {
+    public class Subscriber {
         private final @Nonnull String topic;
         private final @Nonnull String subsriberName;
         private final @Nonnull Class<?> subscriberClass; // same as or inherits from publisherClass
         private final @Nonnull Consumer<? super CloneableObject<?>> callback;
-        private final @Nonnull Queue<CloneableObject<?>> events = new ArrayDeque<>();
+        private final @Nonnull Queue<CloneableObject<?>> messages = new ArrayDeque<>();
 
         private Subscriber(@Nonnull String topic, @Nonnull String subscriberName, @Nonnull Class<?> subscriberClass, @Nonnull Consumer<? super CloneableObject<?>> callback) {
             this.topic = topic;
@@ -91,8 +88,18 @@ public class InMemoryPubSub {
             this.callback = callback;
         }
 
-        public void addEvent(CloneableObject<?> event) {
-            events.offer(event);
+        public void addMessage(CloneableObject<?> message) {
+            if (!(subscriberClass.isInstance(message))) {
+                throw new IllegalArgumentException("message must be or inherit from " + subscriberClass.getName());
+            }
+            lock.lock();
+            try {
+                messages.offer(message);
+                masterList.add(this);
+                notEmpty.signal();
+            } finally {
+                lock.unlock();
+            }
         }
 
         @Nonnull
@@ -181,20 +188,20 @@ public class InMemoryPubSub {
     }
 
     private void startThreads() {
-        executorService.submit(new Listener(masterList, lock, notEmpty, subscriptionEventExceptionHandler));
+        executorService.submit(new Listener(masterList, lock, notEmpty, subscriptionMessageExceptionHandler));
     }
 
     private static class Listener implements Runnable {
         private final Queue<Subscriber> masterList;
         private final Lock lock;
         private final Condition notEmpty;
-        private final SubscriptionEventExceptionHandler subscriptionEventExceptionHandler;
+        private final SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler;
 
-        private Listener(Queue<Subscriber> masterList, Lock lock, Condition notEmpty, SubscriptionEventExceptionHandler subscriptionEventExceptionHandler) {
+        private Listener(Queue<Subscriber> masterList, Lock lock, Condition notEmpty, SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler) {
             this.masterList = masterList;
             this.lock = lock;
             this.notEmpty = notEmpty;
-            this.subscriptionEventExceptionHandler = subscriptionEventExceptionHandler;
+            this.subscriptionMessageExceptionHandler = subscriptionMessageExceptionHandler;
         }
 
         @Override
@@ -211,10 +218,10 @@ public class InMemoryPubSub {
                         }
                     }
                     Subscriber subscriber = masterList.poll();
-                    CloneableObject<?> event = subscriber.events.poll();
+                    CloneableObject<?> message = subscriber.messages.poll();
                     lock.unlock();
                     locked = false;
-                    handleEvent(subscriber, event);
+                    handleMessage(subscriber, message);
                 } finally {
                     if (locked) {
                         lock.unlock();
@@ -223,35 +230,35 @@ public class InMemoryPubSub {
             }
         }
 
-        private void handleEvent(Subscriber subscriber, CloneableObject<?> event) {
+        private void handleMessage(Subscriber subscriber, CloneableObject<?> message) {
             try {
-                subscriber.callback.accept(event);
+                subscriber.callback.accept(message);
             } catch (RuntimeException | Error e) {
-                subscriptionEventExceptionHandler.handleException(subscriber, event, e);
+                subscriptionMessageExceptionHandler.handleException(subscriber, message, e);
             }
         }
     }
 
-    public interface SubscriptionEventExceptionHandler {
+    public interface SubscriptionMessageExceptionHandler {
         /**
-         * Handle exception thrown when processing a subscription event.
+         * Handle exception thrown when processing a subscription message.
          *
          * @param e the exception, which is either a RuntimeException or Error
          */
-        void handleException(Subscriber subscriber, CloneableObject<?> event, Throwable e);
+        void handleException(Subscriber subscriber, CloneableObject<?> message, Throwable e);
     }
 
-    public static SubscriptionEventExceptionHandler defaultSubscriptionEventExceptionHandler() {
-        return defaultSubscriptionEventExceptionHandler;
+    public static SubscriptionMessageExceptionHandler defaultSubscriptionMessageExceptionHandler() {
+        return defaultSubscriptionMessageExceptionHandler;
     }
 
-    private static final SubscriptionEventExceptionHandler defaultSubscriptionEventExceptionHandler = new DefaultSubscriptionEventExceptionHandler();
+    private static final SubscriptionMessageExceptionHandler defaultSubscriptionMessageExceptionHandler = new DefaultSubscriptionMessageExceptionHandler();
 
-    public static class DefaultSubscriptionEventExceptionHandler implements SubscriptionEventExceptionHandler {
-        private static final System.Logger LOGGER = System.getLogger(DefaultSubscriptionEventExceptionHandler.class.getName());
+    public static class DefaultSubscriptionMessageExceptionHandler implements SubscriptionMessageExceptionHandler {
+        private static final System.Logger LOGGER = System.getLogger(DefaultSubscriptionMessageExceptionHandler.class.getName());
 
         @Override
-        public void handleException(Subscriber subcriber, CloneableObject<?> event, Throwable e) {
+        public void handleException(Subscriber subcriber, CloneableObject<?> message, Throwable e) {
             LOGGER.log(System.Logger.Level.WARNING, "Exception invoking subscriber", e);
         }
     }
