@@ -1,4 +1,4 @@
-package myutils.util.concurrent;
+package myutils.pubsub;
 
 import static myutils.TestUtil.assertException;
 import static myutils.TestUtil.sleep;
@@ -233,7 +233,7 @@ public class InMemoryPubSubTest {
         pubSub.createPublisher("hello", CloneableString.class);
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         Consumer<Base> handleBase = base -> words.add(base.toString());
-        assertException(() -> pubSub.subscribe("hello", "Subscriber", Base.class, handleBase), IllegalArgumentException.class, "subscriber class must be the same as or inherit from the publisher class: publisherClass=myutils.util.concurrent.InMemoryPubSubTest$CloneableString subscriberClass=myutils.util.concurrent.InMemoryPubSubTest$Base");
+        assertException(() -> pubSub.subscribe("hello", "Subscriber", Base.class, handleBase), IllegalArgumentException.class, "subscriber class must be the same as or inherit from the publisher class: publisherClass=myutils.pubsub.InMemoryPubSubTest$CloneableString subscriberClass=myutils.pubsub.InMemoryPubSubTest$Base");
     }
 
     @Test

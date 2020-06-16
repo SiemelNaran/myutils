@@ -1,4 +1,4 @@
-package myutils.util.concurrent;
+package myutils.pubsub;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
