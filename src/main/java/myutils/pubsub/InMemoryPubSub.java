@@ -27,6 +27,7 @@ import myutils.util.MultimapUtils;
  * There is a subscribe function to create a subscriber for a topic, along with the type of the class that the subscriber handles and a callback function.
  * The subscriber class must be the same as or inherit from the publisher class.
  * A publisher will only invoke subscribers that handle the type of the event.
+ * Subscribers will only see messages published since the time of subscription.
  * 
  * <p>Prior to invoking the subscription handler, this class makes a copy of the message.
  * The publisher class must implement the CloneableObject interface, which has a public clone function that does not throw CloneNotSupportedException.
@@ -238,13 +239,16 @@ public class InMemoryPubSub {
 
     /**
      * Unsubscribe a subscriber.
-     * Messages in the subscriber queue will still be processed.
+     * Messages in the subscriber queue will be purged.
+     * 
+     * <p>Running time O(N) where N is the total number of messages in all subscribers.
      */
     public synchronized void unsubscribe(Subscriber subscriber) {
         var publisher = topicMap.get(subscriber.topic);
         if (publisher == null) {
             return;
         }
+        masterList.removeIf(iterSubscriber -> iterSubscriber == subscriber);
         publisher.subscribers.remove(subscriber);
     }
 

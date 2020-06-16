@@ -8,9 +8,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
+
+import myutils.pubsub.InMemoryPubSub.Subscriber;
 
 
 public class InMemoryPubSubTest {
@@ -39,7 +44,7 @@ public class InMemoryPubSubTest {
     }
 
     @Test
-    void testPublishAndSubscribe() {
+    void testPublishAndSubscribeAndUnsubscribe() {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
         InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
@@ -80,6 +85,10 @@ public class InMemoryPubSubTest {
         assertThat(words, Matchers.contains("four-2", "four-3"));
     }
 
+    /**
+     * In this test we create the subscriber before the publisher.
+     * This could happen in a multi-threaded environment.
+     */
     @Test
     void testSubscribeAndPublish() {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
@@ -93,6 +102,38 @@ public class InMemoryPubSubTest {
         publisher.publish(new CloneableString("one"));
         sleep(100); // wait for subscribers to work
         assertThat(words, Matchers.contains("one-1", "one-2"));
+    }
+    
+    /**
+     * In this test we publish two events, and while the first is running we unsubscribe.
+     * Verify that the second event does not get processed.
+     * @throws InterruptedException 
+     */
+    @Test
+    public void testUnsubscribeWhileMessageInQueue() throws InterruptedException {
+        List<String> words = Collections.synchronizedList(new ArrayList<>());
+        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
+        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
+        Consumer<CloneableString> handleString1 = str -> {
+                sleep(300);
+                words.add(str.append(""));
+        };
+        Subscriber subscriber = pubSub.subscribe("hello", "Subscriber", CloneableString.class, handleString1);
+
+        ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
+        executor.schedule(() -> {
+            publisher.publish(new CloneableString("one"));
+            publisher.publish(new CloneableString("two"));
+        }, 0, TimeUnit.MILLISECONDS);
+        executor.schedule(() -> {
+            pubSub.unsubscribe(subscriber);
+        }, 250, TimeUnit.MILLISECONDS); 
+        
+        executor.shutdown();
+        executor.awaitTermination(1, TimeUnit.SECONDS);
+        
+        sleep(700); // wait for subscribers to work
+        assertThat(words, Matchers.contains("one"));
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////
@@ -278,6 +319,9 @@ public class InMemoryPubSubTest {
         }
     }
 
+    /**
+     * Demonstrate how to retry failed subscription handlers.
+     */
     @Test
     void testExceptionOnSubscriberCallback2() {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
@@ -311,6 +355,9 @@ public class InMemoryPubSubTest {
                                      "success"));
     }
 
+    /**
+     * In this test we retry a failed a subscription handler but insert an object of the wrong type into the subscriber queue, resulting in an exception.
+     */
     @Test
     void testExceptionOnSubscriberCallback3() {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
