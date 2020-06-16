@@ -16,6 +16,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import javax.annotation.Nonnull;
 import myutils.util.MultimapUtils;
 
@@ -38,10 +39,44 @@ import myutils.util.MultimapUtils;
  * The handler is responsible for taking care of the backoff strategy.
  */
 public class InMemoryPubSub {
+    public static Supplier<Queue<Subscriber>> defaultQueueCreator() {
+        return () -> new ArrayDeque<>();
+    }
+
+    /**
+     * A general exception handler to handle all exceptions arising in this PubSub.
+     */
+    public interface SubscriptionMessageExceptionHandler {
+        /**
+         * Handle exception thrown when processing a subscription message.
+         *
+         * @param e the exception, which is either a RuntimeException or Error
+         */
+        void handleException(Subscriber subscriber, CloneableObject<?> message, Throwable e);
+    }
+
+    /**
+     * The default exception handler which logs the exception and callstack at WARNING level.
+     */
+    public static SubscriptionMessageExceptionHandler defaultSubscriptionMessageExceptionHandler() {
+        return defaultSubscriptionMessageExceptionHandler;
+    }
+
+    private static final SubscriptionMessageExceptionHandler defaultSubscriptionMessageExceptionHandler = new DefaultSubscriptionMessageExceptionHandler();
+
+    public static class DefaultSubscriptionMessageExceptionHandler implements SubscriptionMessageExceptionHandler {
+        private static final System.Logger LOGGER = System.getLogger(DefaultSubscriptionMessageExceptionHandler.class.getName());
+
+        @Override
+        public void handleException(Subscriber subcriber, CloneableObject<?> message, Throwable e) {
+            LOGGER.log(System.Logger.Level.WARNING, "Exception invoking subscriber", e);
+        }
+    }
+
     private final Map<String /*topic*/, Publisher> topicMap = new HashMap<>();
     private final Map<String /*topic*/, Collection<DeferredSubscriber>> deferredSubscribersMap = new HashMap<>();
     private final ExecutorService executorService;
-    private final Queue<Subscriber> masterList = new ArrayDeque<>();
+    private final Queue<Subscriber> masterList;
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition notEmpty = lock.newCondition();
     private final SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler;
@@ -50,9 +85,11 @@ public class InMemoryPubSub {
      * Create a PubSub system.
      * 
      * @param corePoolSize the number of threads handling messages that are published by all publishers.
+     * @param queueCreator the queue to process all message across all subscribers.
      * @param subscriptionMessageExceptionHandler the general subscription handler for exceptions arising from all subscribers.
      */
-    public InMemoryPubSub(int corePoolSize, SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler) {
+    public InMemoryPubSub(int corePoolSize, Supplier<Queue<Subscriber>> queueCreator, SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler) {
+        masterList = queueCreator.get();
         executorService = Executors.newFixedThreadPool(corePoolSize, createThreadFactory());
         this.subscriptionMessageExceptionHandler = subscriptionMessageExceptionHandler;
         startThreads();
@@ -309,37 +346,7 @@ public class InMemoryPubSub {
             }
         }
     }
-
-    /**
-     * A general exception handler to handle all exceptions arising in this PubSub.
-     */
-    public interface SubscriptionMessageExceptionHandler {
-        /**
-         * Handle exception thrown when processing a subscription message.
-         *
-         * @param e the exception, which is either a RuntimeException or Error
-         */
-        void handleException(Subscriber subscriber, CloneableObject<?> message, Throwable e);
-    }
-
-    /**
-     * The default exception handler which logs the exception and callstack at WARNING level.
-     */
-    public static SubscriptionMessageExceptionHandler defaultSubscriptionMessageExceptionHandler() {
-        return defaultSubscriptionMessageExceptionHandler;
-    }
-
-    private static final SubscriptionMessageExceptionHandler defaultSubscriptionMessageExceptionHandler = new DefaultSubscriptionMessageExceptionHandler();
-
-    public static class DefaultSubscriptionMessageExceptionHandler implements SubscriptionMessageExceptionHandler {
-        private static final System.Logger LOGGER = System.getLogger(DefaultSubscriptionMessageExceptionHandler.class.getName());
-
-        @Override
-        public void handleException(Subscriber subcriber, CloneableObject<?> message, Throwable e) {
-            LOGGER.log(System.Logger.Level.WARNING, "Exception invoking subscriber", e);
-        }
-    }
-
+    
     private Thread generateShutdownThread() {
         return new Thread(() -> {
             try {
