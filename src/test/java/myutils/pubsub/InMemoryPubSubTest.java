@@ -5,6 +5,8 @@ import static myutils.TestUtil.sleep;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -14,12 +16,12 @@ import java.util.Queue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-
+import java.util.stream.IntStream;
 import myutils.LogFailureToConsoleTestWatcher;
 import myutils.TestUtil;
-
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -179,10 +181,56 @@ public class InMemoryPubSubTest {
     }
     
     /**
+     * In this test we have many threads.
+     */
+    @Test
+    void testMultipleThreads() {
+        List<String> words = Collections.synchronizedList(new ArrayList<>());
+        Instant startTime = Instant.now();
+        AtomicReference<Instant> endTime = new AtomicReference<>();
+        InMemoryPubSub pubSub = new InMemoryPubSub(3, InMemoryPubSub.defaultQueueCreator(), InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
+        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
+        IntStream.rangeClosed(1, 5).forEach(i -> {
+            pubSub.subscribe("hello", "Subscriber" + i,
+                CloneableString.class,
+                str -> {
+                    System.out.println("currentThread=" + Thread.currentThread().getName() + ", i=" + i);
+                    sleep(20 * i);
+                    String word = str.append("-s" + i);
+                    words.add(word);
+                    System.out.println("currentThread=" + Thread.currentThread().getName() + ", i=" + i + ", word=" + word);
+                    endTime.set(Instant.now());
+                });
+        });
+
+        publisher.publish(new CloneableString("one"));
+        publisher.publish(new CloneableString("two"));
+        publisher.publish(new CloneableString("three"));
+        
+        // subscriber1 takes 20ms to run
+        // subscriber2 takes 40ms to run
+        // etc, so all 5 subscribers take 20 + 40 + 60 + 80 + 100 = 300ms
+        // as we publish 3 events, this should take about 900ms if there were 1 thread
+        // but as we have 3 threads, it will take closer to 300ms
+        sleep(340); // wait for subscribers to work
+        System.out.println("timeTaken=" + Duration.between(startTime, endTime.get())); // typical output: timeTaken=PT0.314515S
+        
+        System.out.println(words);
+        assertThat(words,
+                Matchers.not(Matchers.contains("one-s1", "one-s2", "one-s3", "one-s4", "one-s5",
+                                              "two-s1", "two-s2", "two-s3", "two-s4", "two-s5",
+                                              "three-s1", "three-s2", "three-s3", "three-s4", "three-s5")));
+        assertThat(words,
+                Matchers.containsInAnyOrder("one-s1", "one-s2", "one-s3", "one-s4", "one-s5",
+                                            "two-s1", "two-s2", "two-s3", "two-s4", "two-s5",
+                                            "three-s1", "three-s2", "three-s3", "three-s4", "three-s5"));
+    }
+    
+    /**
      * In one parameterized version of this test we set up a PubSub system with a priority queue such that messages published to Subscriber1 are processed first.
      */
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
-    @ValueSource(strings= {"default", "priority"})
+    @ValueSource(strings = {"default", "priority"})
     void testPrioritySubscribers(String queueType) {
         Supplier<Queue<InMemoryPubSub.Subscriber>> queueCreator;
         switch (queueType) {

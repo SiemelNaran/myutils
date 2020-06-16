@@ -7,9 +7,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
@@ -75,7 +75,7 @@ public class InMemoryPubSub {
 
     private final Map<String /*topic*/, Publisher> topicMap = new HashMap<>();
     private final Map<String /*topic*/, Collection<DeferredSubscriber>> deferredSubscribersMap = new HashMap<>();
-    private final ExecutorService executorService;
+    private final ThreadPoolExecutor executorService;
     private final Queue<Subscriber> masterList;
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition notEmpty = lock.newCondition();
@@ -90,7 +90,7 @@ public class InMemoryPubSub {
      */
     public InMemoryPubSub(int corePoolSize, Supplier<Queue<Subscriber>> queueCreator, SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler) {
         masterList = queueCreator.get();
-        executorService = Executors.newFixedThreadPool(corePoolSize, createThreadFactory());
+        executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(corePoolSize, createThreadFactory());
         this.subscriptionMessageExceptionHandler = subscriptionMessageExceptionHandler;
         startThreads();
         Runtime.getRuntime().addShutdownHook(generateShutdownThread());
@@ -292,7 +292,9 @@ public class InMemoryPubSub {
     }
 
     private void startThreads() {
-        executorService.submit(new Listener(masterList, lock, notEmpty, subscriptionMessageExceptionHandler));
+        for (int i = 0; i < executorService.getCorePoolSize(); i++) {
+            executorService.submit(new Listener(masterList, lock, notEmpty, subscriptionMessageExceptionHandler));
+        }
     }
 
     /**
