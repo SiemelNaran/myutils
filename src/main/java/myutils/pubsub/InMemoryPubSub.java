@@ -33,7 +33,9 @@ import myutils.util.MultimapUtils;
  * The publisher class must implement the CloneableObject interface, which has a public clone function that does not throw CloneNotSupportedException.
  * 
  * <p>Each PubSub instance has a general exception handler to handle exceptions invoking any subscription handler.
- * One may log the error with callstack (the default behavior), or provide custom behavior, such as logging a shorter message or resubmitting the message to the subscription handler. 
+ * One may log the error with callstack (the default behavior), or
+ * or provide custom behavior such as logging a shorter message or resubmitting the message to the subscription handler.
+ * The handler is responsible for taking care of the backoff strategy.
  */
 public class InMemoryPubSub {
     private final Map<String /*topic*/, Publisher> topicMap = new HashMap<>();

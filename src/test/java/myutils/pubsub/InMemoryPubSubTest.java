@@ -15,7 +15,6 @@ import java.util.function.Consumer;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 
-import myutils.pubsub.InMemoryPubSub.Subscriber;
 
 
 public class InMemoryPubSubTest {
@@ -107,7 +106,6 @@ public class InMemoryPubSubTest {
     /**
      * In this test we publish two events, and while the first is running we unsubscribe.
      * Verify that the second event does not get processed.
-     * @throws InterruptedException 
      */
     @Test
     public void testUnsubscribeWhileMessageInQueue() throws InterruptedException {
@@ -115,10 +113,10 @@ public class InMemoryPubSubTest {
         InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
         InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
         Consumer<CloneableString> handleString1 = str -> {
-                sleep(300);
-                words.add(str.append(""));
+            sleep(300);
+            words.add(str.append(""));
         };
-        Subscriber subscriber = pubSub.subscribe("hello", "Subscriber", CloneableString.class, handleString1);
+        InMemoryPubSub.Subscriber subscriber = pubSub.subscribe("hello", "Subscriber", CloneableString.class, handleString1);
 
         ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
         executor.schedule(() -> {
