@@ -20,6 +20,20 @@ import javax.annotation.Nonnull;
 import myutils.util.MultimapUtils;
 
 
+/**
+ * A class to implement publish-subscribe in memory in one JVM.
+ * 
+ * <p>There is a publish function to create a publisher for a topic, along with the type of class the publisher publishes.
+ * There is a subscribe function to create a subscriber for a topic, along with the type of the class that the subscriber handles and a callback function.
+ * The subscriber class must be the same as or inherit from the publisher class.
+ * A publisher will only invoke subscribers that handle the type of the event.
+ * 
+ * <p>Prior to invoking the subscription handler, this class makes a copy of the message.
+ * The publisher class must implement the CloneableObject interface, which has a public clone function that does not throw CloneNotSupportedException.
+ * 
+ * <p>Each PubSub instance has a general exception handler to handle exceptions invoking any subscription handler.
+ * One may log the error with callstack (the default behavior), or provide custom behavior, such as logging a shorter message or resubmitting the message to the subscription handler. 
+ */
 public class InMemoryPubSub {
     private final Map<String /*topic*/, Publisher> topicMap = new HashMap<>();
     private final Map<String /*topic*/, Collection<DeferredSubscriber>> deferredSubscribersMap = new HashMap<>();
@@ -29,6 +43,12 @@ public class InMemoryPubSub {
     private final Condition notEmpty = lock.newCondition();
     private final SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler;
 
+    /**
+     * Create a PubSub system.
+     * 
+     * @param corePoolSize the number of threads handling messages that are published by all publishers.
+     * @param subscriptionMessageExceptionHandler the general subscription handler for exceptions arising from all subscribers.
+     */
     public InMemoryPubSub(int corePoolSize, SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler) {
         executorService = Executors.newFixedThreadPool(corePoolSize, createThreadFactory());
         this.subscriptionMessageExceptionHandler = subscriptionMessageExceptionHandler;
@@ -44,6 +64,10 @@ public class InMemoryPubSub {
         };
     }
 
+    /**
+     * Class representing the publisher.
+     * In implementation it has a topic, publisher class, and list of subscribers.
+     */
     public class Publisher {
         private final @Nonnull String topic;
         private final @Nonnull Class<?> publisherClass;
@@ -74,6 +98,11 @@ public class InMemoryPubSub {
         }
     }
 
+    /**
+     * Class representing a subscriber.
+     * In implementation it has a topic, name, subscriber class (which must be the same as or inherit from the publisher class), callback function,
+     * and list of messages to process.
+     */
     public class Subscriber {
         private final @Nonnull String topic;
         private final @Nonnull String subsriberName;
@@ -112,6 +141,10 @@ public class InMemoryPubSub {
         }
     }
 
+    /**
+     * Class used when subscriber created before publisher.
+     * When publisher created, this class PubSub makes calls to addSubscriber.
+     */
     private static class DeferredSubscriber {
         private final @Nonnull Class<?> subscriberClass;
         private final @Nonnull String subsriberName;
@@ -124,6 +157,16 @@ public class InMemoryPubSub {
         }
     }
 
+    /**
+     * Create a publisher.
+     * 
+     * @param <T> the type of object this publisher publishes. Must implement CloneableObject.
+     * @param topic the topic
+     * @param publisherClass same as T.class
+     * @return a new publisher
+     * @throws IllegalArgumentException if the publisher already exists.
+     * @throws IllegalArgumentException if subscriber class of deferred subscribers is not the same or inherits from the publisher class
+     */
     public synchronized <T> Publisher createPublisher(String topic, Class<T> publisherClass) {
         var publisher = topicMap.get(topic);
         if (publisher != null) {
@@ -135,6 +178,9 @@ public class InMemoryPubSub {
         return publisher;
     }
 
+    /**
+     * Get an existing publisher.
+     */
     public synchronized Optional<Publisher> getPublisher(String topic) {
         var publisher = topicMap.get(topic);
         return Optional.ofNullable(publisher);
@@ -149,6 +195,17 @@ public class InMemoryPubSub {
         }
     }
 
+    /**
+     * Create a subscriber.
+     * 
+     * @param <T> the type of object this subscriber receives. Must be the same as or inherit from the publisher class.
+     * @param topic the topic
+     * @param subscriberName the name of this subscriber, useful for debugging
+     * @param subscriberClass same as T.class
+     * @param callback the callback function
+     * @return a new subscriber
+     * @throws IllegalArgumentException if subscriber class is not the same or inherits from the publisher class
+-     */
     @SuppressWarnings("unchecked")
     public synchronized <T extends CloneableObject<?>> Subscriber subscribe(@Nonnull String topic,
                                                                             @Nonnull String subscriberName,
@@ -179,6 +236,10 @@ public class InMemoryPubSub {
         }
     }
 
+    /**
+     * Unsubscribe a subscriber.
+     * Messages in the subscriber queue will still be processed.
+     */
     public synchronized void unsubscribe(Subscriber subscriber) {
         var publisher = topicMap.get(subscriber.topic);
         if (publisher == null) {
@@ -191,6 +252,10 @@ public class InMemoryPubSub {
         executorService.submit(new Listener(masterList, lock, notEmpty, subscriptionMessageExceptionHandler));
     }
 
+    /**
+     * Thread that listens for a new message in any subscriber queue and process it by cloning it and passing it to all of the relevant subscribers. 
+     *
+     */
     private static class Listener implements Runnable {
         private final Queue<Subscriber> masterList;
         private final Lock lock;
@@ -239,6 +304,9 @@ public class InMemoryPubSub {
         }
     }
 
+    /**
+     * A general exception handler to handle all exceptions arising in this PubSub.
+     */
     public interface SubscriptionMessageExceptionHandler {
         /**
          * Handle exception thrown when processing a subscription message.
@@ -248,6 +316,9 @@ public class InMemoryPubSub {
         void handleException(Subscriber subscriber, CloneableObject<?> message, Throwable e);
     }
 
+    /**
+     * The default exception handler which logs the exception and callstack at WARNING level.
+     */
     public static SubscriptionMessageExceptionHandler defaultSubscriptionMessageExceptionHandler() {
         return defaultSubscriptionMessageExceptionHandler;
     }
