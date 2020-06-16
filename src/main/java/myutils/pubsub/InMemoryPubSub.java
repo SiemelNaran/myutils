@@ -272,9 +272,4 @@ public class InMemoryPubSub {
             }
         }, "PubSub.shutdown");
     }
-
-
-    public interface CloneableObject<T> extends Cloneable {
-        T clone();
-    }
 }

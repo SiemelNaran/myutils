@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
@@ -17,7 +16,7 @@ import org.junit.jupiter.api.Test;
 public class InMemoryPubSubTest {
     ///////////////////////////////////////////////////////////////////////////////////////
 
-    public static class CloneableString implements InMemoryPubSub.CloneableObject<CloneableString> {
+    public static class CloneableString implements CloneableObject<CloneableString> {
         private String str;
 
         public CloneableString(String str) {
@@ -102,7 +101,7 @@ public class InMemoryPubSubTest {
     public interface Animal {
     }
 
-    public static final class Cat implements Animal, InMemoryPubSub.CloneableObject<Cat> {
+    public static final class Cat implements Animal, CloneableObject<Cat> {
         private final int lengthOfTailInInches;
 
         public Cat(int lengthOfTailInInches) {
@@ -114,7 +113,7 @@ public class InMemoryPubSubTest {
         }
 
         @Override
-        public Cat clone() {
+        public final Cat clone() {
             try {
                 return (Cat) super.clone();
             } catch (CloneNotSupportedException e) {
@@ -123,7 +122,7 @@ public class InMemoryPubSubTest {
         }
     }
 
-    public static final class Frog implements Animal, InMemoryPubSub.CloneableObject<Frog> {
+    public static final class Frog implements Animal, CloneableObject<Frog> {
         private final int loudnessOfCroak;
 
         public Frog(int loudnessOfCroak) {
@@ -135,7 +134,7 @@ public class InMemoryPubSubTest {
         }
 
         @Override
-        public Frog clone() {
+        public final Frog clone() {
             try {
                 return (Frog) super.clone();
             } catch (CloneNotSupportedException e) {
@@ -165,9 +164,9 @@ public class InMemoryPubSubTest {
     ///////////////////////////////////////////////////////////////////////////////////////
     // In these classes the base class implements CloneableObject
 
-    public abstract static class Base implements InMemoryPubSub.CloneableObject<Base> {
+    public abstract static class Base implements CloneableObject<Base> {
         @Override
-        public Base clone() {
+        public final Base clone() {
             try {
                 return (Base) super.clone();
             } catch (CloneNotSupportedException e) {
@@ -255,32 +254,97 @@ public class InMemoryPubSubTest {
         */
     }
 
+    public static class TestEvent implements CloneableObject<TestEvent> {
+        private int retryCount;
+
+        public TestEvent() {
+        }
+        
+        int getRetryCount() {
+            return retryCount;
+        }
+        
+        void incrementRetryCount() {
+            retryCount++;
+        }
+
+        @Override
+        public TestEvent clone() {
+            try {
+                return (TestEvent) super.clone();
+            } catch (CloneNotSupportedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
     @Test
     void testExceptionOnSubscriberCallback2() {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         var mySubscriptionMessageExceptionHandler = new InMemoryPubSub.SubscriptionMessageExceptionHandler() {
             @Override
-            public void handleException(InMemoryPubSub.Subscriber subscriber, InMemoryPubSub.CloneableObject<?> message, Throwable e) {
+            public void handleException(InMemoryPubSub.Subscriber subscriber, CloneableObject<?> message, Throwable e) {
+                if (message instanceof TestEvent) {
+                    TestEvent event = (TestEvent) message;
+                    event.incrementRetryCount();
+                }
                 words.add(subscriber.getSubscriberName() + "-" + message.getClass().getSimpleName() + " : " + e.getMessage());
-                subscriber.addMessage(message); // retry
+                subscriber.addMessage(message);
             }
         };
         InMemoryPubSub pubSub = new InMemoryPubSub(1, mySubscriptionMessageExceptionHandler);
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
-        AtomicInteger countTimes = new AtomicInteger(0);
-        Consumer<CloneableString> handleString = str -> {
-            System.out.println("snaran" + countTimes.get());
-            if (countTimes.incrementAndGet() == 1) {
+        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", TestEvent.class);
+        Consumer<TestEvent> handleEvent = event -> {
+            if (event.getRetryCount() == 0) {
                 throw new RuntimeException("Test Exception");
             } else {
                 words.add("success");
             }
         };
-        pubSub.subscribe("hello", "SubscriberThatThrows", CloneableString.class, handleString);
+        pubSub.subscribe("hello", "SubscriberThatThrows", TestEvent.class, handleEvent);
 
-        publisher.publish(new CloneableString("one"));
+        publisher.publish(new TestEvent());
         sleep(100); // wait for subscribers to work
         sleep(100); // wait for message handler to work
-        assertThat(words, Matchers.contains("SubscriberThatThrows-CloneableString : Test Exception", "success"));
+        assertThat(words,
+                   Matchers.contains("SubscriberThatThrows-TestEvent : Test Exception",
+                                     "success"));
+    }
+
+    @Test
+    void testExceptionOnSubscriberCallback3() {
+        List<String> words = Collections.synchronizedList(new ArrayList<>());
+        var mySubscriptionMessageExceptionHandler = new InMemoryPubSub.SubscriptionMessageExceptionHandler() {
+            @Override
+            public void handleException(InMemoryPubSub.Subscriber subscriber, CloneableObject<?> message, Throwable e) {
+                if (message instanceof TestEvent) {
+                    TestEvent event = (TestEvent) message;
+                    event.incrementRetryCount();
+                }
+                words.add(subscriber.getSubscriberName() + "-" + message.getClass().getSimpleName() + " : " + e.getMessage());
+                try {
+                    subscriber.addMessage(new CloneableString("wrong type - expecting TestEvent"));
+                } catch (IllegalArgumentException e2) {
+                    words.add(e2.getMessage());
+                }
+            }
+        };
+        InMemoryPubSub pubSub = new InMemoryPubSub(1, mySubscriptionMessageExceptionHandler);
+        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", TestEvent.class);
+        Consumer<TestEvent> handleEvent = event -> {
+            if (event.getRetryCount() == 0) {
+                throw new RuntimeException("Test Exception");
+            } else {
+                words.add("success");
+            }
+        };
+        pubSub.subscribe("hello", "SubscriberThatThrows", TestEvent.class, handleEvent);
+
+        publisher.publish(new TestEvent());
+        sleep(100); // wait for subscribers to work
+        sleep(100); // wait for message handler to work
+        assertThat(words,
+                   Matchers.contains("SubscriberThatThrows-TestEvent : Test Exception",
+                                     "message must be or inherit from myutils.pubsub.InMemoryPubSubTest$TestEvent"));
     }
 }
