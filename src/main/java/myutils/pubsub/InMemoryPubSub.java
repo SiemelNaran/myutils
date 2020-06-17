@@ -39,6 +39,9 @@ import myutils.util.MultimapUtils;
  * The handler is responsible for taking care of the backoff strategy.
  */
 public class InMemoryPubSub {
+    /**
+     * The default way in which messages published in this PubSub are stored, which is just a standard queue.
+     */
     public static Supplier<Queue<Subscriber>> defaultQueueCreator() {
         return () -> new ArrayDeque<>();
     }
@@ -64,7 +67,7 @@ public class InMemoryPubSub {
 
     private static final SubscriptionMessageExceptionHandler defaultSubscriptionMessageExceptionHandler = new DefaultSubscriptionMessageExceptionHandler();
 
-    public static class DefaultSubscriptionMessageExceptionHandler implements SubscriptionMessageExceptionHandler {
+    private static class DefaultSubscriptionMessageExceptionHandler implements SubscriptionMessageExceptionHandler {
         private static final System.Logger LOGGER = System.getLogger(DefaultSubscriptionMessageExceptionHandler.class.getName());
 
         @Override
@@ -85,12 +88,12 @@ public class InMemoryPubSub {
      * Create a PubSub system.
      * 
      * @param corePoolSize the number of threads handling messages that are published by all publishers.
-     * @param queueCreator the queue to process all message across all subscribers.
+     * @param queueCreator the queue to store all message across all subscribers.
      * @param subscriptionMessageExceptionHandler the general subscription handler for exceptions arising from all subscribers.
      */
     public InMemoryPubSub(int corePoolSize, Supplier<Queue<Subscriber>> queueCreator, SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler) {
-        masterList = queueCreator.get();
         executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(corePoolSize, createThreadFactory());
+        masterList = queueCreator.get();
         this.subscriptionMessageExceptionHandler = subscriptionMessageExceptionHandler;
         startThreads();
         Runtime.getRuntime().addShutdownHook(generateShutdownThread());
@@ -106,7 +109,8 @@ public class InMemoryPubSub {
 
     /**
      * Class representing the publisher.
-     * In implementation it has a topic, publisher class, and list of subscribers.
+     * 
+     * <p>In implementation it has a topic, publisher class, list of subscribers, and pointer to the lock in the outer PubSub class. 
      */
     public class Publisher {
         private final @Nonnull String topic;
@@ -119,7 +123,7 @@ public class InMemoryPubSub {
         }
 
         public <T extends CloneableObject<?>> void publish(@Nonnull T message) {
-            lock.lock();
+            InMemoryPubSub.this.lock.lock();
             try {
                 for (var subscriber : subscribers) {
                     if (subscriber.subscriberClass.isInstance(message)) {
@@ -128,7 +132,7 @@ public class InMemoryPubSub {
                     }
                 }
             } finally {
-                lock.unlock();
+                InMemoryPubSub.this.lock.unlock();
             }
         }
 
@@ -140,8 +144,9 @@ public class InMemoryPubSub {
 
     /**
      * Class representing a subscriber.
-     * In implementation it has a topic, name, subscriber class (which must be the same as or inherit from the publisher class), callback function,
-     * and list of messages to process.
+     * 
+     * <p>In implementation it has a topic, name, subscriber class (which must be the same as or inherit from the publisher class), callback function,
+     * list of messages to process, and pointer to the lock and condition and master list in the outer PubSub class. 
      */
     public class Subscriber {
         private final @Nonnull String topic;
@@ -161,13 +166,13 @@ public class InMemoryPubSub {
             if (!(subscriberClass.isInstance(message))) {
                 throw new IllegalArgumentException("message must be or inherit from " + subscriberClass.getName());
             }
-            lock.lock();
+            InMemoryPubSub.this.lock.lock();
             try {
                 messages.offer(message);
-                masterList.add(this);
-                notEmpty.signal();
+                InMemoryPubSub.this.masterList.add(this);
+                InMemoryPubSub.this.notEmpty.signal();
             } finally {
-                lock.unlock();
+                InMemoryPubSub.this.lock.unlock();
             }
         }
 
@@ -176,6 +181,7 @@ public class InMemoryPubSub {
             return topic;
         }
 
+        @Nonnull
         public String getSubscriberName() {
             return subsriberName;
         }
@@ -299,7 +305,6 @@ public class InMemoryPubSub {
 
     /**
      * Thread that listens for a new message in any subscriber queue and process it by cloning it and passing it to all of the relevant subscribers. 
-     *
      */
     private static class Listener implements Runnable {
         private final Queue<Subscriber> masterList;
@@ -316,7 +321,7 @@ public class InMemoryPubSub {
 
         @Override
         public void run() {
-            while (!Thread.currentThread().isInterrupted()) {
+            while (true) {
                 boolean locked = true;
                 lock.lock();
                 try {
@@ -354,6 +359,14 @@ public class InMemoryPubSub {
             try {
                 executorService.shutdownNow();
                 executorService.awaitTermination(100, TimeUnit.MILLISECONDS);
+                boolean locked = lock.tryLock(1, TimeUnit.SECONDS);
+                if (locked) {
+                    try {
+                        notEmpty.signalAll();
+                    } finally {
+                        lock.unlock();
+                    }
+                }
             } catch (InterruptedException ignored) {
             }
         }, "PubSub.shutdown");
