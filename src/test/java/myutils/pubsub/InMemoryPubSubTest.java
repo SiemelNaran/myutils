@@ -91,10 +91,10 @@ public class InMemoryPubSubTest {
     @Test
     void testPublishAndSubscribeAndUnsubscribe() {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultQueueCreator(), InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
+        PubSub pubSub = new InMemoryPubSub(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler());
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
         Consumer<CloneableString> handleString1 = str -> words.add(str.append("-s1"));
-        InMemoryPubSub.Subscriber subscriber1 = pubSub.subscribe("hello", "Subscriber1", CloneableString.class, handleString1);
+        PubSub.Subscriber subscriber1 = pubSub.subscribe("hello", "Subscriber1", CloneableString.class, handleString1);
         Consumer<CloneableString> handleString2 = str -> words.add(str.append("-s2"));
         pubSub.subscribe("hello", "Subscriber2", CloneableString.class, handleString2);
 
@@ -137,12 +137,12 @@ public class InMemoryPubSubTest {
     @Test
     void testSubscribeAndPublish() {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultQueueCreator(), InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
+        PubSub pubSub = new InMemoryPubSub(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler());
         Consumer<CloneableString> handleString1 = str -> words.add(str.append("-s1"));
         pubSub.subscribe("hello", "Subscriber1", CloneableString.class, handleString1);
         Consumer<CloneableString> handleString2 = str -> words.add(str.append("-s2"));
         pubSub.subscribe("hello", "Subscriber2", CloneableString.class, handleString2);
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
 
         publisher.publish(new CloneableString("one"));
         sleep(100); // wait for subscribers to work
@@ -156,13 +156,13 @@ public class InMemoryPubSubTest {
     @Test
     void testUnsubscribeWhileMessageInQueue() throws InterruptedException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultQueueCreator(), InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
+        PubSub pubSub = new InMemoryPubSub(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler());
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
         Consumer<CloneableString> handleString1 = str -> {
             sleep(300);
             words.add(str.append(""));
         };
-        InMemoryPubSub.Subscriber subscriber = pubSub.subscribe("hello", "Subscriber", CloneableString.class, handleString1);
+        PubSub.Subscriber subscriber = pubSub.subscribe("hello", "Subscriber", CloneableString.class, handleString1);
 
         ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
         executor.schedule(() -> {
@@ -188,8 +188,8 @@ public class InMemoryPubSubTest {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         Instant startTime = Instant.now();
         AtomicReference<Instant> endTime = new AtomicReference<>();
-        InMemoryPubSub pubSub = new InMemoryPubSub(3, InMemoryPubSub.defaultQueueCreator(), InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
+        PubSub pubSub = new InMemoryPubSub(3, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler());
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
         IntStream.rangeClosed(1, 5).forEach(i -> {
             pubSub.subscribe("hello", "Subscriber" + i,
                 CloneableString.class,
@@ -232,15 +232,15 @@ public class InMemoryPubSubTest {
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(strings = {"default", "priority"})
     void testPrioritySubscribers(String queueType) {
-        Supplier<Queue<InMemoryPubSub.Subscriber>> queueCreator;
+        Supplier<Queue<PubSub.Subscriber>> queueCreator;
         switch (queueType) {
-            case "default": queueCreator = InMemoryPubSub.defaultQueueCreator(); break;
-            case "priority": queueCreator = () -> new PriorityQueue<>(Comparator.comparing(InMemoryPubSub.Subscriber::getSubscriberName)); break;
+            case "default": queueCreator = PubSub.defaultQueueCreator(); break;
+            case "priority": queueCreator = () -> new PriorityQueue<>(Comparator.comparing(PubSub.Subscriber::getSubscriberName)); break;
             default: throw new UnsupportedOperationException();
         }
         List<String> words = Collections.synchronizedList(new ArrayList<>());
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, queueCreator, InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
+        PubSub pubSub = new InMemoryPubSub(1, queueCreator, PubSub.defaultSubscriptionMessageExceptionHandler());
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
         Consumer<CloneableString> handleString1 = str -> {
             sleep(50);
             words.add(str.append("-s1"));
@@ -326,8 +326,8 @@ public class InMemoryPubSubTest {
     @Test
     void testPublishAndSubscribeWithInheritance1() {
         List<Integer> words = Collections.synchronizedList(new ArrayList<>());
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultQueueCreator(), InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", Animal.class);
+        PubSub pubSub = new InMemoryPubSub(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler());
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", Animal.class);
         Consumer<Cat> handleCat = cat -> words.add(cat.getLengthOfTailInInches());
         pubSub.subscribe("hello", "CatSubscriber", Cat.class, handleCat);
         Consumer<Frog> handleFrog = frog -> words.add(frog.getLoudnessOfCroak());
@@ -384,8 +384,8 @@ public class InMemoryPubSubTest {
     @Test
     void testPublishAndSubscribeWithInheritance2() {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultQueueCreator(), InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", Base.class);
+        PubSub pubSub = new InMemoryPubSub(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler());
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", Base.class);
         Consumer<Base> handleBase = base -> words.add(base.toString());
         pubSub.subscribe("hello", "BaseSubscriber", Base.class, handleBase);
 
@@ -400,7 +400,7 @@ public class InMemoryPubSubTest {
 
     @Test
     void testErrorOnCreatePublisherTwice() {
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultQueueCreator(), InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
+        PubSub pubSub = new InMemoryPubSub(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler());
         pubSub.createPublisher("hello", CloneableString.class);
         assertException(() -> pubSub.createPublisher("hello", CloneableString.class), IllegalArgumentException.class, "publisher already exists: hello");
     }
@@ -408,7 +408,7 @@ public class InMemoryPubSubTest {
     @Test
     @SuppressWarnings("checkstyle:LineLength")
     void testErrorOnSubscriberWrongClassType() {
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultQueueCreator(), InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
+        PubSub pubSub = new InMemoryPubSub(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler());
         pubSub.createPublisher("hello", CloneableString.class);
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         Consumer<Base> handleBase = base -> words.add(base.toString());
@@ -417,8 +417,8 @@ public class InMemoryPubSubTest {
 
     @Test
     void testExceptionOnSubscriberCallback1() {
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultQueueCreator(), InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
+        PubSub pubSub = new InMemoryPubSub(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler());
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
         Consumer<CloneableString> handleString = str -> {
             throw new RuntimeException("Test Exception");
         };
@@ -466,7 +466,7 @@ public class InMemoryPubSubTest {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         var mySubscriptionMessageExceptionHandler = new InMemoryPubSub.SubscriptionMessageExceptionHandler() {
             @Override
-            public void handleException(InMemoryPubSub.Subscriber subscriber, CloneableObject<?> message, Throwable e) {
+            public void handleException(PubSub.Subscriber subscriber, CloneableObject<?> message, Throwable e) {
                 if (message instanceof TestEvent) {
                     TestEvent event = (TestEvent) message;
                     event.incrementRetryCount();
@@ -475,8 +475,8 @@ public class InMemoryPubSubTest {
                 subscriber.addMessage(message);
             }
         };
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultQueueCreator(), mySubscriptionMessageExceptionHandler);
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", TestEvent.class);
+        PubSub pubSub = new InMemoryPubSub(1, PubSub.defaultQueueCreator(), mySubscriptionMessageExceptionHandler);
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", TestEvent.class);
         Consumer<TestEvent> handleEvent = event -> {
             if (event.getRetryCount() == 0) {
                 throw new RuntimeException("Test Exception");
@@ -502,7 +502,7 @@ public class InMemoryPubSubTest {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         var mySubscriptionMessageExceptionHandler = new InMemoryPubSub.SubscriptionMessageExceptionHandler() {
             @Override
-            public void handleException(InMemoryPubSub.Subscriber subscriber, CloneableObject<?> message, Throwable e) {
+            public void handleException(PubSub.Subscriber subscriber, CloneableObject<?> message, Throwable e) {
                 if (message instanceof TestEvent) {
                     TestEvent event = (TestEvent) message;
                     event.incrementRetryCount();
@@ -515,8 +515,8 @@ public class InMemoryPubSubTest {
                 }
             }
         };
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultQueueCreator(), mySubscriptionMessageExceptionHandler);
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", TestEvent.class);
+        PubSub pubSub = new InMemoryPubSub(1, PubSub.defaultQueueCreator(), mySubscriptionMessageExceptionHandler);
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", TestEvent.class);
         Consumer<TestEvent> handleEvent = event -> {
             if (event.getRetryCount() == 0) {
                 throw new RuntimeException("Test Exception");
