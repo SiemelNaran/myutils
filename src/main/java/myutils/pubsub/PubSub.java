@@ -1,5 +1,8 @@
 package myutils.pubsub;
 
+import static myutils.util.concurrent.MoreExecutors.createThreadFactory;
+
+import java.lang.ref.Cleaner;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -7,11 +10,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -87,26 +89,22 @@ public abstract class PubSub {
     /**
      * Create a PubSub system.
      * 
-     * @param corePoolSize the number of threads handling messages that are published by all publishers.
+     * @param register this object in the cleaner to clean up this object (i.e. shutdown threads) when this object goes out of scope
+     * @param numInMemoryHandlers the number of threads handling messages that are published by all publishers.
      * @param queueCreator the queue to store all message across all subscribers.
      * @param subscriptionMessageExceptionHandler the general subscription handler for exceptions arising from all subscribers.
      */
-    public PubSub(int corePoolSize, Supplier<Queue<Subscriber>> queueCreator, SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler) {
-        executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(corePoolSize, createThreadFactory());
+    public PubSub(Cleaner cleaner,
+                  int numInMemoryHandlers,
+                  Supplier<Queue<Subscriber>> queueCreator,
+                  SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler) {
+        executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(numInMemoryHandlers, createThreadFactory("PubSubListener"));
         masterList = queueCreator.get();
         this.subscriptionMessageExceptionHandler = subscriptionMessageExceptionHandler;
         startThreads();
-        Runtime.getRuntime().addShutdownHook(generateShutdownThread());
+        cleaner.register(this, new Cleanup(executorService, lock, notEmpty));
     }
-
-    private static ThreadFactory createThreadFactory() {
-        final AtomicInteger count = new AtomicInteger();
-        return runnable -> {
-            ThreadGroup threadGroup = new ThreadGroup("PubSubListener");
-            return new Thread(threadGroup, runnable, "PubSubListener" + "-" + count.incrementAndGet());
-        };
-    }
-
+    
     /**
      * Class representing the publisher.
      * 
@@ -364,8 +362,23 @@ public abstract class PubSub {
         }
     }
     
-    private Thread generateShutdownThread() {
-        return new Thread(() -> {
+    /**
+     * Cleanup this class.
+     * Shutdown the executor and wake up all threads so that they can end gracefully.
+     */
+    private static class Cleanup implements Runnable {
+        private final ExecutorService executorService;
+        private final ReentrantLock lock;
+        private final Condition notEmpty;
+
+        private Cleanup(ExecutorService executorService, ReentrantLock lock, Condition notEmpty) {
+            this.executorService = executorService;
+            this.lock = lock;
+            this.notEmpty = notEmpty;
+        }
+
+        @Override
+        public void run() {
             try {
                 executorService.shutdownNow();
                 executorService.awaitTermination(100, TimeUnit.MILLISECONDS);
@@ -379,6 +392,6 @@ public abstract class PubSub {
                 }
             } catch (InterruptedException ignored) {
             }
-        }, "PubSub.shutdown");
+        }        
     }
 }
