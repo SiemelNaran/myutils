@@ -1,5 +1,6 @@
 package myutils.pubsub;
 
+import java.lang.ref.Cleaner;
 import java.util.Queue;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -12,8 +13,19 @@ import javax.annotation.Nonnull;
  * <p>This class implements publish-subscribe in memory in one JVM.
  */
 public class InMemoryPubSub extends PubSub {
-    public InMemoryPubSub(int corePoolSize, Supplier<Queue<Subscriber>> queueCreator, SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler) {
-        super(corePoolSize, queueCreator, subscriptionMessageExceptionHandler);
+    /**
+     * Create a PubSub system.
+     * 
+     * @param register this object in the cleaner to clean up this object (i.e. shutdown threads) when this object goes out of scope
+     * @param numInMemoryHandlers the number of threads handling messages that are published by all publishers.
+     * @param queueCreator the queue to store all message across all subscribers.
+     * @param subscriptionMessageExceptionHandler the general subscription handler for exceptions arising from all subscribers.
+     */
+    public InMemoryPubSub(Cleaner cleaner,
+                          int corePoolSize,
+                          Supplier<Queue<Subscriber>> queueCreator,
+                          SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler) {
+        super(cleaner, corePoolSize, queueCreator, subscriptionMessageExceptionHandler);
     }
 
     public final class InMemoryPublisher extends Publisher {
