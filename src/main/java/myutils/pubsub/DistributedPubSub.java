@@ -80,7 +80,7 @@ public class DistributedPubSub extends PubSub {
      * Create an in-memory publish/subscribe system and also talk to a central
      * server to send and receive publish commands.
      * 
-     * @param register this object in the cleaner to clean up this object (i.e. close connection, shutdown threads) when this object goes out of scope
+     * @param cleaner register this object in the cleaner to clean up this object (i.e. close connection, shutdown threads) when this object goes out of scope
      * @param numInMemoryHandlers the number of threads handling messages that are published by all publishers.
      * @param queueCreator the queue to store all message across all subscribers.
      * @param subscriptionMessageExceptionHandler the general subscription handler for exceptions arising from all subscribers.
@@ -176,8 +176,8 @@ public class DistributedPubSub extends PubSub {
                 boolean retryDone = retry >= MAX_RETRIES || isClosed(e);
                 Level level = retryDone ? Level.WARNING : Level.DEBUG;
                 LOGGER.log(level,
-                           () -> String.format("Send message failed: machine=%s, retry=%d, retryDone=%b, exception=%s",
-                                               machineId, retry, retryDone, e.toString()));
+                    () -> String.format("Send message failed: machine=%s, retry=%d, retryDone=%b, exception=%s",
+                                        machineId, retry, retryDone, e.toString()));
                 if (!retryDone) {
                     int delay = 1 << retry;
                     retryExecutor.schedule(() -> send(message, retry + 1), delay, TimeUnit.SECONDS);
