@@ -57,7 +57,8 @@ import myutils.pubsub.PubSubUtils.CallStackCapturingCleanup;
  * <p>Thereafter clients may send createPublisher or publisher.add commands, and these will be relayed to all other clients.
  * Upon receiving a message to relay, the server generates a monotonically  increasing integer and sets the machineId of the machine which sent the message.
  * These are part of the message sent to each client.
- * Clients must avoid infinite recursion: if server relays a message to client2, that client2 must not send that message back to the server as that would send the message back to client1.
+ * Clients must avoid infinite recursion: if server relays a message to client2, that client2 must not send that message back to the server
+ * as that would send the message back to client1.
  * 
  * <p>About messages sent between client and server:
  * The first two bytes are the length of the message.
@@ -126,7 +127,7 @@ public class DistributedMessageServer {
     /**
      * Create a message server.
      * 
-     * @param register this object in the cleaner to clean up this object (i.e. close connections, shutdown threads) when this object goes out of scope
+     * @param cleaner register this object in the cleaner to clean up this object (i.e. close connections, shutdown threads) when this object goes out of scope
      * @param host (the host of this server, may be "localhost")
      * @param port (a unique port)
      * @throws IOException if there is an error opening a socket (but no error if the host:port is already in use)

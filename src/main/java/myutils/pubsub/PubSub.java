@@ -97,7 +97,7 @@ public abstract class PubSub {
     /**
      * Create a PubSub system.
      * 
-     * @param register this object in the cleaner to clean up this object (i.e. shutdown threads) when this object goes out of scope
+     * @param cleaner register this object in the cleaner to clean up this object (i.e. shutdown threads) when this object goes out of scope
      * @param numInMemoryHandlers the number of threads handling messages that are published by all publishers.
      * @param queueCreator the queue to store all message across all subscribers.
      * @param subscriptionMessageExceptionHandler the general subscription handler for exceptions arising from all subscribers.

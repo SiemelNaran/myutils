@@ -27,7 +27,10 @@ class PubSubUtils {
         String getCallStack() {
             StringBuilder builder = new StringBuilder("\n");
             for (var element : stackTrace) {
-                builder.append("\tat ").append(element.getClassName()).append('.').append(element.getMethodName()).append('(').append(element.getFileName()).append(':').append(element.getLineNumber()).append(")\n");
+                builder.append("\tat ")
+                       .append(element.getClassName()).append('.').append(element.getMethodName())
+                       .append('(').append(element.getFileName()).append(':').append(element.getLineNumber())
+                       .append(")\n");
             }
             return builder.toString();
         }
