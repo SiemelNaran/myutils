@@ -28,7 +28,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.annotation.Nonnull;
-import myutils.pubsub.DistributedPubSub.DistributedSubscriber;
 import myutils.pubsub.MessageClasses.ActionMessageBase;
 import myutils.pubsub.MessageClasses.ClientGeneratedMessage;
 import myutils.pubsub.MessageClasses.Identification;
@@ -402,7 +401,7 @@ public class DistributedMessageServer {
 
         @Override
         public void run() {
-            LOGGER.log(Level.INFO, "Shutting down " + DistributedSubscriber.class.getSimpleName() + getCallStack());
+            LOGGER.log(Level.INFO, "Shutting down " + DistributedMessageServer.class.getSimpleName() + getCallStack());
             closeExecutorQuietly(acceptExecutor);
             closeExecutorQuietly(channelExecutor);
             closeExecutorQuietly(retryExecutor);
