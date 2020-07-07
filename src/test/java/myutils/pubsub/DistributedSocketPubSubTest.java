@@ -69,6 +69,8 @@ public class DistributedSocketPubSubTest {
                                                           PubSub.defaultQueueCreator(),
                                                           PubSub.defaultSubscriptionMessageExceptionHandler(),
                                                           "client1",
+                                                          "localhost",
+                                                          30001,
                                                           CENTRAL_SERVER_HOST,
                                                           CENTRAL_SERVER_PORT);
         client1.start();
@@ -78,6 +80,8 @@ public class DistributedSocketPubSubTest {
                                                           PubSub.defaultQueueCreator(),
                                                           PubSub.defaultSubscriptionMessageExceptionHandler(),
                                                           "client2",
+                                                          "localhost",
+                                                          30002,
                                                           CENTRAL_SERVER_HOST,
                                                           CENTRAL_SERVER_PORT);
         client2.start();
@@ -87,6 +91,8 @@ public class DistributedSocketPubSubTest {
                                                           PubSub.defaultQueueCreator(),
                                                           PubSub.defaultSubscriptionMessageExceptionHandler(),
                                                           "client3",
+                                                          "localhost",
+                                                          30003,
                                                           CENTRAL_SERVER_HOST,
                                                           CENTRAL_SERVER_PORT);
         client3.start();
