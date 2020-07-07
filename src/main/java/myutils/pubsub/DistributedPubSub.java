@@ -8,7 +8,6 @@ import static myutils.pubsub.PubSubUtils.getRemoteAddress;
 import static myutils.pubsub.PubSubUtils.isClosed;
 import static myutils.util.concurrent.MoreExecutors.createThreadFactory;
 
-import java.io.EOFException;
 import java.io.IOException;
 import java.lang.System.Logger.Level;
 import java.lang.ref.Cleaner;
@@ -249,10 +248,10 @@ public class DistributedPubSub extends PubSub {
                         LOGGER.log(Level.WARNING, "Unrecognized object type received: machine={0}, messageClass={2}",
                                    DistributedPubSub.this.machineId, message.getClass().getSimpleName());
                     }
-                } catch (EOFException e) {
-                    LOGGER.log(Level.INFO, "End of stream reached, closing socket");
-                    closeQuietly(channel);
                 } catch (IOException e) {
+                    if (isClosed(e)) {
+                        LOGGER.log(Level.INFO, "Socket closed, ending reader: {0}", e.toString());
+                    }
                     LOGGER.log(Level.WARNING, "Socket exception: machine={0}, exception={1}",
                                DistributedPubSub.this.machineId, e.toString());
                 } catch (RuntimeException | Error e) {

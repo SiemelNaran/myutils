@@ -226,6 +226,7 @@ public class DistributedMessageServer {
             if (exception != null) {
                 if (isClosed(exception)) {
                     logChannelClosed();
+                    removeChannel(channel);
                     return;
                 } else {
                     logException(exception);
@@ -283,9 +284,9 @@ public class DistributedMessageServer {
      * Running time O(N).
      */
     private ClientMachine findClientMachineByChannel(AsynchronousSocketChannel channel) {
-        for (var remoteMachine : clientMachines) {
-            if (remoteMachine.getChannel() == channel) {
-                return remoteMachine;
+        for (var clientMachine : clientMachines) {
+            if (clientMachine.getChannel() == channel) {
+                return clientMachine;
             }
         }
         return null;
@@ -296,18 +297,32 @@ public class DistributedMessageServer {
      * Running time O(N).
      */
     private ClientMachine findClientMachineByMachineId(String machineId) {
-        for (var remoteMachine : clientMachines) {
-            if (remoteMachine.getMachineId().equals(machineId)) {
-                return remoteMachine;
+        for (var clientMachine : clientMachines) {
+            if (clientMachine.getMachineId().equals(machineId)) {
+                return clientMachine;
             }
         }
         return null;
     }
     
+    /**
+     * Remove the given channel from topology.
+     * Running time O(N).
+     */
+    private void removeChannel(AsynchronousSocketChannel channel) {
+        for (var iter = clientMachines.iterator(); iter.hasNext(); ) {
+            var clientMachine = iter.next();
+            if (clientMachine.getChannel().equals(channel)) {
+                iter.remove();
+                LOGGER.log(Level.INFO, "Removed client machine: clientMachine={0} clientChannel={1}", clientMachine.getMachineId(), getRemoteAddress(channel));
+            }
+        }
+    }
+    
     private void handleAction(AsynchronousSocketChannel channel, ActionMessageBase action) {
-        ClientMachine remoteMachine = findClientMachineByChannel(channel);
-        if (remoteMachine != null) {
-            action.setSourceMachineIdAndResetIndex(remoteMachine.getMachineId(), maxMessage.incrementAndGet());
+        ClientMachine clientMachine = findClientMachineByChannel(channel);
+        if (clientMachine != null) {
+            action.setSourceMachineIdAndResetIndex(clientMachine.getMachineId(), maxMessage.incrementAndGet());
             sendToEveryoneExcept(action, channel);
         } else {
             sendRequestIdentification(channel, action.getIndex());
@@ -315,9 +330,9 @@ public class DistributedMessageServer {
     }
 
     private void sendRequestIdentification(AsynchronousSocketChannel channel, long failedIndex) {
-        ClientMachine remoteMachine = new ClientMachine("<unknown>", channel);
+        ClientMachine clientMachine = new ClientMachine("<unknown>", channel);
         RequestIdentification request = new RequestIdentification(failedIndex);
-        send(request, remoteMachine, 0);
+        send(request, clientMachine, 0);
     }
 
     private void sendToEveryoneExcept(MessageBase message, AsynchronousSocketChannel excludeChannel) {
@@ -329,28 +344,28 @@ public class DistributedMessageServer {
         }
     }
 
-    private void send(MessageBase message, ClientMachine remoteMachine, int retry) {
+    private void send(MessageBase message, ClientMachine clientMachine, int retry) {
         try {
-            SocketTransformer.writeMessageToSocketAsync(message, Short.MAX_VALUE, remoteMachine.getChannel())
+            SocketTransformer.writeMessageToSocketAsync(message, Short.MAX_VALUE, clientMachine.getChannel())
                              .thenAcceptAsync(unused -> LOGGER.log(Level.TRACE, "Sent message: clientMachine={0}, messageClass={1}",
-                                                                   remoteMachine.getMachineId(),
+                                                                   clientMachine.getMachineId(),
                                                                    message.getClass().getSimpleName()), channelExecutor)
-                             .exceptionally(e -> retrySend(message, remoteMachine, retry, e));
+                             .exceptionally(e -> retrySend(message, clientMachine, retry, e));
         } catch (IOException e) {
             LOGGER.log(Level.WARNING,
                        String.format("Send message failed: clientMachine=%s, retry=%d, retryDone=%b, exception=%s",
-                                     remoteMachine.getMachineId(), retry, true, e.toString()));
+                                     clientMachine.getMachineId(), retry, true, e.toString()));
         }
     }
     
-    private Void retrySend(MessageBase message, ClientMachine remoteMachine, int retry, Throwable e) {
+    private Void retrySend(MessageBase message, ClientMachine clientMachine, int retry, Throwable e) {
         boolean retryDone = retry >= MAX_RETRIES || isClosed(e);
         Level level = retryDone ? Level.WARNING : Level.TRACE;
         LOGGER.log(level, () -> String.format("Send message failed: clientMachine=%s, retry=%d, retryDone=%b, exception=%s",
-                                              remoteMachine.getMachineId(), retry, retryDone, e.toString()));
+                                              clientMachine.getMachineId(), retry, retryDone, e.toString()));
         if (!retryDone) {
             int delay = 1 << retry;
-            retryExecutor.schedule(() -> send(message, remoteMachine, retry + 1), delay, TimeUnit.SECONDS);
+            retryExecutor.schedule(() -> send(message, clientMachine, retry + 1), delay, TimeUnit.SECONDS);
         }
         return null;
     }
@@ -375,14 +390,14 @@ public class DistributedMessageServer {
         private final ExecutorService acceptExecutor;
         private final ExecutorService channelExecutor;
         private final ExecutorService retryExecutor;
-        private final List<ClientMachine> remoteMachines;
+        private final List<ClientMachine> clientMachines;
 
-        private Cleanup(Channel channel, ExecutorService acceptExecutor, ExecutorService channelExecutor, ExecutorService retryExecutor, List<ClientMachine> remoteMachines) {
+        private Cleanup(Channel channel, ExecutorService acceptExecutor, ExecutorService channelExecutor, ExecutorService retryExecutor, List<ClientMachine> clientMachines) {
             this.channel = channel;
             this.acceptExecutor = acceptExecutor;
             this.channelExecutor = channelExecutor;
             this.retryExecutor = retryExecutor;
-            this.remoteMachines = remoteMachines;
+            this.clientMachines = clientMachines;
         }
 
         @Override
@@ -391,7 +406,7 @@ public class DistributedMessageServer {
             closeExecutorQuietly(acceptExecutor);
             closeExecutorQuietly(channelExecutor);
             closeExecutorQuietly(retryExecutor);
-            remoteMachines.forEach(clientMachine -> closeQuietly(clientMachine.channel));
+            clientMachines.forEach(clientMachine -> closeQuietly(clientMachine.channel));
             closeQuietly(channel);
         }
     }
