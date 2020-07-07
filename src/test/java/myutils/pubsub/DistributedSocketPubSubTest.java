@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.lang.ref.Cleaner;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -57,44 +56,40 @@ public class DistributedSocketPubSubTest {
     
     @Test
     void testPublishAndSubscribeAndUnsubscribe() throws IOException {
-        Cleaner cleaner = Cleaner.create();
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         
-        DistributedMessageServer centralServer = new DistributedMessageServer(cleaner, CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT);
+        DistributedMessageServer centralServer = new DistributedMessageServer(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT);
         centralServer.start();
         sleep(250); // time to let the central server start
         
-        DistributedSocketPubSub client1 = new DistributedSocketPubSub(cleaner,
-                                                          1,
-                                                          PubSub.defaultQueueCreator(),
-                                                          PubSub.defaultSubscriptionMessageExceptionHandler(),
-                                                          "client1",
-                                                          "localhost",
-                                                          30001,
-                                                          CENTRAL_SERVER_HOST,
-                                                          CENTRAL_SERVER_PORT);
+        DistributedSocketPubSub client1 = new DistributedSocketPubSub(1,
+                                                                      PubSub.defaultQueueCreator(),
+                                                                      PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                                                      "client1",
+                                                                      "localhost",
+                                                                      30001,
+                                                                      CENTRAL_SERVER_HOST,
+                                                                      CENTRAL_SERVER_PORT);
         client1.start();
         
-        DistributedSocketPubSub client2 = new DistributedSocketPubSub(cleaner,
-                                                          1,
-                                                          PubSub.defaultQueueCreator(),
-                                                          PubSub.defaultSubscriptionMessageExceptionHandler(),
-                                                          "client2",
-                                                          "localhost",
-                                                          30002,
-                                                          CENTRAL_SERVER_HOST,
-                                                          CENTRAL_SERVER_PORT);
+        DistributedSocketPubSub client2 = new DistributedSocketPubSub(1,
+                                                                      PubSub.defaultQueueCreator(),
+                                                                      PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                                                      "client2",
+                                                                      "localhost",
+                                                                      30002,
+                                                                      CENTRAL_SERVER_HOST,
+                                                                      CENTRAL_SERVER_PORT);
         client2.start();
         
-        DistributedSocketPubSub client3 = new DistributedSocketPubSub(cleaner,
-                                                          1,
-                                                          PubSub.defaultQueueCreator(),
-                                                          PubSub.defaultSubscriptionMessageExceptionHandler(),
-                                                          "client3",
-                                                          "localhost",
-                                                          30003,
-                                                          CENTRAL_SERVER_HOST,
-                                                          CENTRAL_SERVER_PORT);
+        DistributedSocketPubSub client3 = new DistributedSocketPubSub(1,
+                                                                      PubSub.defaultQueueCreator(),
+                                                                      PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                                                      "client3",
+                                                                      "localhost",
+                                                                      30003,
+                                                                      CENTRAL_SERVER_HOST,
+                                                                      CENTRAL_SERVER_PORT);
         client3.start();
 
         sleep(250); // time to let clients start, connect to the central server, and send identification

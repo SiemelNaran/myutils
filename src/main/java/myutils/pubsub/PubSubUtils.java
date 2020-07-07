@@ -3,6 +3,7 @@ package myutils.pubsub;
 import java.io.Closeable;
 import java.io.EOFException;
 import java.io.IOException;
+import java.lang.ref.Cleaner;
 import java.lang.ref.Cleaner.Cleanable;
 import java.nio.channels.AsynchronousCloseException;
 import java.nio.channels.AsynchronousSocketChannel;
@@ -17,10 +18,12 @@ import java.util.concurrent.TimeUnit;
 
 
 class PubSubUtils {
-    static class CallStackCapturingCleanup {
+    private static final Cleaner cleaner = Cleaner.create();
+    
+    static abstract class CallStackCapturing {
         private final StackTraceElement[] stackTrace;
 
-        CallStackCapturingCleanup() {
+        CallStackCapturing() {
             StackTraceElement[] fullStackTrace = Thread.currentThread().getStackTrace();
             this.stackTrace = Arrays.stream(fullStackTrace).skip(3).limit(7).toArray(StackTraceElement[]::new);
         }
@@ -38,9 +41,11 @@ class PubSubUtils {
         }
     }
     
-    static void addShutdownHook(Cleanable cleanble, Class<?> clazz) {
-        Thread thread = new Thread(() -> cleanble.clean(), clazz.getSimpleName() + ".shutdown");
+    static Cleanable addShutdownHook(Object object, Runnable cleanup, Class<?> clazz) {
+        Cleanable cleanable = cleaner.register(object, cleanup);
+        Thread thread = new Thread(() -> cleanable.clean(), clazz.getSimpleName() + ".shutdown");
         Runtime.getRuntime().addShutdownHook(thread);
+        return cleanable;
     }
     
     static String getLocalAddress(NetworkChannel channel) {

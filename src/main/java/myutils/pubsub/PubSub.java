@@ -5,7 +5,6 @@ import static myutils.pubsub.PubSubUtils.closeExecutorQuietly;
 import static myutils.util.concurrent.MoreExecutors.createThreadFactory;
 
 import java.lang.System.Logger.Level;
-import java.lang.ref.Cleaner;
 import java.lang.ref.Cleaner.Cleanable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -24,7 +23,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import javax.annotation.Nonnull;
-import myutils.pubsub.PubSubUtils.CallStackCapturingCleanup;
+import myutils.pubsub.PubSubUtils.CallStackCapturing;
 import myutils.util.MultimapUtils;
 
 
@@ -97,21 +96,18 @@ public abstract class PubSub {
     /**
      * Create a PubSub system.
      * 
-     * @param cleaner register this object in the cleaner to clean up this object (i.e. shutdown threads) when this object goes out of scope
      * @param numInMemoryHandlers the number of threads handling messages that are published by all publishers.
      * @param queueCreator the queue to store all message across all subscribers.
      * @param subscriptionMessageExceptionHandler the general subscription handler for exceptions arising from all subscribers.
      */
-    public PubSub(Cleaner cleaner,
-                  int numInMemoryHandlers,
+    public PubSub(int numInMemoryHandlers,
                   Supplier<Queue<Subscriber>> queueCreator,
                   SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler) {
-        executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(numInMemoryHandlers, createThreadFactory("PubSubListener"));
-        masterList = queueCreator.get();
+        this.executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(numInMemoryHandlers, createThreadFactory("PubSubListener"));
+        this.masterList = queueCreator.get();
         this.subscriptionMessageExceptionHandler = subscriptionMessageExceptionHandler;
+        this.cleanable = addShutdownHook(this, new Cleanup(executorService, lock, notEmpty), PubSub.class);
         startThreads();
-        this.cleanable = cleaner.register(this, new Cleanup(executorService, lock, notEmpty));
-        addShutdownHook(cleanable, PubSub.class);
     }
     
     /**
@@ -382,7 +378,7 @@ public abstract class PubSub {
      * Cleanup this class.
      * Shutdown the executor and wake up all threads so that they can end gracefully.
      */
-    private static class Cleanup extends CallStackCapturingCleanup implements Runnable {
+    private static class Cleanup extends CallStackCapturing implements Runnable {
         private final ExecutorService executorService;
         private final ReentrantLock lock;
         private final Condition notEmpty;
