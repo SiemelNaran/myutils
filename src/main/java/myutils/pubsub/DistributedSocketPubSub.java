@@ -84,6 +84,8 @@ public class DistributedSocketPubSub extends PubSub {
      * @param queueCreator the queue to store all message across all subscribers.
      * @param subscriptionMessageExceptionHandler the general subscription handler for exceptions arising from all subscribers.
      * @param machineId the name of this machine, and if null the code will set it to this machine's hostname
+     * @param localServer the local server
+     * @param localPort the local port
      * @param messageServerHost the server to connect to in order to send and receive publish commands
      * @param messageServerPort the server to connect to in order to send and receive publish commands
      * @throws IOException if there is an error opening the socket channel
@@ -93,16 +95,24 @@ public class DistributedSocketPubSub extends PubSub {
                              Supplier<Queue<Subscriber>> queueCreator,
                              SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler,
                              @Nullable String machineId,
+                             String localServer,
+                             int localPort,
                              String messageServerHost,
                              int messageServerPort) throws IOException {
         super(cleaner, numInMemoryHandlers, queueCreator, subscriptionMessageExceptionHandler);
         this.messageServerHost = messageServerHost;
         this.messageServerPort = messageServerPort;
         this.machineId = machineId != null ? machineId : InetAddress.getLocalHost().getHostName();
-        this.channel = SocketChannel.open();
+        this.channel = createNewSocket(localServer, localPort);
         this.messageWriter = createMessageWriter(this.machineId, messageServerHost, messageServerPort);
         this.cleanable = cleaner.register(this, new Cleanup(channel, channelExecutor, retryExecutor));
         addShutdownHook(cleanable, DistributedSocketPubSub.class);
+    }
+    
+    private static SocketChannel createNewSocket(String localServer, int localPort) throws IOException {
+        var channel = SocketChannel.open();        
+        channel.bind(new InetSocketAddress(localServer, localPort));
+        return channel;
     }
 
     private MessageWriter createMessageWriter(@Nullable String machineId,
@@ -120,12 +130,12 @@ public class DistributedSocketPubSub extends PubSub {
     public void start() throws IOException {
         channel.connect(new InetSocketAddress(messageServerHost, messageServerPort));
         LOGGER.log(Level.INFO,
-                   "Started DistributedPubSub machine={0} with local address {1} connected to {2}:{3} remoteMachine={4}",
-                   messageWriter.getMachineId(),
-                   getLocalAddress(channel),
-                   messageServerHost,
-                   messageServerPort,
-                   getRemoteAddress(channel));
+                   String.format("Started DistributedPubSub machine=%s with local address %s connected to %s:%d remoteMachine=%s",
+                                 messageWriter.getMachineId(),
+                                 getLocalAddress(channel),
+                                 messageServerHost,
+                                 messageServerPort,
+                                 getRemoteAddress(channel)));
         channelExecutor.submit(messageWriter);
         channelExecutor.submit(new MessageReader());
         messageWriter.sendIdentification();
