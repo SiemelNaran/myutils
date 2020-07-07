@@ -1,6 +1,7 @@
 package myutils.pubsub;
 
 import java.io.Closeable;
+import java.io.EOFException;
 import java.io.IOException;
 import java.lang.ref.Cleaner.Cleanable;
 import java.nio.channels.AsynchronousCloseException;
@@ -21,7 +22,7 @@ class PubSubUtils {
 
         CallStackCapturingCleanup() {
             StackTraceElement[] fullStackTrace = Thread.currentThread().getStackTrace();
-            this.stackTrace = Arrays.stream(fullStackTrace).skip(3).limit(4).toArray(StackTraceElement[]::new);
+            this.stackTrace = Arrays.stream(fullStackTrace).skip(3).limit(7).toArray(StackTraceElement[]::new);
         }
         
         String getCallStack() {
@@ -32,6 +33,7 @@ class PubSubUtils {
                        .append('(').append(element.getFileName()).append(':').append(element.getLineNumber())
                        .append(")\n");
             }
+            builder.deleteCharAt(builder.length() - 1);
             return builder.toString();
         }
     }
@@ -88,6 +90,6 @@ class PubSubUtils {
 
     static boolean isClosed(Throwable throwable) {
         Throwable e = throwable instanceof CompletionException ? throwable.getCause() : throwable;
-        return e instanceof ClosedChannelException || e instanceof AsynchronousCloseException || e instanceof ClosedByInterruptException;
+        return e instanceof EOFException || e instanceof ClosedChannelException || e instanceof AsynchronousCloseException || e instanceof ClosedByInterruptException;
     }
 }

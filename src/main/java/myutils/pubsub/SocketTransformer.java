@@ -83,7 +83,7 @@ public class SocketTransformer {
         while (buffer.hasRemaining()) {
             int bytesRead = channel.read(buffer);
             if (bytesRead == -1) {
-                throw new EOFException("enf of stream: read " + buffer.position() + " bytes, expecting " + buffer.capacity());
+                throw new EOFException("end of stream: read " + buffer.position() + " bytes, expected " + buffer.capacity());
             }
         }
         buffer.flip();
@@ -142,28 +142,39 @@ public class SocketTransformer {
         channel.read(lengthBuffer, NULL, new CompletionHandler<>() {
             @Override
             public void completed(Integer lengthBufferLength, Void unused) {
-                assert lengthBufferLength == Short.BYTES;
-                lengthBuffer.flip();
-                short length = lengthBuffer.getShort();
-                ByteBuffer messageBuffer = ByteBuffer.allocate(length);
-                channel.read(messageBuffer, NULL, new CompletionHandler<>() {
-                    @Override
-                    public void completed(Integer messageBufferLength, Void unused) {
-                        messageBuffer.flip();
-                        try {
-                            MessageBase message = byteBufferToMessage(messageBuffer);
-                            futureMessage.complete(message);
-                        } catch (IOException | RuntimeException e) {
+                if (lengthBufferLength < Short.BYTES) {
+                    futureMessage.completeExceptionally(new EOFException("end of stream: read " + lengthBuffer.capacity() + " bytes, expected " + lengthBufferLength));
+                }
+                try {
+                    lengthBuffer.flip();
+                    short length = lengthBuffer.getShort();
+                    ByteBuffer messageBuffer = ByteBuffer.allocate(length);
+                    
+                    channel.read(messageBuffer, NULL, new CompletionHandler<>() {
+                        @Override
+                        public void completed(Integer messageBufferLength, Void unused) {
+                            if (messageBufferLength < length) {
+                                futureMessage.completeExceptionally(new EOFException("end of stream: read " + messageBuffer.capacity() + " bytes, got " + messageBufferLength));
+                            }
+                            try {
+                                messageBuffer.flip();
+                                MessageBase message = byteBufferToMessage(messageBuffer);
+                                futureMessage.complete(message);
+                            } catch (IOException | RuntimeException | Error e) {
+                                futureMessage.completeExceptionally(e);
+                            }
+                        }
+    
+                        @Override
+                        public void failed(Throwable e, Void unused) {
                             futureMessage.completeExceptionally(e);
                         }
-                    }
-
-                    @Override
-                    public void failed(Throwable e, Void unused) {
-                        futureMessage.completeExceptionally(e);
-                    }
+                        
+                    });
                     
-                });
+                } catch (RuntimeException | Error e) {
+                    futureMessage.completeExceptionally(e);
+                }
             }
 
             @Override
