@@ -155,6 +155,30 @@ public class InMemoryPubSubTest {
     }
     
     /**
+     * In this test we create the subscriber before the publisher.
+     * This could happen in a multi-threaded environment.
+     */
+    @Test
+    void testShutdown() {
+        Cleaner cleaner = Cleaner.create();
+        List<String> words = Collections.synchronizedList(new ArrayList<>());
+        PubSub pubSub = new InMemoryPubSub(cleaner, 1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler());
+        Consumer<CloneableString> handleString = str -> words.add(str.append(""));
+        pubSub.subscribe("hello", "Subscriber1", CloneableString.class, handleString);
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
+
+        publisher.publish(new CloneableString("one"));
+        sleep(100); // wait for subscribers to work
+        assertThat(words, Matchers.contains("one"));
+        
+        pubSub.shutdown();
+        
+        publisher.publish(new CloneableString("two"));
+        sleep(100); // wait for subscribers to work
+        assertThat(words, Matchers.contains("one")); // no change as pubSub is shutdown
+    }
+    
+    /**
      * In this test we publish two events, and while the first is running we unsubscribe.
      * Verify that the second event does not get processed.
      */

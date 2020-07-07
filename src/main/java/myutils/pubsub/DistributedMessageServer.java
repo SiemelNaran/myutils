@@ -1,5 +1,6 @@
 package myutils.pubsub;
 
+import static myutils.pubsub.PubSubUtils.addShutdownHook;
 import static myutils.pubsub.PubSubUtils.closeExecutorQuietly;
 import static myutils.pubsub.PubSubUtils.closeQuietly;
 import static myutils.pubsub.PubSubUtils.getLocalAddress;
@@ -10,6 +11,7 @@ import static myutils.util.concurrent.MoreExecutors.createThreadFactory;
 import java.io.IOException;
 import java.lang.System.Logger.Level;
 import java.lang.ref.Cleaner;
+import java.lang.ref.Cleaner.Cleanable;
 import java.net.InetSocketAddress;
 import java.net.StandardSocketOptions;
 import java.nio.channels.AsynchronousServerSocketChannel;
@@ -32,6 +34,7 @@ import myutils.pubsub.MessageClasses.ClientGeneratedMessage;
 import myutils.pubsub.MessageClasses.Identification;
 import myutils.pubsub.MessageClasses.MessageBase;
 import myutils.pubsub.MessageClasses.RequestIdentification;
+import myutils.pubsub.PubSubUtils.CallStackCapturingCleanup;
 
 
 /**
@@ -73,6 +76,7 @@ public class DistributedMessageServer {
     private final ScheduledExecutorService retryExecutor;
     private final List<ClientMachine> clientMachines = new CopyOnWriteArrayList<>();
     private final AtomicLong maxMessage = new AtomicLong();
+    private final Cleanable cleanable;
     
     
     /**
@@ -134,7 +138,8 @@ public class DistributedMessageServer {
         this.acceptExecutor = Executors.newSingleThreadExecutor(createThreadFactory("DistributedMessageServer.accept"));
         this.channelExecutor = Executors.newFixedThreadPool(NUM_CHANNEL_THREADS, createThreadFactory("DistributedMessageServer.socket"));
         this.retryExecutor = Executors.newScheduledThreadPool(1, createThreadFactory("DistributedMessageServer.Retry"));
-        cleaner.register(this, new Cleanup(asyncServerSocketChannel, acceptExecutor, channelExecutor, retryExecutor, clientMachines));
+        this.cleanable = cleaner.register(this, new Cleanup(asyncServerSocketChannel, acceptExecutor, channelExecutor, retryExecutor, clientMachines));
+        addShutdownHook(cleanable, DistributedMessageServer.class);
     }
     
     /**
@@ -169,7 +174,7 @@ public class DistributedMessageServer {
                 } catch (ExecutionException e) {
                     LOGGER.log(Level.WARNING, "Exception during serverSocketChannel.accept(): exception={0}", e.toString()); 
                 } catch (InterruptedException e) {
-                    LOGGER.log(Level.INFO, "SocketThread interrupted");
+                    LOGGER.log(Level.DEBUG, "SocketThread interrupted");
                     break;
                 }
             }
@@ -192,13 +197,14 @@ public class DistributedMessageServer {
         public void run() {
             SocketTransformer.readMessageFromSocketAsync(channel)
                              .thenAcceptAsync(message -> handle(channel, message), channelExecutor)
-                             .exceptionally(e -> logException(e))
-                             .thenRun(() -> DistributedMessageServer.this.submitReadFromChannelJob(channel));
+                             .whenComplete((unused, exception) -> onComplete(exception));
         }
         
         private void handle(AsynchronousSocketChannel channel, MessageBase message) {
-            LOGGER.log(Level.TRACE, "Received message from client: clientMachine={0}, messageClass={1}",
-                       getRemoteAddress(channel), message.getClass().getSimpleName());
+            LOGGER.log(Level.TRACE,
+                       "Received message from client: clientMachine={0}, messageClass={1}",
+                       getRemoteAddress(channel),
+                       message.getClass().getSimpleName());
             if (message instanceof ClientGeneratedMessage) {
                 ClientGeneratedMessage clientGeneratedMessage = (ClientGeneratedMessage) message;
                 clientGeneratedMessage.setServerTimestampToNow();
@@ -215,9 +221,25 @@ public class DistributedMessageServer {
             }
         }
         
-        private Void logException(Throwable e) {
+        private void onComplete(Throwable exception) {
+            if (exception != null) {
+                if (isClosed(exception)) {
+                    logChannelClosed();
+                    return;
+                } else {
+                    logException(exception);
+                }
+            }
+            DistributedMessageServer.this.submitReadFromChannelJob(channel);
+        }
+        
+        private void logChannelClosed() {
+            ClientMachine clientMachine = DistributedMessageServer.this.findClientMachineByChannel(channel);
+            LOGGER.log(Level.DEBUG, "Channel closed: clientMachine={0}", clientMachine != null ? clientMachine.getMachineId() : "<unknown>");
+        }
+        
+        private void logException(Throwable e) {
             LOGGER.log(Level.WARNING, "Error reading from remote socket: clientMachine={0}, exception={1}", getRemoteAddress(channel), e.toString());
-            return null;
         }
     }
     
@@ -335,12 +357,19 @@ public class DistributedMessageServer {
     private void submitReadFromChannelJob(AsynchronousSocketChannel channel) {
         channelExecutor.submit(new ChannelThread(channel));
     }
+    
+    /**
+     * Shutdown this object.
+     */
+    public void shutdown() {
+        cleanable.clean();
+    }
 
     /**
      * Cleanup this class.
      * Close all connections, close the socket server channel, and shutdown all executors.
      */
-    private static class Cleanup implements Runnable {
+    private static class Cleanup extends CallStackCapturingCleanup implements Runnable {
         private final Channel channel;
         private final ExecutorService acceptExecutor;
         private final ExecutorService channelExecutor;
@@ -357,13 +386,12 @@ public class DistributedMessageServer {
 
         @Override
         public void run() {
-            LOGGER.log(Level.INFO, "Cleaning up " + DistributedSubscriber.class.getName());
-            remoteMachines.forEach(clientMachine -> closeQuietly(clientMachine.channel));
-            remoteMachines.clear();
-            closeQuietly(channel);
+            LOGGER.log(Level.INFO, "Shutting down " + DistributedSubscriber.class.getSimpleName() + getCallStack());
             closeExecutorQuietly(acceptExecutor);
             closeExecutorQuietly(channelExecutor);
             closeExecutorQuietly(retryExecutor);
+            remoteMachines.forEach(clientMachine -> closeQuietly(clientMachine.channel));
+            closeQuietly(channel);
         }
     }
 }

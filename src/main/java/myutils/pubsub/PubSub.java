@@ -1,8 +1,12 @@
 package myutils.pubsub;
 
+import static myutils.pubsub.PubSubUtils.addShutdownHook;
+import static myutils.pubsub.PubSubUtils.closeExecutorQuietly;
 import static myutils.util.concurrent.MoreExecutors.createThreadFactory;
 
+import java.lang.System.Logger.Level;
 import java.lang.ref.Cleaner;
+import java.lang.ref.Cleaner.Cleanable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -20,11 +24,12 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import javax.annotation.Nonnull;
+import myutils.pubsub.PubSubUtils.CallStackCapturingCleanup;
 import myutils.util.MultimapUtils;
 
 
 /**
- * A class to implement publish-subscribe in memory in one JVM.
+ * A class to implement publish-subscribe in memory in one JVM, with the ability to add distributed features.
  * 
  * <p>There is a publish function to create a publisher for a topic, along with the type of class the publisher publishes.
  * There is a subscribe function to create a subscriber for a topic, along with the type of the class that the subscriber handles and a callback function.
@@ -41,6 +46,8 @@ import myutils.util.MultimapUtils;
  * The handler is responsible for taking care of the backoff strategy.
  */
 public abstract class PubSub {
+    private static final System.Logger LOGGER = System.getLogger(PubSub.class.getName());
+
     /**
      * The default way in which messages to process in this PubSub are stored, which is just a standard queue.
      */
@@ -85,6 +92,7 @@ public abstract class PubSub {
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition notEmpty = lock.newCondition();
     private final SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler;
+    private final Cleanable cleanable;
 
     /**
      * Create a PubSub system.
@@ -102,7 +110,8 @@ public abstract class PubSub {
         masterList = queueCreator.get();
         this.subscriptionMessageExceptionHandler = subscriptionMessageExceptionHandler;
         startThreads();
-        cleaner.register(this, new Cleanup(executorService, lock, notEmpty));
+        this.cleanable = cleaner.register(this, new Cleanup(executorService, lock, notEmpty));
+        addShutdownHook(cleanable, PubSub.class);
     }
     
     /**
@@ -363,10 +372,17 @@ public abstract class PubSub {
     }
     
     /**
+     * Shutdown this object.
+     */
+    public void shutdown() {
+        cleanable.clean();
+    }
+
+    /**
      * Cleanup this class.
      * Shutdown the executor and wake up all threads so that they can end gracefully.
      */
-    private static class Cleanup implements Runnable {
+    private static class Cleanup extends CallStackCapturingCleanup implements Runnable {
         private final ExecutorService executorService;
         private final ReentrantLock lock;
         private final Condition notEmpty;
@@ -379,10 +395,10 @@ public abstract class PubSub {
 
         @Override
         public void run() {
+            LOGGER.log(Level.INFO, "Cleaning up " + PubSub.class.getSimpleName() + getCallStack());
+            closeExecutorQuietly(executorService);
             try {
-                executorService.shutdownNow();
-                executorService.awaitTermination(100, TimeUnit.MILLISECONDS);
-                boolean locked = lock.tryLock(1, TimeUnit.SECONDS);
+                boolean locked = lock.tryLock(100, TimeUnit.MILLISECONDS);
                 if (locked) {
                     try {
                         notEmpty.signalAll();

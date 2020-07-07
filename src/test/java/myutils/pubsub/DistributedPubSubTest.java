@@ -82,28 +82,53 @@ public class DistributedPubSubTest {
                                                           CENTRAL_SERVER_PORT);
         client2.start();
         
+        DistributedPubSub client3 = new DistributedPubSub(cleaner,
+                                                          1,
+                                                          PubSub.defaultQueueCreator(),
+                                                          PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                                          "client3",
+                                                          CENTRAL_SERVER_HOST,
+                                                          CENTRAL_SERVER_PORT);
+        client3.start();
+
         sleep(250); // time to let clients start, connect to the central server, and send identification
 
         // subscribe before publisher created, as this could happen in a real system
         client1.subscribe("hello", "ClientOneSubscriber", CloneableString.class, str -> words.add(str.append("-s1")));
         client2.subscribe("hello", "ClientTwoSubscriber", CloneableString.class, str -> words.add(str.append("-s2")));
+        client3.subscribe("hello", "ClientThreeSubscriber", CloneableString.class, str -> words.add(str.append("-s3")));
         assertFalse(client1.getPublisher("hello").isPresent());
         assertFalse(client2.getPublisher("hello").isPresent());
         
         // create publisher on client1
-        // this will get replicated to client2
+        // this will get replicated to client2 and client3
         Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
         sleep(250); // time to let publisher be propagated to client2
         assertTrue(client1.getPublisher("hello").isPresent());
         assertTrue(client2.getPublisher("hello").isPresent());
+        assertTrue(client3.getPublisher("hello").isPresent());
         
         // publish two messages
         // the subscriber running on client1 will pick it up immediately
-        // the message will get replicated to all other subscribers, and in client2 the system will call publisher2.publish() to publish the same message
+        // the message will get replicated to all other subscribers, and in client2 the system will call publisher2.publish(), and similarly for client3
         publisher1.publish(new CloneableString("one"));
         publisher1.publish(new CloneableString("two"));
         sleep(250); // time to let messages be published to client2
-        System.out.println("actual: " + words);
-        assertThat(words, Matchers.contains("one-s1", "two-s1", "one-s2", "two-s2"));
+        System.out.println("actual= " + words);
+        assertThat(words, Matchers.containsInAnyOrder("one-s1", "two-s1", "one-s2", "two-s2", "one-s3", "two-s3"));
+        
+        client3.shutdown();
+        words.clear();
+        
+        // publish two messages
+        // the subscriber running on client1 will pick it up immediately
+        // the message will get replicated to all other subscribers, and in client2 the system will call publisher2.publish()
+        publisher1.publish(new CloneableString("three"));
+        publisher1.publish(new CloneableString("four"));
+        sleep(250); // time to let messages be published to client2
+        System.out.println("actual= " + words);
+        assertThat(words, Matchers.containsInAnyOrder("three-s1", "four-s1", "three-s2", "four-s2"));
+        
+        centralServer.shutdown();
     }
 }
