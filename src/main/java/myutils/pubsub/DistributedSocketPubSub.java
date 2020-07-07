@@ -60,8 +60,8 @@ import myutils.pubsub.PubSubUtils.CallStackCapturingCleanup;
  * The first two bytes are the length of the message.
  * The next N bytes is the message, when serialized and converted to a byte stream.
  */
-public class DistributedPubSub extends PubSub {
-    private static final System.Logger LOGGER = System.getLogger(DistributedPubSub.class.getName());
+public class DistributedSocketPubSub extends PubSub {
+    private static final System.Logger LOGGER = System.getLogger(DistributedSocketPubSub.class.getName());
     private static final ThreadLocal<Boolean> isRemoteThread = new ThreadLocal<>();
     private static final int MAX_RETRIES = 3;
 
@@ -88,7 +88,7 @@ public class DistributedPubSub extends PubSub {
      * @param messageServerPort the server to connect to in order to send and receive publish commands
      * @throws IOException if there is an error opening the socket channel
      */
-    public DistributedPubSub(Cleaner cleaner,
+    public DistributedSocketPubSub(Cleaner cleaner,
                              int numInMemoryHandlers,
                              Supplier<Queue<Subscriber>> queueCreator,
                              SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler,
@@ -102,7 +102,7 @@ public class DistributedPubSub extends PubSub {
         this.channel = SocketChannel.open();
         this.messageWriter = createMessageWriter(this.machineId, messageServerHost, messageServerPort);
         this.cleanable = cleaner.register(this, new Cleanup(channel, channelExecutor, retryExecutor));
-        addShutdownHook(cleanable, DistributedPubSub.class);
+        addShutdownHook(cleanable, DistributedSocketPubSub.class);
     }
 
     private MessageWriter createMessageWriter(@Nullable String machineId,
@@ -226,7 +226,7 @@ public class DistributedPubSub extends PubSub {
                     MessageBase message = SocketTransformer.readMessageFromSocket(channel);
                     LOGGER.log(Level.TRACE,
                                "Received message from server: machine={0}, index={1}, messageClass={2}, sourceMachine={3}",
-                               DistributedPubSub.this.machineId,
+                               DistributedSocketPubSub.this.machineId,
                                extractIndex(message),
                                message.getClass().getSimpleName(),
                                extractSourceMachine(message));
@@ -234,28 +234,28 @@ public class DistributedPubSub extends PubSub {
                         messageWriter.sendIdentification();
                     } else if (message instanceof CreatePublisher) {
                         CreatePublisher createPublisher = (CreatePublisher) message;
-                        DistributedPubSub.this.localMaxMessage.set(createPublisher.getIndex());
-                        DistributedPubSub.this.createPublisher(createPublisher.getTopic(),
+                        DistributedSocketPubSub.this.localMaxMessage.set(createPublisher.getIndex());
+                        DistributedSocketPubSub.this.createPublisher(createPublisher.getTopic(),
                                                                createPublisher.getPublisherClass());
                     } else if (message instanceof PublishMessage) {
                         PublishMessage publishMessage = (PublishMessage) message;
-                        DistributedPubSub.this.localMaxMessage.set(publishMessage.getIndex());
-                        Optional<Publisher> publisher = DistributedPubSub.this.getPublisher(publishMessage.getTopic());
+                        DistributedSocketPubSub.this.localMaxMessage.set(publishMessage.getIndex());
+                        Optional<Publisher> publisher = DistributedSocketPubSub.this.getPublisher(publishMessage.getTopic());
                         if (publisher.isPresent()) {
                             publisher.get().publish(publishMessage.getMessage());
                         }
                     } else {
                         LOGGER.log(Level.WARNING, "Unrecognized object type received: machine={0}, messageClass={2}",
-                                   DistributedPubSub.this.machineId, message.getClass().getSimpleName());
+                                   DistributedSocketPubSub.this.machineId, message.getClass().getSimpleName());
                     }
                 } catch (IOException e) {
                     if (isClosed(e)) {
                         LOGGER.log(Level.INFO, "Socket closed, ending reader: {0}", e.toString());
                     }
                     LOGGER.log(Level.WARNING, "Socket exception: machine={0}, exception={1}",
-                               DistributedPubSub.this.machineId, e.toString());
+                               DistributedSocketPubSub.this.machineId, e.toString());
                 } catch (RuntimeException | Error e) {
-                    LOGGER.log(Level.ERROR, "Unexpected exception: machine=" + DistributedPubSub.this.machineId, e);
+                    LOGGER.log(Level.ERROR, "Unexpected exception: machine=" + DistributedSocketPubSub.this.machineId, e);
                 }
             }
         }
@@ -288,7 +288,7 @@ public class DistributedPubSub extends PubSub {
         @Override
         public <T extends CloneableObject<?>> void publish(@Nonnull T message) {
             super.publish(message);
-            DistributedPubSub.this.messageWriter.publishMessage(getTopic(), message);
+            DistributedSocketPubSub.this.messageWriter.publishMessage(getTopic(), message);
         }
     }
 

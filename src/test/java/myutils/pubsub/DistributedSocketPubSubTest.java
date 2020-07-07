@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 
 
-public class DistributedPubSubTest {
+public class DistributedSocketPubSubTest {
     @SuppressWarnings("unused")
     private long startOfTime;
     
@@ -64,7 +64,7 @@ public class DistributedPubSubTest {
         centralServer.start();
         sleep(250); // time to let the central server start
         
-        DistributedPubSub client1 = new DistributedPubSub(cleaner,
+        DistributedSocketPubSub client1 = new DistributedSocketPubSub(cleaner,
                                                           1,
                                                           PubSub.defaultQueueCreator(),
                                                           PubSub.defaultSubscriptionMessageExceptionHandler(),
@@ -73,7 +73,7 @@ public class DistributedPubSubTest {
                                                           CENTRAL_SERVER_PORT);
         client1.start();
         
-        DistributedPubSub client2 = new DistributedPubSub(cleaner,
+        DistributedSocketPubSub client2 = new DistributedSocketPubSub(cleaner,
                                                           1,
                                                           PubSub.defaultQueueCreator(),
                                                           PubSub.defaultSubscriptionMessageExceptionHandler(),
@@ -82,7 +82,7 @@ public class DistributedPubSubTest {
                                                           CENTRAL_SERVER_PORT);
         client2.start();
         
-        DistributedPubSub client3 = new DistributedPubSub(cleaner,
+        DistributedSocketPubSub client3 = new DistributedSocketPubSub(cleaner,
                                                           1,
                                                           PubSub.defaultQueueCreator(),
                                                           PubSub.defaultSubscriptionMessageExceptionHandler(),
