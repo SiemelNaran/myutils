@@ -10,7 +10,6 @@ import static myutils.util.concurrent.MoreExecutors.createThreadFactory;
 
 import java.io.IOException;
 import java.lang.System.Logger.Level;
-import java.lang.ref.Cleaner;
 import java.lang.ref.Cleaner.Cleanable;
 import java.net.InetSocketAddress;
 import java.net.StandardSocketOptions;
@@ -33,7 +32,7 @@ import myutils.pubsub.MessageClasses.ClientGeneratedMessage;
 import myutils.pubsub.MessageClasses.Identification;
 import myutils.pubsub.MessageClasses.MessageBase;
 import myutils.pubsub.MessageClasses.RequestIdentification;
-import myutils.pubsub.PubSubUtils.CallStackCapturingCleanup;
+import myutils.pubsub.PubSubUtils.CallStackCapturing;
 
 
 /**
@@ -126,20 +125,18 @@ public class DistributedMessageServer {
     /**
      * Create a message server.
      * 
-     * @param cleaner register this object in the cleaner to clean up this object (i.e. close connections, shutdown threads) when this object goes out of scope
      * @param host (the host of this server, may be "localhost")
      * @param port (a unique port)
      * @throws IOException if there is an error opening a socket (but no error if the host:port is already in use)
      */
-    public DistributedMessageServer(Cleaner cleaner, @Nonnull String host, int port) throws IOException {
+    public DistributedMessageServer(@Nonnull String host, int port) throws IOException {
         this.host = host;
         this.port = port;
         this.asyncServerSocketChannel = AsynchronousServerSocketChannel.open();
         this.acceptExecutor = Executors.newSingleThreadExecutor(createThreadFactory("DistributedMessageServer.accept"));
         this.channelExecutor = Executors.newFixedThreadPool(NUM_CHANNEL_THREADS, createThreadFactory("DistributedMessageServer.socket"));
         this.retryExecutor = Executors.newScheduledThreadPool(1, createThreadFactory("DistributedMessageServer.Retry"));
-        this.cleanable = cleaner.register(this, new Cleanup(asyncServerSocketChannel, acceptExecutor, channelExecutor, retryExecutor, clientMachines));
-        addShutdownHook(cleanable, DistributedMessageServer.class);
+        this.cleanable = addShutdownHook(this, new Cleanup(asyncServerSocketChannel, acceptExecutor, channelExecutor, retryExecutor, clientMachines), DistributedMessageServer.class);
     }
     
     /**
@@ -384,7 +381,7 @@ public class DistributedMessageServer {
      * Cleanup this class.
      * Close all connections, close the socket server channel, and shutdown all executors.
      */
-    private static class Cleanup extends CallStackCapturingCleanup implements Runnable {
+    private static class Cleanup extends CallStackCapturing implements Runnable {
         private final Channel channel;
         private final ExecutorService acceptExecutor;
         private final ExecutorService channelExecutor;

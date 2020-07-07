@@ -10,7 +10,6 @@ import static myutils.util.concurrent.MoreExecutors.createThreadFactory;
 
 import java.io.IOException;
 import java.lang.System.Logger.Level;
-import java.lang.ref.Cleaner;
 import java.lang.ref.Cleaner.Cleanable;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -34,7 +33,7 @@ import myutils.pubsub.MessageClasses.Identification;
 import myutils.pubsub.MessageClasses.MessageBase;
 import myutils.pubsub.MessageClasses.PublishMessage;
 import myutils.pubsub.MessageClasses.RequestIdentification;
-import myutils.pubsub.PubSubUtils.CallStackCapturingCleanup;
+import myutils.pubsub.PubSubUtils.CallStackCapturing;
 
 /**
  * Client class that acts as an in-memory publish/subscribe system, as well as talks to a server to send and receive publish commands.
@@ -79,7 +78,6 @@ public class DistributedSocketPubSub extends PubSub {
      * Create an in-memory publish/subscribe system and also talk to a central
      * server to send and receive publish commands.
      * 
-     * @param cleaner register this object in the cleaner to clean up this object (i.e. close connection, shutdown threads) when this object goes out of scope
      * @param numInMemoryHandlers the number of threads handling messages that are published by all publishers.
      * @param queueCreator the queue to store all message across all subscribers.
      * @param subscriptionMessageExceptionHandler the general subscription handler for exceptions arising from all subscribers.
@@ -90,23 +88,21 @@ public class DistributedSocketPubSub extends PubSub {
      * @param messageServerPort the server to connect to in order to send and receive publish commands
      * @throws IOException if there is an error opening the socket channel
      */
-    public DistributedSocketPubSub(Cleaner cleaner,
-                             int numInMemoryHandlers,
-                             Supplier<Queue<Subscriber>> queueCreator,
-                             SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler,
-                             @Nullable String machineId,
-                             String localServer,
-                             int localPort,
-                             String messageServerHost,
-                             int messageServerPort) throws IOException {
-        super(cleaner, numInMemoryHandlers, queueCreator, subscriptionMessageExceptionHandler);
+    public DistributedSocketPubSub(int numInMemoryHandlers,
+                                   Supplier<Queue<Subscriber>> queueCreator,
+                                   SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler,
+                                   @Nullable String machineId,
+                                   String localServer,
+                                   int localPort,
+                                   String messageServerHost,
+                                   int messageServerPort) throws IOException {
+        super(numInMemoryHandlers, queueCreator, subscriptionMessageExceptionHandler);
         this.messageServerHost = messageServerHost;
         this.messageServerPort = messageServerPort;
         this.machineId = machineId != null ? machineId : InetAddress.getLocalHost().getHostName();
         this.channel = createNewSocket(localServer, localPort);
         this.messageWriter = createMessageWriter(this.machineId, messageServerHost, messageServerPort);
-        this.cleanable = cleaner.register(this, new Cleanup(channel, channelExecutor, retryExecutor));
-        addShutdownHook(cleanable, DistributedSocketPubSub.class);
+        this.cleanable = addShutdownHook(this, new Cleanup(channel, channelExecutor, retryExecutor), DistributedSocketPubSub.class);
     }
     
     private static SocketChannel createNewSocket(String localServer, int localPort) throws IOException {
@@ -344,7 +340,7 @@ public class DistributedSocketPubSub extends PubSub {
     /**
      * Cleanup this class. Close the socket channel and shutdown the executor.
      */
-    private static class Cleanup extends CallStackCapturingCleanup implements Runnable {
+    private static class Cleanup extends CallStackCapturing implements Runnable {
         private final SocketChannel channel;
         private final ExecutorService channelExecutor;
         private final ExecutorService retryExecutor;
