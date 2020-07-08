@@ -80,7 +80,10 @@ interface MessageClasses {
             return machineId;
         }
     }
-    
+
+    //////////////////////////////////////////////////////////////////////
+    // Server generated messages
+
     /**
      * Class sent by server to client to request identification.
      * Sent when server receives a command from a machine it does not know about.
@@ -100,6 +103,26 @@ interface MessageClasses {
         }
     }
     
+    //////////////////////////////////////////////////////////////////////
+    // Client generated messages
+    
+    /**
+     * Class send by client to download published messages with server index startIndex.
+     * The server will send a PublishMessage object for each object that it has in its cache.
+     */
+    class DownloadPublishedMessages extends ClientGeneratedMessage {
+        private static final long serialVersionUID = 1L;
+        
+        private long startIndex;
+
+        public DownloadPublishedMessages(long startIndex) {
+            this.startIndex = startIndex;
+        }
+        
+        long getStartIndex() {
+            return startIndex;
+        }
+    }
     
     /**
      * Base class of all actions sent from one client to server, and then forwarded to all other clients.
@@ -142,8 +165,8 @@ interface MessageClasses {
     class CreatePublisher extends ActionMessageBase {
         private static final long serialVersionUID = 1L;
         
-        final @Nonnull String topic;
-        final @Nonnull Class<?> publisherClass;
+        private final @Nonnull String topic;
+        private final @Nonnull Class<?> publisherClass;
 
         CreatePublisher(long clientIndex, @Nonnull String topic, @Nonnull Class<?> publisherClass) {
             super(clientIndex);
@@ -167,13 +190,15 @@ interface MessageClasses {
     class PublishMessage extends ActionMessageBase {
         private static final long serialVersionUID = 1L;
         
-        final @Nonnull String topic;
-        final @Nonnull CloneableObject<?> message;
+        private final @Nonnull String topic;
+        private final @Nonnull CloneableObject<?> message;
+        private final @Nonnull MessagePriority priority;
         
-        PublishMessage(long clientIndex, @Nonnull String topic, @Nonnull CloneableObject<?> message) {
+        PublishMessage(long clientIndex, @Nonnull String topic, @Nonnull CloneableObject<?> message, MessagePriority priority) {
             super(clientIndex);
             this.topic = topic;
             this.message = message;
+            this.priority = priority;
         }
 
         String getTopic() {
@@ -182,6 +207,10 @@ interface MessageClasses {
 
         CloneableObject<?> getMessage() {
             return message;
+        }
+        
+        MessagePriority getPriority() {
+            return priority;
         }
     } 
 }

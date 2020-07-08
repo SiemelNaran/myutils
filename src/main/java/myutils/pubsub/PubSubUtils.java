@@ -15,6 +15,9 @@ import java.util.Arrays;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import javax.annotation.Nullable;
+import myutils.pubsub.MessageClasses.ActionMessageBase;
+import myutils.pubsub.MessageClasses.MessageBase;
 
 
 class PubSubUtils {
@@ -96,5 +99,21 @@ class PubSubUtils {
     static boolean isClosed(Throwable throwable) {
         Throwable e = throwable instanceof CompletionException ? throwable.getCause() : throwable;
         return e instanceof EOFException || e instanceof ClosedChannelException || e instanceof AsynchronousCloseException || e instanceof ClosedByInterruptException;
+    }
+    
+    static Long extractIndex(MessageBase message) {
+        if (message instanceof ActionMessageBase) {
+            ActionMessageBase action = (ActionMessageBase) message;
+            return action.getIndex();
+        }
+        return null;
+    }
+
+    static @Nullable String extractSourceMachine(MessageBase message) {
+        if (message instanceof ActionMessageBase) {
+            ActionMessageBase action = (ActionMessageBase) message;
+            return action.getSourceMachineId();
+        }
+        return null;
     }
 }
