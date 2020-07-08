@@ -3,6 +3,8 @@ package myutils.pubsub;
 import static myutils.pubsub.PubSubUtils.addShutdownHook;
 import static myutils.pubsub.PubSubUtils.closeExecutorQuietly;
 import static myutils.pubsub.PubSubUtils.closeQuietly;
+import static myutils.pubsub.PubSubUtils.extractIndex;
+import static myutils.pubsub.PubSubUtils.extractSourceMachine;
 import static myutils.pubsub.PubSubUtils.getLocalAddress;
 import static myutils.pubsub.PubSubUtils.getRemoteAddress;
 import static myutils.pubsub.PubSubUtils.isClosed;
@@ -27,8 +29,8 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import myutils.pubsub.MessageClasses.ActionMessageBase;
 import myutils.pubsub.MessageClasses.CreatePublisher;
+import myutils.pubsub.MessageClasses.DownloadPublishedMessages;
 import myutils.pubsub.MessageClasses.Identification;
 import myutils.pubsub.MessageClasses.MessageBase;
 import myutils.pubsub.MessageClasses.PublishMessage;
@@ -136,6 +138,18 @@ public class DistributedSocketPubSub extends PubSub {
         channelExecutor.submit(new MessageReader());
         messageWriter.sendIdentification();
     }
+    
+    /**
+     * Download as many messages starting with startIndex from the server.
+     * The server does not retain messages forever, so it may not find the oldest messages.
+     * 
+     * @param startIndex the start index
+     * @see DistributedMessageServer#DistributedMessageServer(String, int, java.util.Map) for the number of messages of each MessagePriority to remember
+     * @see MessagePriority
+     */
+    public void download(long startIndex) {
+        messageWriter.download(startIndex);
+    }
 
     /**
      * Thread that writes messages to the message server.
@@ -163,8 +177,11 @@ public class DistributedSocketPubSub extends PubSub {
             try {
                 while (channel.isConnected()) {
                     MessageBase message = queue.take();
-                    LOGGER.log(Level.TRACE, "Sending message to server: machine={0}, messageClass={1}", machineId,
-                            message.getClass().getSimpleName());
+                    LOGGER.log(Level.TRACE,
+                               String.format("Sending message to server: machine=%s, messageClass=%s, index=%d",
+                                             machineId,
+                                             message.getClass().getSimpleName(),
+                                             extractIndex(message)));
                     send(message, 0);
                 }
             } catch (InterruptedException ignored) {
@@ -201,11 +218,15 @@ public class DistributedSocketPubSub extends PubSub {
             internalPutMessage(new CreatePublisher(localMaxMessage.incrementAndGet(), topic, publisherClass));
         }
 
-        private void publishMessage(@Nonnull String topic, @Nonnull CloneableObject<?> message) {
+        private void publishMessage(@Nonnull String topic, @Nonnull CloneableObject<?> message, MessagePriority priority) {
             if (isRemoteThread.get() == Boolean.TRUE) {
                 return;
             }
-            internalPutMessage(new PublishMessage(localMaxMessage.incrementAndGet(), topic, message));
+            internalPutMessage(new PublishMessage(localMaxMessage.incrementAndGet(), topic, message, priority));
+        }
+
+        public void download(long startIndex) {
+            internalPutMessage(new DownloadPublishedMessages(startIndex));
         }
 
         private void internalPutMessage(MessageBase message) {
@@ -231,11 +252,11 @@ public class DistributedSocketPubSub extends PubSub {
                 try {
                     MessageBase message = SocketTransformer.readMessageFromSocket(channel);
                     LOGGER.log(Level.TRACE,
-                               "Received message from server: machine={0}, index={1}, messageClass={2}, sourceMachine={3}",
-                               DistributedSocketPubSub.this.machineId,
-                               extractIndex(message),
-                               message.getClass().getSimpleName(),
-                               extractSourceMachine(message));
+                               String.format("Received message from server: machine=%s, messageClass=%s, index=%d, sourceMachine=%s",
+                                             DistributedSocketPubSub.this.machineId,
+                                             message.getClass().getSimpleName(),
+                                             extractIndex(message),
+                                             extractSourceMachine(message)));
                     if (message instanceof RequestIdentification) {
                         messageWriter.sendIdentification();
                     } else if (message instanceof CreatePublisher) {
@@ -267,22 +288,6 @@ public class DistributedSocketPubSub extends PubSub {
         }
     }
 
-    private static Long extractIndex(MessageBase message) {
-        if (message instanceof ActionMessageBase) {
-            ActionMessageBase action = (ActionMessageBase) message;
-            return action.getIndex();
-        }
-        return null;
-    }
-
-    private static @Nullable String extractSourceMachine(MessageBase message) {
-        if (message instanceof ActionMessageBase) {
-            ActionMessageBase action = (ActionMessageBase) message;
-            return action.getSourceMachineId();
-        }
-        return null;
-    }
-
     /**
      * Publisher that forwards publish commands to the message server.
      */
@@ -292,9 +297,9 @@ public class DistributedSocketPubSub extends PubSub {
         }
 
         @Override
-        public <T extends CloneableObject<?>> void publish(@Nonnull T message) {
-            super.publish(message);
-            DistributedSocketPubSub.this.messageWriter.publishMessage(getTopic(), message);
+        public <T extends CloneableObject<?>> void publish(@Nonnull T message, MessagePriority priority) {
+            super.publish(message, priority);
+            DistributedSocketPubSub.this.messageWriter.publishMessage(getTopic(), message, priority);
         }
     }
 
@@ -353,7 +358,7 @@ public class DistributedSocketPubSub extends PubSub {
 
         @Override
         public void run() {
-            LOGGER.log(Level.INFO, "Cleaning up " + DistributedSubscriber.class.getSimpleName() + getCallStack());
+            LOGGER.log(Level.DEBUG, "Cleaning up " + DistributedSubscriber.class.getSimpleName() + getCallStack());
             closeExecutorQuietly(channelExecutor);
             closeExecutorQuietly(retryExecutor);
             closeQuietly(channel);

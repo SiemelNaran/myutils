@@ -44,7 +44,7 @@ import myutils.util.MultimapUtils;
  * or provide custom behavior such as logging a shorter message or resubmitting the message to the subscription handler.
  * The handler is responsible for taking care of the backoff strategy.
  */
-public abstract class PubSub {
+public abstract class PubSub implements Shutdowneable {
     private static final System.Logger LOGGER = System.getLogger(PubSub.class.getName());
 
     /**
@@ -130,7 +130,11 @@ public abstract class PubSub {
             return topic;
         }
         
-        public <T extends CloneableObject<?>> void publish(@Nonnull T message) {
+        public final <T extends CloneableObject<?>> void publish(@Nonnull T message) {
+            publish(message, MessagePriority.MEDIUM);
+        }
+        
+        public <T extends CloneableObject<?>> void publish(@Nonnull T message, MessagePriority priority) {
             PubSub.this.lock.lock();
             try {
                 for (var subscriber : subscribers) {
@@ -370,6 +374,7 @@ public abstract class PubSub {
     /**
      * Shutdown this object.
      */
+    @Override
     public void shutdown() {
         cleanable.clean();
     }
@@ -391,7 +396,7 @@ public abstract class PubSub {
 
         @Override
         public void run() {
-            LOGGER.log(Level.INFO, "Cleaning up " + PubSub.class.getSimpleName() + getCallStack());
+            LOGGER.log(Level.DEBUG, "Cleaning up " + PubSub.class.getSimpleName() + getCallStack());
             closeExecutorQuietly(executorService);
             try {
                 boolean locked = lock.tryLock(100, TimeUnit.MILLISECONDS);
