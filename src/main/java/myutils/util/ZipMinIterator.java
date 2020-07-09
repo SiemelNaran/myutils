@@ -3,9 +3,7 @@ package myutils.util;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.PriorityQueue;
-import java.util.stream.Collectors;
 
 
 /**
@@ -23,9 +21,8 @@ public class ZipMinIterator<T> implements Iterator<T> {
     }
     
     private void fillElements(Collection<? extends Collection<T>> collections) {
-        LinkedList<Iterator<T>> iterators = collections.stream().map(Collection::iterator).collect(Collectors.toCollection(LinkedList::new));
-        for (Iterator<Iterator<T>> outerIter = iterators.iterator(); outerIter.hasNext(); ) {
-            Iterator<T> iter = outerIter.next();
+        for (var collection : collections) {
+            Iterator<T> iter = collection.iterator();
             if (iter.hasNext()) {
                 elements.offer(new ValueAndLocation<T>(iter));
             }
