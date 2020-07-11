@@ -85,7 +85,7 @@ public abstract class PubSub implements Shutdowneable {
     }
 
     private final Map<String /*topic*/, Publisher> topicMap = new HashMap<>();
-    private final Map<String /*topic*/, Collection<DeferredSubscriber>> deferredSubscribersMap = new HashMap<>();
+    private final Map<String /*topic*/, Collection<Subscriber>> deferredSubscribersMap = new HashMap<>();
     private final ThreadPoolExecutor executorService;
     private final Queue<Subscriber> masterList;
     private final ReentrantLock lock = new ReentrantLock();
@@ -198,22 +198,6 @@ public abstract class PubSub implements Shutdowneable {
     }
 
     /**
-     * Class used when subscriber created before publisher.
-     * When publisher created, this class PubSub makes calls to addSubscriber.
-     */
-    private static class DeferredSubscriber {
-        private final @Nonnull String subsriberName;
-        private final @Nonnull Class<? extends CloneableObject<?>> subscriberClass;
-        private final @Nonnull Consumer<CloneableObject<?>> callback;
-
-        private DeferredSubscriber(@Nonnull String subscriberName, @Nonnull Class<? extends CloneableObject<?>> subscriberClass, @Nonnull Consumer<CloneableObject<?>> callback) {
-            this.subsriberName = subscriberName;
-            this.subscriberClass = subscriberClass;
-            this.callback = callback;
-        }
-    }
-
-    /**
      * Create a publisher.
      * 
      * @param <T> the type of object this publisher publishes. Need not implement CloneableObject as the derived classes may implement it.
@@ -230,7 +214,7 @@ public abstract class PubSub implements Shutdowneable {
         }
         publisher = newPublisher(topic, publisherClass);
         topicMap.put(topic, publisher);
-        addDeferredSubscribers(topic);
+        addDeferredSubscribers(publisher);
         return publisher;
     }
     
@@ -244,11 +228,11 @@ public abstract class PubSub implements Shutdowneable {
         return Optional.ofNullable(publisher);
     }
 
-    private void addDeferredSubscribers(String topic) {
-        var deferredSubscribers = deferredSubscribersMap.remove(topic);
-        if (deferredSubscribers != null) {
-            for (var deferredSubscriber : deferredSubscribers) {
-                doSubscribe(topic, deferredSubscriber.subsriberName, deferredSubscriber.subscriberClass, deferredSubscriber.callback);
+    private void addDeferredSubscribers(Publisher publisher) {
+        var subscribers = deferredSubscribersMap.remove(publisher.getTopic());
+        if (subscribers != null) {
+            for (var subscriber : subscribers) {
+                addSubscriber(publisher, subscriber, /*skipOnAdd*/ true);
             }
         }
     }
@@ -270,20 +254,24 @@ public abstract class PubSub implements Shutdowneable {
                                                                                   @Nonnull Class<T> subscriberClass,
                                                                                   @Nonnull Consumer<T> callback) {
         Consumer<CloneableObject<?>> callbackCasted = (Consumer<CloneableObject<?>>) callback;
-        return doSubscribe(topic, subscriberName, subscriberClass, callbackCasted);
-    }
-
-    private Subscriber doSubscribe(String topic, String subscriberName, Class<? extends CloneableObject<?>> subscriberClass, Consumer<CloneableObject<?>> callback) {
-        var subscriber = newSubscriber(topic, subscriberName, subscriberClass, callback);
+        var subscriber = newSubscriber(topic, subscriberName, subscriberClass, callbackCasted);
         var publisher = topicMap.get(topic);
         if (publisher != null) {
             checkClassType(publisher.publisherClass, subscriberClass);
-            publisher.subscribers.add(subscriber);
+            addSubscriber(publisher, subscriber, /*skipOnAdd*/ false);
         } else {
-            MultimapUtils<String, DeferredSubscriber> multimap = new MultimapUtils<>(deferredSubscribersMap, ArrayList::new);
-            multimap.put(topic, new DeferredSubscriber(subscriberName, subscriberClass, callback));
+            MultimapUtils<String, Subscriber> multimap = new MultimapUtils<>(deferredSubscribersMap, ArrayList::new);
+            multimap.put(topic, subscriber);
+            onAddSubscriber(subscriber);
         }
         return subscriber;
+    }
+    
+    private void addSubscriber(Publisher publisher, Subscriber subscriber, boolean skipOnAdd) {
+        publisher.subscribers.add(subscriber);
+        if (!skipOnAdd) {
+            onAddSubscriber(subscriber);
+        }
     }
     
     protected abstract Subscriber newSubscriber(@Nonnull String topic,
@@ -311,7 +299,15 @@ public abstract class PubSub implements Shutdowneable {
             return;
         }
         masterList.removeIf(iterSubscriber -> iterSubscriber == subscriber);
-        publisher.subscribers.remove(subscriber);
+        if (publisher.subscribers.remove(subscriber)) {
+            onRemoveSubscriber(subscriber);
+        }
+    }
+    
+    protected void onAddSubscriber(Subscriber subscriber) {
+    }
+
+    protected void onRemoveSubscriber(Subscriber subscriber) {
     }
 
     private void startThreads() {

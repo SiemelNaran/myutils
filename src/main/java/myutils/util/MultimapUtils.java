@@ -2,6 +2,7 @@ package myutils.util;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 
@@ -30,11 +31,21 @@ public class MultimapUtils<K, V> {
         this.creator = creator;
     }
 
+
+    /**
+     * Get the collection with the given key.
+     * Create an empty collection if one does not exist.
+     */
+    public Collection<V> getOrCreate(K key) {
+        Collection<V> collection = map.computeIfAbsent(key, unused -> creator.get());
+        return collection;
+    }
+
     /**
      * Insert a key value pair into the map.
      */
     public void put(K key, V value) {
-        Collection<V> collection = map.computeIfAbsent(key, unused -> creator.get());
+        Collection<V> collection = getOrCreate(key);
         collection.add(value);
     }
 
@@ -49,6 +60,18 @@ public class MultimapUtils<K, V> {
             return false;
         }
         boolean removed = collection.remove(value);
+        if (collection.isEmpty()) {
+            map.remove(key);
+        }
+        return removed;
+    }
+
+    public boolean removeIf(K key, Predicate<? super V> filter) {
+        Collection<V> collection = map.get(key);
+        if (collection == null) {
+            return false;
+        }
+        boolean removed = collection.removeIf(filter);
         if (collection.isEmpty()) {
             map.remove(key);
         }
