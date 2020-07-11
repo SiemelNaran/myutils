@@ -29,6 +29,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import myutils.pubsub.MessageClasses.AddOrRemoveSubscriber;
 import myutils.pubsub.MessageClasses.CreatePublisher;
 import myutils.pubsub.MessageClasses.DownloadPublishedMessages;
 import myutils.pubsub.MessageClasses.Identification;
@@ -116,7 +117,7 @@ public class DistributedSocketPubSub extends PubSub {
     private MessageWriter createMessageWriter(@Nullable String machineId,
                                               String messageServerHost,
                                               int messageServerPort) throws IOException {
-        MessageWriter messageWriter = new MessageWriter(machineId, channel, localMaxMessage, retryExecutor);
+        MessageWriter messageWriter = new MessageWriter();
         return messageWriter;
     }
 
@@ -129,7 +130,7 @@ public class DistributedSocketPubSub extends PubSub {
         channel.connect(new InetSocketAddress(messageServerHost, messageServerPort));
         LOGGER.log(Level.INFO,
                    String.format("Started DistributedPubSub machine=%s with local address %s connected to %s:%d remoteMachine=%s",
-                                 messageWriter.getMachineId(),
+                                 machineId,
                                  getLocalAddress(channel),
                                  messageServerHost,
                                  messageServerPort,
@@ -154,22 +155,10 @@ public class DistributedSocketPubSub extends PubSub {
     /**
      * Thread that writes messages to the message server.
      */
-    private static class MessageWriter implements Runnable {
-        private final String machineId;
-        private final SocketChannel channel;
-        private final AtomicLong localMaxMessage;
+    private class MessageWriter implements Runnable {
         private final BlockingQueue<MessageBase> queue = new LinkedBlockingQueue<>();
-        private final ScheduledExecutorService retryExecutor;
 
-        private MessageWriter(String machineId, SocketChannel chanel, AtomicLong localMaxMessage, ScheduledExecutorService retryExecutor) {
-            this.machineId = machineId;
-            this.channel = chanel;
-            this.localMaxMessage = localMaxMessage;
-            this.retryExecutor = retryExecutor;
-        }
-
-        String getMachineId() {
-            return machineId;
+        private MessageWriter() {
         }
 
         @Override
@@ -178,7 +167,7 @@ public class DistributedSocketPubSub extends PubSub {
                 while (channel.isConnected()) {
                     MessageBase message = queue.take();
                     LOGGER.log(Level.TRACE,
-                               String.format("Sending message to server: machine=%s, messageClass=%s, index=%d",
+                               String.format("Sending message to server: clientMachine=%s, messageClass=%s, index=%d",
                                              machineId,
                                              message.getClass().getSimpleName(),
                                              extractIndex(message)));
@@ -193,6 +182,7 @@ public class DistributedSocketPubSub extends PubSub {
 
         private void send(MessageBase message, int retry) {
             try {
+                DistributedSocketPubSub.this.onBeforeSendMessage(message);
                 SocketTransformer.writeMessageToSocket(message, Short.MAX_VALUE, channel);
             } catch (IOException e) {
                 boolean retryDone = retry >= MAX_RETRIES || isClosed(e);
@@ -209,6 +199,14 @@ public class DistributedSocketPubSub extends PubSub {
 
         private void sendIdentification() {
             internalPutMessage(new Identification(machineId));
+        }
+
+        private void addSubscriber(@Nonnull String topic, @Nonnull String subscriberName) {
+            internalPutMessage(new AddOrRemoveSubscriber(true, topic, subscriberName));
+        }
+
+        private void removeSubscriber(@Nonnull String topic, @Nonnull String subscriberName) {
+            internalPutMessage(new AddOrRemoveSubscriber(false, topic, subscriberName));
         }
 
         private void createPublisher(@Nonnull String topic, @Nonnull Class<?> publisherClass) {
@@ -252,18 +250,19 @@ public class DistributedSocketPubSub extends PubSub {
                 try {
                     MessageBase message = SocketTransformer.readMessageFromSocket(channel);
                     LOGGER.log(Level.TRACE,
-                               String.format("Received message from server: machine=%s, messageClass=%s, index=%d, sourceMachine=%s",
+                               String.format("Received message from server: clientMachine=%s, messageClass=%s, index=%d, sourceMachine=%s",
                                              DistributedSocketPubSub.this.machineId,
                                              message.getClass().getSimpleName(),
                                              extractIndex(message),
                                              extractSourceMachine(message)));
+                    DistributedSocketPubSub.this.onMessageReceived(message);
                     if (message instanceof RequestIdentification) {
                         messageWriter.sendIdentification();
                     } else if (message instanceof CreatePublisher) {
                         CreatePublisher createPublisher = (CreatePublisher) message;
                         DistributedSocketPubSub.this.localMaxMessage.set(createPublisher.getIndex());
                         DistributedSocketPubSub.this.createPublisher(createPublisher.getTopic(),
-                                                               createPublisher.getPublisherClass());
+                                                                     createPublisher.getPublisherClass());
                     } else if (message instanceof PublishMessage) {
                         PublishMessage publishMessage = (PublishMessage) message;
                         DistributedSocketPubSub.this.localMaxMessage.set(publishMessage.getIndex());
@@ -341,6 +340,23 @@ public class DistributedSocketPubSub extends PubSub {
         super.shutdown();
         cleanable.clean();
     }
+    
+    @Override
+    protected void onAddSubscriber(Subscriber subscriber) {
+        messageWriter.addSubscriber(subscriber.getTopic(),subscriber.getSubscriberName());
+    }
+
+    @Override
+    protected void onRemoveSubscriber(Subscriber subscriber) {
+        messageWriter.removeSubscriber(subscriber.getTopic(),subscriber.getSubscriberName());
+    }
+
+    protected void onMessageReceived(MessageBase message) {
+    }
+
+    protected void onBeforeSendMessage(MessageBase message) {
+    }
+
 
     /**
      * Cleanup this class. Close the socket channel and shutdown the executor.

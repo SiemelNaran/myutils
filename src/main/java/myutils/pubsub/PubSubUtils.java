@@ -16,7 +16,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
-import myutils.pubsub.MessageClasses.ActionMessageBase;
+import myutils.pubsub.MessageClasses.RelayMessageBase;
 import myutils.pubsub.MessageClasses.MessageBase;
 
 
@@ -102,16 +102,16 @@ class PubSubUtils {
     }
     
     static Long extractIndex(MessageBase message) {
-        if (message instanceof ActionMessageBase) {
-            ActionMessageBase action = (ActionMessageBase) message;
+        if (message instanceof RelayMessageBase) {
+            RelayMessageBase action = (RelayMessageBase) message;
             return action.getIndex();
         }
         return null;
     }
 
     static @Nullable String extractSourceMachine(MessageBase message) {
-        if (message instanceof ActionMessageBase) {
-            ActionMessageBase action = (ActionMessageBase) message;
+        if (message instanceof RelayMessageBase) {
+            RelayMessageBase action = (RelayMessageBase) message;
             return action.getSourceMachineId();
         }
         return null;

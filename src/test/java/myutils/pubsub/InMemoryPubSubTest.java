@@ -22,6 +22,8 @@ import java.util.function.Supplier;
 import java.util.stream.IntStream;
 import myutils.LogFailureToConsoleTestWatcher;
 import myutils.TestUtil;
+import myutils.pubsub.PubSub.Subscriber;
+
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -137,18 +139,24 @@ public class InMemoryPubSubTest {
      * This could happen in a multi-threaded environment.
      */
     @Test
-    void testSubscribeAndPublish() {
+    void testSubscribeAndPublishAndUnsubcribe() {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         PubSub pubSub = new InMemoryPubSub(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler());
         Consumer<CloneableString> handleString1 = str -> words.add(str.append("-s1"));
         pubSub.subscribe("hello", "Subscriber1", CloneableString.class, handleString1);
         Consumer<CloneableString> handleString2 = str -> words.add(str.append("-s2"));
-        pubSub.subscribe("hello", "Subscriber2", CloneableString.class, handleString2);
+        Subscriber subscriber2 = pubSub.subscribe("hello", "Subscriber2", CloneableString.class, handleString2);
         PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
 
         publisher.publish(new CloneableString("one"));
         sleep(100); // wait for subscribers to work
         assertThat(words, Matchers.contains("one-s1", "one-s2"));
+        
+        pubSub.unsubscribe(subscriber2);
+        words.clear();
+        publisher.publish(new CloneableString("two"));
+        sleep(100); // wait for subscribers to work
+        assertThat(words, Matchers.contains("two-s1"));
     }
     
     /**

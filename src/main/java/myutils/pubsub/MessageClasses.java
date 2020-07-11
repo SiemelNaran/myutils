@@ -92,10 +92,16 @@ interface MessageClasses {
     class RequestIdentification extends ServerGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
-        private final long failedClientIndex;
+        private final Class<? extends MessageBase> classOfMessageToResend;
+        private final Long failedClientIndex;
         
-        RequestIdentification(long failedClientIndex) {
+        RequestIdentification(Class<? extends MessageBase> classOfMessageToResend, Long failedClientIndex) {
+            this.classOfMessageToResend = classOfMessageToResend;
             this.failedClientIndex = failedClientIndex;
+        }
+        
+        Class<? extends MessageBase> getClassOfMessageToResend() {
+            return classOfMessageToResend;
         }
         
         long getFailedClientIndex() {
@@ -105,6 +111,40 @@ interface MessageClasses {
     
     //////////////////////////////////////////////////////////////////////
     // Client generated messages
+    
+    /**
+     * Class to notify the server that we are subscribing to a particular topic, so that it sends us messages published to this topic.
+     * Required field topic and subscriberName.
+     */
+    class AddOrRemoveSubscriber extends ClientGeneratedMessage {
+        private static final long serialVersionUID = 1L;
+        
+        private boolean add;
+        private String topic;
+        private String subscriberName;
+
+        public AddOrRemoveSubscriber(boolean add, String topic, String subscriberName) {
+            this.add = add;
+            this.topic = topic;
+            this.subscriberName = subscriberName;
+        }
+        
+        boolean isAddSubscriber() {
+            return add;
+        }
+        
+        boolean isRemoveSubscriber() {
+            return !add;
+        }
+        
+        String getTopic() {
+            return topic;
+        }
+        
+        String getSubscriberName() {
+            return subscriberName;
+        }
+    }
     
     /**
      * Class send by client to download published messages with server index startIndex.
@@ -125,22 +165,22 @@ interface MessageClasses {
     }
     
     /**
-     * Base class of all actions sent from one client to server, and then forwarded to all other clients.
+     * Base class of all messages that can be relayed from one client to another via the server.
      * Required field sourceMachineId, which is the machine sending the message. The field is set by server.
      * Required field clientIndex, which is the message number on the client.
      * Required field serverIndex, which is the message number on the server, or 0 if the message is yet to be sent to the server.
      * It is unique across messages in all machines. 
      */
-    abstract class ActionMessageBase extends ClientGeneratedMessage {
+    abstract class RelayMessageBase extends ClientGeneratedMessage {
         private static final long serialVersionUID = 1L;
 
         private String sourceMachineId;
         private long index;
         
-        ActionMessageBase() {
+        RelayMessageBase() {
         }
         
-        ActionMessageBase(long index) {
+        RelayMessageBase(long index) {
             this.index = index;
         }
         
@@ -158,24 +198,35 @@ interface MessageClasses {
         }
     }
     
+    /**
+     * Relay messages with a topic.
+     */
+    abstract class RelayTopicMessageBase extends RelayMessageBase {
+        private static final long serialVersionUID = 1L;
+
+        private final @Nonnull String topic;
+        
+        RelayTopicMessageBase(long index, @Nonnull String topic) {
+            super(index);
+            this.topic = topic;
+        }
+        
+        String getTopic() {
+            return topic;
+        }
+    }
     
     /**
      * Action representing the createPublisher command.
      */
-    class CreatePublisher extends ActionMessageBase {
+    class CreatePublisher extends RelayTopicMessageBase {
         private static final long serialVersionUID = 1L;
         
-        private final @Nonnull String topic;
         private final @Nonnull Class<?> publisherClass;
 
         CreatePublisher(long clientIndex, @Nonnull String topic, @Nonnull Class<?> publisherClass) {
-            super(clientIndex);
-            this.topic = topic;
+            super(clientIndex, topic);
             this.publisherClass = publisherClass;
-        }
-
-        String getTopic() {
-            return topic;
         }
 
         Class<?> getPublisherClass() {
@@ -187,7 +238,7 @@ interface MessageClasses {
     /**
      * Action representing the publisher.publish command.
      */
-    class PublishMessage extends ActionMessageBase {
+    class PublishMessage extends RelayTopicMessageBase {
         private static final long serialVersionUID = 1L;
         
         private final @Nonnull String topic;
@@ -195,14 +246,10 @@ interface MessageClasses {
         private final @Nonnull MessagePriority priority;
         
         PublishMessage(long clientIndex, @Nonnull String topic, @Nonnull CloneableObject<?> message, MessagePriority priority) {
-            super(clientIndex);
+            super(clientIndex, topic);
             this.topic = topic;
             this.message = message;
             this.priority = priority;
-        }
-
-        String getTopic() {
-            return topic;
         }
 
         CloneableObject<?> getMessage() {
