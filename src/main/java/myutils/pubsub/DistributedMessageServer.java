@@ -44,6 +44,7 @@ import myutils.pubsub.MessageClasses.ClientGeneratedMessage;
 import myutils.pubsub.MessageClasses.CreatePublisher;
 import myutils.pubsub.MessageClasses.DownloadPublishedMessages;
 import myutils.pubsub.MessageClasses.Identification;
+import myutils.pubsub.MessageClasses.InvalidRelayMessage;
 import myutils.pubsub.MessageClasses.MessageBase;
 import myutils.pubsub.MessageClasses.PublishMessage;
 import myutils.pubsub.MessageClasses.RelayMessageBase;
@@ -75,8 +76,11 @@ import myutils.util.ZipMinIterator;
  * <p>Thereafter clients may send createPublisher or publisher.add commands, and these will be relayed to all other clients.
  * Upon receiving a message to relay, the server generates a monotonically  increasing integer and sets the machineId of the machine which sent the message.
  * These are part of the message sent to each client who is subscribed to the topic.
- * Clients must avoid infinite recursion: if server relays a message to client2, that client2 must not send that message back to the server
- * as that would send the message back to client1.
+ * 
+ * <p>A note on infinite recursion: if server relays a message to client2, that client2 must not send that message back to the server
+ * as in theory that would send the message back to client1.
+ * However, using the field serverIndex, the server detects that it already processed the message and therefore ignores it.
+ * But clients should still not send the message to avoid unnecessary network traffic.
  * 
  * <p>The server caches the last N messages of each MessagePriority.
  * Clients can download all publish message commands from a particular index, and all messages in the cache from this time up to the time of download
@@ -219,7 +223,7 @@ public class DistributedMessageServer implements Shutdowneable {
         }
         
         synchronized void onMessageRelayed(ClientMachine clientMachine, RelayTopicMessageBase relayMessage) {
-            setMaxIndexIfLarger(clientMachine, relayMessage.getTopic(), relayMessage.getIndex());
+            setMaxIndexIfLarger(clientMachine, relayMessage.getTopic(), relayMessage.getServerIndex());
         }
 
         /**
@@ -239,10 +243,10 @@ public class DistributedMessageServer implements Shutdowneable {
             Iterator<CreatePublisher> iter = publishers.iterator();
             while (iter.hasNext()) {
                 CreatePublisher message = iter.next();
-                if (message.getIndex() > upperBoundInclusive) {
+                if (message.getServerIndex() > upperBoundInclusive) {
                     break;
                 }
-                if (message.getIndex() < lowerBoundInclusive) {
+                if (message.getServerIndex() < lowerBoundInclusive) {
                     continue;
                 }
                 consumer.accept(message);
@@ -250,7 +254,7 @@ public class DistributedMessageServer implements Shutdowneable {
                 lastMessage = message;
             }
             if (lastMessage != null) {
-                setMaxIndexIfLarger(clientMachine, topic, lastMessage.getIndex());
+                setMaxIndexIfLarger(clientMachine, topic, lastMessage.getServerIndex());
             }
             return count;
         }
@@ -279,13 +283,13 @@ public class DistributedMessageServer implements Shutdowneable {
                 lowerBoundInclusive = getMaxIndex(clientMachine, topic) + 1;
             }
             PublishMessage lastMessage = null;
-            Iterator<PublishMessage> iter = new ZipMinIterator<PublishMessage>(messages, (lhs, rhs) -> Long.compare(lhs.getIndex(), rhs.getIndex()));
+            Iterator<PublishMessage> iter = new ZipMinIterator<PublishMessage>(messages, (lhs, rhs) -> Long.compare(lhs.getServerIndex(), rhs.getServerIndex()));
             while (iter.hasNext()) {
                 PublishMessage message = iter.next();
-                if (message.getIndex() > upperBoundInclusive) {
+                if (message.getServerIndex() > upperBoundInclusive) {
                     break;
                 }
-                if (message.getIndex() < lowerBoundInclusive) {
+                if (message.getServerIndex() < lowerBoundInclusive) {
                     continue;
                 }
                 if (topic == null || topic.equals(message.getTopic())) {
@@ -297,7 +301,7 @@ public class DistributedMessageServer implements Shutdowneable {
                 }
             }
             if (lastMessage != null) {
-                setMaxIndexIfLarger(clientMachine, topic, lastMessage.getIndex());
+                setMaxIndexIfLarger(clientMachine, topic, lastMessage.getServerIndex());
             }
             return count;
         }
@@ -415,13 +419,18 @@ public class DistributedMessageServer implements Shutdowneable {
                     ClientMachine clientMachine = findClientMachineByChannel(channel);
                     if (clientMachine == null) {
                         sendRequestIdentification(channel, message);
+                    } else if (message instanceof RelayMessageBase && ((RelayMessageBase) message).getServerIndex() != 0) {
+                        RelayMessageBase relayMessage = (RelayMessageBase) message;
+                        DistributedMessageServer.this.sendInvalidRelayMessage(clientMachine, relayMessage, ErrorMessageEnum.MESSAGE_ALREADY_PROCESSED.format(relayMessage.getClientIndex()));
                     } else {
+                        onValidMessageReceived(message);
                         if (message instanceof AddSubscriber) {
                             DistributedMessageServer.this.handleAddSubscriber(clientMachine, (AddSubscriber) message);
                         } else if (message instanceof RemoveSubscriber) {
                             DistributedMessageServer.this.handleRemoveSubscriber(clientMachine, (RemoveSubscriber) message);
                         } else if (message instanceof RelayMessageBase) {
-                            DistributedMessageServer.this.handleRelayMessage(clientMachine, (RelayMessageBase) message);
+                            RelayMessageBase relayMessage = (RelayMessageBase) message;
+                            DistributedMessageServer.this.handleRelayMessage(clientMachine, relayMessage);
                         } else if (message instanceof DownloadPublishedMessages) {
                             DistributedMessageServer.this.handleDownload(clientMachine, (DownloadPublishedMessages) message);
                         } else {
@@ -575,7 +584,7 @@ public class DistributedMessageServer implements Shutdowneable {
         multimap.removeIf(topic, endpoint -> endpoint.getSubscriberName().equals(subscriberName));
         LOGGER.log(Level.INFO, "Removed subscriber : topic={0} subscriberName={1} clientMachine={2}", topic, subscriberName, clientMachine.getMachineId());
     }
-    
+
     private void handleRelayMessage(@Nonnull ClientMachine clientMachine, RelayMessageBase relay) {
         relay.setServerTimestampAndSourceMachineIdAndIndex(clientMachine.getMachineId(), maxMessage.incrementAndGet());
         if (relay instanceof RelayTopicMessageBase) {
@@ -595,14 +604,8 @@ public class DistributedMessageServer implements Shutdowneable {
         }
     }
     
-    private void sendRequestIdentification(AsynchronousSocketChannel channel, MessageBase message) {
-        ClientMachine clientMachine = new ClientMachine("<unregistered>", channel);
-        RequestIdentification request = new RequestIdentification(message.getClass(), extractIndex(message));
-        send(request, clientMachine, 0);
-    }
-
     private void handleDownload(ClientMachine clientMachine, DownloadPublishedMessages download) {
-        download(clientMachine, null, null, download.getStartIndexInclusive(), download.getEndIndexInclusive());
+        download(clientMachine, null, null, download.getStartServerIndexInclusive(), download.getEndServerIndexInclusive());
     }
     
     private void download(ClientMachine clientMachine,
@@ -619,6 +622,17 @@ public class DistributedMessageServer implements Shutdowneable {
         LOGGER.log(Level.INFO, String.format("Download messages to client: clientMachine=%s numMessages=%d", clientMachine.getMachineId(), numMessages));
     }
 
+    private void sendRequestIdentification(AsynchronousSocketChannel channel, MessageBase message) {
+        ClientMachine clientMachine = new ClientMachine("<unregistered>", channel);
+        RequestIdentification request = new RequestIdentification(message.getClass(), extractIndex(message));
+        send(request, clientMachine, 0);
+    }
+
+    private void sendInvalidRelayMessage(ClientMachine clientMachine, RelayMessageBase relayMessage, String error) {
+        InvalidRelayMessage invalid = new InvalidRelayMessage(relayMessage.getClientIndex(), error);
+        send(invalid, clientMachine, 0);
+    }
+    
     private void send(MessageBase message, ClientMachine clientMachine, int retry) {
         try {
             SocketTransformer.writeMessageToSocketAsync(message, Short.MAX_VALUE, clientMachine.getChannel())
@@ -637,6 +651,7 @@ public class DistributedMessageServer implements Shutdowneable {
                                  clientMachine.getMachineId(),
                                  message.getClass().getSimpleName(),
                                  extractIndex(message)));
+        onMessageSent(message);
         if (message instanceof RelayTopicMessageBase) {
             RelayTopicMessageBase relayMessage = (RelayTopicMessageBase) message;
             mostRecentMessages.onMessageRelayed(clientMachine, relayMessage);
@@ -670,11 +685,45 @@ public class DistributedMessageServer implements Shutdowneable {
 
     /**
      * Override this function to set socket options.
-     * The unit tests set SO_REUSEADDR to true.
+     * For example, the unit tests set SO_REUSEADDR to true.
      */
     protected void onBeforeSocketBound(NetworkChannel channel) throws IOException {
     }
 
+    /**
+     * Override this function to do something before sending a message.
+     * For example, the unit tests override this to record the number of messages sent.
+     */
+    protected void onMessageSent(MessageBase message) {
+    }
+
+    /**
+     * Override this function to do something upon receiving a message.
+     * For example, the unit tests override this to record the number of messages received.
+     * 
+     * <p>This function is only called for valid messages received.
+     */
+    protected void onValidMessageReceived(MessageBase message) {
+    }
+
+    private enum ErrorMessageEnum {
+        /**
+         * Server already saw this message and gave it a serverIndex.
+         * Yet client sent this message back to the server.
+         */
+        MESSAGE_ALREADY_PROCESSED("Message already processed by server: clientIndex=%s");
+        
+        private String formatString;
+
+        ErrorMessageEnum(String formatString) {
+            this.formatString = formatString;
+        }
+
+        String format(Object... args) {
+            return String.format(formatString, args);
+        }
+    }
+    
     /**
      * Cleanup this class.
      * Close all connections, close the socket server channel, and shutdown all executors.

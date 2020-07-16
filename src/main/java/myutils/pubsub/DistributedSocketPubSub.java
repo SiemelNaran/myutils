@@ -41,6 +41,7 @@ import myutils.pubsub.MessageClasses.AddSubscriber;
 import myutils.pubsub.MessageClasses.CreatePublisher;
 import myutils.pubsub.MessageClasses.DownloadPublishedMessages;
 import myutils.pubsub.MessageClasses.Identification;
+import myutils.pubsub.MessageClasses.InvalidRelayMessage;
 import myutils.pubsub.MessageClasses.MessageBase;
 import myutils.pubsub.MessageClasses.PublishMessage;
 import myutils.pubsub.MessageClasses.RemoveSubscriber;
@@ -306,18 +307,19 @@ public class DistributedSocketPubSub extends PubSub {
                     DistributedSocketPubSub.this.onMessageReceived(message);
                     if (message instanceof CreatePublisher) {
                         CreatePublisher createPublisher = (CreatePublisher) message;
-                        DistributedSocketPubSub.this.localMaxMessage.set(createPublisher.getIndex());
                         DistributedSocketPubSub.this.createPublisher(createPublisher.getTopic(),
                                                                      createPublisher.getPublisherClass());
                     } else if (message instanceof PublishMessage) {
                         PublishMessage publishMessage = (PublishMessage) message;
-                        DistributedSocketPubSub.this.localMaxMessage.set(publishMessage.getIndex());
                         Optional<Publisher> publisher = DistributedSocketPubSub.this.getPublisher(publishMessage.getTopic());
                         if (publisher.isPresent()) {
                             publisher.get().publish(publishMessage.getMessage());
                         }
+                    } else if (message instanceof InvalidRelayMessage) {
+                        InvalidRelayMessage invalid = (InvalidRelayMessage) message;
+                        LOGGER.log(Level.WARNING, invalid.getError());
                     } else {
-                        LOGGER.log(Level.WARNING, "Unrecognized object type received: machine={0}, messageClass={2}",
+                        LOGGER.log(Level.WARNING, "Unrecognized object type received: clientMachine={0}, messageClass={1}",
                                    DistributedSocketPubSub.this.machineId, message.getClass().getSimpleName());
                     }
                 } catch (IOException e) {
