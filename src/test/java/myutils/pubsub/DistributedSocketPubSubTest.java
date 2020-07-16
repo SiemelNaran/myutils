@@ -264,7 +264,7 @@ public class DistributedSocketPubSubTest {
      * The new client does not receive new messages.
      * However, the new client can call download to retrieve and replay old messages.
      */
-    //@Test
+    @Test
     void testDownloadMessages() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         
