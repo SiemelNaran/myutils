@@ -18,6 +18,7 @@ import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.nio.channels.NetworkChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Optional;
 import java.util.Queue;
@@ -117,8 +118,9 @@ public class DistributedSocketPubSub extends PubSub {
                                          DistributedSocketPubSub.class);
     }
     
-    private static SocketChannel createNewSocket(SocketAddress localAddress) throws IOException {
-        var channel = SocketChannel.open();        
+    private SocketChannel createNewSocket(SocketAddress localAddress) throws IOException {
+        var channel = SocketChannel.open();
+        onBeforeSocketBound(channel);
         channel.bind(localAddress);
         return channel;
     }
@@ -385,20 +387,42 @@ public class DistributedSocketPubSub extends PubSub {
         cleanable.clean();
     }
     
+    /**
+     * Send the subscriber to the central server.
+     */
     @Override
     protected void onAddSubscriber(Subscriber subscriber) {
         messageWriter.addSubscriber(subscriber.getTopic(),subscriber.getSubscriberName());
     }
 
+    /**
+     * Remove the subscriber from the central server.
+     * When all subscribers to the topic from this machine are removed, the central server will no longer send messages published to this topic to this machine. 
+     */
     @Override
     protected void onRemoveSubscriber(Subscriber subscriber) {
         messageWriter.removeSubscriber(subscriber.getTopic(),subscriber.getSubscriberName());
     }
 
-    protected void onMessageReceived(MessageBase message) {
+    /**
+     * Override this function to set socket options.
+     * For example, the unit tests set SO_REUSEADDR to true.
+     */
+    protected void onBeforeSocketBound(NetworkChannel channel) throws IOException {
     }
 
+    /**
+     * Override this function to do something before sending a message.
+     * For example, the unit tests override this to record the number of messages sent.
+     */
     protected void onBeforeSendMessage(MessageBase message) {
+    }
+
+    /**
+     * Override this function to do something upon receiving a message.
+     * For example, the unit tests override this to record the number of messages received.
+     */
+    protected void onMessageReceived(MessageBase message) {
     }
 
 
