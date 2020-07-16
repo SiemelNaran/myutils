@@ -18,5 +18,4 @@ public enum MessagePriority {
     int getLevel() {
         return level;
     }
-};
-
+}
