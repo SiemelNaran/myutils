@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.net.StandardSocketOptions;
+import java.nio.channels.NetworkChannel;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
@@ -92,7 +94,7 @@ public class DistributedSocketPubSubTest {
     void testPublishAndSubscribeAndUnsubscribe() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         
-        DistributedMessageServer centralServer = new DistributedMessageServer(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, Collections.emptyMap());
+        var centralServer = new TestDistributedMessageServer(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, Collections.emptyMap());
         addShutdown(centralServer);
         centralServer.start();
         sleep(250); // time to let the central server start
@@ -266,9 +268,9 @@ public class DistributedSocketPubSubTest {
     void testDownloadMessages() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         
-        DistributedMessageServer centralServer = new DistributedMessageServer(CENTRAL_SERVER_HOST,
-                                                                              CENTRAL_SERVER_PORT,
-                                                                              Map.of(MessagePriority.HIGH, 2, MessagePriority.MEDIUM, 3));
+        var centralServer = new TestDistributedMessageServer(CENTRAL_SERVER_HOST,
+                                                             CENTRAL_SERVER_PORT,
+                                                             Map.of(MessagePriority.HIGH, 2, MessagePriority.MEDIUM, 3));
         addShutdown(centralServer);
         centralServer.start();
         sleep(250); // time to let the central server start
@@ -416,9 +418,9 @@ public class DistributedSocketPubSubTest {
         assertFalse(toFuture(client1Started).isDone());
 
         words.clear();
-        DistributedMessageServer centralServer = new DistributedMessageServer(CENTRAL_SERVER_HOST,
-                                                                              CENTRAL_SERVER_PORT,
-                                                                              Map.of(MessagePriority.HIGH, 1, MessagePriority.MEDIUM, 3));
+        var centralServer = new TestDistributedMessageServer(CENTRAL_SERVER_HOST,
+                                                             CENTRAL_SERVER_PORT,
+                                                             Map.of(MessagePriority.HIGH, 1, MessagePriority.MEDIUM, 3));
         addShutdown(centralServer);
         centralServer.start();
         sleep(250); // time to let the central server start
@@ -432,6 +434,24 @@ public class DistributedSocketPubSubTest {
         assertEquals(3, client2.getCountSent()); // identification, addSubscriber, addSubscriber
         assertEquals(3, client2.getCountReceived()); // createPublisher, message, message
         assertThat(words, Matchers.containsInAnyOrder("one-s2a", "one-s2b", "two-s2a", "two-s2b"));
+    }
+}
+
+
+
+class TestDistributedMessageServer extends DistributedMessageServer {
+    public TestDistributedMessageServer(String host,
+                                        int port,
+                                        Map<MessagePriority, Integer> mostRecentMessagesToKeep) throws IOException {
+        super(host, port, mostRecentMessagesToKeep);
+    }
+
+    /**
+     * Set SO_REUSEADDR so that the unit tests can close and open channels immediately, not waiting for TIME_WAIT seconds.
+     */
+    @Override
+    protected void onBeforeSocketBound(NetworkChannel channel) throws IOException {
+        channel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
     }
 }
 
@@ -450,17 +470,25 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
                                        int messageServerPort) throws IOException {
         super(numInMemoryHandlers, queueCreator, subscriptionMessageExceptionHandler, machineId, localServer, localPort, messageServerHost, messageServerPort);
     }
+
+    /**
+     * Set SO_REUSEADDR so that the unit tests can close and open channels immediately, not waiting for TIME_WAIT seconds.
+     */
+    @Override
+    protected void onBeforeSocketBound(NetworkChannel channel) throws IOException {
+        channel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
+    }
+   
+    @Override
+    protected void onBeforeSendMessage(MessageBase message) {
+        countSent.add(message.getClass().getSimpleName());
+    }
     
     @Override
     protected void onMessageReceived(MessageBase message) {
         countReceived.add(message.getClass().getSimpleName());
     }
 
-    @Override
-    protected void onBeforeSendMessage(MessageBase message) {
-        countSent.add(message.getClass().getSimpleName());
-    }
-    
     int getCountReceived() {
         return countReceived.size();
     }

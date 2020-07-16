@@ -353,6 +353,7 @@ public class DistributedMessageServer implements Shutdowneable {
     }
 
     private void openServerSocket() throws IOException {
+        onBeforeSocketBound(asyncServerSocketChannel);
         asyncServerSocketChannel.bind(new InetSocketAddress(host, port));
         LOGGER.log(Level.INFO, String.format("Started DistributedMessageServer: localHostAndPort=%s:%d, localMachine=%s", host, port, getLocalAddress(asyncServerSocketChannel)));
     }
@@ -665,6 +666,13 @@ public class DistributedMessageServer implements Shutdowneable {
     @Override
     public void shutdown() {
         cleanable.clean();
+    }
+
+    /**
+     * Override this function to set socket options.
+     * The unit tests set SO_REUSEADDR to true.
+     */
+    protected void onBeforeSocketBound(NetworkChannel channel) throws IOException {
     }
 
     /**
