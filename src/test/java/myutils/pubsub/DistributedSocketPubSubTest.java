@@ -21,6 +21,7 @@ import java.util.function.Supplier;
 import myutils.LogFailureToConsoleTestWatcher;
 import myutils.pubsub.InMemoryPubSubTest.CloneableString;
 import myutils.pubsub.MessageClasses.MessageBase;
+import myutils.pubsub.MessageClasses.RelayMessageBase;
 import myutils.pubsub.PubSub.Publisher;
 import myutils.pubsub.PubSub.Subscriber;
 import org.hamcrest.Matchers;
@@ -435,11 +436,82 @@ public class DistributedSocketPubSubTest {
         assertEquals(3, client2.getCountReceived()); // createPublisher, message, message
         assertThat(words, Matchers.containsInAnyOrder("one-s2a", "one-s2b", "two-s2a", "two-s2b"));
     }
+
+    /**
+     * In this test the client sends a message which has serverIndex set.
+     * This indicates that the server is receiving a message that it already processed.
+     * Ensure that the server ignores it.
+     */
+    @Test
+    void testServerIgnoresMessagesAlreadyProcessed() throws IOException {
+        List<String> words = Collections.synchronizedList(new ArrayList<>());
+        
+        var centralServer = new TestDistributedMessageServer(CENTRAL_SERVER_HOST,
+                                                             CENTRAL_SERVER_PORT,
+                                                             Map.of(MessagePriority.HIGH, 1, MessagePriority.MEDIUM, 3));
+        addShutdown(centralServer);
+        centralServer.start();
+        sleep(250); // time to let server start
+        
+        var client1 = new TestDistributedSocketPubSub(1,
+                                                      PubSub.defaultQueueCreator(),
+                                                      PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                                      "client1",
+                                                      "localhost",
+                                                      31001,
+                                                      CENTRAL_SERVER_HOST,
+                                                      CENTRAL_SERVER_PORT);
+        addShutdown(client1);
+        client1.start();
+        Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
+        client1.subscribe("hello", "ClientOneSubscriber", CloneableString.class, str -> words.add(str.append("-s1")));
+        sleep(250); // time to let client start
+        assertTrue(client1.getPublisher("hello").isPresent());
+        assertEquals(3, client1.getCountSent()); // Identification, CreatePublisher, AddSubsriber
+        assertEquals(0, client1.getCountReceived());
+        
+        var client2 = new TestDistributedSocketPubSub(1,
+                                                      PubSub.defaultQueueCreator(),
+                                                      PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                                      "client2",
+                                                      "localhost",
+                                                      31002,
+                                                      CENTRAL_SERVER_HOST,
+                                                      CENTRAL_SERVER_PORT);
+        addShutdown(client2);
+        client2.start();
+        client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a")));
+        client2.subscribe("hello", "ClientTwoSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b")));
+        sleep(250); // time to let client2 start
+        assertEquals(3, client1.getCountSent());
+        assertEquals(0, client1.getCountReceived());
+        assertEquals(3, client2.getCountSent()); // Identification, AddSubsriber, AddSubsriber
+        assertEquals(1, client2.getCountReceived()); // CreatePublisher
+        assertTrue(client2.getPublisher("hello").isPresent());
+
+        // publish two messages
+        // the subscriber running on client1 will pick it up immediately
+        // the client has been modified to tamper the message by adding a serverInddex
+        // the server will ignore the message
+        client1.enableTamperServerIndex();
+        publisher1.publish(new CloneableString("one"));
+        publisher1.publish(new CloneableString("two"));
+        sleep(250); // time to let messages be published to remote clients
+        System.out.println("actual=" + words);
+        assertEquals(5, client1.getCountSent());
+        assertEquals(2, client1.getCountReceived()); // InvalidMessage, InvalidMessage
+        assertEquals(3, client2.getCountSent());
+        assertEquals(1, client2.getCountReceived()); // CreatePublisher
+        assertThat(words, Matchers.containsInAnyOrder("one-s1", "two-s1"));
+    }
 }
 
 
 
 class TestDistributedMessageServer extends DistributedMessageServer {
+    private List<String> countValidReceived = Collections.synchronizedList(new ArrayList<>());
+    private List<String> countSent = Collections.synchronizedList(new ArrayList<>());
+
     public TestDistributedMessageServer(String host,
                                         int port,
                                         Map<MessagePriority, Integer> mostRecentMessagesToKeep) throws IOException {
@@ -453,10 +525,29 @@ class TestDistributedMessageServer extends DistributedMessageServer {
     protected void onBeforeSocketBound(NetworkChannel channel) throws IOException {
         channel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
     }
+    
+    @Override
+    protected void onMessageSent(MessageBase message) {
+        countSent.add(message.getClass().getSimpleName());
+    }
+    
+    @Override
+    protected void onValidMessageReceived(MessageBase message) {
+        countValidReceived.add(message.getClass().getSimpleName());
+    }
+
+    int getCountValidReceived() {
+        return countValidReceived.size();
+    }
+    
+    int getCountSent() {
+        return countSent.size();
+    }
 }
 
 
 class TestDistributedSocketPubSub extends DistributedSocketPubSub {
+    private boolean enableTamperServerIndex;
     private List<String> countReceived = Collections.synchronizedList(new ArrayList<>());
     private List<String> countSent = Collections.synchronizedList(new ArrayList<>());
 
@@ -471,6 +562,10 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
         super(numInMemoryHandlers, queueCreator, subscriptionMessageExceptionHandler, machineId, localServer, localPort, messageServerHost, messageServerPort);
     }
 
+    void enableTamperServerIndex() {
+        enableTamperServerIndex = true;        
+    }
+
     /**
      * Set SO_REUSEADDR so that the unit tests can close and open channels immediately, not waiting for TIME_WAIT seconds.
      */
@@ -481,6 +576,10 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
    
     @Override
     protected void onBeforeSendMessage(MessageBase message) {
+        if (enableTamperServerIndex && message instanceof RelayMessageBase) {
+            RelayMessageBase relayMessage = (RelayMessageBase) message;
+            relayMessage.setServerTimestampAndSourceMachineIdAndIndex("bogus", 137);
+        }
         countSent.add(message.getClass().getSimpleName());
     }
     

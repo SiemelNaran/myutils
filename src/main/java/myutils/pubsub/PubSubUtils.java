@@ -152,7 +152,7 @@ class PubSubUtils {
     static Long extractIndex(MessageBase message) {
         if (message instanceof RelayMessageBase) {
             RelayMessageBase action = (RelayMessageBase) message;
-            return action.getIndex();
+            return action.getServerIndex();
         }
         return null;
     }

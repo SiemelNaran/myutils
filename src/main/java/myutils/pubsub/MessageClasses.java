@@ -46,7 +46,7 @@ interface MessageClasses {
         private static final long serialVersionUID = 1L;
         
         private final Class<? extends MessageBase> classOfMessageToResend;
-        private final Long failedClientIndex;
+        private final Long failedClientIndex; // optional because not all messages a clientIndex
         
         RequestIdentification(Class<? extends MessageBase> classOfMessageToResend, Long failedClientIndex) {
             this.classOfMessageToResend = classOfMessageToResend;
@@ -61,6 +61,27 @@ interface MessageClasses {
             return failedClientIndex;
         }
     }
+    
+    class InvalidRelayMessage extends ServerGeneratedMessage {
+        private static final long serialVersionUID = 1L;
+        
+        private final long failedClientIndex; // optional because not all messages a clientIndex
+        private final String error;
+
+        InvalidRelayMessage(long failedClientIndex, @Nonnull String error) {
+            this.failedClientIndex = failedClientIndex;
+            this.error = error;
+        }
+
+        public long getFailedClientIndex() {
+            return failedClientIndex;
+        }
+
+        public String getError() {
+            return error;
+        }
+    }
+
     
     //////////////////////////////////////////////////////////////////////
     // Client generated messages
@@ -130,7 +151,7 @@ interface MessageClasses {
     
     /**
      * Class to notify the server that we are subscribing to a particular topic.
-     * Required field currentServerIndex.
+     * Required field shouldTryDownload.
      */
     class AddSubscriber extends AddOrRemoveSubscriber {
         private static final long serialVersionUID = 1L;
@@ -160,26 +181,26 @@ interface MessageClasses {
     }
     
     /**
-     * Class send by client to download published messages with server index startIndex.
-     * The server will send a PublishMessage object for each object that it has in its cache.
+     * Class sent by client to download published messages even if they have already been sent to the client.
+     * The server will send a PublishMessage for each object that it has in its cache.
      */
     class DownloadPublishedMessages extends ClientGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
-        private long startIndexInclusive;
-        private long endIndexInclusive;
+        private long startServerIndexInclusive;
+        private long endServerIndexInclusive;
 
-        public DownloadPublishedMessages(long startIndexInclusive, long endIndexInclusive) {
-            this.startIndexInclusive = startIndexInclusive;
-            this.endIndexInclusive = endIndexInclusive;
+        public DownloadPublishedMessages(long startServerIndexInclusive, long endServerIndexInclusive) {
+            this.startServerIndexInclusive = startServerIndexInclusive;
+            this.endServerIndexInclusive = endServerIndexInclusive;
         }
         
-        long getStartIndexInclusive() {
-            return startIndexInclusive;
+        long getStartServerIndexInclusive() {
+            return startServerIndexInclusive;
         }
         
-        long getEndIndexInclusive() {
-            return endIndexInclusive;
+        long getEndServerIndexInclusive() {
+            return endServerIndexInclusive;
         }
     }
     
@@ -195,19 +216,20 @@ interface MessageClasses {
 
         private long serverTimestamp;
         private String sourceMachineId;
-        private long index;
+        private long clientIndex;
+        private long serverIndex; // 0 if message has not yet been sent to server
         
         RelayMessageBase() {
         }
         
-        RelayMessageBase(long index) {
-            this.index = index;
+        RelayMessageBase(long clientIndex) {
+            this.clientIndex = clientIndex;
         }
         
-        void setServerTimestampAndSourceMachineIdAndIndex(String sourceMachineId, long index) {
+        void setServerTimestampAndSourceMachineIdAndIndex(String sourceMachineId, long serverIndex) {
             this.serverTimestamp = System.currentTimeMillis();
             this.sourceMachineId = sourceMachineId;
-            this.index = index;
+            this.serverIndex = serverIndex;
         }
         
         long getServerTimestamp() {
@@ -218,8 +240,12 @@ interface MessageClasses {
             return sourceMachineId;
         }
 
-        long getIndex() {
-            return index;
+        long getClientIndex() {
+            return clientIndex;
+        }
+
+        long getServerIndex() {
+            return serverIndex;
         }
     }
     
@@ -231,8 +257,8 @@ interface MessageClasses {
 
         private final @Nonnull String topic;
         
-        RelayTopicMessageBase(long index, @Nonnull String topic) {
-            super(index);
+        RelayTopicMessageBase(long clientIndex, @Nonnull String topic) {
+            super(clientIndex);
             this.topic = topic;
         }
         
