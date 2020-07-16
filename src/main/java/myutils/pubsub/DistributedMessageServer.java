@@ -3,6 +3,7 @@ package myutils.pubsub;
 import static myutils.pubsub.PubSubUtils.addShutdownHook;
 import static myutils.pubsub.PubSubUtils.closeExecutorQuietly;
 import static myutils.pubsub.PubSubUtils.closeQuietly;
+import static myutils.pubsub.PubSubUtils.computeExponentialBackoffMillis;
 import static myutils.pubsub.PubSubUtils.extractIndex;
 import static myutils.pubsub.PubSubUtils.getLocalAddress;
 import static myutils.pubsub.PubSubUtils.getRemoteAddress;
@@ -16,12 +17,13 @@ import java.net.InetSocketAddress;
 import java.net.StandardSocketOptions;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
-import java.nio.channels.Channel;
+import java.nio.channels.NetworkChannel;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -35,9 +37,9 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
-import java.util.function.Predicate;
 import javax.annotation.Nonnull;
-import myutils.pubsub.MessageClasses.AddOrRemoveSubscriber;
+import javax.annotation.Nullable;
+import myutils.pubsub.MessageClasses.AddSubscriber;
 import myutils.pubsub.MessageClasses.ClientGeneratedMessage;
 import myutils.pubsub.MessageClasses.CreatePublisher;
 import myutils.pubsub.MessageClasses.DownloadPublishedMessages;
@@ -46,6 +48,7 @@ import myutils.pubsub.MessageClasses.MessageBase;
 import myutils.pubsub.MessageClasses.PublishMessage;
 import myutils.pubsub.MessageClasses.RelayMessageBase;
 import myutils.pubsub.MessageClasses.RelayTopicMessageBase;
+import myutils.pubsub.MessageClasses.RemoveSubscriber;
 import myutils.pubsub.MessageClasses.RequestIdentification;
 import myutils.pubsub.PubSubUtils.CallStackCapturing;
 import myutils.util.MultimapUtils;
@@ -79,7 +82,7 @@ import myutils.util.ZipMinIterator;
  * Clients can download all publish message commands from a particular index, and all messages in the cache from this time up to the time of download
  * will be sent to that client.
  * 
- * <p>About messages sent between client and server:
+ * <p>About messages sent between client and server if using a socket:
  * The first two bytes are the length of the message.
  * The next N bytes is the message, when serialized and converted to a byte stream.
  */
@@ -107,13 +110,13 @@ public class DistributedMessageServer implements Shutdowneable {
      */
     private static final class ClientMachine {
         private final String machineId;
-        private final AsynchronousSocketChannel channel;
         private final String remoteAddress;
+        private final AsynchronousSocketChannel channel;
         
         private ClientMachine(String machineId, AsynchronousSocketChannel channel) {
             this.machineId = machineId;
-            this.channel = channel;
             this.remoteAddress = getRemoteAddress(channel);
+            this.channel = channel;
         }
 
         private AsynchronousSocketChannel getChannel() {
@@ -144,9 +147,14 @@ public class DistributedMessageServer implements Shutdowneable {
         }
     }
     
+    /**
+     * Class to what subscribers and client machine has.
+     * Used in the map of topic to list of subscribers for that topic.
+     * One client machine can have two subscribers for the same topic.
+     */
     private static final class SubscriberEndpoint {
         private final String subscriberName;
-        private final ClientMachine clientMachine ;
+        private final ClientMachine clientMachine;
         
         private SubscriberEndpoint(String subscriberName, ClientMachine clientMachine) {
             this.subscriberName = subscriberName;
@@ -179,7 +187,8 @@ public class DistributedMessageServer implements Shutdowneable {
     private static class MostRecentMessages {
         private final List<CreatePublisher> publishers = new ArrayList<>();
         private final int[] mostRecentMessagesToKeep;
-        private final List<Deque<PublishMessage>> messages = List.of(new LinkedList<>(), new LinkedList<>()); 
+        private final List<Deque<PublishMessage>> messages = List.of(new LinkedList<>(), new LinkedList<>());
+        private final Map<ClientMachine, Map<String /*topic*/, Long /*maxIndex*/>> highestIndexMap = new HashMap<>();
         
         MostRecentMessages(Map<MessagePriority, Integer> mostRecentMessagesToKeep) {
             this.mostRecentMessagesToKeep = computeMostRecentMessagesToKeep(mostRecentMessagesToKeep);
@@ -193,7 +202,7 @@ public class DistributedMessageServer implements Shutdowneable {
             return result;
         }
 
-        synchronized void save(RelayTopicMessageBase relayMessage) {
+        synchronized void save(ClientMachine clientMachine, RelayTopicMessageBase relayMessage) {
             if (relayMessage instanceof CreatePublisher) {
                 CreatePublisher createPublisher = (CreatePublisher) relayMessage;
                 publishers.add(createPublisher);
@@ -206,44 +215,109 @@ public class DistributedMessageServer implements Shutdowneable {
                     deque.removeFirst();
                 }
             }
+            onMessageRelayed(clientMachine, relayMessage);
         }
         
-        synchronized int retrievePublishers(long upperBoundInclusive, Predicate<CreatePublisher> filter, Consumer<CreatePublisher> consumer) {
+        synchronized void onMessageRelayed(ClientMachine clientMachine, RelayTopicMessageBase relayMessage) {
+            setMaxIndexIfLarger(clientMachine, relayMessage.getTopic(), relayMessage.getIndex());
+        }
+
+        /**
+         * Retrieve publishers to send to clientMachine.
+         * 
+         * <p>Publishers that originated from clientMachine are not sent to it because save/onMessageRelayed would have been called,
+         * setting the maxIndex for this clientMachine and topic,
+         * and this functions only retrieves messages larger than maxIndex.
+         */
+        synchronized int retrievePublishers(ClientMachine clientMachine,
+                                            @Nonnull String topic,
+                                            long upperBoundInclusive,
+                                            Consumer<CreatePublisher> consumer) {
             int count = 0;
+            long lowerBoundInclusive = getMaxIndex(clientMachine, topic) + 1;
+            CreatePublisher lastMessage = null;
             Iterator<CreatePublisher> iter = publishers.iterator();
             while (iter.hasNext()) {
-                CreatePublisher createPublisher = iter.next();
-                if (createPublisher.getIndex() > upperBoundInclusive) {
-                    break;
-                }
-                if (!filter.test(createPublisher)) {
-                    continue;
-                }
-                consumer.accept(createPublisher);
-                count++;
-            }
-            return count;
-        }
-        
-        synchronized int retrieveMessages(long lowerBoundInclusive, long upperBoundInclusive, Consumer<PublishMessage> consumer) {
-            int count = 0;
-            Iterator<PublishMessage> iter = new ZipMinIterator<PublishMessage>(messages, (lhs, rhs) -> Long.compare(lhs.getIndex(), rhs.getIndex()));
-            while (iter.hasNext()) {
-                var message = iter.next();
-                if (message.getIndex() < lowerBoundInclusive) {
-                    continue;
-                }
+                CreatePublisher message = iter.next();
                 if (message.getIndex() > upperBoundInclusive) {
                     break;
                 }
+                if (message.getIndex() < lowerBoundInclusive) {
+                    continue;
+                }
                 consumer.accept(message);
                 count++;
+                lastMessage = message;
+            }
+            if (lastMessage != null) {
+                setMaxIndexIfLarger(clientMachine, topic, lastMessage.getIndex());
             }
             return count;
         }
+
+        /**
+         * Retrieve messages to send to clientMachine.
+         * 
+         * <p>Messages that originated from clientMachine are not sent to it because save/onMessageRelayed would have been called,
+         * setting the maxIndex for this clientMachine and topic,
+         * and this functions only retrieves messages larger than maxIndex.
+         * 
+         * <p>If topic is null it means find all messages (used when user downloads/replays messages).
+         * If topic is not null is means only messages published to this topic (used when user calls addSubscriber).
+         * 
+         * <p>If minClientTimestamp is null it means find all messages (used when user downloads/replays messages).
+         * If minClientTimestamp is not null is means only messages published on or after this client date (used when user calls addSubscriber).
+         */
+        synchronized int retrieveMessages(ClientMachine clientMachine,
+                                          @Nullable String topic,
+                                          @Nullable Long minClientTimestamp,
+                                          Long lowerBoundInclusive,
+                                          long upperBoundInclusive,
+                                          Consumer<PublishMessage> consumer) {
+            int count = 0;
+            if (lowerBoundInclusive == null) {
+                lowerBoundInclusive = getMaxIndex(clientMachine, topic) + 1;
+            }
+            PublishMessage lastMessage = null;
+            Iterator<PublishMessage> iter = new ZipMinIterator<PublishMessage>(messages, (lhs, rhs) -> Long.compare(lhs.getIndex(), rhs.getIndex()));
+            while (iter.hasNext()) {
+                PublishMessage message = iter.next();
+                if (message.getIndex() > upperBoundInclusive) {
+                    break;
+                }
+                if (message.getIndex() < lowerBoundInclusive) {
+                    continue;
+                }
+                if (topic == null || topic.equals(message.getTopic())) {
+                    if (minClientTimestamp == null || message.getClientTimestamp() >= minClientTimestamp) {
+                        consumer.accept(message);
+                        count++;
+                        lastMessage = message;
+                    }
+                }
+            }
+            if (lastMessage != null) {
+                setMaxIndexIfLarger(clientMachine, topic, lastMessage.getIndex());
+            }
+            return count;
+        }
+
+        private long getMaxIndex(ClientMachine clientMachine, String topic) {
+            Map<String, Long> map = highestIndexMap.computeIfAbsent(clientMachine, unused -> new LinkedHashMap<>());
+            Long index = map.get(topic);
+            return index != null ? index : 0;
+        }
+
+        private void setMaxIndexIfLarger(ClientMachine clientMachine, String topic, long newMax) {
+            Map<String, Long> map = highestIndexMap.computeIfAbsent(clientMachine, unused -> new LinkedHashMap<>());
+            Long index = map.get(topic);
+            if (index == null || newMax > index) {
+                map.put(topic, newMax);
+            }
+        }
     }
     
-    /**r
+    /**
      * Create a message server.
      * 
      * @param host (the host of this server, may be "localhost")
@@ -259,7 +333,13 @@ public class DistributedMessageServer implements Shutdowneable {
         this.channelExecutor = Executors.newFixedThreadPool(NUM_CHANNEL_THREADS, createThreadFactory("DistributedMessageServer.socket"));
         this.retryExecutor = Executors.newScheduledThreadPool(1, createThreadFactory("DistributedMessageServer.Retry"));
         this.mostRecentMessages = new MostRecentMessages(mostRecentMessagesToKeep);
-        this.cleanable = addShutdownHook(this, new Cleanup(asyncServerSocketChannel, acceptExecutor, channelExecutor, retryExecutor, clientMachines), DistributedMessageServer.class);
+        this.cleanable = addShutdownHook(this,
+                                         new Cleanup(asyncServerSocketChannel,
+                                                     acceptExecutor,
+                                                     channelExecutor,
+                                                     retryExecutor,
+                                                     clientMachines),
+                                         DistributedMessageServer.class);
     }
     
     /**
@@ -327,8 +407,6 @@ public class DistributedMessageServer implements Shutdowneable {
                                      message.getClass().getSimpleName(),
                                      extractIndex(message)));
             if (message instanceof ClientGeneratedMessage) {
-                ClientGeneratedMessage clientGeneratedMessage = (ClientGeneratedMessage) message;
-                clientGeneratedMessage.setServerTimestampToNow();
                 if (message instanceof Identification) {
                     Identification identification = (Identification) message;
                     DistributedMessageServer.this.addIfNotPresentAndSendPublishers(identification, channel);
@@ -337,12 +415,14 @@ public class DistributedMessageServer implements Shutdowneable {
                     if (clientMachine == null) {
                         sendRequestIdentification(channel, message);
                     } else {
-                        if (message instanceof AddOrRemoveSubscriber) {
-                            DistributedMessageServer.this.handleAddOrRemoveSubscriber(clientMachine, (AddOrRemoveSubscriber) message);
+                        if (message instanceof AddSubscriber) {
+                            DistributedMessageServer.this.handleAddSubscriber(clientMachine, (AddSubscriber) message);
+                        } else if (message instanceof RemoveSubscriber) {
+                            DistributedMessageServer.this.handleRemoveSubscriber(clientMachine, (RemoveSubscriber) message);
                         } else if (message instanceof RelayMessageBase) {
                             DistributedMessageServer.this.handleRelayMessage(clientMachine, (RelayMessageBase) message);
                         } else if (message instanceof DownloadPublishedMessages) {
-                            DistributedMessageServer.this.handleDowload(clientMachine, (DownloadPublishedMessages) message);
+                            DistributedMessageServer.this.handleDownload(clientMachine, (DownloadPublishedMessages) message);
                         } else {
                             LOGGER.log(Level.DEBUG, "Unhandled message {0}", message.getClass().getSimpleName());
                         }
@@ -463,40 +543,47 @@ public class DistributedMessageServer implements Shutdowneable {
         }
     }
     
-    private synchronized void handleAddOrRemoveSubscriber(ClientMachine clientMachine, AddOrRemoveSubscriber subscriberInfo) {
+    private synchronized void handleAddSubscriber(ClientMachine clientMachine, AddSubscriber subscriberInfo) {
         String topic = subscriberInfo.getTopic();
         String subscriberName = subscriberInfo.getSubscriberName();
         MultimapUtils<String, SubscriberEndpoint> multimap = new MultimapUtils<>(subscriberEndpointMap, ArrayList::new);
-        if (subscriberInfo.isAddSubscriber()) {
-            var endpoints = multimap.getOrCreate(topic);
-            boolean endpointAlreadySubscribedToThisPublisher = endpoints.stream().anyMatch(endpoint -> endpoint.getClientMachine().equals(clientMachine));
-            endpoints.add(new SubscriberEndpoint(subscriberName, clientMachine));
-            int numPublishersSent;
-            if (endpointAlreadySubscribedToThisPublisher) {
-                long upperBoundInclusive = maxMessage.get();
-                numPublishersSent = mostRecentMessages.retrievePublishers(
-                        upperBoundInclusive,
-                        createPublisher -> topic.equals(createPublisher.getTopic()) && !createPublisher.getSourceMachineId().equals(clientMachine.getMachineId()),
-                        createPublisher -> DistributedMessageServer.this.send(createPublisher, clientMachine, 0));
-            } else {
-                numPublishersSent = 0;
-            }
-            LOGGER.log(Level.INFO, "Added subscriber : topic={0} subscriberName={1} clientMachine={2} numPublishersSent={3}", topic, subscriberName, clientMachine.getMachineId(), numPublishersSent);
-        } else if (subscriberInfo.isRemoveSubscriber()) {
-            multimap.removeIf(topic, endpoint -> endpoint.getSubscriberName().equals(subscriberName));
-            LOGGER.log(Level.INFO, "Removed subscriber : topic={0} subscriberName={1} clientMachine={2}", topic, subscriberName, clientMachine.getMachineId());
+        var endpoints = multimap.getOrCreate(topic);
+        boolean clientMachineAlreadySubscribedToTopic = endpoints.stream().anyMatch(endpoint -> endpoint.getClientMachine().equals(clientMachine));
+        endpoints.add(new SubscriberEndpoint(subscriberName, clientMachine));
+        int numPublishersSent;
+        if (!clientMachineAlreadySubscribedToTopic) {
+            numPublishersSent = mostRecentMessages.retrievePublishers(clientMachine,
+                                                                      topic,
+                                                                      Long.MAX_VALUE,
+                createPublisher -> DistributedMessageServer.this.send(createPublisher, clientMachine, 0));
+        } else {
+            numPublishersSent = 0;
+        }
+        LOGGER.log(Level.INFO,
+                   "Added subscriber : topic={0} subscriberName={1} clientMachine={2} numPublishersSent={3}",
+                  topic, subscriberName, clientMachine.getMachineId(), numPublishersSent);
+        if (subscriberInfo.shouldTryDownload()) {
+            download(clientMachine, topic, subscriberInfo.getClientTimestamp(), null, Long.MAX_VALUE);
         }
     }
     
+    private synchronized void handleRemoveSubscriber(ClientMachine clientMachine, RemoveSubscriber subscriberInfo) {
+        String topic = subscriberInfo.getTopic();
+        String subscriberName = subscriberInfo.getSubscriberName();
+        MultimapUtils<String, SubscriberEndpoint> multimap = new MultimapUtils<>(subscriberEndpointMap, ArrayList::new);
+        multimap.removeIf(topic, endpoint -> endpoint.getSubscriberName().equals(subscriberName));
+        LOGGER.log(Level.INFO, "Removed subscriber : topic={0} subscriberName={1} clientMachine={2}", topic, subscriberName, clientMachine.getMachineId());
+    }
+    
     private void handleRelayMessage(@Nonnull ClientMachine clientMachine, RelayMessageBase relay) {
-        relay.setSourceMachineIdAndResetIndex(clientMachine.getMachineId(), maxMessage.incrementAndGet());
+        relay.setServerTimestampAndSourceMachineIdAndIndex(clientMachine.getMachineId(), maxMessage.incrementAndGet());
         if (relay instanceof RelayTopicMessageBase) {
             handleRelayTopicMessage(clientMachine, (RelayTopicMessageBase) relay);
         }
     }
     
     private void handleRelayTopicMessage(ClientMachine clientMachine, RelayTopicMessageBase relay) {
-        mostRecentMessages.save(relay);
+        mostRecentMessages.save(clientMachine, relay);
         Collection<SubscriberEndpoint> endpoints = subscriberEndpointMap.get(relay.getTopic());
         if (endpoints != null) {
             endpoints.stream()
@@ -513,27 +600,45 @@ public class DistributedMessageServer implements Shutdowneable {
         send(request, clientMachine, 0);
     }
 
-    private void handleDowload(ClientMachine clientMachine, DownloadPublishedMessages download) {
-        long lowerBoundInclusive = download.getStartIndex();
-        long upperBoundInclusive = maxMessage.get();
-        int numMessages = mostRecentMessages.retrieveMessages(lowerBoundInclusive, upperBoundInclusive, publishMessage -> send(publishMessage, clientMachine, 0));
+    private void handleDownload(ClientMachine clientMachine, DownloadPublishedMessages download) {
+        download(clientMachine, null, null, download.getStartIndexInclusive(), download.getEndIndexInclusive());
+    }
+    
+    private void download(ClientMachine clientMachine,
+                          @Nullable String topic,
+                          @Nullable Long minClientTimestamp,
+                          Long lowerBoundInclusive,
+                          long upperBoundInclusive) {
+        int numMessages = mostRecentMessages.retrieveMessages(clientMachine,
+                                                              topic,
+                                                              minClientTimestamp,
+                                                              lowerBoundInclusive, 
+                                                              upperBoundInclusive,
+            publishMessage -> send(publishMessage, clientMachine, 0));
         LOGGER.log(Level.INFO, String.format("Download messages to client: clientMachine=%s numMessages=%d", clientMachine.getMachineId(), numMessages));
     }
 
     private void send(MessageBase message, ClientMachine clientMachine, int retry) {
         try {
             SocketTransformer.writeMessageToSocketAsync(message, Short.MAX_VALUE, clientMachine.getChannel())
-                             .thenAcceptAsync(unused -> LOGGER.log(Level.TRACE,
-                                                                   String.format("Sent message to client: clientMachine=%s, messageClass=%s, messageIndex=%d",
-                                                                                 clientMachine.getMachineId(),
-                                                                                 message.getClass().getSimpleName(),
-                                                                                 extractIndex(message))),
-                                              channelExecutor)
+                             .thenAcceptAsync(unused -> onMessageSent(clientMachine, message), channelExecutor)
                              .exceptionally(e -> retrySend(message, clientMachine, retry, e));
         } catch (IOException e) {
             LOGGER.log(Level.WARNING,
                        String.format("Send message failed: clientMachine=%s, retry=%d, retryDone=%b, exception=%s",
                                      clientMachine.getMachineId(), retry, true, e.toString()));
+        }
+    }
+    
+    private void onMessageSent(ClientMachine clientMachine, MessageBase message) {
+        LOGGER.log(Level.TRACE,
+                   String.format("Sent message to client: clientMachine=%s, messageClass=%s, messageIndex=%d",
+                                 clientMachine.getMachineId(),
+                                 message.getClass().getSimpleName(),
+                                 extractIndex(message)));
+        if (message instanceof RelayTopicMessageBase) {
+            RelayTopicMessageBase relayMessage = (RelayTopicMessageBase) message;
+            mostRecentMessages.onMessageRelayed(clientMachine, relayMessage);
         }
     }
     
@@ -543,8 +648,9 @@ public class DistributedMessageServer implements Shutdowneable {
         LOGGER.log(level, () -> String.format("Send message failed: clientMachine=%s, retry=%d, retryDone=%b, exception=%s",
                                               clientMachine.getMachineId(), retry, retryDone, e.toString()));
         if (!retryDone) {
-            int delay = 1 << retry;
-            retryExecutor.schedule(() -> send(message, clientMachine, retry + 1), delay, TimeUnit.SECONDS);
+            int nextRetry = retry + 1;
+            long delayMillis = computeExponentialBackoffMillis(1000, nextRetry, MAX_RETRIES);
+            retryExecutor.schedule(() -> send(message, clientMachine, nextRetry), delayMillis, TimeUnit.MILLISECONDS);
         }
         return null;
     }
@@ -566,13 +672,17 @@ public class DistributedMessageServer implements Shutdowneable {
      * Close all connections, close the socket server channel, and shutdown all executors.
      */
     private static class Cleanup extends CallStackCapturing implements Runnable {
-        private final Channel channel;
+        private final NetworkChannel channel;
         private final ExecutorService acceptExecutor;
         private final ExecutorService channelExecutor;
         private final ExecutorService retryExecutor;
         private final List<ClientMachine> clientMachines;
 
-        private Cleanup(Channel channel, ExecutorService acceptExecutor, ExecutorService channelExecutor, ExecutorService retryExecutor, List<ClientMachine> clientMachines) {
+        private Cleanup(NetworkChannel channel,
+                        ExecutorService acceptExecutor,
+                        ExecutorService channelExecutor,
+                        ExecutorService retryExecutor,
+                        List<ClientMachine> clientMachines) {
             this.channel = channel;
             this.acceptExecutor = acceptExecutor;
             this.channelExecutor = channelExecutor;
@@ -582,7 +692,7 @@ public class DistributedMessageServer implements Shutdowneable {
 
         @Override
         public void run() {
-            LOGGER.log(Level.DEBUG, "Shutting down " + DistributedMessageServer.class.getSimpleName() + getCallStack());
+            LOGGER.log(Level.DEBUG, "Shutting down " + DistributedMessageServer.class.getSimpleName() + " " + getLocalAddress(channel) + getCallStack());
             closeExecutorQuietly(acceptExecutor);
             closeExecutorQuietly(channelExecutor);
             closeExecutorQuietly(retryExecutor);

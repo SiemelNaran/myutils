@@ -16,33 +16,8 @@ interface MessageClasses {
     }
     
     
-    /**
-     * Messages originating from client and sent to server, which they may be relayed to other clients.
-     * Required field clientTimestamp, which is the time the client sent the message.
-     * Required field serverTimestamp, which is the time the server received the message, or 0 if the message is yet to be sent to the server.
-     */
-    abstract class ClientGeneratedMessage implements MessageBase {
-        private static final long serialVersionUID = 1L;
-        
-        private long clientTimestamp;
-        private long serverTimestamp;
-
-        ClientGeneratedMessage() {
-            this.clientTimestamp = System.currentTimeMillis();
-        }
-
-        void setServerTimestampToNow() {
-            this.serverTimestamp = System.currentTimeMillis();
-        }
-        
-        long getClientTimestamp() {
-            return clientTimestamp;
-        }
-        
-        long getServerTimestamp() {
-            return serverTimestamp;
-        }
-    }
+    //////////////////////////////////////////////////////////////////////
+    // Server generated messages
 
     /**
      * Messages originating from server and sent to client.
@@ -61,28 +36,6 @@ interface MessageClasses {
             return serverTimestamp;
         }
     }
-
-    /**
-     * Class sent by client to register itself to the server.
-     * Sent when client first connects to server.
-     * Required field machineId, which must be unique across all machines.
-     */
-    class Identification extends ClientGeneratedMessage {
-        private static final long serialVersionUID = 1L;
-        
-        private final String machineId;
-        
-        Identification(String machineId) {
-            this.machineId = machineId;
-        }
-        
-        String getMachineId() {
-            return machineId;
-        }
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // Server generated messages
 
     /**
      * Class sent by server to client to request identification.
@@ -113,28 +66,57 @@ interface MessageClasses {
     // Client generated messages
     
     /**
-     * Class to notify the server that we are subscribing to a particular topic, so that it sends us messages published to this topic.
-     * Required field topic and subscriberName.
+     * Messages originating from client and sent to server, which they may be relayed to other clients.
+     * Required field clientTimestamp, which is the time the client sent the message.
+     * Required field serverTimestamp, which is the time the server received the message, or 0 if the message is yet to be sent to the server.
      */
-    class AddOrRemoveSubscriber extends ClientGeneratedMessage {
+    abstract class ClientGeneratedMessage implements MessageBase {
         private static final long serialVersionUID = 1L;
         
-        private boolean add;
+        private long clientTimestamp;
+
+        ClientGeneratedMessage() {
+            this.clientTimestamp = System.currentTimeMillis();
+        }
+
+        long getClientTimestamp() {
+            return clientTimestamp;
+        }
+    }
+
+    /**
+     * Class sent by client to register itself to the server.
+     * Sent when client first connects to server.
+     * Required field machineId, which must be unique across all machines.
+     */
+    class Identification extends ClientGeneratedMessage {
+        private static final long serialVersionUID = 1L;
+        
+        private final String machineId;
+        
+        Identification(String machineId) {
+            this.machineId = machineId;
+        }
+        
+        String getMachineId() {
+            return machineId;
+        }
+    }
+
+    /**
+     * Class to notify the server that we are subscribing to or unsubscribing from a particular topic,
+     * so that it sends or stops sending us messages published to this topic.
+     * Required fields topic and subscriberName.
+     */
+    abstract class AddOrRemoveSubscriber extends ClientGeneratedMessage {
+        private static final long serialVersionUID = 1L;
+        
         private String topic;
         private String subscriberName;
 
-        public AddOrRemoveSubscriber(boolean add, String topic, String subscriberName) {
-            this.add = add;
+        public AddOrRemoveSubscriber(String topic, String subscriberName) {
             this.topic = topic;
             this.subscriberName = subscriberName;
-        }
-        
-        boolean isAddSubscriber() {
-            return add;
-        }
-        
-        boolean isRemoveSubscriber() {
-            return !add;
         }
         
         String getTopic() {
@@ -147,20 +129,57 @@ interface MessageClasses {
     }
     
     /**
+     * Class to notify the server that we are subscribing to a particular topic.
+     * Required field currentServerIndex.
+     */
+    class AddSubscriber extends AddOrRemoveSubscriber {
+        private static final long serialVersionUID = 1L;
+        
+        private boolean tryDownload;
+        
+        public AddSubscriber(String topic, String subscriberName, boolean tryDownload) {
+            super(topic, subscriberName);
+            this.tryDownload = tryDownload;
+        }
+
+        public boolean shouldTryDownload() {
+            return tryDownload;
+        }
+    }
+    
+    /**
+     * Class to notify the server that we are unsubscribing from a particular topic.
+     * No new required fields.
+     */
+    class RemoveSubscriber extends AddOrRemoveSubscriber {
+        private static final long serialVersionUID = 1L;
+        
+        public RemoveSubscriber(String topic, String subscriberName) {
+            super(topic, subscriberName);
+        }
+    }
+    
+    /**
      * Class send by client to download published messages with server index startIndex.
      * The server will send a PublishMessage object for each object that it has in its cache.
      */
     class DownloadPublishedMessages extends ClientGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
-        private long startIndex;
+        private long startIndexInclusive;
+        private long endIndexInclusive;
 
-        public DownloadPublishedMessages(long startIndex) {
-            this.startIndex = startIndex;
+        public DownloadPublishedMessages(long startIndexInclusive, long endIndexInclusive) {
+            this.startIndexInclusive = startIndexInclusive;
+            this.endIndexInclusive = endIndexInclusive;
         }
         
-        long getStartIndex() {
-            return startIndex;
+        long getStartIndexInclusive() {
+            return startIndexInclusive;
+        }
+        
+        long getEndIndexInclusive() {
+            return endIndexInclusive;
         }
     }
     
@@ -174,6 +193,7 @@ interface MessageClasses {
     abstract class RelayMessageBase extends ClientGeneratedMessage {
         private static final long serialVersionUID = 1L;
 
+        private long serverTimestamp;
         private String sourceMachineId;
         private long index;
         
@@ -184,9 +204,14 @@ interface MessageClasses {
             this.index = index;
         }
         
-        void setSourceMachineIdAndResetIndex(String sourceMachineId, long index) {
+        void setServerTimestampAndSourceMachineIdAndIndex(String sourceMachineId, long index) {
+            this.serverTimestamp = System.currentTimeMillis();
             this.sourceMachineId = sourceMachineId;
             this.index = index;
+        }
+        
+        long getServerTimestamp() {
+            return serverTimestamp;
         }
         
         String getSourceMachineId() {

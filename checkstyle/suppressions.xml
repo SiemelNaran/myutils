@@ -10,6 +10,7 @@
     <suppress files="/src/test" checks="LeftCurly"/>
     <suppress files="/src/test" checks="OneStatementPerLine"/>
     <suppress files="/src/test" checks="AbbreviationAsWordInName"/>
+    <suppress files="/src/test" checks="OneTopLevelClass"/>
 
     <suppress files="/src/test" id="LineLengthMain"/>
     <suppress files="/src/main" id="LineLengthTest"/>

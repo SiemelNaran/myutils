@@ -16,14 +16,18 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
-import myutils.pubsub.MessageClasses.RelayMessageBase;
 import myutils.pubsub.MessageClasses.MessageBase;
+import myutils.pubsub.MessageClasses.RelayMessageBase;
 
 
 class PubSubUtils {
     private static final Cleaner cleaner = Cleaner.create();
     
-    static abstract class CallStackCapturing {
+    /**
+     * A class whose constructor a few lines of the current thread's call stack.
+     * Used for recording when an object was created, so that it can be logged upon destruction.
+     */
+    abstract static class CallStackCapturing {
         private final StackTraceElement[] stackTrace;
 
         CallStackCapturing() {
@@ -52,6 +56,9 @@ class PubSubUtils {
     }
     
     static String getLocalAddress(NetworkChannel channel) {
+        if (channel == null) {
+            return "null";
+        }
         try {
             return channel.getLocalAddress().toString();
         } catch (IOException e) {
@@ -60,6 +67,9 @@ class PubSubUtils {
     }
 
     static String getRemoteAddress(SocketChannel channel) {
+        if (channel == null) {
+            return "null";
+        }
         try {
             return channel.getRemoteAddress().toString();
         } catch (IOException e) {
@@ -68,6 +78,9 @@ class PubSubUtils {
     }
 
     static String getRemoteAddress(AsynchronousSocketChannel channel) {
+        if (channel == null) {
+            return "null";
+        }
         try {
             return channel.getRemoteAddress().toString();
         } catch (IOException e) {
@@ -96,9 +109,44 @@ class PubSubUtils {
         }
     }
 
+    /**
+     * Tell if the exception reflects the fact that the socket is closed.
+     * The list includes EOFException and all of the exceptions declared in ...
+     */
     static boolean isClosed(Throwable throwable) {
         Throwable e = throwable instanceof CompletionException ? throwable.getCause() : throwable;
         return e instanceof EOFException || e instanceof ClosedChannelException || e instanceof AsynchronousCloseException || e instanceof ClosedByInterruptException;
+    }
+    
+    /**
+     * Calculate the exponential backoff delay.
+     * 
+     * @param baseMillis the time for the first event
+     * @param retryNumber one for the first call to this function
+     * @param capRetries if retryNumber is more than capRetries then set retryNumber to capRetires, to prevent exponential backoff from becoming too big
+     * @param jitterFraction add a small positive/negative random value to the returned value. Should typically be between [0, 0.20].
+     * @return the exponential backoff in milliseconds
+     */
+    static long computeExponentialBackoffMillis(long baseMillis, int retryNumber, int capRetries) {
+        int count = Math.min(retryNumber,  capRetries) - 1;
+        return baseMillis * (1 << count);
+    }
+    
+    /**
+     * Calculate the exponential backoff delay.
+     * 
+     * @param baseMillis the time for the first event
+     * @param retryNumber one for the first call to this function
+     * @param capRetries if retryNumber is more than capRetries then set retryNumber to capRetires, to prevent exponential backoff from becoming too big
+     * @param jitterFraction add a small positive/negative random value to the returned value. Should typically be between [0, 0.20].
+     * @return the exponential backoff in milliseconds
+     */
+    static long computeExponentialBackoffMillis(long baseMillis, int retryNumber, int capRetries, double jitterFraction) {
+        long backoff = computeExponentialBackoffMillis(baseMillis, retryNumber, capRetries);
+        double range = backoff * jitterFraction;
+        long delta = (long) (Math.random() * range + 0.5);
+        delta -= range / 2;
+        return backoff + delta;
     }
     
     static Long extractIndex(MessageBase message) {

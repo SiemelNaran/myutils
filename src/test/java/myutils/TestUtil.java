@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -60,6 +61,15 @@ public class TestUtil {
         return list;
     }
     
+    /**
+     * Convert a CompletionStage to a Future.
+     * Only works if the class inherits from Future, as CompletableFuture does.
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> Future<T> toFuture(CompletionStage<T> future) {
+        return (Future<T>) future;
+    }
+
     /**
      * Assert that the desired exception is thrown.
      * 
