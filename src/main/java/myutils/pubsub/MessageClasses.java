@@ -35,7 +35,7 @@ interface MessageClasses {
     abstract class ServerGeneratedMessage implements MessageBase {
         private static final long serialVersionUID = 1L;
 
-        private long serverTimestamp;
+        private final long serverTimestamp;
 
         ServerGeneratedMessage() {
             this.serverTimestamp = System.currentTimeMillis();
@@ -113,7 +113,7 @@ interface MessageClasses {
     abstract class ClientGeneratedMessage implements MessageBase {
         private static final long serialVersionUID = 1L;
         
-        private long clientTimestamp;
+        private final long clientTimestamp;
 
         ClientGeneratedMessage() {
             this.clientTimestamp = System.currentTimeMillis();
@@ -156,8 +156,8 @@ interface MessageClasses {
     abstract class AddOrRemoveSubscriber extends ClientGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
-        private String topic;
-        private String subscriberName;
+        private final String topic;
+        private final String subscriberName;
 
         public AddOrRemoveSubscriber(String topic, String subscriberName) {
             this.topic = topic;
@@ -184,7 +184,7 @@ interface MessageClasses {
     class AddSubscriber extends AddOrRemoveSubscriber {
         private static final long serialVersionUID = 1L;
         
-        private boolean tryDownload;
+        private final boolean tryDownload;
         
         public AddSubscriber(String topic, String subscriberName, boolean tryDownload) {
             super(topic, subscriberName);
@@ -225,8 +225,8 @@ interface MessageClasses {
     class DownloadPublishedMessages extends ClientGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
-        private long startServerIndexInclusive;
-        private long endServerIndexInclusive;
+        private final long startServerIndexInclusive;
+        private final long endServerIndexInclusive;
 
         public DownloadPublishedMessages(long startServerIndexInclusive, long endServerIndexInclusive) {
             this.startServerIndexInclusive = startServerIndexInclusive;
@@ -257,32 +257,21 @@ interface MessageClasses {
     abstract class RelayMessageBase extends ClientGeneratedMessage {
         private static final long serialVersionUID = 1L;
 
+        private final long clientIndex;
         private long serverTimestamp;
         private String sourceMachineId;
-        private long clientIndex;
         private long serverIndex; // 0 if message has not yet been sent to server
-        
-        RelayMessageBase() {
-        }
         
         RelayMessageBase(long clientIndex) {
             this.clientIndex = clientIndex;
         }
         
         void setServerTimestampAndSourceMachineIdAndIndex(String sourceMachineId, long serverIndex) {
+            this.serverIndex = serverIndex;
             this.serverTimestamp = System.currentTimeMillis();
             this.sourceMachineId = sourceMachineId;
-            this.serverIndex = serverIndex;
         }
         
-        long getServerTimestamp() {
-            return serverTimestamp;
-        }
-        
-        String getSourceMachineId() {
-            return sourceMachineId;
-        }
-
         long getClientIndex() {
             return clientIndex;
         }
@@ -291,12 +280,20 @@ interface MessageClasses {
             return serverIndex;
         }
 
+        long getServerTimestamp() {
+            return serverTimestamp;
+        }
+        
+        String getSourceMachineId() {
+            return sourceMachineId;
+        }
+
         String basicLoggingString() {
             return classType(this)
-                    + ", serverTimestamp=" + serverTimestamp
-                    + ", sourceMachineId=" + sourceMachineId
                     + ", clientIndex=" + clientIndex
-                    + ", serverIndex=" + serverIndex;
+                    + ", serverIndex=" + serverIndex
+                    + ", serverTimestamp=" + serverTimestamp
+                    + ", sourceMachineId=" + sourceMachineId;
         }
     }
     
