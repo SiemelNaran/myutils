@@ -9,10 +9,19 @@ import javax.annotation.Nonnull;
  */
 interface MessageClasses {
     
+    interface LoggingString {
+        String toLoggingString();
+    }
+    
     /**
      * This base class of all messages sent between client and server.
      */
-    interface MessageBase extends Serializable {
+    interface MessageBase extends Serializable, LoggingString {
+    }
+    
+    
+    private static String classType(MessageBase message) {
+        return "class=" + message.getClass().getSimpleName();
     }
     
     
@@ -60,6 +69,11 @@ interface MessageClasses {
         long getFailedClientIndex() {
             return failedClientIndex;
         }
+
+        @Override
+        public String toLoggingString() {
+            return classType(this) + ", classOfMessageToResend=" + classOfMessageToResend.getSimpleName() + ", failedClientIndex=" + failedClientIndex;
+        }
     }
     
     class InvalidRelayMessage extends ServerGeneratedMessage {
@@ -79,6 +93,11 @@ interface MessageClasses {
 
         public String getError() {
             return error;
+        }
+
+        @Override
+        public String toLoggingString() {
+            return classType(this) + ", failedClientIndex=" + failedClientIndex + ", error='" + error + "'";
         }
     }
 
@@ -122,6 +141,11 @@ interface MessageClasses {
         String getMachineId() {
             return machineId;
         }
+
+        @Override
+        public String toLoggingString() {
+            return classType(this) + "machineId=" + machineId;
+        }
     }
 
     /**
@@ -147,6 +171,10 @@ interface MessageClasses {
         String getSubscriberName() {
             return subscriberName;
         }
+
+        private String basicLoggingString() {
+            return classType(this) + ", topic=" + topic + ", subscriberName=" + subscriberName;
+        }
     }
     
     /**
@@ -166,6 +194,11 @@ interface MessageClasses {
         public boolean shouldTryDownload() {
             return tryDownload;
         }
+
+        @Override
+        public String toLoggingString() {
+            return super.basicLoggingString() + ", tryDownload=" + tryDownload;
+        }
     }
     
     /**
@@ -177,6 +210,11 @@ interface MessageClasses {
         
         public RemoveSubscriber(String topic, String subscriberName) {
             super(topic, subscriberName);
+        }
+
+        @Override
+        public String toLoggingString() {
+            return super.basicLoggingString();
         }
     }
     
@@ -201,6 +239,11 @@ interface MessageClasses {
         
         long getEndServerIndexInclusive() {
             return endServerIndexInclusive;
+        }
+
+        @Override
+        public String toLoggingString() {
+            return classType(this) + ", startServerIndexInclusive=" + startServerIndexInclusive + ", endServerIndexInclusive=" + endServerIndexInclusive;
         }
     }
     
@@ -247,6 +290,14 @@ interface MessageClasses {
         long getServerIndex() {
             return serverIndex;
         }
+
+        String basicLoggingString() {
+            return classType(this)
+                    + ", serverTimestamp=" + serverTimestamp
+                    + ", sourceMachineId=" + sourceMachineId
+                    + ", clientIndex=" + clientIndex
+                    + ", serverIndex=" + serverIndex;
+        }
     }
     
     /**
@@ -264,6 +315,11 @@ interface MessageClasses {
         
         String getTopic() {
             return topic;
+        }
+        
+        @Override
+        String basicLoggingString() {
+            return super.basicLoggingString() + ", topic=" + topic;
         }
     }
     
@@ -283,6 +339,11 @@ interface MessageClasses {
         Class<?> getPublisherClass() {
             return publisherClass;
         }
+
+        @Override
+        public String toLoggingString() {
+            return super.basicLoggingString() + ", publisherClass=" + publisherClass.getSimpleName();
+        }
     }
     
     
@@ -292,13 +353,11 @@ interface MessageClasses {
     class PublishMessage extends RelayTopicMessageBase {
         private static final long serialVersionUID = 1L;
         
-        private final @Nonnull String topic;
         private final @Nonnull CloneableObject<?> message;
         private final @Nonnull MessagePriority priority;
         
         PublishMessage(long clientIndex, @Nonnull String topic, @Nonnull CloneableObject<?> message, MessagePriority priority) {
             super(clientIndex, topic);
-            this.topic = topic;
             this.message = message;
             this.priority = priority;
         }
@@ -309,6 +368,11 @@ interface MessageClasses {
         
         MessagePriority getPriority() {
             return priority;
+        }
+
+        @Override
+        public String toLoggingString() {
+            return super.basicLoggingString() + ", message.estimateBytes=" + message.getNumBytes() + ", priority=" + priority;
         }
     } 
 }

@@ -219,10 +219,9 @@ public class DistributedSocketPubSub extends PubSub {
 
         private CompletableFuture<Void> send(MessageBase message) {
             LOGGER.log(Level.TRACE,
-                       String.format("Sending message to server: clientMachine=%s, messageClass=%s, index=%d",
+                       String.format("Sending message to server: clientMachine=%s, %s",
                                      machineId,
-                                     message.getClass().getSimpleName(),
-                                     extractIndex(message)));
+                                     message.toLoggingString()));
             CompletableFuture<Void> future = new CompletableFuture<Void>();
             send(future, message, 0);
             return future;
@@ -299,11 +298,9 @@ public class DistributedSocketPubSub extends PubSub {
                 try {
                     MessageBase message = SocketTransformer.readMessageFromSocket(channel);
                     LOGGER.log(Level.TRACE,
-                               String.format("Received message from server: clientMachine=%s, messageClass=%s, index=%d, sourceMachine=%s",
+                               String.format("Received message from server: clientMachine=%s, %s",
                                              DistributedSocketPubSub.this.machineId,
-                                             message.getClass().getSimpleName(),
-                                             extractIndex(message),
-                                             extractSourceMachine(message)));
+                                             message.toLoggingString()));
                     DistributedSocketPubSub.this.onMessageReceived(message);
                     if (message instanceof CreatePublisher) {
                         CreatePublisher createPublisher = (CreatePublisher) message;
