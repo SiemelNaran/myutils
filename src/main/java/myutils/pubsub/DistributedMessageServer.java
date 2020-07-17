@@ -359,7 +359,7 @@ public class DistributedMessageServer implements Shutdowneable {
     private void openServerSocket() throws IOException {
         onBeforeSocketBound(asyncServerSocketChannel);
         asyncServerSocketChannel.bind(new InetSocketAddress(host, port));
-        LOGGER.log(Level.INFO, String.format("Started DistributedMessageServer: localHostAndPort=%s:%d, localMachine=%s", host, port, getLocalAddress(asyncServerSocketChannel)));
+        LOGGER.log(Level.INFO, String.format("Started DistributedMessageServer: localHostAndPort=%s:%d, localServer=%s", host, port, getLocalAddress(asyncServerSocketChannel)));
     }
     
     /**
@@ -406,11 +406,7 @@ public class DistributedMessageServer implements Shutdowneable {
         }
         
         private void handle(AsynchronousSocketChannel channel, MessageBase message) {
-            LOGGER.log(Level.TRACE,
-                       String.format("Received message from client: clientMachine=%s, messageClass=%s, messageIndex=%d",
-                                     getRemoteAddress(channel),
-                                     message.getClass().getSimpleName(),
-                                     extractIndex(message)));
+            String unhandledClientMachine = null;
             if (message instanceof ClientGeneratedMessage) {
                 if (message instanceof Identification) {
                     Identification identification = (Identification) message;
@@ -423,23 +419,39 @@ public class DistributedMessageServer implements Shutdowneable {
                         RelayMessageBase relayMessage = (RelayMessageBase) message;
                         DistributedMessageServer.this.sendInvalidRelayMessage(clientMachine, relayMessage, ErrorMessageEnum.MESSAGE_ALREADY_PROCESSED.format(relayMessage.getClientIndex()));
                     } else {
-                        onValidMessageReceived(message);
+                        Runnable logging = () -> {
+                            LOGGER.log(Level.TRACE,
+                                       String.format("Received message from client: clientMachine=%s, %s",
+                                                     clientMachine.getMachineId(),
+                                                     message.toLoggingString()));
+                            onValidMessageReceived(message);
+                        };
                         if (message instanceof AddSubscriber) {
+                            logging.run();
                             DistributedMessageServer.this.handleAddSubscriber(clientMachine, (AddSubscriber) message);
                         } else if (message instanceof RemoveSubscriber) {
+                            logging.run();
                             DistributedMessageServer.this.handleRemoveSubscriber(clientMachine, (RemoveSubscriber) message);
                         } else if (message instanceof RelayMessageBase) {
+                            logging.run();
                             RelayMessageBase relayMessage = (RelayMessageBase) message;
                             DistributedMessageServer.this.handleRelayMessage(clientMachine, relayMessage);
                         } else if (message instanceof DownloadPublishedMessages) {
+                            logging.run();
                             DistributedMessageServer.this.handleDownload(clientMachine, (DownloadPublishedMessages) message);
                         } else {
-                            LOGGER.log(Level.DEBUG, "Unhandled message {0}", message.getClass().getSimpleName());
+                            unhandledClientMachine = clientMachine.getMachineId();
                         }
                     }
                 }
             } else {
-                LOGGER.log(Level.DEBUG, "Unhandled message {0}", message.getClass().getSimpleName());
+                unhandledClientMachine = getRemoteAddress(channel);
+            }
+            if (unhandledClientMachine != null) {
+                LOGGER.log(Level.DEBUG,
+                           String.format("Unhandled message from client: clientMachine=%s, %s",
+                                         unhandledClientMachine,
+                                         message.toLoggingString()));
             }
         }
         
@@ -458,7 +470,7 @@ public class DistributedMessageServer implements Shutdowneable {
         
         private void logChannelClosed() {
             ClientMachine clientMachine = DistributedMessageServer.this.findClientMachineByChannel(channel);
-            LOGGER.log(Level.DEBUG, "Channel closed: clientMachine={0}", clientMachine != null ? clientMachine.getMachineId() : "<unknown>");
+            LOGGER.log(Level.INFO, "Channel closed: clientMachine={0}", clientMachine != null ? clientMachine.getMachineId() : "<unknown>");
         }
         
         private void logException(Throwable e) {
