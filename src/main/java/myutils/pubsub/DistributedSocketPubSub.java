@@ -4,8 +4,6 @@ import static myutils.pubsub.PubSubUtils.addShutdownHook;
 import static myutils.pubsub.PubSubUtils.closeExecutorQuietly;
 import static myutils.pubsub.PubSubUtils.closeQuietly;
 import static myutils.pubsub.PubSubUtils.computeExponentialBackoffMillis;
-import static myutils.pubsub.PubSubUtils.extractIndex;
-import static myutils.pubsub.PubSubUtils.extractSourceMachine;
 import static myutils.pubsub.PubSubUtils.getLocalAddress;
 import static myutils.pubsub.PubSubUtils.getRemoteAddress;
 import static myutils.pubsub.PubSubUtils.isClosed;

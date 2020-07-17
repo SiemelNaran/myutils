@@ -7,7 +7,7 @@ import java.io.Serializable;
  * The interface for an object which can be passed between JVMs.
  * It implements Serializable and has a clone function.
  *
- * @param <T> the type of the object which must implement CloneableObject<T> 
+ * @param <T> the type of the object which must implement CloneableObject&larr;T&rarr; 
  */
 public interface CloneableObject<T> extends Cloneable, Serializable {
     /**

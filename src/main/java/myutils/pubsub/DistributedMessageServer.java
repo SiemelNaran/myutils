@@ -417,7 +417,9 @@ public class DistributedMessageServer implements Shutdowneable {
                         sendRequestIdentification(channel, message);
                     } else if (message instanceof RelayMessageBase && ((RelayMessageBase) message).getServerIndex() != 0) {
                         RelayMessageBase relayMessage = (RelayMessageBase) message;
-                        DistributedMessageServer.this.sendInvalidRelayMessage(clientMachine, relayMessage, ErrorMessageEnum.MESSAGE_ALREADY_PROCESSED.format(relayMessage.getClientIndex()));
+                        DistributedMessageServer.this.sendInvalidRelayMessage(clientMachine,
+                                                                              relayMessage,
+                                                                              ErrorMessageEnum.MESSAGE_ALREADY_PROCESSED.format(relayMessage.getClientIndex()));
                     } else {
                         Runnable logging = () -> {
                             LOGGER.log(Level.TRACE,
@@ -648,7 +650,7 @@ public class DistributedMessageServer implements Shutdowneable {
     private void send(MessageBase message, ClientMachine clientMachine, int retry) {
         try {
             SocketTransformer.writeMessageToSocketAsync(message, Short.MAX_VALUE, clientMachine.getChannel())
-                             .thenAcceptAsync(unused -> onMessageSent(clientMachine, message), channelExecutor)
+                             .thenAcceptAsync(unused -> afterMessageSent(clientMachine, message), channelExecutor)
                              .exceptionally(e -> retrySend(message, clientMachine, retry, e));
         } catch (IOException e) {
             LOGGER.log(Level.WARNING,
@@ -657,7 +659,7 @@ public class DistributedMessageServer implements Shutdowneable {
         }
     }
     
-    private void onMessageSent(ClientMachine clientMachine, MessageBase message) {
+    private void afterMessageSent(ClientMachine clientMachine, MessageBase message) {
         LOGGER.log(Level.TRACE,
                    String.format("Sent message to client: clientMachine=%s, messageClass=%s, messageIndex=%d",
                                  clientMachine.getMachineId(),
