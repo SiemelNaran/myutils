@@ -9,6 +9,10 @@ import javax.annotation.Nonnull;
  */
 interface MessageClasses {
     
+    /**
+     * A method toLoggingString that can be used for logging purposes.
+     * Derived classes should only log meta-data, not the content of messages as this may include personally identifiable information.
+     */
     interface LoggingString {
         String toLoggingString();
     }
@@ -19,6 +23,12 @@ interface MessageClasses {
     interface MessageBase extends Serializable, LoggingString {
     }
     
+    /**
+     * If a message can be resent to the server after it was already send and received, it should inherit from this class.
+     */
+    interface Resendable {
+        boolean isResend();
+    }
     
     private static String classType(MessageBase message) {
         return "class=" + message.getClass().getSimpleName();
@@ -144,7 +154,7 @@ interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return classType(this) + "machineId=" + machineId;
+            return classType(this) + ", machineId=" + machineId;
         }
     }
 
@@ -181,14 +191,16 @@ interface MessageClasses {
      * Class to notify the server that we are subscribing to a particular topic.
      * Required field shouldTryDownload.
      */
-    class AddSubscriber extends AddOrRemoveSubscriber {
+    class AddSubscriber extends AddOrRemoveSubscriber implements Resendable {
         private static final long serialVersionUID = 1L;
         
         private final boolean tryDownload;
+        private final boolean isResend;
         
-        public AddSubscriber(String topic, String subscriberName, boolean tryDownload) {
+        public AddSubscriber(String topic, String subscriberName, boolean tryDownload, boolean isResend) {
             super(topic, subscriberName);
             this.tryDownload = tryDownload;
+            this.isResend = isResend;
         }
 
         public boolean shouldTryDownload() {
@@ -196,8 +208,13 @@ interface MessageClasses {
         }
 
         @Override
+        public boolean isResend() {
+            return isResend;
+        }
+        
+        @Override
         public String toLoggingString() {
-            return super.basicLoggingString() + ", tryDownload=" + tryDownload;
+            return super.basicLoggingString() + ", tryDownload=" + tryDownload + ", isResend=" + isResend;
         }
     }
     
@@ -247,6 +264,39 @@ interface MessageClasses {
         }
     }
     
+    class RelayFields implements Serializable {
+        private static final long serialVersionUID = 1L;
+        
+        private final long serverTimestamp;
+        private final long serverIndex;
+        private final String sourceMachineId;
+        
+        RelayFields(long serverTimestamp, long serverIndex, String sourceMachineId) {
+            this.serverTimestamp = serverTimestamp;
+            this.serverIndex = serverIndex;
+            this.sourceMachineId = sourceMachineId;
+        }
+        
+        long getServerTimestamp() {
+            return serverTimestamp;
+        }
+        
+        long getServerIndex() {
+            return serverIndex;
+        }
+
+        String getSourceMachineId() {
+            return sourceMachineId;
+        }
+
+        @Override
+        public String toString() {
+            return "serverTimestamp=" + serverTimestamp
+                    + ", serverIndex=" + serverIndex
+                    + ", sourceMachineId=" + sourceMachineId;
+        }
+    }
+    
     /**
      * Base class of all messages that can be relayed from one client to another via the server.
      * Required field sourceMachineId, which is the machine sending the message. The field is set by server.
@@ -258,42 +308,28 @@ interface MessageClasses {
         private static final long serialVersionUID = 1L;
 
         private final long clientIndex;
-        private long serverTimestamp;
-        private String sourceMachineId;
-        private long serverIndex; // 0 if message has not yet been sent to server
+        private RelayFields relayFields; // null before message sent to server
         
         RelayMessageBase(long clientIndex) {
             this.clientIndex = clientIndex;
         }
         
-        void setServerTimestampAndSourceMachineIdAndIndex(String sourceMachineId, long serverIndex) {
-            this.serverIndex = serverIndex;
-            this.serverTimestamp = System.currentTimeMillis();
-            this.sourceMachineId = sourceMachineId;
+        void setRelayFields(RelayFields relayFields) {
+            this.relayFields = relayFields;
         }
         
         long getClientIndex() {
             return clientIndex;
         }
-
-        long getServerIndex() {
-            return serverIndex;
-        }
-
-        long getServerTimestamp() {
-            return serverTimestamp;
-        }
         
-        String getSourceMachineId() {
-            return sourceMachineId;
+        RelayFields getRelayFields() {
+            return relayFields;
         }
 
         String basicLoggingString() {
             return classType(this)
                     + ", clientIndex=" + clientIndex
-                    + ", serverIndex=" + serverIndex
-                    + ", serverTimestamp=" + serverTimestamp
-                    + ", sourceMachineId=" + sourceMachineId;
+                    + ", " + relayFields;
         }
     }
     
@@ -323,14 +359,16 @@ interface MessageClasses {
     /**
      * Action representing the createPublisher command.
      */
-    class CreatePublisher extends RelayTopicMessageBase {
+    class CreatePublisher extends RelayTopicMessageBase implements Resendable {
         private static final long serialVersionUID = 1L;
         
         private final @Nonnull Class<?> publisherClass;
+        private final boolean isResend;
 
-        CreatePublisher(long clientIndex, @Nonnull String topic, @Nonnull Class<?> publisherClass) {
+        CreatePublisher(long clientIndex, @Nonnull String topic, @Nonnull Class<?> publisherClass, boolean isResend) {
             super(clientIndex, topic);
             this.publisherClass = publisherClass;
+            this.isResend = isResend;
         }
 
         Class<?> getPublisherClass() {
@@ -338,8 +376,13 @@ interface MessageClasses {
         }
 
         @Override
+        public boolean isResend() {
+            return isResend;
+        }
+
+        @Override
         public String toLoggingString() {
-            return super.basicLoggingString() + ", publisherClass=" + publisherClass.getSimpleName();
+            return super.basicLoggingString() + ", publisherClass=" + publisherClass.getSimpleName() + ", isResend=" + isResend;
         }
     }
     

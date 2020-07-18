@@ -10,6 +10,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
@@ -22,6 +23,8 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+
 import javax.annotation.Nonnull;
 import myutils.pubsub.PubSubUtils.CallStackCapturing;
 import myutils.util.MultimapUtils;
@@ -125,9 +128,16 @@ public abstract class PubSub implements Shutdowneable {
             this.publisherClass = publisherClass;
         }
 
-        @Nonnull
-        public String getTopic() {
+        public @Nonnull String getTopic() {
             return topic;
+        }
+        
+        protected @Nonnull Class<?> getPublisherClass() {
+            return publisherClass;
+        }
+        
+        protected @Nonnull List<String> getSubsciberNames() {
+            return subscribers.stream().map(Subscriber::getSubscriberName).collect(Collectors.toList());
         }
         
         public final <T extends CloneableObject<?>> void publish(@Nonnull T message) {
@@ -226,6 +236,13 @@ public abstract class PubSub implements Shutdowneable {
     public final synchronized Optional<Publisher> getPublisher(String topic) {
         var publisher = topicMap.get(topic);
         return Optional.ofNullable(publisher);
+    }
+
+    /**
+     * Apply an action to all publishers.
+     */
+    protected final synchronized void forEachPublisher(Consumer<Publisher> action) {
+        topicMap.values().forEach(action);
     }
 
     private void addDeferredSubscribers(Publisher publisher) {
