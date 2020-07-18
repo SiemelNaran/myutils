@@ -3,7 +3,7 @@ package myutils.pubsub;
 import static myutils.pubsub.PubSubUtils.addShutdownHook;
 import static myutils.pubsub.PubSubUtils.closeExecutorQuietly;
 import static myutils.pubsub.PubSubUtils.closeQuietly;
-import static myutils.pubsub.PubSubUtils.computeExponentialBackoffMillis;
+import static myutils.pubsub.PubSubUtils.computeExponentialBackoff;
 import static myutils.pubsub.PubSubUtils.getLocalAddress;
 import static myutils.pubsub.PubSubUtils.getRemoteAddress;
 import static myutils.pubsub.PubSubUtils.isClosed;
@@ -16,6 +16,7 @@ import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.nio.channels.AlreadyConnectedException;
 import java.nio.channels.NetworkChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Optional;
@@ -26,6 +27,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -42,6 +44,8 @@ import myutils.pubsub.MessageClasses.Identification;
 import myutils.pubsub.MessageClasses.InvalidRelayMessage;
 import myutils.pubsub.MessageClasses.MessageBase;
 import myutils.pubsub.MessageClasses.PublishMessage;
+import myutils.pubsub.MessageClasses.RelayFields;
+import myutils.pubsub.MessageClasses.RelayMessageBase;
 import myutils.pubsub.MessageClasses.RemoveSubscriber;
 import myutils.pubsub.PubSubUtils.CallStackCapturing;
 
@@ -50,6 +54,7 @@ import myutils.pubsub.PubSubUtils.CallStackCapturing;
  * 
  * <p>When a DistributedPubSub is started it connects to the DistributedMessageServer, and identifies itself to the server.
  * The identification includes the client's name, and must be unique across all machines in the system.
+ * If the DistributedMessageServer is not available, this class attempts to connect to the DistributedPubSub again which capped exponential backoff. 
  * 
  * <p>Since this class inherits from PubSub, it also implements the in-memory publish/subscribe system.
  * 
@@ -65,24 +70,31 @@ import myutils.pubsub.PubSubUtils.CallStackCapturing;
  * one thread that sends messages to the server,
  * and another that handles retires with exponential backoff.
  * 
+ * <p>If the DistributedMessageServer dies, this DistributedPubSub detects it and stops the reader and writer threads
+ * and attempts to connect to the DistributedPubSub again which capped exponential backoff.
+ * Upon getting connected this class resends all publishers it created and topics it subscribed to.
+ * This is to tell the new DistributedMessageServer the publishers and subscribers that exist, in case the DistributedMessageServer does not have a copy of them.
+ * 
  * <p>About messages sent between client and server:
  * The first two bytes are the length of the message.
  * The next N bytes is the message, when serialized and converted to a byte stream.
  */
 public class DistributedSocketPubSub extends PubSub {
     private static final System.Logger LOGGER = System.getLogger(DistributedSocketPubSub.class.getName());
-    private static final ThreadLocal<Boolean> isRemoteThread = new ThreadLocal<>();
+    private static final ThreadLocal<RelayMessageBase> remoteRelayMessage = new ThreadLocal<>();
     private static final int MAX_RETRIES = 3;
-
+    
     private String messageServerHost;
     private int messageServerPort;
     private final String machineId;
+    private final SocketAddress localAddress;
     private final AtomicReference<SocketChannel> channelHolder;
-    private final ExecutorService channelExecutor = Executors.newFixedThreadPool(2, createThreadFactory("DistributedPubSub"));
-    private final ScheduledExecutorService retryExecutor = Executors.newScheduledThreadPool(1, createThreadFactory("DistributedPubSub.Retry"));
+    private final ExecutorService channelExecutor = Executors.newFixedThreadPool(2, createThreadFactory("DistributedSocketPubSub"));
+    private final ScheduledExecutorService retryExecutor = Executors.newScheduledThreadPool(1, createThreadFactory("DistributedSocketPubSub.Retry"));
     private final MessageWriter messageWriter;
     private final AtomicLong localMaxMessage = new AtomicLong();
     private final Cleanable cleanable;
+    private volatile Future<?> messageWriterTask;
 
     /**
      * Create an in-memory publish/subscribe system and also talk to a central
@@ -110,14 +122,15 @@ public class DistributedSocketPubSub extends PubSub {
         this.messageServerHost = messageServerHost;
         this.messageServerPort = messageServerPort;
         this.machineId = machineId != null ? machineId : InetAddress.getLocalHost().getHostName();
-        this.channelHolder = new AtomicReference<>(createNewSocket(new InetSocketAddress(localServer, localPort)));
+        this.localAddress = new InetSocketAddress(localServer, localPort);
+        this.channelHolder = new AtomicReference<>(createNewSocket());
         this.messageWriter = createMessageWriter(this.machineId, messageServerHost, messageServerPort);
         this.cleanable = addShutdownHook(this,
                                          new Cleanup(machineId, channelHolder, channelExecutor, retryExecutor),
                                          DistributedSocketPubSub.class);
     }
     
-    private SocketChannel createNewSocket(SocketAddress localAddress) throws IOException {
+    private SocketChannel createNewSocket() throws IOException {
         var channel = SocketChannel.open();
         onBeforeSocketBound(channel);
         channel.bind(localAddress);
@@ -132,44 +145,69 @@ public class DistributedSocketPubSub extends PubSub {
     }
 
     /**
-     * Start the message client.
+     * Start the message client by connecting to the server and starting all threads.
+     * Returns a future that is resolved when everything starts, or rejected if starting fails.
+     * If the server is not available, retries connecting to the server with exponential backoff starting at 1 second, 2 seconds, 4 seconds, 8 seconds, 8 seconds.
+     * If there was another IOException in starting the future is rejected with this exception.
      * 
-     * @throws IOException if there was an error connecting to the messageServerHost:messageServerPost or any other IOException
+     * @throws java.util.concurrent.RejectedExecutionException if client was shutdown
      */
     public CompletionStage<Void> start() {
+        return doStart(false);
+    }
+    
+    private CompletionStage<Void> doStart(boolean sendAllPublishersAndSubscribers) {
         CompletableFuture<Void> future = new CompletableFuture<>();
-        retryExecutor.submit(() -> doStart(future, 0));
+        retryExecutor.submit(() -> doStart(sendAllPublishersAndSubscribers, future, 0));
         return future;
     }
     
-    private void doStart(CompletableFuture<Void> future, int retry) {
-        String snippet = String.format("DistributedPubSub clientMachine=%s centralServer=%s:%d",
+    private void doStart(boolean sendAllPublishersAndSubscribers, CompletableFuture<Void> future, int retry) {
+        String snippet = String.format("DistributedSocketPubSub clientMachine=%s centralServer=%s:%d",
                                        machineId,
                                        messageServerHost,
                                        messageServerPort);
         try {
             var channel = channelHolder.get();
-            var localAddress = channel.getLocalAddress();
+            if (channel.isConnected()) {
+                future.completeExceptionally(new AlreadyConnectedException());
+                return;
+            }
             try {
                 channel.connect(new InetSocketAddress(messageServerHost, messageServerPort));
-                LOGGER.log(Level.INFO, String.format("Started %s: localAddress=%s remoteAddress=%s", snippet, getLocalAddress(channel), getRemoteAddress(channel)));
+                LOGGER.log(Level.INFO, String.format("Started %s, localAddress=%s remoteAddress=%s", snippet, getLocalAddress(channel), getRemoteAddress(channel)));
                 messageWriter.blockingSendIdentification();
-                channelExecutor.submit(messageWriter);
+                if (sendAllPublishersAndSubscribers) {
+                    doSendAllPublishersAndSubscribers();
+                }
+                messageWriterTask = channelExecutor.submit(messageWriter);
                 channelExecutor.submit(new MessageReader());
                 future.complete(null);
             } catch (ConnectException e) {
                 int nextRetry = retry + 1;
-                long delayMillis = computeExponentialBackoffMillis(1000, nextRetry, 4);
-                this.channelHolder.set(createNewSocket(localAddress));
+                long delayMillis = computeExponentialBackoff(1000, nextRetry, 4);
+                this.channelHolder.set(createNewSocket());
                 LOGGER.log(Level.INFO, String.format("Failed to connect %s. Retrying in %d millis...", snippet, delayMillis));
-                retryExecutor.schedule(() -> doStart(future, nextRetry), delayMillis, TimeUnit.MILLISECONDS);
+                retryExecutor.schedule(() -> doStart(sendAllPublishersAndSubscribers, future, nextRetry), delayMillis, TimeUnit.MILLISECONDS);
             }
-        } catch (IOException e) {
-            LOGGER.log(Level.WARNING, String.format("Failed to connect %s: %s", snippet, e.toString()));
+        } catch (IOException | RuntimeException | Error e) {
+            LOGGER.log(Level.ERROR, String.format("Failed to start %s: %s", snippet, e.toString()));
             future.completeExceptionally(e);
         }
     }
     
+    private void doSendAllPublishersAndSubscribers() {
+       this.forEachPublisher(basePublisher -> {
+           DistributedPublisher publisher = (DistributedPublisher) basePublisher;
+           if (!publisher.isRemote()) {
+               messageWriter.createPublisher(publisher.getTopic(), publisher.getPublisherClass(), publisher.getRemoteRelayFields(), /*isResend*/ true);
+           }
+           for (var subscriberName : publisher.getSubsciberNames()) {
+               messageWriter.addSubscriber(publisher.getTopic(), subscriberName, /*isResend*/ true);
+           }
+       });
+    }
+
     /**
      * Download as many messages starting with startIndex from the server.
      * The server does not retain messages forever, so it may not find the oldest messages.
@@ -229,6 +267,7 @@ public class DistributedSocketPubSub extends PubSub {
             try {
                 DistributedSocketPubSub.this.onBeforeSendMessage(message);
                 SocketTransformer.writeMessageToSocket(message, Short.MAX_VALUE, channelHolder.get());
+                DistributedSocketPubSub.this.onMessageSent(message);
                 future.complete(null);
             } catch (IOException e) {
                 boolean retryDone = retry >= MAX_RETRIES || isClosed(e);
@@ -238,7 +277,7 @@ public class DistributedSocketPubSub extends PubSub {
                                         machineId, retry, retryDone, e.toString()));
                 if (!retryDone) {
                     int nextRetry = retry + 1;
-                    long delayMillis = computeExponentialBackoffMillis(1000, nextRetry, MAX_RETRIES);
+                    long delayMillis = computeExponentialBackoff(1000, nextRetry, MAX_RETRIES);
                     retryExecutor.schedule(() -> send(future, message, nextRetry), delayMillis, TimeUnit.MILLISECONDS);
                 } else {
                     future.completeExceptionally(e);
@@ -246,26 +285,24 @@ public class DistributedSocketPubSub extends PubSub {
             }
         }
 
-        private void addSubscriber(@Nonnull String topic, @Nonnull String subscriberName) {
-            internalPutMessage(new AddSubscriber(topic, subscriberName, true));
+        private void addSubscriber(@Nonnull String topic, @Nonnull String subscriberName, boolean isResend) {
+            internalPutMessage(new AddSubscriber(topic, subscriberName, true, isResend));
         }
 
         private void removeSubscriber(@Nonnull String topic, @Nonnull String subscriberName) {
             internalPutMessage(new RemoveSubscriber(topic, subscriberName));
         }
 
-        private void createPublisher(@Nonnull String topic, @Nonnull Class<?> publisherClass) {
-            if (isRemoteThread.get() == Boolean.TRUE) {
-                return;
-            }
-            internalPutMessage(new CreatePublisher(localMaxMessage.incrementAndGet(), topic, publisherClass));
+        private void createPublisher(@Nonnull String topic, @Nonnull Class<?> publisherClass, RelayFields relayFields, boolean isResend) {
+            var createPublisher = new CreatePublisher(localMaxMessage.incrementAndGet(), topic, publisherClass, isResend);
+            createPublisher.setRelayFields(relayFields);
+            internalPutMessage(createPublisher);
         }
 
-        private void publishMessage(@Nonnull String topic, @Nonnull CloneableObject<?> message, MessagePriority priority) {
-            if (isRemoteThread.get() == Boolean.TRUE) {
-                return;
-            }
-            internalPutMessage(new PublishMessage(localMaxMessage.incrementAndGet(), topic, message, priority));
+        private void publishMessage(@Nonnull String topic, @Nonnull CloneableObject<?> message, MessagePriority priority, RelayFields relayFields) {
+            var publishMessage = new PublishMessage(localMaxMessage.incrementAndGet(), topic, message, priority);
+            publishMessage.setRelayFields(relayFields);
+            internalPutMessage(publishMessage);
         }
 
         public void download(long startIndexInclusive, long endIndexInclusive) {
@@ -279,6 +316,13 @@ public class DistributedSocketPubSub extends PubSub {
                 throw new RuntimeException(e);
             }
         }
+
+        public void interrupt() {
+            if (messageWriterTask != null) {
+                messageWriterTask.cancel(true);
+                messageWriterTask = null;
+            }
+        }
     }
 
     /**
@@ -290,7 +334,8 @@ public class DistributedSocketPubSub extends PubSub {
 
         @Override
         public void run() {
-            isRemoteThread.set(Boolean.TRUE);
+            boolean attemptRestart = false;
+            
             var channel = channelHolder.get();
             while (channel.isConnected()) {
                 try {
@@ -302,10 +347,12 @@ public class DistributedSocketPubSub extends PubSub {
                     DistributedSocketPubSub.this.onMessageReceived(message);
                     if (message instanceof CreatePublisher) {
                         CreatePublisher createPublisher = (CreatePublisher) message;
+                        remoteRelayMessage.set(createPublisher);
                         DistributedSocketPubSub.this.createPublisher(createPublisher.getTopic(),
                                                                      createPublisher.getPublisherClass());
                     } else if (message instanceof PublishMessage) {
                         PublishMessage publishMessage = (PublishMessage) message;
+                        remoteRelayMessage.set(publishMessage);
                         Optional<Publisher> publisher = DistributedSocketPubSub.this.getPublisher(publishMessage.getTopic());
                         if (publisher.isPresent()) {
                             publisher.get().publish(publishMessage.getMessage());
@@ -320,28 +367,69 @@ public class DistributedSocketPubSub extends PubSub {
                 } catch (IOException e) {
                     if (isClosed(e)) {
                         LOGGER.log(Level.INFO, "Socket closed, ending reader: {0}", e.toString());
+                        attemptRestart = true;
+                        if (channel.isOpen()) {
+                            closeQuietly(channel);
+                        }
                     }
                     LOGGER.log(Level.WARNING, "Socket exception: machine={0}, exception={1}",
                                DistributedSocketPubSub.this.machineId, e.toString());
                 } catch (RuntimeException | Error e) {
                     LOGGER.log(Level.ERROR, "Unexpected exception: machine=" + DistributedSocketPubSub.this.machineId, e);
+                } finally {
+                    remoteRelayMessage.set(null);
                 }
+            } // end while
+            
+            messageWriter.interrupt();
+            
+            if (attemptRestart) {
+                DistributedSocketPubSub.this.doRestart();
             }
         }
     }
-
+    
+    private void doRestart() {
+        channelHolder.set(null);
+        try {
+            channelHolder.set(createNewSocket());
+            doStart(true).exceptionally(e -> {
+                LOGGER.log(Level.ERROR, "Unable to restart DistributedSocketPubSub: %s", e.toString());
+                return null;
+            });
+        } catch (IOException e) {
+            LOGGER.log(Level.ERROR, "Unable to restart DistributedSocketPubSub: %s", e.toString());
+        }
+    }
+    
     /**
      * Publisher that forwards publish commands to the message server.
      */
     public final class DistributedPublisher extends Publisher {
-        private DistributedPublisher(@Nonnull String topic, @Nonnull Class<?> publisherClass) {
+        private final RelayFields remoteRelayFields;
+
+        private DistributedPublisher(@Nonnull String topic, @Nonnull Class<?> publisherClass, RelayFields remoteRelayFields) {
             super(topic, publisherClass);
+            this.remoteRelayFields = remoteRelayFields;
+        }
+
+        boolean isRemote() {
+            return remoteRelayFields != null;
+        }
+
+        RelayFields getRemoteRelayFields() {
+            return remoteRelayFields;
         }
 
         @Override
         public <T extends CloneableObject<?>> void publish(@Nonnull T message, MessagePriority priority) {
             super.publish(message, priority);
-            DistributedSocketPubSub.this.messageWriter.publishMessage(getTopic(), message, priority);
+            var relayFields = Optional.ofNullable(remoteRelayMessage.get()).map(RelayMessageBase::getRelayFields).orElse(null);
+            if (relayFields == null) {
+                // this DistributedPubSub is publishing a new message
+                // so send it to the central server
+                DistributedSocketPubSub.this.messageWriter.publishMessage(getTopic(), message, priority, null);
+            }
         }
     }
 
@@ -362,8 +450,13 @@ public class DistributedSocketPubSub extends PubSub {
      */
     @Override
     protected <T> DistributedPublisher newPublisher(String topic, Class<T> publisherClass) {
-        var publisher = new DistributedPublisher(topic, publisherClass);
-        messageWriter.createPublisher(topic, publisherClass);
+        var relayFields = Optional.ofNullable(remoteRelayMessage.get()).map(RelayMessageBase::getRelayFields).orElse(null);
+        var publisher = new DistributedPublisher(topic, publisherClass, relayFields);
+        if (relayFields == null) {
+            // this DistributedPubSub is creating a new publisher
+            // so send it to the central server
+            messageWriter.createPublisher(topic, publisherClass, null, /*isResend*/ false);
+        }
         return publisher;
     }
 
@@ -377,6 +470,7 @@ public class DistributedSocketPubSub extends PubSub {
 
     /**
      * Shutdown this object.
+     * Object cannot be restarted after shutdown.
      */
     @Override
     public void shutdown() {
@@ -389,7 +483,7 @@ public class DistributedSocketPubSub extends PubSub {
      */
     @Override
     protected void onAddSubscriber(Subscriber subscriber) {
-        messageWriter.addSubscriber(subscriber.getTopic(),subscriber.getSubscriberName());
+        messageWriter.addSubscriber(subscriber.getTopic(),subscriber.getSubscriberName(), /*isResend*/ false);
     }
 
     /**
@@ -410,9 +504,15 @@ public class DistributedSocketPubSub extends PubSub {
 
     /**
      * Override this function to do something before sending a message.
-     * For example, the unit tests override this to record the number of messages sent.
      */
     protected void onBeforeSendMessage(MessageBase message) {
+    }
+
+    /**
+     * Override this function to do something after sending a message.
+     * For example, the unit tests override this to record the number of messages sent.
+     */
+    protected void onMessageSent(MessageBase message) {
     }
 
     /**

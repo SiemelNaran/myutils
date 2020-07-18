@@ -127,7 +127,7 @@ class PubSubUtils {
      * @param jitterFraction add a small positive/negative random value to the returned value. Should typically be between [0, 0.20].
      * @return the exponential backoff in milliseconds
      */
-    static long computeExponentialBackoffMillis(long baseMillis, int retryNumber, int capRetries) {
+    static long computeExponentialBackoff(long baseMillis, int retryNumber, int capRetries) {
         int count = Math.min(retryNumber,  capRetries) - 1;
         return baseMillis * (1 << count);
     }
@@ -141,8 +141,8 @@ class PubSubUtils {
      * @param jitterFraction add a small positive/negative random value to the returned value. Should typically be between [0, 0.20].
      * @return the exponential backoff in milliseconds
      */
-    static long computeExponentialBackoffMillis(long baseMillis, int retryNumber, int capRetries, double jitterFraction) {
-        long backoff = computeExponentialBackoffMillis(baseMillis, retryNumber, capRetries);
+    static long computeExponentialBackoff(long baseMillis, int retryNumber, int capRetries, double jitterFraction) {
+        long backoff = computeExponentialBackoff(baseMillis, retryNumber, capRetries);
         double range = backoff * jitterFraction;
         long delta = (long) (Math.random() * range + 0.5);
         delta -= range / 2;
@@ -152,7 +152,7 @@ class PubSubUtils {
     static Long extractIndex(MessageBase message) {
         if (message instanceof RelayMessageBase) {
             RelayMessageBase action = (RelayMessageBase) message;
-            return action.getServerIndex();
+            return action.getRelayFields().getServerIndex();
         }
         return null;
     }
@@ -160,7 +160,7 @@ class PubSubUtils {
     static @Nullable String extractSourceMachine(MessageBase message) {
         if (message instanceof RelayMessageBase) {
             RelayMessageBase action = (RelayMessageBase) message;
-            return action.getSourceMachineId();
+            return action.getRelayFields().getSourceMachineId();
         }
         return null;
     }
