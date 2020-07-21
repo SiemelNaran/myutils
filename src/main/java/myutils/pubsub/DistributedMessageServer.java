@@ -7,7 +7,6 @@ import static myutils.pubsub.PubSubUtils.computeExponentialBackoff;
 import static myutils.pubsub.PubSubUtils.extractIndex;
 import static myutils.pubsub.PubSubUtils.getLocalAddress;
 import static myutils.pubsub.PubSubUtils.getRemoteAddress;
-import static myutils.pubsub.PubSubUtils.isClosed;
 import static myutils.util.concurrent.MoreExecutors.createThreadFactory;
 
 import java.io.IOException;
@@ -20,6 +19,7 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.NetworkChannel;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -287,7 +287,9 @@ public class DistributedMessageServer implements Shutdowneable {
                 lowerBoundInclusive = getMaxIndex(clientMachine, topic) + 1;
             }
             PublishMessage lastMessage = null;
-            Iterator<PublishMessage> iter = new ZipMinIterator<PublishMessage>(messages, (lhs, rhs) -> Long.compare(lhs.getRelayFields().getServerIndex(), rhs.getRelayFields().getServerIndex()));
+            Comparator<PublishMessage> comparator = (lhs, rhs) -> Long.compare(lhs.getRelayFields().getServerIndex(), rhs.getRelayFields().getServerIndex()); 
+            Iterator<PublishMessage> iter = new ZipMinIterator<PublishMessage>(messages, comparator); 
+                
             while (iter.hasNext()) {
                 PublishMessage message = iter.next();
                 if (message.getRelayFields().getServerIndex() > upperBoundInclusive) {
@@ -356,6 +358,7 @@ public class DistributedMessageServer implements Shutdowneable {
      * If there was an IOException in starting the future is rejected with this exception.
      * 
      * @throws java.util.concurrent.RejectedExecutionException if server was shutdown
+     * @throws IOException if there was an IOException such as socket already in use
      */
     public CompletionStage<Void> start() throws IOException {
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -487,7 +490,7 @@ public class DistributedMessageServer implements Shutdowneable {
         
         private void onComplete(Throwable exception) {
             if (exception != null) {
-                if (isClosed(exception)) {
+                if (SocketTransformer.isClosed(exception)) {
                     logChannelClosed();
                     removeChannel(channel);
                     return;
@@ -605,16 +608,16 @@ public class DistributedMessageServer implements Shutdowneable {
         int numPublishersSent;
         if (!clientMachineAlreadySubscribedToTopic) {
             numPublishersSent = mostRecentMessages.retrievePublishers(
-                    clientMachine,
-                    topic,
-                    Long.MAX_VALUE,
-                    createPublisher -> DistributedMessageServer.this.send(createPublisher, clientMachine, 0));
+                clientMachine,
+                topic,
+                Long.MAX_VALUE,
+                createPublisher -> DistributedMessageServer.this.send(createPublisher, clientMachine, 0));
         } else {
             numPublishersSent = 0;
         }
         LOGGER.log(Level.INFO,
                    "Added subscriber : topic={0} subscriberName={1} clientMachine={2} numPublishersSent={3}",
-                  topic, subscriberName, clientMachine.getMachineId(), numPublishersSent);
+                   topic, subscriberName, clientMachine.getMachineId(), numPublishersSent);
         if (subscriberInfo.shouldTryDownload()) {
             download(clientMachine, topic, subscriberInfo.getClientTimestamp(), null, Long.MAX_VALUE);
         }
@@ -669,12 +672,12 @@ public class DistributedMessageServer implements Shutdowneable {
                           Long lowerBoundInclusive,
                           long upperBoundInclusive) {
         int numMessages = mostRecentMessages.retrieveMessages(
-                clientMachine,
-                topic,
-                minClientTimestamp,
-                lowerBoundInclusive, 
-                upperBoundInclusive,
-                publishMessage -> send(publishMessage, clientMachine, 0));
+            clientMachine,
+            topic,
+            minClientTimestamp,
+            lowerBoundInclusive, 
+            upperBoundInclusive,
+            publishMessage -> send(publishMessage, clientMachine, 0));
         LOGGER.log(Level.INFO, String.format("Download messages to client: clientMachine=%s numMessages=%d", clientMachine.getMachineId(), numMessages));
     }
 
@@ -714,7 +717,7 @@ public class DistributedMessageServer implements Shutdowneable {
     }
     
     private Void retrySend(MessageBase message, ClientMachine clientMachine, int retry, Throwable e) {
-        boolean retryDone = retry >= MAX_RETRIES || isClosed(e);
+        boolean retryDone = retry >= MAX_RETRIES || SocketTransformer.isClosed(e);
         Level level = retryDone ? Level.WARNING : Level.TRACE;
         LOGGER.log(level, () -> String.format("Send message failed: clientMachine=%s, retry=%d, retryDone=%b, exception=%s",
                                               clientMachine.getMachineId(), retry, retryDone, e.toString()));
