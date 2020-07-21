@@ -13,10 +13,14 @@ import java.io.OptionalDataException;
 import java.io.Serializable;
 import java.io.StreamCorruptedException;
 import java.nio.ByteBuffer;
+import java.nio.channels.AsynchronousCloseException;
 import java.nio.channels.AsynchronousSocketChannel;
+import java.nio.channels.ClosedByInterruptException;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.CompletionHandler;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import myutils.pubsub.MessageClasses.MessageBase;
 
@@ -212,5 +216,14 @@ public class SocketTransformer {
         } finally {
             closeQuietly(ois);
         }
+    }
+    
+    /**
+     * Tell if the exception reflects the fact that the socket is closed.
+     * The list includes EOFException and all of the channel exceptions that have the word Closed in them.
+     */
+    static boolean isClosed(Throwable throwable) {
+        Throwable e = throwable instanceof CompletionException ? throwable.getCause() : throwable;
+        return e instanceof EOFException || e instanceof ClosedChannelException || e instanceof AsynchronousCloseException || e instanceof ClosedByInterruptException;
     }
 }

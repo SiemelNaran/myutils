@@ -6,7 +6,6 @@ import static myutils.pubsub.PubSubUtils.closeQuietly;
 import static myutils.pubsub.PubSubUtils.computeExponentialBackoff;
 import static myutils.pubsub.PubSubUtils.getLocalAddress;
 import static myutils.pubsub.PubSubUtils.getRemoteAddress;
-import static myutils.pubsub.PubSubUtils.isClosed;
 import static myutils.util.concurrent.MoreExecutors.createThreadFactory;
 
 import java.io.IOException;
@@ -197,15 +196,15 @@ public class DistributedSocketPubSub extends PubSub {
     }
     
     private void doSendAllPublishersAndSubscribers() {
-       this.forEachPublisher(basePublisher -> {
-           DistributedPublisher publisher = (DistributedPublisher) basePublisher;
-           if (!publisher.isRemote()) {
-               messageWriter.createPublisher(publisher.getTopic(), publisher.getPublisherClass(), publisher.getRemoteRelayFields(), /*isResend*/ true);
-           }
-           for (var subscriberName : publisher.getSubsciberNames()) {
-               messageWriter.addSubscriber(publisher.getTopic(), subscriberName, /*isResend*/ true);
-           }
-       });
+        forEachPublisher(basePublisher -> {
+            DistributedPublisher publisher = (DistributedPublisher) basePublisher;
+            if (!publisher.isRemote()) {
+                messageWriter.createPublisher(publisher.getTopic(), publisher.getPublisherClass(), publisher.getRemoteRelayFields(), /*isResend*/ true);
+            }
+            for (var subscriberName : publisher.getSubsciberNames()) {
+                messageWriter.addSubscriber(publisher.getTopic(), subscriberName, /*isResend*/ true);
+            }
+        });
     }
 
     /**
@@ -270,7 +269,7 @@ public class DistributedSocketPubSub extends PubSub {
                 DistributedSocketPubSub.this.onMessageSent(message);
                 future.complete(null);
             } catch (IOException e) {
-                boolean retryDone = retry >= MAX_RETRIES || isClosed(e);
+                boolean retryDone = retry >= MAX_RETRIES || SocketTransformer.isClosed(e);
                 Level level = retryDone ? Level.WARNING : Level.DEBUG;
                 LOGGER.log(level,
                     () -> String.format("Send message failed: machine=%s, retry=%d, retryDone=%b, exception=%s",
@@ -365,7 +364,7 @@ public class DistributedSocketPubSub extends PubSub {
                                    DistributedSocketPubSub.this.machineId, message.getClass().getSimpleName());
                     }
                 } catch (IOException e) {
-                    if (isClosed(e)) {
+                    if (SocketTransformer.isClosed(e)) {
                         LOGGER.log(Level.INFO, "Socket closed, ending reader: {0}", e.toString());
                         attemptRestart = true;
                         if (channel.isOpen()) {

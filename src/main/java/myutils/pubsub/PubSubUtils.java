@@ -1,18 +1,13 @@
 package myutils.pubsub;
 
 import java.io.Closeable;
-import java.io.EOFException;
 import java.io.IOException;
 import java.lang.ref.Cleaner;
 import java.lang.ref.Cleaner.Cleanable;
-import java.nio.channels.AsynchronousCloseException;
 import java.nio.channels.AsynchronousSocketChannel;
-import java.nio.channels.ClosedByInterruptException;
-import java.nio.channels.ClosedChannelException;
 import java.nio.channels.NetworkChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Arrays;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
@@ -109,15 +104,6 @@ class PubSubUtils {
         }
     }
 
-    /**
-     * Tell if the exception reflects the fact that the socket is closed.
-     * The list includes EOFException and all of the exceptions declared in ...
-     */
-    static boolean isClosed(Throwable throwable) {
-        Throwable e = throwable instanceof CompletionException ? throwable.getCause() : throwable;
-        return e instanceof EOFException || e instanceof ClosedChannelException || e instanceof AsynchronousCloseException || e instanceof ClosedByInterruptException;
-    }
-    
     /**
      * Calculate the exponential backoff delay.
      * 
