@@ -394,9 +394,9 @@ interface MessageClasses {
         private static final long serialVersionUID = 1L;
         
         private final @Nonnull CloneableObject<?> message;
-        private final @Nonnull MessagePriority priority;
+        private final @Nonnull RetentionPriority priority;
         
-        PublishMessage(long clientIndex, @Nonnull String topic, @Nonnull CloneableObject<?> message, MessagePriority priority) {
+        PublishMessage(long clientIndex, @Nonnull String topic, @Nonnull CloneableObject<?> message, RetentionPriority priority) {
             super(clientIndex, topic);
             this.message = message;
             this.priority = priority;
@@ -406,7 +406,7 @@ interface MessageClasses {
             return message;
         }
         
-        MessagePriority getPriority() {
+        RetentionPriority getPriority() {
             return priority;
         }
 

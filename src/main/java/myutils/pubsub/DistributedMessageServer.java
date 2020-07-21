@@ -86,7 +86,7 @@ import myutils.util.ZipMinIterator;
  * However, using the field serverIndex, the server detects that it already processed the message and therefore ignores it.
  * But clients should still not send the message to avoid unnecessary network traffic.
  * 
- * <p>The server caches the last N messages of each MessagePriority.
+ * <p>The server caches the last N messages of each RententionPriority.
  * Clients can download all publish message commands from a particular index, and all messages in the cache from this time up to the time of download
  * will be sent to that client.
  * 
@@ -198,12 +198,12 @@ public class DistributedMessageServer implements Shutdowneable {
         private final List<Deque<PublishMessage>> messages = List.of(new LinkedList<>(), new LinkedList<>());
         private final Map<ClientMachine, Map<String /*topic*/, Long /*maxIndex*/>> highestIndexMap = new HashMap<>();
         
-        MostRecentMessages(Map<MessagePriority, Integer> mostRecentMessagesToKeep) {
+        MostRecentMessages(Map<RetentionPriority, Integer> mostRecentMessagesToKeep) {
             this.mostRecentMessagesToKeep = computeMostRecentMessagesToKeep(mostRecentMessagesToKeep);
         }
         
-        private static int[] computeMostRecentMessagesToKeep(Map<MessagePriority, Integer> mostRecentMessagesToKeep) {
-            var result = new int[MessagePriority.values().length];
+        private static int[] computeMostRecentMessagesToKeep(Map<RetentionPriority, Integer> mostRecentMessagesToKeep) {
+            var result = new int[RetentionPriority.values().length];
             for (var entry : mostRecentMessagesToKeep.entrySet()) {
                 result[entry.getKey().ordinal()] = entry.getValue();
             }
@@ -333,7 +333,7 @@ public class DistributedMessageServer implements Shutdowneable {
      * @param mostRecentMessagesToKeep the number of most recent messages of the given priority to keep (and zero if message not in this list)
      * @throws IOException if there is an error opening a socket (but no error if the host:port is already in use)
      */
-    public DistributedMessageServer(@Nonnull String host, int port, Map<MessagePriority, Integer> mostRecentMessagesToKeep) throws IOException {
+    public DistributedMessageServer(@Nonnull String host, int port, Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
         this.host = host;
         this.port = port;
         this.asyncServerSocketChannel = AsynchronousServerSocketChannel.open();

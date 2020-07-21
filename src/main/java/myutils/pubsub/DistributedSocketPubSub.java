@@ -214,8 +214,8 @@ public class DistributedSocketPubSub extends PubSub {
      * 
      * @param startIndexInclusive the start index. Use 0 or 1 for no minimum.
      * @param endIndexInclusive the end index. Use Long.MAX_VALUE for no maximum.
-     * @see DistributedMessageServer#DistributedMessageServer(String, int, java.util.Map) for the number of messages of each MessagePriority to remember
-     * @see MessagePriority
+     * @see DistributedMessageServer#DistributedMessageServer(String, int, java.util.Map) for the number of messages of each RetentionPriority to remember
+     * @see RetentionPriority
      */
     public void download(long startIndexInclusive, long endIndexInclusive) {
         messageWriter.download(startIndexInclusive, endIndexInclusive);
@@ -299,7 +299,7 @@ public class DistributedSocketPubSub extends PubSub {
             internalPutMessage(createPublisher);
         }
 
-        private void publishMessage(@Nonnull String topic, @Nonnull CloneableObject<?> message, MessagePriority priority, RelayFields relayFields) {
+        private void publishMessage(@Nonnull String topic, @Nonnull CloneableObject<?> message, RetentionPriority priority, RelayFields relayFields) {
             var publishMessage = new PublishMessage(localMaxMessage.incrementAndGet(), topic, message, priority);
             publishMessage.setRelayFields(relayFields);
             internalPutMessage(publishMessage);
@@ -422,7 +422,7 @@ public class DistributedSocketPubSub extends PubSub {
         }
 
         @Override
-        public <T extends CloneableObject<?>> void publish(@Nonnull T message, MessagePriority priority) {
+        public <T extends CloneableObject<?>> void publish(@Nonnull T message, RetentionPriority priority) {
             super.publish(message, priority);
             var relayFields = Optional.ofNullable(remoteRelayMessage.get()).map(RelayMessageBase::getRelayFields).orElse(null);
             if (relayFields == null) {
