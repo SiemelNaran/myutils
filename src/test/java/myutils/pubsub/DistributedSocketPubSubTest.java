@@ -282,7 +282,7 @@ public class DistributedSocketPubSubTest {
         
         var centralServer = new TestDistributedMessageServer(CENTRAL_SERVER_HOST,
                                                              CENTRAL_SERVER_PORT,
-                                                             Map.of(MessagePriority.HIGH, 2, MessagePriority.MEDIUM, 3));
+                                                             Map.of(RetentionPriority.HIGH, 2, RetentionPriority.MEDIUM, 3));
         addShutdown(centralServer);
         centralServer.start();
         sleep(250); // time to let the central server start
@@ -313,13 +313,13 @@ public class DistributedSocketPubSubTest {
         // the server will remember the last 2 messages with low retention, and the last 2 messages with high retention
         // the subscriber running on client1 will pick it up immediately
         // the message will get replicated to all other subscribers, but client2 is not yet running
-        publisher1.publish(new CloneableString("ImportantOne"), MessagePriority.HIGH);
-        publisher1.publish(new CloneableString("ImportantTwo"), MessagePriority.HIGH);
-        publisher1.publish(new CloneableString("ImportantThree"), MessagePriority.HIGH);
-        publisher1.publish(new CloneableString("apple"), MessagePriority.MEDIUM);
-        publisher1.publish(new CloneableString("banana"), MessagePriority.MEDIUM);
+        publisher1.publish(new CloneableString("ImportantOne"), RetentionPriority.HIGH);
+        publisher1.publish(new CloneableString("ImportantTwo"), RetentionPriority.HIGH);
+        publisher1.publish(new CloneableString("ImportantThree"), RetentionPriority.HIGH);
+        publisher1.publish(new CloneableString("apple"), RetentionPriority.MEDIUM);
+        publisher1.publish(new CloneableString("banana"), RetentionPriority.MEDIUM);
         publisher1.publish(new CloneableString("carrot"));
-        publisher1.publish(new CloneableString("dragonfruit"), MessagePriority.MEDIUM);
+        publisher1.publish(new CloneableString("dragonfruit"), RetentionPriority.MEDIUM);
         sleep(250); // time to let messages be published to client2
         System.out.println("actual=" + words);
         assertThat(words,
@@ -377,7 +377,7 @@ public class DistributedSocketPubSubTest {
     void testRestartFails() throws IOException, InterruptedException, ExecutionException {
         var centralServer = new TestDistributedMessageServer(CENTRAL_SERVER_HOST,
                                                              CENTRAL_SERVER_PORT,
-                                                             Map.of(MessagePriority.HIGH, 1, MessagePriority.MEDIUM, 3));
+                                                             Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         addShutdown(centralServer);
         Future<Void> startCentralServerFuture = toFuture(centralServer.start());
         sleep(250); // time to let server start
@@ -409,7 +409,7 @@ public class DistributedSocketPubSubTest {
         // start another server on same host:port
         var centralServerDuplicateAddress = new TestDistributedMessageServer(CENTRAL_SERVER_HOST,
                                                                              CENTRAL_SERVER_PORT,
-                                                                             Map.of(MessagePriority.HIGH, 1, MessagePriority.MEDIUM, 3));
+                                                                             Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         Future<Void> startServerDuplicateAddressFuture = toFuture(centralServerDuplicateAddress.start());
         sleep(250); // time to let server start        
         assertTrue(startServerDuplicateAddressFuture.isDone());
@@ -507,7 +507,7 @@ public class DistributedSocketPubSubTest {
         words.clear();
         var centralServer = new TestDistributedMessageServer(CENTRAL_SERVER_HOST,
                                                              CENTRAL_SERVER_PORT,
-                                                             Map.of(MessagePriority.HIGH, 1, MessagePriority.MEDIUM, 3));
+                                                             Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         addShutdown(centralServer);
         centralServer.start();
         sleep(250); // time to let the central server start
@@ -535,7 +535,7 @@ public class DistributedSocketPubSubTest {
         
         var centralServer = new TestDistributedMessageServer(CENTRAL_SERVER_HOST,
                                                              CENTRAL_SERVER_PORT,
-                                                             Map.of(MessagePriority.HIGH, 1, MessagePriority.MEDIUM, 3));
+                                                             Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         addShutdown(centralServer);
         centralServer.start();
         sleep(250); // time to let server start
@@ -575,7 +575,7 @@ public class DistributedSocketPubSubTest {
 
         var centralServer2 = new TestDistributedMessageServer(CENTRAL_SERVER_HOST,
                                                               CENTRAL_SERVER_PORT,
-                                                              Map.of(MessagePriority.HIGH, 1, MessagePriority.MEDIUM, 3));
+                                                              Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         addShutdown(centralServer2);
         centralServer2.start();
         sleep(250); // time to let server start
@@ -615,7 +615,7 @@ public class DistributedSocketPubSubTest {
         
         var centralServer = new TestDistributedMessageServer(CENTRAL_SERVER_HOST,
                                                              CENTRAL_SERVER_PORT,
-                                                             Map.of(MessagePriority.HIGH, 1, MessagePriority.MEDIUM, 3));
+                                                             Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         addShutdown(centralServer);
         centralServer.start();
         sleep(250); // time to let server start
@@ -676,7 +676,7 @@ public class DistributedSocketPubSubTest {
         
         var centralServer2 = new TestDistributedMessageServer(CENTRAL_SERVER_HOST,
                                                               CENTRAL_SERVER_PORT,
-                                                              Map.of(MessagePriority.HIGH, 1, MessagePriority.MEDIUM, 3));
+                                                              Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         addShutdown(centralServer2);
         centralServer2.start();
         sleep(250); // time to let server start
@@ -702,7 +702,7 @@ public class DistributedSocketPubSubTest {
         
         var centralServer = new TestDistributedMessageServer(CENTRAL_SERVER_HOST,
                                                              CENTRAL_SERVER_PORT,
-                                                             Map.of(MessagePriority.HIGH, 1, MessagePriority.MEDIUM, 3));
+                                                             Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         addShutdown(centralServer);
         centralServer.start();
         sleep(250); // time to let server start
@@ -774,7 +774,7 @@ class TestDistributedMessageServer extends DistributedMessageServer {
 
     public TestDistributedMessageServer(String host,
                                         int port,
-                                        Map<MessagePriority, Integer> mostRecentMessagesToKeep) throws IOException {
+                                        Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
         super(host, port, mostRecentMessagesToKeep);
     }
 

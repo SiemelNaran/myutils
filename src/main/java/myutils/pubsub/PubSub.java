@@ -141,10 +141,10 @@ public abstract class PubSub implements Shutdowneable {
         }
         
         public final <T extends CloneableObject<?>> void publish(@Nonnull T message) {
-            publish(message, MessagePriority.MEDIUM);
+            publish(message, RetentionPriority.MEDIUM);
         }
         
-        public <T extends CloneableObject<?>> void publish(@Nonnull T message, MessagePriority priority) {
+        public <T extends CloneableObject<?>> void publish(@Nonnull T message, RetentionPriority priority) {
             PubSub.this.lock.lock();
             try {
                 for (var subscriber : subscribers) {
