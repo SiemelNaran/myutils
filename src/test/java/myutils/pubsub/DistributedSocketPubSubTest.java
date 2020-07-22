@@ -11,6 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.net.StandardSocketOptions;
 import java.nio.channels.NetworkChannel;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
@@ -18,9 +20,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import myutils.LogFailureToConsoleTestWatcher;
 import myutils.pubsub.InMemoryPubSubTest.CloneableString;
@@ -763,6 +770,117 @@ public class DistributedSocketPubSubTest {
         
         assertEquals(6, centralServer.getCountValidReceived()); // +0 = invalid message not valid
         assertEquals(3, centralServer.getCountSent()); // +2 = InvalidRelayMessage, InvalidRelayMessage
+    }
+    
+    /**
+     * Test performance.
+     * There is a central server and 4 clients.
+     * 3 clients publish N messages messages.
+     * The 4th client receives all of the messages and has 2 subscribers.
+     * 
+     * <p>With N as 1000 the test takes about 4.5sec.<br/>
+     * With N as 100 the test takes around 0.9sec.<br/>
+     * With N as 10 the test takes around 0.2sec.<br/>
+     * 
+     * <p>This test also tests that the server does not encounter WritePendingException
+     * (where we one thread sends a message to a client while another is also sending a message to it).
+     */
+    @Test
+    void testPerformance() throws IOException {
+        List<String> words = Collections.synchronizedList(new ArrayList<>());
+        
+        var centralServer = new TestDistributedMessageServer(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, Collections.emptyMap());
+        addShutdown(centralServer);
+        centralServer.start();
+        
+        var client1 = new TestDistributedSocketPubSub(1,
+                                                      PubSub.defaultQueueCreator(),
+                                                      PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                                      "client1",
+                                                      "localhost",
+                                                      30001,
+                                                      CENTRAL_SERVER_HOST,
+                                                      CENTRAL_SERVER_PORT);
+        addShutdown(client1);
+        client1.start();
+        
+        var client2 = new TestDistributedSocketPubSub(1,
+                                                      PubSub.defaultQueueCreator(),
+                                                      PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                                      "client2",
+                                                      "localhost",
+                                                      30002,
+                                                      CENTRAL_SERVER_HOST,
+                                                      CENTRAL_SERVER_PORT);
+        addShutdown(client2);
+        client2.start();
+        
+        var client3 = new TestDistributedSocketPubSub(1,
+                                                      PubSub.defaultQueueCreator(),
+                                                      PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                                      "client3",
+                                                      "localhost",
+                                                      30003,
+                                                      CENTRAL_SERVER_HOST,
+                                                      CENTRAL_SERVER_PORT);
+        addShutdown(client3);
+        client3.start();
+
+        var client4 = new TestDistributedSocketPubSub(1,
+                                                      PubSub.defaultQueueCreator(),
+                                                      PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                                      "client4",
+                                                      "localhost",
+                                                      30004,
+                                                      CENTRAL_SERVER_HOST,
+                                                      CENTRAL_SERVER_PORT);
+        addShutdown(client4);
+        client4.start();
+        
+        final int N = 1000; // client1, client2, client3 each publish N messages
+        final int totalMessagesHandledByClient4 = N * 3 * 2; // times 2 because there are 2 subscribers in client4
+        final CountDownLatch latch = new CountDownLatch(totalMessagesHandledByClient4);
+        
+        client1.createPublisher("hello", CloneableString.class);
+        client2.subscribe("hello", "ClientTwoSubscriber", CloneableString.class, nothing());
+        client3.subscribe("hello", "ClientThreeSubscriber", CloneableString.class, nothing());
+        client4.subscribe("hello", "ClientFourSubscriber_First", CloneableString.class, str -> { words.add(str.append("FirstHandler")); latch.countDown(); });
+        client4.subscribe("hello", "ClientFourSubscriber_Second", CloneableString.class, str -> { words.add(str.append("SecondHandler")); latch.countDown(); });
+
+        sleep(250);
+        var publisher1 = client1.getPublisher("hello").get();
+        var publisher2 = client2.getPublisher("hello").get();
+        var publisher3 = client3.getPublisher("hello").get();
+
+        Instant startTime = Instant.now();
+        
+        ExecutorService executor = Executors.newFixedThreadPool(3);
+        for (int i = 1; i <= N; i++) {
+            String val = Integer.toString(i);
+            executor.submit(() -> publisher1.publish(new CloneableString("message from client1: " + val)));
+            executor.submit(() -> publisher2.publish(new CloneableString("message from client2: " + val)));
+            executor.submit(() -> publisher3.publish(new CloneableString("message from client3: " + val)));
+        }
+        
+        double timeTakenMillis;
+        try {
+            latch.await(30, TimeUnit.SECONDS);
+            executor.shutdown();
+            executor.awaitTermination(100, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            timeTakenMillis = Duration.between(startTime, Instant.now()).toNanos() / 1_000_000.0;
+            System.out.println("timeTaken=" + timeTakenMillis + "ms");
+            System.out.println("actual.length=" + words.size());
+        }
+     
+        assertEquals(totalMessagesHandledByClient4, words.size());
+        assertThat(timeTakenMillis, Matchers.lessThan(6000.0));
+    }
+    
+    private static <T> Consumer<T> nothing() {
+        return unused -> { };
     }
 }
 
