@@ -28,6 +28,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -37,6 +38,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import javax.annotation.Nonnull;
@@ -120,7 +122,8 @@ public class DistributedMessageServer implements Shutdowneable {
         private final String machineId;
         private final String remoteAddress;
         private final AsynchronousSocketChannel channel;
-        
+        private final WriteManager writeManager = new WriteManager();
+
         private ClientMachine(String machineId, AsynchronousSocketChannel channel) {
             this.machineId = machineId;
             this.remoteAddress = getRemoteAddress(channel);
@@ -152,6 +155,40 @@ public class DistributedMessageServer implements Shutdowneable {
             }
             ClientMachine that = (ClientMachine) thatObject;
             return this.machineId.equals(that.machineId) && this.remoteAddress.equals(that.remoteAddress);
+        }
+        
+        WriteManager getWriteManager() {
+            return writeManager;
+        }
+
+        static class WriteManager {
+            private final AtomicBoolean writeLock = new AtomicBoolean();
+            private final Queue<MessageBase> writeQueue = new LinkedList<>();
+
+            /**
+             * Acquire a write lock on this channel.
+             * But if it is not available, add the message to send to the write queue.
+             */
+            synchronized boolean acquireWriteLock(@Nonnull MessageBase message) {
+                boolean acquired = writeLock.compareAndSet(false, true);
+                if (!acquired) {
+                    writeQueue.add(message);
+                }
+                return acquired;
+            }
+
+            /**
+             * This function is called with the write lock held.
+             * If the write queue is not empty, return the head of it and keep the write lock held.
+             * If it is empty, release the lock.
+             */
+            @Nullable synchronized MessageBase returnHeadOfHeadQueueOrReleaseLock() {
+                var nextMessage = writeQueue.poll();
+                if (nextMessage == null) {
+                    writeLock.set(false);            
+                }
+                return nextMessage;
+            }
         }
     }
     
@@ -693,10 +730,22 @@ public class DistributedMessageServer implements Shutdowneable {
     }
     
     private void send(MessageBase message, ClientMachine clientMachine, int retry) {
+        if (clientMachine.getWriteManager().acquireWriteLock(message)) {
+            internalSend(message, clientMachine, 0);
+        }
+    }
+    
+    /**
+     * Send a message to client asynchronously.
+     * If we are already writing another message to the client machine, the message to added to a queue.
+     * Upon sending a message, this function sends the first of any queued messages by calling itself.
+     */
+    private void internalSend(MessageBase message, ClientMachine clientMachine, int retry) {
         try {
             SocketTransformer.writeMessageToSocketAsync(message, Short.MAX_VALUE, clientMachine.getChannel())
                              .thenAcceptAsync(unused -> afterMessageSent(clientMachine, message), channelExecutor)
-                             .exceptionally(e -> retrySend(message, clientMachine, retry, e));
+                             .exceptionally(e -> retrySend(message, clientMachine, retry, e))
+                             .thenRun(() -> sendQueuedMessageOrReleaseLock(clientMachine));
         } catch (IOException e) {
             LOGGER.log(Level.WARNING,
                        String.format("Send message failed: clientMachine=%s, retry=%d, retryDone=%b, exception=%s",
@@ -727,6 +776,13 @@ public class DistributedMessageServer implements Shutdowneable {
             retryExecutor.schedule(() -> send(message, clientMachine, nextRetry), delayMillis, TimeUnit.MILLISECONDS);
         }
         return null;
+    }
+
+    private void sendQueuedMessageOrReleaseLock(ClientMachine clientMachine) {
+        var nextMessage = clientMachine.getWriteManager().returnHeadOfHeadQueueOrReleaseLock();
+        if (nextMessage != null) {
+            internalSend(nextMessage, clientMachine, 0);
+        }
     }
 
     private void submitReadFromChannelJob(AsynchronousSocketChannel channel) {

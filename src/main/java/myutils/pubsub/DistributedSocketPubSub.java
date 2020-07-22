@@ -543,7 +543,6 @@ public class DistributedSocketPubSub extends PubSub {
             LOGGER.log(Level.DEBUG, "Cleaning up " + machineId + " " + DistributedSocketPubSub.class.getSimpleName() + " " + getLocalAddress(channelHolder.get()) + getCallStack());
             closeExecutorQuietly(channelExecutor);
             closeExecutorQuietly(retryExecutor);
-            System.out.println(channelHolder.get());
             closeQuietly(channelHolder.get());
         }
     }
