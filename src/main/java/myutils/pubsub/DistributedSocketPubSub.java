@@ -95,7 +95,7 @@ public class DistributedSocketPubSub extends PubSub {
     private final ScheduledExecutorService retryExecutor = Executors.newScheduledThreadPool(1, createThreadFactory("DistributedSocketPubSub.Retry"));
     private final MessageWriter messageWriter;
     private final AtomicLong localMaxMessage = new AtomicLong();
-    private final Map<String /*topic*/, CompletableFuture<Publisher>> fetchPublisherMap= new HashMap<>();
+    private final Map<String /*topic*/, CompletableFuture<Publisher>> fetchPublisherMap = new HashMap<>();
     private final Cleanable cleanable;
     private volatile Future<?> messageWriterTask;
 
@@ -484,8 +484,8 @@ public class DistributedSocketPubSub extends PubSub {
             if (publisher.isPresent()) {
                 return CompletableFuture.completedFuture(publisher.get());
             } else {
-                return fetchPublisherMap.computeIfAbsent(topic, sTopic -> {
-                    messageWriter.addFetchPublisher(sTopic);
+                return fetchPublisherMap.computeIfAbsent(topic, t -> {
+                    messageWriter.addFetchPublisher(t);
                     return new CompletableFuture<Publisher>();
                 });
             }
