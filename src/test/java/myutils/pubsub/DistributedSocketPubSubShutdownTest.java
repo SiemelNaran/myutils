@@ -55,24 +55,24 @@ public class DistributedSocketPubSubShutdownTest {
         centralServer.start();
         sleep(250); // time to let the central server start
         
-        DistributedSocketPubSub client1 = new DistributedSocketPubSub(1,
-                                                                      PubSub.defaultQueueCreator(),
-                                                                      PubSub.defaultSubscriptionMessageExceptionHandler(),
-                                                                      "client1",
-                                                                      "localhost",
-                                                                      30001,
-                                                                      CENTRAL_SERVER_HOST,
-                                                                      CENTRAL_SERVER_PORT);
+        var client1 = new TestDistributedSocketPubSub(1,
+                                                      PubSub.defaultQueueCreator(),
+                                                      PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                                      "client1",
+                                                      "localhost",
+                                                       30001,
+                                                       CENTRAL_SERVER_HOST,
+                                                       CENTRAL_SERVER_PORT);
         client1.start();
         
-        DistributedSocketPubSub client2 = new DistributedSocketPubSub(1,
-                                                                      PubSub.defaultQueueCreator(),
-                                                                      PubSub.defaultSubscriptionMessageExceptionHandler(),
-                                                                      "client2",
-                                                                      "localhost",
-                                                                      30002,
-                                                                      CENTRAL_SERVER_HOST,
-                                                                      CENTRAL_SERVER_PORT);
+        var client2 = new TestDistributedSocketPubSub(1,
+                                                      PubSub.defaultQueueCreator(),
+                                                      PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                                      "client2",
+                                                      "localhost",
+                                                      30002,
+                                                      CENTRAL_SERVER_HOST,
+                                                      CENTRAL_SERVER_PORT);
         client2.start();
 
         sleep(250); // time to let clients start, connect to the central server, and send identification

@@ -224,6 +224,7 @@ public abstract class PubSub implements Shutdowneable {
         publisher = newPublisher(topic, publisherClass);
         topicMap.put(topic, publisher);
         addDeferredSubscribers(publisher);
+        onPublisherAdded(publisher);
         return publisher;
     }
     
@@ -232,7 +233,7 @@ public abstract class PubSub implements Shutdowneable {
     /**
      * Get an existing publisher.
      */
-    public final synchronized Optional<Publisher> getPublisher(String topic) {
+    public final synchronized Optional<Publisher> getPublisher(@Nonnull String topic) {
         var publisher = topicMap.get(topic);
         return Optional.ofNullable(publisher);
     }
@@ -318,6 +319,9 @@ public abstract class PubSub implements Shutdowneable {
         if (publisher.subscribers.remove(subscriber)) {
             onRemoveSubscriber(subscriber);
         }
+    }
+    
+    protected void onPublisherAdded(Publisher publisher) {
     }
     
     protected void onAddSubscriber(Subscriber subscriber) {

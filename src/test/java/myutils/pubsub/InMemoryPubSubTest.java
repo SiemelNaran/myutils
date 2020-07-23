@@ -249,13 +249,13 @@ public class InMemoryPubSubTest {
         
         System.out.println(words);
         assertThat(words,
-                Matchers.not(Matchers.contains("one-s1", "one-s2", "one-s3", "one-s4", "one-s5",
-                                              "two-s1", "two-s2", "two-s3", "two-s4", "two-s5",
-                                              "three-s1", "three-s2", "three-s3", "three-s4", "three-s5")));
+                   Matchers.not(Matchers.contains("one-s1", "one-s2", "one-s3", "one-s4", "one-s5",
+                                                 "two-s1", "two-s2", "two-s3", "two-s4", "two-s5",
+                                                 "three-s1", "three-s2", "three-s3", "three-s4", "three-s5")));
         assertThat(words,
-                Matchers.containsInAnyOrder("one-s1", "one-s2", "one-s3", "one-s4", "one-s5",
-                                            "two-s1", "two-s2", "two-s3", "two-s4", "two-s5",
-                                            "three-s1", "three-s2", "three-s3", "three-s4", "three-s5"));
+                   Matchers.containsInAnyOrder("one-s1", "one-s2", "one-s3", "one-s4", "one-s5",
+                                               "two-s1", "two-s2", "two-s3", "two-s4", "two-s5",
+                                               "three-s1", "three-s2", "three-s3", "three-s4", "three-s5"));
     }
     
     /**

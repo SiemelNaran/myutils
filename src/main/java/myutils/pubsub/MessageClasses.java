@@ -236,6 +236,30 @@ interface MessageClasses {
     }
     
     /**
+     * Class to fetch a publisher from the server.
+     * Required field topic.
+     * The response is a CreatePublisher command.
+     */
+    class FetchPublisher extends ClientGeneratedMessage {
+        private static final long serialVersionUID = 1L;
+        
+        private final String topic;
+        
+        public FetchPublisher(String topic) {
+            this.topic = topic;
+        }
+        
+        String getTopic() {
+            return topic;
+        }
+
+        @Override
+        public String toLoggingString() {
+            return classType(this) + ", topic=" + topic;
+        }
+    }
+    
+    /**
      * Class sent by client to download published messages even if they have already been sent to the client.
      * The server will send a PublishMessage for each object that it has in its cache.
      */
@@ -358,6 +382,8 @@ interface MessageClasses {
     
     /**
      * Action representing the createPublisher command.
+     * Sent to a client when they subscribe to a topic,
+     * or when they issue the FetchPublisher commnand.
      */
     class CreatePublisher extends RelayTopicMessageBase implements Resendable {
         private static final long serialVersionUID = 1L;
@@ -412,7 +438,7 @@ interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return super.basicLoggingString() + ", message.estimateBytes=" + message.getNumBytes() + ", priority=" + priority;
+            return super.basicLoggingString() + ", message.estimateBytes=" + message.getNumBytes() + ", retentionPriority=" + priority;
         }
     } 
 }
