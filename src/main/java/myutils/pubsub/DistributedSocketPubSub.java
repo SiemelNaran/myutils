@@ -18,6 +18,8 @@ import java.net.SocketAddress;
 import java.nio.channels.AlreadyConnectedException;
 import java.nio.channels.NetworkChannel;
 import java.nio.channels.SocketChannel;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
@@ -39,6 +41,7 @@ import javax.annotation.Nullable;
 import myutils.pubsub.MessageClasses.AddSubscriber;
 import myutils.pubsub.MessageClasses.CreatePublisher;
 import myutils.pubsub.MessageClasses.DownloadPublishedMessages;
+import myutils.pubsub.MessageClasses.FetchPublisher;
 import myutils.pubsub.MessageClasses.Identification;
 import myutils.pubsub.MessageClasses.InvalidRelayMessage;
 import myutils.pubsub.MessageClasses.MessageBase;
@@ -92,6 +95,7 @@ public class DistributedSocketPubSub extends PubSub {
     private final ScheduledExecutorService retryExecutor = Executors.newScheduledThreadPool(1, createThreadFactory("DistributedSocketPubSub.Retry"));
     private final MessageWriter messageWriter;
     private final AtomicLong localMaxMessage = new AtomicLong();
+    private final Map<String /*topic*/, CompletableFuture<Publisher>> fetchPublisherMap= new HashMap<>();
     private final Cleanable cleanable;
     private volatile Future<?> messageWriterTask;
 
@@ -308,6 +312,10 @@ public class DistributedSocketPubSub extends PubSub {
             internalPutMessage(new DownloadPublishedMessages(startIndexInclusive, endIndexInclusive));
         }
 
+        public void addFetchPublisher(String topic) {
+            internalPutMessage(new FetchPublisher(topic));
+        }
+
         private void internalPutMessage(MessageBase message) {
             try {
                 queue.put(message);
@@ -466,6 +474,32 @@ public class DistributedSocketPubSub extends PubSub {
                                                   @Nonnull Consumer<CloneableObject<?>> callback) {
         return new DistributedSubscriber(topic, subscriberName, subscriberClass, callback);
     }
+    
+    /**
+     * Fetch the publisher from central server.
+     */
+    public final CompletableFuture<Publisher> fetchPublisher(@Nonnull String topic) {
+        synchronized (fetchPublisherMap) {
+            var publisher = getPublisher(topic);
+            if (publisher.isPresent()) {
+                return CompletableFuture.completedFuture(publisher.get());
+            } else {
+                return fetchPublisherMap.computeIfAbsent(topic, sTopic -> {
+                    messageWriter.addFetchPublisher(sTopic);
+                    return new CompletableFuture<Publisher>();
+                });
+            }
+        }
+    }
+
+    private void resolveFetchPublisher(Publisher publisher) {
+        synchronized (fetchPublisherMap) {
+            var future = fetchPublisherMap.remove(publisher.getTopic());
+            if (future != null) {
+                future.complete(publisher);
+            }
+        }
+    }
 
     /**
      * Shutdown this object.
@@ -475,6 +509,14 @@ public class DistributedSocketPubSub extends PubSub {
     public void shutdown() {
         super.shutdown();
         cleanable.clean();
+    }
+    
+    /**
+     * Resolve any futures waiting for this publisher to be created.
+     */
+    @Override
+    protected void onPublisherAdded(Publisher publisher) {
+        resolveFetchPublisher(publisher);
     }
     
     /**

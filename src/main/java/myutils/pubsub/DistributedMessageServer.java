@@ -17,18 +17,18 @@ import java.net.StandardSocketOptions;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.NetworkChannel;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -41,12 +41,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import myutils.pubsub.MessageClasses.AddSubscriber;
 import myutils.pubsub.MessageClasses.ClientGeneratedMessage;
 import myutils.pubsub.MessageClasses.CreatePublisher;
 import myutils.pubsub.MessageClasses.DownloadPublishedMessages;
+import myutils.pubsub.MessageClasses.FetchPublisher;
 import myutils.pubsub.MessageClasses.Identification;
 import myutils.pubsub.MessageClasses.InvalidRelayMessage;
 import myutils.pubsub.MessageClasses.MessageBase;
@@ -58,7 +60,6 @@ import myutils.pubsub.MessageClasses.RemoveSubscriber;
 import myutils.pubsub.MessageClasses.RequestIdentification;
 import myutils.pubsub.MessageClasses.Resendable;
 import myutils.pubsub.PubSubUtils.CallStackCapturing;
-import myutils.util.MultimapUtils;
 import myutils.util.ZipMinIterator;
 
 
@@ -108,8 +109,8 @@ public class DistributedMessageServer implements Shutdowneable {
     private final ExecutorService channelExecutor;
     private final ScheduledExecutorService retryExecutor;
     private final List<ClientMachine> clientMachines = new CopyOnWriteArrayList<>();
-    private final Map<String /*topic*/, Collection<SubscriberEndpoint>> subscriberEndpointMap = new HashMap<>();
     private final AtomicLong maxMessage = new AtomicLong();
+    private final PublishersAndSubscribers publishersAndSubscribers = new PublishersAndSubscribers();
     private final MostRecentMessages mostRecentMessages;
     private final Cleanable cleanable;
     
@@ -193,6 +194,123 @@ public class DistributedMessageServer implements Shutdowneable {
     }
     
     /**
+     * List of all publishers and subscribers in the system.
+     */
+    private static class PublishersAndSubscribers {
+        private static class TopicInfo {
+            private CreatePublisher createPublisher;
+            private final Set<SubscriberEndpoint> subscriberEndpoints = new LinkedHashSet<>(); 
+            private Set<ClientMachine> notifyClients; // clients to notify when a publisher is created
+            
+            private void setNotifyClientsToNullIfEmpty() {
+                if (notifyClients != null && notifyClients.isEmpty()) {
+                    notifyClients = null;
+                }
+            }
+        }
+
+        private final Map<String /*topic*/, TopicInfo> topicMap = new LinkedHashMap<>();
+        
+        /**
+         * Add subscriber to this topic.
+         * Note that the publisher may not yet be created.
+         * 
+         * @return the CreatePublisher if one exists and the client machine is not already subscribed 
+         */
+        synchronized @Nullable CreatePublisher addSubscriberEndpoint(String topic, String subscriberName, ClientMachine clientMachine) {
+            TopicInfo info = topicMap.computeIfAbsent(topic, unused -> new TopicInfo());
+            boolean clientMachineAlreadySubscribedToTopic = info.subscriberEndpoints.stream().anyMatch(endpoint -> endpoint.getClientMachine().equals(clientMachine));
+            info.subscriberEndpoints.add(new SubscriberEndpoint(subscriberName, clientMachine));
+            if (info.notifyClients != null) {
+                info.notifyClients.removeIf(c -> c.equals(clientMachine));
+                info.setNotifyClientsToNullIfEmpty();
+            }
+            if (info.createPublisher != null && !clientMachineAlreadySubscribedToTopic) {
+                return info.createPublisher;
+            } else {
+                return null;
+            }
+        }
+
+        public synchronized void removeSubscriberEndpoint(String topic, String subscriberName) {
+            TopicInfo info = topicMap.computeIfAbsent(topic, unused -> new TopicInfo());
+            info.subscriberEndpoints.removeIf(subscriberEndpoint -> subscriberEndpoint.getSubscriberName().equals(subscriberName));
+        }
+        
+        /**
+         * Add a client to notify upon the publisher getting created.
+         * Does not add if there is already a subscriber and the publisher has not yet been created.
+         *
+         * @return the CreatePublisher if one exists
+         */
+        synchronized CreatePublisher maybeAddNotifyClient(String topic, ClientMachine clientMachine) {
+            TopicInfo info = topicMap.computeIfAbsent(topic, unused -> new TopicInfo());
+            if (info.createPublisher == null && info.subscriberEndpoints.stream().anyMatch(subscriberEndpoint -> subscriberEndpoint.getClientMachine().equals(clientMachine))) {
+                // clientMachine is already subscribed to the topic (even though the publisher does not yet exist)
+                // and will be notified anyway upon CreatePublisher
+                // so no need to notify it again
+                return null;
+            }
+            if (info.createPublisher != null) {
+                return info.createPublisher;
+            }
+            if (info.notifyClients == null) {
+                info.notifyClients = new LinkedHashSet<>();
+            }
+            info.notifyClients.add(clientMachine);
+            return null;
+        }
+        
+        /**
+         * Add createPublisher command.
+         * Used when a new client comes online and we have to relay the CreatePublisher command to them.
+         * 
+         * @throws IllegalArgumentException if the publisher already exists
+         */
+        synchronized void savePublisher(CreatePublisher createPublisher) {
+            var topic = createPublisher.getTopic();
+            TopicInfo info = topicMap.computeIfAbsent(topic, unused -> new TopicInfo());
+            if (info.createPublisher != null) {
+                throw new IllegalStateException(
+                    "Publisher already exists: topic=" + topic
+                        + ", publisherClass=" + info.createPublisher.getPublisherClass().getSimpleName()
+                        + ", newPublisherClass=" + createPublisher.getPublisherClass().getSimpleName());
+            }
+            info.createPublisher = createPublisher;
+        }
+
+        /**
+         * A channel has been closed.
+         * Remove all subscriber endpoints and notify clients for this channel.
+         */
+        synchronized void removeAllClientMachines(AsynchronousSocketChannel channel) {
+            for (var entry : topicMap.entrySet()) {
+                TopicInfo info = entry.getValue();
+                info.subscriberEndpoints.removeIf(subscriberEndpoint -> subscriberEndpoint.getClientMachine().getChannel() == channel);
+                if (info.notifyClients != null) {
+                    info.notifyClients.removeIf(clientMachine -> clientMachine.getChannel() == channel);
+                    info.setNotifyClientsToNullIfEmpty();
+                }
+            }
+        }
+
+        /**
+         * Return the client machines subscribed to this topic or who want a notification when a publisher is created.
+         * Side effect of this function is to remove elements from the notifyClients collection.
+         */
+        synchronized Stream<ClientMachine> getClientsInterestedInTopic(String topic) {
+            TopicInfo info = topicMap.get(topic);
+            if (info == null) {
+                return Stream.empty();
+            }
+            Stream<ClientMachine> subscribedClients = info.subscriberEndpoints.stream().map(SubscriberEndpoint::getClientMachine).distinct();
+            Stream<ClientMachine> notifyClients = info.notifyClients != null ? info.notifyClients.stream() : Stream.empty();
+            info.notifyClients = null;
+            return Stream.concat(subscribedClients, notifyClients);
+        }
+    }
+    
+    /**
      * Class to what subscribers and client machine has.
      * Used in the map of topic to list of subscribers for that topic.
      * One client machine can have two subscribers for the same topic.
@@ -230,7 +348,6 @@ public class DistributedMessageServer implements Shutdowneable {
     }
 
     private static class MostRecentMessages {
-        private final List<CreatePublisher> publishers = new ArrayList<>();
         private final int[] mostRecentMessagesToKeep;
         private final List<Deque<PublishMessage>> messages = List.of(new LinkedList<>(), new LinkedList<>());
         private final Map<ClientMachine, Map<String /*topic*/, Long /*maxIndex*/>> highestIndexMap = new HashMap<>();
@@ -247,57 +364,14 @@ public class DistributedMessageServer implements Shutdowneable {
             return result;
         }
 
-        synchronized void save(ClientMachine clientMachine, RelayTopicMessageBase relayMessage) {
-            if (relayMessage instanceof CreatePublisher) {
-                CreatePublisher createPublisher = (CreatePublisher) relayMessage;
-                publishers.add(createPublisher);
-            } else if (relayMessage instanceof PublishMessage) {
-                PublishMessage publishMessage = (PublishMessage) relayMessage;
-                int ordinal = publishMessage.getPriority().ordinal();
-                Deque<PublishMessage> deque = messages.get(ordinal);
-                deque.add(publishMessage);
-                if (deque.size() > mostRecentMessagesToKeep[ordinal]) {
-                    deque.removeFirst();
-                }
+        synchronized void save(ClientMachine clientMachine, PublishMessage publishMessage) {
+            int ordinal = publishMessage.getPriority().ordinal();
+            Deque<PublishMessage> deque = messages.get(ordinal);
+            deque.add(publishMessage);
+            if (deque.size() > mostRecentMessagesToKeep[ordinal]) {
+                deque.removeFirst();
             }
-            onMessageRelayed(clientMachine, relayMessage);
-        }
-        
-        synchronized void onMessageRelayed(ClientMachine clientMachine, RelayTopicMessageBase relayMessage) {
-            setMaxIndexIfLarger(clientMachine, relayMessage.getTopic(), relayMessage.getRelayFields().getServerIndex());
-        }
-
-        /**
-         * Retrieve publishers to send to clientMachine.
-         * 
-         * <p>Publishers that originated from clientMachine are not sent to it because save/onMessageRelayed would have been called,
-         * setting the maxIndex for this clientMachine and topic,
-         * and this functions only retrieves messages larger than maxIndex.
-         */
-        synchronized int retrievePublishers(ClientMachine clientMachine,
-                                            @Nonnull String topic,
-                                            long upperBoundInclusive,
-                                            Consumer<CreatePublisher> consumer) {
-            int count = 0;
-            long lowerBoundInclusive = getMaxIndex(clientMachine, topic) + 1;
-            CreatePublisher lastMessage = null;
-            Iterator<CreatePublisher> iter = publishers.iterator();
-            while (iter.hasNext()) {
-                CreatePublisher message = iter.next();
-                if (message.getRelayFields().getServerIndex() > upperBoundInclusive) {
-                    break;
-                }
-                if (message.getRelayFields().getServerIndex() < lowerBoundInclusive) {
-                    continue;
-                }
-                consumer.accept(message);
-                count++;
-                lastMessage = message;
-            }
-            if (lastMessage != null) {
-                setMaxIndexIfLarger(clientMachine, topic, lastMessage.getRelayFields().getServerIndex());
-            }
-            return count;
+            setMaxIndexIfLarger(clientMachine, publishMessage.getTopic(), publishMessage.getRelayFields().getServerIndex());
         }
 
         /**
@@ -344,9 +418,13 @@ public class DistributedMessageServer implements Shutdowneable {
                 }
             }
             if (lastMessage != null) {
-                setMaxIndexIfLarger(clientMachine, topic, lastMessage.getRelayFields().getServerIndex());
+                onMessageRelayed(clientMachine, lastMessage);
             }
             return count;
+        }
+
+        synchronized void onMessageRelayed(ClientMachine clientMachine, PublishMessage publishMessage) {
+            setMaxIndexIfLarger(clientMachine, publishMessage.getTopic(), publishMessage.getRelayFields().getServerIndex());
         }
 
         private long getMaxIndex(ClientMachine clientMachine, String topic) {
@@ -481,13 +559,6 @@ public class DistributedMessageServer implements Shutdowneable {
                     ClientMachine clientMachine = findClientMachineByChannel(channel);
                     if (clientMachine == null) {
                         sendRequestIdentification(channel, message);
-                    } else if (message instanceof RelayMessageBase
-                                && ((RelayMessageBase) message).getRelayFields() != null
-                                && (!(message instanceof Resendable) || !((Resendable)message).isResend())) {
-                        RelayMessageBase relayMessage = (RelayMessageBase) message;
-                        DistributedMessageServer.this.sendInvalidRelayMessage(clientMachine,
-                                                                              relayMessage,
-                                                                              ErrorMessageEnum.MESSAGE_ALREADY_PROCESSED.format(relayMessage.getClientIndex()));
                     } else {
                         Runnable logging = () -> {
                             LOGGER.log(Level.TRACE,
@@ -496,7 +567,18 @@ public class DistributedMessageServer implements Shutdowneable {
                                                      message.toLoggingString()));
                             onValidMessageReceived(message);
                         };
-                        if (message instanceof AddSubscriber) {
+                        
+                        if (message instanceof RelayMessageBase
+                                    && ((RelayMessageBase) message).getRelayFields() != null
+                                    && (!(message instanceof Resendable) || !((Resendable)message).isResend())) {
+                            RelayMessageBase relayMessage = (RelayMessageBase) message;
+                            DistributedMessageServer.this.sendInvalidRelayMessage(clientMachine,
+                                                                                  relayMessage,
+                                                                                  ErrorMessageEnum.MESSAGE_ALREADY_PROCESSED.format(relayMessage.getClientIndex()));
+                        } else if (message instanceof FetchPublisher) {
+                            logging.run();
+                            DistributedMessageServer.this.handleFetchPublisher(clientMachine, ((FetchPublisher) message).getTopic());
+                        } else if (message instanceof AddSubscriber) {
                             logging.run();
                             DistributedMessageServer.this.handleAddSubscriber(clientMachine, (AddSubscriber) message);
                         } else if (message instanceof RemoveSubscriber) {
@@ -621,40 +703,26 @@ public class DistributedMessageServer implements Shutdowneable {
                 LOGGER.log(Level.INFO, "Removed client machine: clientMachine={0} clientChannel={1}", clientMachine.getMachineId(), getRemoteAddress(channel));
             }
         }
-        removeSubscriber(channel);
+        publishersAndSubscribers.removeAllClientMachines(channel);
     }
     
-    private synchronized void removeSubscriber(AsynchronousSocketChannel channel) {
-        for (var iter = subscriberEndpointMap.entrySet().iterator(); iter.hasNext(); ) {
-            var entry = iter.next();
-            Collection<SubscriberEndpoint> collection = entry.getValue();
-            collection.removeIf(endpoint -> endpoint.getClientMachine().getChannel() == channel);
-            if (collection.isEmpty()) {
-                iter.remove();
-            }
+    private synchronized void handleFetchPublisher(ClientMachine clientMachine, String topic) {
+        CreatePublisher createPublisher = publishersAndSubscribers.maybeAddNotifyClient(topic, clientMachine);
+        if (createPublisher != null) {
+            send(createPublisher, clientMachine, 0);
         }
     }
     
     private synchronized void handleAddSubscriber(ClientMachine clientMachine, AddSubscriber subscriberInfo) {
         String topic = subscriberInfo.getTopic();
         String subscriberName = subscriberInfo.getSubscriberName();
-        MultimapUtils<String, SubscriberEndpoint> multimap = new MultimapUtils<>(subscriberEndpointMap, ArrayList::new);
-        var endpoints = multimap.getOrCreate(topic);
-        boolean clientMachineAlreadySubscribedToTopic = endpoints.stream().anyMatch(endpoint -> endpoint.getClientMachine().equals(clientMachine));
-        endpoints.add(new SubscriberEndpoint(subscriberName, clientMachine));
-        int numPublishersSent;
-        if (!clientMachineAlreadySubscribedToTopic) {
-            numPublishersSent = mostRecentMessages.retrievePublishers(
-                clientMachine,
-                topic,
-                Long.MAX_VALUE,
-                createPublisher -> DistributedMessageServer.this.send(createPublisher, clientMachine, 0));
-        } else {
-            numPublishersSent = 0;
-        }
+        CreatePublisher createPublisher = publishersAndSubscribers.addSubscriberEndpoint(topic, subscriberName, clientMachine);
         LOGGER.log(Level.INFO,
-                   "Added subscriber : topic={0} subscriberName={1} clientMachine={2} numPublishersSent={3}",
-                   topic, subscriberName, clientMachine.getMachineId(), numPublishersSent);
+                   "Added subscriber : topic={0} subscriberName={1} clientMachine={2} sendingPublisher={3}",
+                   topic, subscriberName, clientMachine.getMachineId(), createPublisher != null);
+        if (createPublisher != null) {
+            send(createPublisher, clientMachine, 0);
+        }
         if (subscriberInfo.shouldTryDownload()) {
             download(clientMachine, topic, subscriberInfo.getClientTimestamp(), null, Long.MAX_VALUE);
         }
@@ -663,8 +731,7 @@ public class DistributedMessageServer implements Shutdowneable {
     private synchronized void handleRemoveSubscriber(ClientMachine clientMachine, RemoveSubscriber subscriberInfo) {
         String topic = subscriberInfo.getTopic();
         String subscriberName = subscriberInfo.getSubscriberName();
-        MultimapUtils<String, SubscriberEndpoint> multimap = new MultimapUtils<>(subscriberEndpointMap, ArrayList::new);
-        multimap.removeIf(topic, endpoint -> endpoint.getSubscriberName().equals(subscriberName));
+        publishersAndSubscribers.removeSubscriberEndpoint(topic, subscriberName);
         LOGGER.log(Level.INFO, "Removed subscriber : topic={0} subscriberName={1} clientMachine={2}", topic, subscriberName, clientMachine.getMachineId());
     }
 
@@ -681,21 +748,19 @@ public class DistributedMessageServer implements Shutdowneable {
         boolean isResend = false;
         if (relay instanceof CreatePublisher) {
             CreatePublisher createPublisher = (CreatePublisher) relay;
+            publishersAndSubscribers.savePublisher(createPublisher);
             LOGGER.log(Level.INFO, "Added publisher: topic={0}, topicClass={1}", createPublisher.getTopic(), createPublisher.getPublisherClass().getSimpleName());
             if (createPublisher.isResend()) {
                 isResend = true;
             }
+        } else if (relay instanceof PublishMessage) {
+            PublishMessage publishMessage = (PublishMessage) relay;
+            mostRecentMessages.save(clientMachine, publishMessage);
         }
-        mostRecentMessages.save(clientMachine, relay);
         if (!isResend) {
-            Collection<SubscriberEndpoint> endpoints = subscriberEndpointMap.get(relay.getTopic());
-            if (endpoints != null) {
-                endpoints.stream()
-                         .filter(endpoint -> !endpoint.getClientMachine().equals(clientMachine))
-                         .map(SubscriberEndpoint::getClientMachine)
-                         .distinct()
-                         .forEach(otherMachine -> send(relay, otherMachine, 0));
-            }
+            publishersAndSubscribers.getClientsInterestedInTopic(relay.getTopic())
+                                    .filter(otherClientMachine -> !otherClientMachine.equals(clientMachine))
+                                    .forEach(otherClientMachine -> send(relay, otherClientMachine, 0));
         }
     }
     
@@ -759,9 +824,9 @@ public class DistributedMessageServer implements Shutdowneable {
                                  clientMachine.getMachineId(),
                                  message.toLoggingString()));
         onMessageSent(message);
-        if (message instanceof RelayTopicMessageBase) {
-            RelayTopicMessageBase relayMessage = (RelayTopicMessageBase) message;
-            mostRecentMessages.onMessageRelayed(clientMachine, relayMessage);
+        if (message instanceof PublishMessage) {
+            PublishMessage publishMessage = (PublishMessage) message;
+            mostRecentMessages.onMessageRelayed(clientMachine, publishMessage);
         }
     }
     
