@@ -34,8 +34,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
 import myutils.LogFailureToConsoleTestWatcher;
 import myutils.pubsub.InMemoryPubSubTest.CloneableString;
 import myutils.pubsub.MessageClasses.MessageBase;
@@ -989,9 +987,9 @@ public class DistributedSocketPubSubTest {
         assertEquals("AddSubscriber=2, CreatePublisher=1, FetchPublisher=3, Identification=5", centralServer.getValidReceived());
         assertEquals("CreatePublisher=3", centralServer.getSent());
 
-        CompletableFuture<Publisher> futurePublisher4_Again = client4.fetchPublisher("hello");
-        assertTrue(futurePublisher4_Again.isDone());
-        assertSame(publisher4, futurePublisher4_Again.get());
+        CompletableFuture<Publisher> repeatFuturePublisher4 = client4.fetchPublisher("hello");
+        assertTrue(repeatFuturePublisher4.isDone());
+        assertSame(publisher4, repeatFuturePublisher4.get());
         assertEquals("AddSubscriber=2, CreatePublisher=1, FetchPublisher=3, Identification=5", centralServer.getValidReceived()); // unchanged
         assertEquals("CreatePublisher=3", centralServer.getSent());
     }
@@ -1044,7 +1042,7 @@ class TestDistributedMessageServer extends DistributedMessageServer {
     }
 
     /**
-     * Return a string like
+     * Return a string like the following.
      * AddSubscriber=2, CreatePublisher=1, Identification=5
      */
     private static String accumulate(List<String> list) {
