@@ -7,12 +7,15 @@ import static org.junit.jupiter.api.Assertions.fail;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.TreeMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.junit.jupiter.params.ParameterizedTest;
 
 
@@ -59,6 +62,35 @@ public class TestUtil {
             }
         }
         return list;
+    }
+    
+    /**
+     * Given a list like [I, I, A, A, I, I, I, C, C] in other words 2 A's, 2 C's, 5 I's,
+     * return a string like the following.
+     * A=2, C=1, I=5
+     * 
+     * <p>This could be used to check if a list contains the correct quantities of each value in any order.
+     */
+    public static String countElementsInListByType(List<String> list) {
+        return countElementsInListByType(list, Function.identity());
+    }
+
+    /**
+     * Given a list like [fI, fI, fA, fA, fI, fI, fI, fC, fC] in other words 2 A's, 2 C's, 5 I's, and the mapper function as removing the 'f' at the start of each word,
+     * return a string like the following.
+     * A=2, C=1, I=5
+     * 
+     * <p>This could be used to check if a list contains the correct quantities of each value in any order.
+     */
+    public static String countElementsInListByType(List<String> list, Function<String, String> mapper) {
+        return list.stream()
+                   .collect(Collectors.groupingBy(mapper,
+                                                  TreeMap::new,
+                                                  Collectors.counting()))
+                   .entrySet()
+                   .stream()
+                   .map(entry -> entry.getKey() + '=' + entry.getValue())
+                   .collect(Collectors.joining(", "));
     }
     
     /**
