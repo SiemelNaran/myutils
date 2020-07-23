@@ -465,6 +465,7 @@ public class DistributedSocketPubSubTest {
      * The clients keep checking if the central server exists via capped exponential backoff.
      * Messages that failed to send before are sent now and relayed to the other client.
      */
+    // snaran: fail
     @Test
     void testCreateClientBeforeServer() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
@@ -742,7 +743,7 @@ public class DistributedSocketPubSubTest {
         assertTrue(client1.getPublisher("hello").isPresent());
         assertEquals(3, client1.getCountSent()); // Identification, CreatePublisher, AddSubsriber
         assertEquals(0, client1.getCountReceived());
-        
+
         var client2 = new TestDistributedSocketPubSub(1,
                                                       PubSub.defaultQueueCreator(),
                                                       PubSub.defaultSubscriptionMessageExceptionHandler(),
