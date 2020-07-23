@@ -1,6 +1,7 @@
 package myutils.pubsub;
 
 import static myutils.TestUtil.assertExceptionFromCallable;
+import static myutils.TestUtil.countElementsInListByType;
 import static myutils.TestUtil.sleep;
 import static myutils.TestUtil.toFuture;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -20,7 +21,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
-import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
@@ -31,9 +31,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import myutils.LogFailureToConsoleTestWatcher;
 import myutils.pubsub.InMemoryPubSubTest.CloneableString;
 import myutils.pubsub.MessageClasses.MessageBase;
@@ -288,7 +286,6 @@ public class DistributedSocketPubSubTest {
      * The new client does not receive the messages which were published earlier.
      * However, the new client can call download to retrieve the old messages.
      */
-    // snaran: fail
     @Test
     void testDownloadMessages() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
@@ -387,7 +384,6 @@ public class DistributedSocketPubSubTest {
      * Verify that restart fails.
      */
     @Test
-    // snaran: fail
     void testRestartFails() throws IOException, InterruptedException, ExecutionException {
         var centralServer = new TestDistributedMessageServer(CENTRAL_SERVER_HOST,
                                                              CENTRAL_SERVER_PORT,
@@ -463,7 +459,6 @@ public class DistributedSocketPubSubTest {
      * The clients keep checking if the central server exists via capped exponential backoff.
      * Messages that failed to send before are sent now and relayed to the other client.
      */
-    // snaran: fail
     @Test
     void testCreateClientBeforeServer() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
@@ -545,7 +540,6 @@ public class DistributedSocketPubSubTest {
      * Ensure that the other client receives the messages when the server comes back online.
      */
     @Test
-    // snaran: fail
     void testServerRestartsWhileClientRunning() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         
@@ -626,7 +620,6 @@ public class DistributedSocketPubSubTest {
      * Ensure that the other client receives the messages when the server comes back online.
      */
     @Test
-    // snaran: fail
     void testServerRestartsWhileClientRunning2() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         
@@ -714,7 +707,6 @@ public class DistributedSocketPubSubTest {
      * Ensure that the server ignores it.
      */
     @Test
-    // snaran: fail
     void testServerIgnoresMessagesAlreadyProcessed() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         
@@ -786,11 +778,12 @@ public class DistributedSocketPubSubTest {
     /**
      * Test performance.
      * There is a central server and 4 clients.
-     * 3 clients publish N messages messages.
+     * 3 clients publish N messages each, and one of them also publishes another N messages.
      * The 4th client receives all of the messages and has 2 subscribers.
      * 
-     * <p>With N as 1000 the test takes about 3.0sec.<br/>
-     * With N as 100 the test takes around 0.6sec.<br/>
+     * <p>On my computer,<br/>
+     * With N as 1000 the test takes about 3.8sec.<br/>
+     * With N as 100 the test takes around 0.8sec.<br/>
      * 
      * <p>This test also tests that the server does not encounter WritePendingException
      * (where we one thread sends a message to a client while another is also sending a message to it).
@@ -848,7 +841,7 @@ public class DistributedSocketPubSubTest {
         client4.start();
         
         final int N = 1000; // client1, client2, client3 each publish N messages
-        final int totalMessagesHandledByClient4 = N * 3 * 2; // times 2 because there are 2 subscribers in client4
+        final int totalMessagesHandledByClient4 = N * 4 * 2; // times 2 because there are 2 subscribers in client4
         final CountDownLatch latch = new CountDownLatch(totalMessagesHandledByClient4);
         
         client1.createPublisher("hello", CloneableString.class);
@@ -864,10 +857,11 @@ public class DistributedSocketPubSubTest {
 
         Instant startTime = Instant.now();
         
-        ExecutorService executor = Executors.newFixedThreadPool(3);
+        ExecutorService executor = Executors.newFixedThreadPool(4);
         for (int i = 1; i <= N; i++) {
             String val = Integer.toString(i);
-            executor.submit(() -> publisher1.publish(new CloneableString("message from client1: " + val)));
+            executor.submit(() -> publisher1.publish(new CloneableString("first message from client1: " + val)));
+            executor.submit(() -> publisher1.publish(new CloneableString("second message from client1: " + val)));
             executor.submit(() -> publisher2.publish(new CloneableString("message from client2: " + val)));
             executor.submit(() -> publisher3.publish(new CloneableString("message from client3: " + val)));
         }
@@ -1030,7 +1024,7 @@ class TestDistributedMessageServer extends DistributedMessageServer {
     }
 
     String getValidReceived() {
-        return accumulate(countValidReceived);
+        return countElementsInListByType(countValidReceived);
     }
     
     int getCountSent() {
@@ -1038,22 +1032,7 @@ class TestDistributedMessageServer extends DistributedMessageServer {
     }
 
     String getSent() {
-        return accumulate(countSent);
-    }
-
-    /**
-     * Return a string like the following.
-     * AddSubscriber=2, CreatePublisher=1, Identification=5
-     */
-    private static String accumulate(List<String> list) {
-        return list.stream()
-                   .collect(Collectors.groupingBy(Function.identity(),
-                                                          TreeMap::new,
-                                                          Collectors.counting()))
-                   .entrySet()
-                   .stream()
-                   .map(entry -> entry.getKey() + '=' + entry.getValue())
-                   .collect(Collectors.joining(", "));
+        return countElementsInListByType(countSent);
     }
 }
 
