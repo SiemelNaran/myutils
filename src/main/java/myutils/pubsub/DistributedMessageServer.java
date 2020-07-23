@@ -21,7 +21,6 @@ import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -195,6 +194,8 @@ public class DistributedMessageServer implements Shutdowneable {
     
     /**
      * List of all publishers and subscribers in the system.
+     * 
+     * @implNote The synchronized functions in this class could be synchronized on TopicInfo.notifyClients instead, and topicMap would have to be a ConcurrentHashMap.
      */
     private static class PublishersAndSubscribers {
         private static class TopicInfo {
@@ -209,7 +210,7 @@ public class DistributedMessageServer implements Shutdowneable {
             }
         }
 
-        private final Map<String /*topic*/, TopicInfo> topicMap = new LinkedHashMap<>();
+        private final Map<String /*topic*/, TopicInfo> topicMap = new HashMap<>();
         
         /**
          * Add subscriber to this topic.
@@ -304,6 +305,10 @@ public class DistributedMessageServer implements Shutdowneable {
         /**
          * Return the client machines subscribed to this topic or who want a notification when a publisher is created.
          * Side effect of this function is to remove elements from the notifyClients collection.
+         * 
+         * <p>A potential flaw of this function is that it returns a Stream, which is like an iterator,
+         * and if another thread modifies the underlying collection while this one is iterating, it could throw an exception.
+         * But see testNoConcurrentModificationWhileStreaming for why this may not happen.
          */
         synchronized Stream<ClientMachine> getClientsInterestedInTopic(String topic) {
             TopicInfo info = topicMap.get(topic);
@@ -435,13 +440,13 @@ public class DistributedMessageServer implements Shutdowneable {
         }
 
         private long getMaxIndex(ClientMachine clientMachine, String topic) {
-            Map<String, Long> map = highestIndexMap.computeIfAbsent(clientMachine, unused -> new LinkedHashMap<>());
+            Map<String, Long> map = highestIndexMap.computeIfAbsent(clientMachine, unused -> new HashMap<>());
             Long index = map.get(topic);
             return index != null ? index : 0;
         }
 
         private void setMaxIndexIfLarger(ClientMachine clientMachine, String topic, long newMax) {
-            Map<String, Long> map = highestIndexMap.computeIfAbsent(clientMachine, unused -> new LinkedHashMap<>());
+            Map<String, Long> map = highestIndexMap.computeIfAbsent(clientMachine, unused -> new HashMap<>());
             Long index = map.get(topic);
             if (index == null || newMax > index) {
                 map.put(topic, newMax);
@@ -713,14 +718,14 @@ public class DistributedMessageServer implements Shutdowneable {
         publishersAndSubscribers.removeAllClientMachines(channel);
     }
     
-    private synchronized void handleFetchPublisher(ClientMachine clientMachine, String topic) {
+    private void handleFetchPublisher(ClientMachine clientMachine, String topic) {
         CreatePublisher createPublisher = publishersAndSubscribers.maybeAddNotifyClient(topic, clientMachine);
         if (createPublisher != null) {
             send(createPublisher, clientMachine, 0);
         }
     }
     
-    private synchronized void handleAddSubscriber(ClientMachine clientMachine, AddSubscriber subscriberInfo) {
+    private void handleAddSubscriber(ClientMachine clientMachine, AddSubscriber subscriberInfo) {
         String topic = subscriberInfo.getTopic();
         String subscriberName = subscriberInfo.getSubscriberName();
         CreatePublisher createPublisher = publishersAndSubscribers.addSubscriberEndpoint(topic, subscriberName, clientMachine);
@@ -735,7 +740,7 @@ public class DistributedMessageServer implements Shutdowneable {
         }
     }
     
-    private synchronized void handleRemoveSubscriber(ClientMachine clientMachine, RemoveSubscriber subscriberInfo) {
+    private void handleRemoveSubscriber(ClientMachine clientMachine, RemoveSubscriber subscriberInfo) {
         String topic = subscriberInfo.getTopic();
         String subscriberName = subscriberInfo.getSubscriberName();
         publishersAndSubscribers.removeSubscriberEndpoint(topic, subscriberName);
