@@ -219,7 +219,7 @@ public class DistributedMessageServer implements Shutdowneable {
          */
         synchronized @Nullable CreatePublisher addSubscriberEndpoint(String topic, String subscriberName, ClientMachine clientMachine) {
             TopicInfo info = topicMap.computeIfAbsent(topic, unused -> new TopicInfo());
-            boolean clientMachineAlreadySubscribedToTopic = info.subscriberEndpoints.stream().anyMatch(endpoint -> endpoint.getClientMachine().equals(clientMachine));
+            boolean clientMachineAlreadySubscribedToTopic = isClientMachineAlreadySubscribedToTopic(info, clientMachine);
             info.subscriberEndpoints.add(new SubscriberEndpoint(subscriberName, clientMachine));
             if (info.notifyClients != null) {
                 info.notifyClients.removeIf(c -> c.equals(clientMachine));
@@ -230,6 +230,13 @@ public class DistributedMessageServer implements Shutdowneable {
             } else {
                 return null;
             }
+        }
+        
+        private boolean isClientMachineAlreadySubscribedToTopic(TopicInfo info, ClientMachine clientMachine) {
+            if (info.createPublisher != null && info.createPublisher.getRelayFields().getSourceMachineId().equals(clientMachine.getMachineId())) {
+                return true;
+            }
+            return info.subscriberEndpoints.stream().anyMatch(endpoint -> endpoint.getClientMachine().equals(clientMachine));
         }
 
         public synchronized void removeSubscriberEndpoint(String topic, String subscriberName) {
