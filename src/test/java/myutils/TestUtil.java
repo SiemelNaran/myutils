@@ -65,6 +65,15 @@ public class TestUtil {
     }
     
     /**
+     * Convert a CompletionStage to a Future.
+     * Only works if the class inherits from Future, as CompletableFuture does.
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> Future<T> toFuture(CompletionStage<T> future) {
+        return (Future<T>) future;
+    }
+
+    /**
      * Given a list like [I, I, A, A, I, I, I, C, C] in other words 2 A's, 2 C's, 5 I's,
      * return a string like the following.
      * A=2, C=1, I=5
@@ -74,7 +83,8 @@ public class TestUtil {
     public static String countElementsInListByType(List<String> list) {
         return countElementsInListByType(list, Function.identity());
     }
-
+    
+    
     /**
      * Given a list like [fI, fI, fA, fA, fI, fI, fI, fC, fC] in other words 2 A's, 2 C's, 5 I's, and the mapper function as removing the 'f' at the start of each word,
      * return a string like the following.
@@ -94,12 +104,23 @@ public class TestUtil {
     }
     
     /**
-     * Convert a CompletionStage to a Future.
-     * Only works if the class inherits from Future, as CompletableFuture does.
+     * Verify that each element in the list is greater than the previous one
+     * 
+     * @throws AssertionError if an element is the list is equal to or less than the element before it
      */
-    @SuppressWarnings("unchecked")
-    public static <T> Future<T> toFuture(CompletionStage<T> future) {
-        return (Future<T>) future;
+    public static <T extends Comparable<T>> void assertIncreasing(List<T> list) {
+        if (list.isEmpty()) {
+            return;
+        }
+        var iter = list.iterator();
+        T prev = iter.next();
+        while (iter.hasNext()) {
+            T val = iter.next();
+            if (val.compareTo(prev) <= 0) {
+                throw new AssertionError("list " + list + " is not increasing at [" + prev + ", " + val + "]");
+            }
+            prev = val;
+        }
     }
 
     /**

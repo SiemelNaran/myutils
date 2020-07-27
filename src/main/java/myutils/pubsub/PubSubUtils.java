@@ -8,6 +8,7 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.NetworkChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
@@ -55,7 +56,7 @@ class PubSubUtils {
             return "null";
         }
         try {
-            return channel.getLocalAddress().toString();
+            return Objects.toString(channel.getLocalAddress());
         } catch (IOException e) {
             return "<unknown>";
         }
@@ -66,7 +67,7 @@ class PubSubUtils {
             return "null";
         }
         try {
-            return channel.getRemoteAddress().toString();
+            return Objects.toString(channel.getRemoteAddress());
         } catch (IOException e) {
             return "<unknown>";
         }
@@ -77,7 +78,7 @@ class PubSubUtils {
             return "null";
         }
         try {
-            return channel.getRemoteAddress().toString();
+            return Objects.toString(channel.getRemoteAddress());
         } catch (IOException e) {
             return "<unknown>";
         }
@@ -135,10 +136,18 @@ class PubSubUtils {
         return backoff + delta;
     }
     
-    static Long extractIndex(MessageBase message) {
+    static Long extractClientIndex(MessageBase message) {
         if (message instanceof RelayMessageBase) {
             RelayMessageBase action = (RelayMessageBase) message;
-            return action.getRelayFields().getServerIndex();
+            return action.getClientIndex();
+        }
+        return null;
+    }
+
+    static @Nullable ServerIndex extractServerIndex(MessageBase message) {
+        if (message instanceof RelayMessageBase) {
+            RelayMessageBase action = (RelayMessageBase) message;
+            return action.getRelayFields().getServerIndex(); // may throw NullPointerException
         }
         return null;
     }

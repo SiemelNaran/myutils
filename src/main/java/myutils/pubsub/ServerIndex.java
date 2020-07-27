@@ -1,0 +1,81 @@
+package myutils.pubsub;
+
+import java.math.BigInteger;
+
+
+public class ServerIndex extends Number implements Comparable<ServerIndex> {
+    private static final long serialVersionUID = 1L;
+    
+    public static final ServerIndex MIN_VALUE = new ServerIndex(BigInteger.ZERO);
+    public static final ServerIndex MAX_VALUE = new ServerIndex(BigInteger.valueOf(Long.MAX_VALUE).shiftLeft(Long.SIZE).or(new BigInteger("FFFFFFFFFFFFFFFF", 16)));
+    
+    public static ServerIndex createDefaultFromNow() {
+        return new ServerIndex();
+    }
+    
+    private final BigInteger value;
+    
+    private ServerIndex() {
+        this(System.currentTimeMillis());
+    }
+    
+    ServerIndex(long now) {
+        value = BigInteger.valueOf(now).shiftLeft(Long.SIZE);
+    }
+    
+    private ServerIndex(BigInteger value) {
+        this.value = value;
+    }
+    
+    public ServerIndex increment() {
+       return new ServerIndex(value.add(BigInteger.ONE));
+    }
+
+    @Override
+    public boolean equals(Object thatObject) {
+        if (!(thatObject instanceof ServerIndex)) {
+            return false;
+        }
+        ServerIndex that = (ServerIndex) thatObject;
+        return this.value.equals(that.value);
+    }
+    
+    @Override
+    public int hashCode() {
+        return value.hashCode();
+    }
+    
+    @Override
+    public String toString() {
+        return value.toString(16);
+    }
+
+    @Override
+    public int intValue() {
+        return value.intValue();
+    }
+
+    @Override
+    public long longValue() {
+        return value.longValue();
+    }
+
+    @Override
+    public float floatValue() {
+        return value.floatValue();
+    }
+
+    @Override
+    public double doubleValue() {
+        return value.doubleValue();
+    }
+
+    @Override
+    public int compareTo(ServerIndex that) {
+        return this.value.compareTo(that.value);
+    }
+
+    public static int compare(ServerIndex lhs, ServerIndex rhs) {
+        return lhs.value.compareTo(rhs.value);
+    }
+}

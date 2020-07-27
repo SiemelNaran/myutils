@@ -194,7 +194,7 @@ public class DistributedSocketPubSub extends PubSub {
                 retryExecutor.schedule(() -> doStart(sendAllPublishersAndSubscribers, future, nextRetry), delayMillis, TimeUnit.MILLISECONDS);
             }
         } catch (IOException | RuntimeException | Error e) {
-            LOGGER.log(Level.ERROR, String.format("Failed to start %s: %s", snippet, e.toString()));
+            LOGGER.log(Level.ERROR, String.format("Failed to start %s", snippet), e);
             future.completeExceptionally(e);
         }
     }
@@ -220,7 +220,7 @@ public class DistributedSocketPubSub extends PubSub {
      * @see DistributedMessageServer#DistributedMessageServer(String, int, java.util.Map) for the number of messages of each RetentionPriority to remember
      * @see RetentionPriority
      */
-    public void download(long startIndexInclusive, long endIndexInclusive) {
+    public void download(ServerIndex startIndexInclusive, ServerIndex endIndexInclusive) {
         messageWriter.download(startIndexInclusive, endIndexInclusive);
     }
 
@@ -276,8 +276,9 @@ public class DistributedSocketPubSub extends PubSub {
                 boolean retryDone = retry >= MAX_RETRIES || SocketTransformer.isClosed(e);
                 Level level = retryDone ? Level.WARNING : Level.DEBUG;
                 LOGGER.log(level,
-                    () -> String.format("Send message failed: machine=%s, retry=%d, retryDone=%b, exception=%s",
-                                        machineId, retry, retryDone, e.toString()));
+                    () -> String.format("Send message failed: machine=%s, retry=%d, retryDone=%b",
+                                        machineId, retry, retryDone),
+                    e);
                 if (!retryDone) {
                     int nextRetry = retry + 1;
                     long delayMillis = computeExponentialBackoff(1000, nextRetry, MAX_RETRIES);
@@ -308,7 +309,7 @@ public class DistributedSocketPubSub extends PubSub {
             internalPutMessage(publishMessage);
         }
 
-        public void download(long startIndexInclusive, long endIndexInclusive) {
+        public void download(ServerIndex startIndexInclusive, ServerIndex endIndexInclusive) {
             internalPutMessage(new DownloadPublishedMessages(startIndexInclusive, endIndexInclusive));
         }
 
@@ -377,10 +378,12 @@ public class DistributedSocketPubSub extends PubSub {
                         attemptRestart = true;
                         if (channel.isOpen()) {
                             closeQuietly(channel);
-                        }
+                        }        
+                    } else {
+                        LOGGER.log(Level.WARNING,
+                                   String.format("Socket exception: machine={0}", DistributedSocketPubSub.this.machineId),
+                                   e);
                     }
-                    LOGGER.log(Level.WARNING, "Socket exception: machine={0}, exception={1}",
-                               DistributedSocketPubSub.this.machineId, e.toString());
                 } catch (RuntimeException | Error e) {
                     LOGGER.log(Level.ERROR, "Unexpected exception: machine=" + DistributedSocketPubSub.this.machineId, e);
                 } finally {
@@ -401,11 +404,11 @@ public class DistributedSocketPubSub extends PubSub {
         try {
             channelHolder.set(createNewSocket());
             doStart(true).exceptionally(e -> {
-                LOGGER.log(Level.ERROR, "Unable to restart DistributedSocketPubSub: %s", e.toString());
+                LOGGER.log(Level.ERROR, "Unable to restart DistributedSocketPubSub", e);
                 return null;
             });
         } catch (IOException e) {
-            LOGGER.log(Level.ERROR, "Unable to restart DistributedSocketPubSub: %s", e.toString());
+            LOGGER.log(Level.ERROR, "Unable to restart DistributedSocketPubSub", e);
         }
     }
     

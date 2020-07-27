@@ -266,19 +266,19 @@ interface MessageClasses {
     class DownloadPublishedMessages extends ClientGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
-        private final long startServerIndexInclusive;
-        private final long endServerIndexInclusive;
+        private final ServerIndex startServerIndexInclusive;
+        private final ServerIndex endServerIndexInclusive;
 
-        public DownloadPublishedMessages(long startServerIndexInclusive, long endServerIndexInclusive) {
+        public DownloadPublishedMessages(ServerIndex startServerIndexInclusive, ServerIndex endServerIndexInclusive) {
             this.startServerIndexInclusive = startServerIndexInclusive;
             this.endServerIndexInclusive = endServerIndexInclusive;
         }
         
-        long getStartServerIndexInclusive() {
+        ServerIndex getStartServerIndexInclusive() {
             return startServerIndexInclusive;
         }
         
-        long getEndServerIndexInclusive() {
+        ServerIndex getEndServerIndexInclusive() {
             return endServerIndexInclusive;
         }
 
@@ -292,10 +292,10 @@ interface MessageClasses {
         private static final long serialVersionUID = 1L;
         
         private final long serverTimestamp;
-        private final long serverIndex;
+        private final ServerIndex serverIndex;
         private final String sourceMachineId;
         
-        RelayFields(long serverTimestamp, long serverIndex, String sourceMachineId) {
+        RelayFields(long serverTimestamp, ServerIndex serverIndex, String sourceMachineId) {
             this.serverTimestamp = serverTimestamp;
             this.serverIndex = serverIndex;
             this.sourceMachineId = sourceMachineId;
@@ -305,7 +305,7 @@ interface MessageClasses {
             return serverTimestamp;
         }
         
-        long getServerIndex() {
+        ServerIndex getServerIndex() {
             return serverIndex;
         }
 
