@@ -800,7 +800,7 @@ public class DistributedMessageServer implements Shutdowneable {
         }
         if (addSubsciberResult.getCreatePublisher() != null && addSubsciberResult.isClientMachineNotAlreadySubscribed()) {
             if (subscriberInfo.shouldTryDownload()) {
-                download(clientMachine, topic, clientTimestamp, null, ServerIndex.MAX_VALUE, subscriberInfo.isResend());
+                download("handleAddSubscriber", clientMachine, topic, clientTimestamp, null, ServerIndex.MAX_VALUE, /*forceLogging*/ subscriberInfo.isResend());
             }
         }
     }
@@ -847,7 +847,7 @@ public class DistributedMessageServer implements Shutdowneable {
             // the messages published since the server died (b) need to be sent to all subscribers
             relayAction = (otherClientMachine, minClientTimestamp) -> {
                 if (minClientTimestamp != null) {
-                    download(otherClientMachine, topic, minClientTimestamp, null, ServerIndex.MAX_VALUE, true);
+                    download("handleCreatePublisher", otherClientMachine, topic, minClientTimestamp, null, ServerIndex.MAX_VALUE, /*forceLogging*/ true);
                 } else {
                     send(relay, otherClientMachine, 0); // send CreatePublisher commands to clients who requested it
                 }
@@ -857,15 +857,16 @@ public class DistributedMessageServer implements Shutdowneable {
     }
     
     private void handleDownload(ClientMachine clientMachine, DownloadPublishedMessages download) {
-        download(clientMachine, null, null, download.getStartServerIndexInclusive(), download.getEndServerIndexInclusive(), /*forceLog*/ true);
+        download("download", clientMachine, null, null, download.getStartServerIndexInclusive(), download.getEndServerIndexInclusive(), /*forceLogging*/ true);
     }
     
-    private void download(ClientMachine clientMachine,
+    private void download(@Nonnull String trigger,
+                          ClientMachine clientMachine,
                           @Nullable String topic,
                           @Nullable Long minClientTimestamp,
                           @Nullable ServerIndex lowerBoundInclusive,
                           ServerIndex upperBoundInclusive,
-                          boolean forceLog) {
+                          boolean forceLogging) {
         int numMessages = mostRecentMessages.forSavedMessages(
             clientMachine,
             topic,
@@ -873,8 +874,8 @@ public class DistributedMessageServer implements Shutdowneable {
             lowerBoundInclusive, 
             upperBoundInclusive,
             publishMessage -> send(publishMessage, clientMachine, 0));
-        if (numMessages != 0 || forceLog) {
-            LOGGER.log(Level.INFO, String.format("Download messages to client: clientMachine=%s, numMessagesDownloaded=%d", clientMachine.getMachineId(), numMessages));
+        if (numMessages != 0 || forceLogging) {
+            LOGGER.log(Level.INFO, String.format("Download messages to client: clientMachine=%s, trigger=%s, numMessagesDownloaded=%d", clientMachine.getMachineId(), trigger, numMessages));
         }
     }
 
