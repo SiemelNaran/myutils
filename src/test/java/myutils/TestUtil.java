@@ -104,7 +104,7 @@ public class TestUtil {
     }
     
     /**
-     * Verify that each element in the list is greater than the previous one
+     * Verify that each element in the list is greater than the previous one.
      * 
      * @throws AssertionError if an element is the list is equal to or less than the element before it
      */

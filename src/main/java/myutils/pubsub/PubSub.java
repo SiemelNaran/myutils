@@ -23,7 +23,6 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
 import myutils.pubsub.PubSubUtils.CallStackCapturing;
 import myutils.util.MultimapUtils;
@@ -118,15 +117,21 @@ public abstract class PubSub implements Shutdowneable {
      * <p>In implementation it has a topic, publisher class, list of subscribers, and pointer to the lock in the outer PubSub class. 
      */
     public abstract class Publisher {
+        private final long createdAtTimestamp;
         private final @Nonnull String topic;
         private final @Nonnull Class<?> publisherClass;
         private final @Nonnull Collection<Subscriber> subscribers = new ArrayList<>();
 
         protected Publisher(@Nonnull String topic, @Nonnull Class<?> publisherClass) {
+            this.createdAtTimestamp = System.currentTimeMillis();
             this.topic = topic;
             this.publisherClass = publisherClass;
         }
 
+        protected long getCreatedAtTimestamp() {
+            return createdAtTimestamp;
+        }
+        
         public @Nonnull String getTopic() {
             return topic;
         }
@@ -135,8 +140,11 @@ public abstract class PubSub implements Shutdowneable {
             return publisherClass;
         }
         
-        protected @Nonnull List<String> getSubsciberNames() {
-            return subscribers.stream().map(Subscriber::getSubscriberName).collect(Collectors.toList());
+        /**
+         * Return subscribers in the order they were created.
+         */
+        protected @Nonnull List<Subscriber> getSubscibers() {
+            return new ArrayList<>(subscribers);
         }
         
         public final <T extends CloneableObject<?>> void publish(@Nonnull T message) {
@@ -165,6 +173,7 @@ public abstract class PubSub implements Shutdowneable {
      * list of messages to process, and pointer to the lock and condition and master list in the outer PubSub class. 
      */
     public abstract class Subscriber {
+        private final long createdAtTimestamp;
         private final @Nonnull String topic;
         private final @Nonnull String subsriberName;
         private final @Nonnull Class<? extends CloneableObject<?>> subscriberClass; // same as or inherits from publisherClass
@@ -175,10 +184,15 @@ public abstract class PubSub implements Shutdowneable {
                              @Nonnull String subscriberName,
                              @Nonnull Class<? extends CloneableObject<?>> subscriberClass,
                              @Nonnull Consumer<CloneableObject<?>> callback) {
+            this.createdAtTimestamp = System.currentTimeMillis();
             this.topic = topic;
             this.subsriberName = subscriberName;
             this.subscriberClass = subscriberClass;
             this.callback = callback;
+        }
+        
+        protected long getCreatedAtTimestamp() {
+            return createdAtTimestamp;
         }
 
         @Nonnull

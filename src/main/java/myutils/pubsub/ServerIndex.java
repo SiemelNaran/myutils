@@ -28,7 +28,7 @@ public class ServerIndex extends Number implements Comparable<ServerIndex> {
     }
     
     public ServerIndex increment() {
-       return new ServerIndex(value.add(BigInteger.ONE));
+        return new ServerIndex(value.add(BigInteger.ONE));
     }
 
     @Override
