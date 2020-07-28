@@ -6,11 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 
 import java.math.BigInteger;
-
+import myutils.TestBase;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
-
-import myutils.TestBase;
 
 
 public class ServerIndexTest extends TestBase {

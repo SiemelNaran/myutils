@@ -202,11 +202,12 @@ public class DistributedSocketPubSub extends PubSub {
     private void doSendAllPublishersAndSubscribers() {
         forEachPublisher(basePublisher -> {
             DistributedPublisher publisher = (DistributedPublisher) basePublisher;
+            String topic = publisher.getTopic();
             if (!publisher.isRemote()) {
-                messageWriter.createPublisher(publisher.getTopic(), publisher.getPublisherClass(), publisher.getRemoteRelayFields(), /*isResend*/ true);
+                messageWriter.createPublisher(publisher.getCreatedAtTimestamp(), topic, publisher.getPublisherClass(), publisher.getRemoteRelayFields(), /*isResend*/ true);
             }
-            for (var subscriberName : publisher.getSubsciberNames()) {
-                messageWriter.addSubscriber(publisher.getTopic(), subscriberName, /*isResend*/ true);
+            for (var subscriber : publisher.getSubscibers()) {
+                messageWriter.addSubscriber(subscriber.getCreatedAtTimestamp(), topic, subscriber.getSubscriberName(), /*isResend*/ true);
             }
         });
     }
@@ -289,16 +290,16 @@ public class DistributedSocketPubSub extends PubSub {
             }
         }
 
-        private void addSubscriber(@Nonnull String topic, @Nonnull String subscriberName, boolean isResend) {
-            internalPutMessage(new AddSubscriber(topic, subscriberName, true, isResend));
+        private void addSubscriber(long createdAtTimestamp, @Nonnull String topic, @Nonnull String subscriberName, boolean isResend) {
+            internalPutMessage(new AddSubscriber(createdAtTimestamp, topic, subscriberName, true, isResend));
         }
 
         private void removeSubscriber(@Nonnull String topic, @Nonnull String subscriberName) {
             internalPutMessage(new RemoveSubscriber(topic, subscriberName));
         }
 
-        private void createPublisher(@Nonnull String topic, @Nonnull Class<?> publisherClass, RelayFields relayFields, boolean isResend) {
-            var createPublisher = new CreatePublisher(localMaxMessage.incrementAndGet(), topic, publisherClass, isResend);
+        private void createPublisher(long createdAtTimestamp, @Nonnull String topic, @Nonnull Class<?> publisherClass, RelayFields relayFields, boolean isResend) {
+            var createPublisher = new CreatePublisher(createdAtTimestamp, localMaxMessage.incrementAndGet(), topic, publisherClass, isResend);
             createPublisher.setRelayFields(relayFields);
             internalPutMessage(createPublisher);
         }
@@ -465,7 +466,7 @@ public class DistributedSocketPubSub extends PubSub {
         if (relayFields == null) {
             // this DistributedPubSub is creating a new publisher
             // so send it to the central server
-            messageWriter.createPublisher(topic, publisherClass, null, /*isResend*/ false);
+            messageWriter.createPublisher(publisher.getCreatedAtTimestamp(), topic, publisherClass, null, /*isResend*/ false);
         }
         return publisher;
     }
@@ -527,7 +528,7 @@ public class DistributedSocketPubSub extends PubSub {
      */
     @Override
     protected void onAddSubscriber(Subscriber subscriber) {
-        messageWriter.addSubscriber(subscriber.getTopic(),subscriber.getSubscriberName(), /*isResend*/ false);
+        messageWriter.addSubscriber(subscriber.getCreatedAtTimestamp(), subscriber.getTopic(),subscriber.getSubscriberName(), /*isResend*/ false);
     }
 
     /**

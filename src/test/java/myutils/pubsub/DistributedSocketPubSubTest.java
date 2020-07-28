@@ -388,9 +388,10 @@ public class DistributedSocketPubSubTest extends TestBase {
         assertExceptionFromCallable(() -> startCentralServerFutureAgain.get(), ExecutionException.class, "java.nio.channels.AlreadyConnectedException");
 
         // start another server on same host:port
-       var centralServerDuplicateAddress = new TestDistributedMessageServer(CENTRAL_SERVER_HOST,
+        var centralServerDuplicateAddress = new TestDistributedMessageServer(CENTRAL_SERVER_HOST,
                                                                              CENTRAL_SERVER_PORT,
                                                                              Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
+        addShutdown(centralServerDuplicateAddress);
         Future<Void> startServerDuplicateAddressFuture = toFuture(centralServerDuplicateAddress.start());
         sleep(250); // time to let server start        
         assertTrue(startServerDuplicateAddressFuture.isDone());
@@ -411,6 +412,7 @@ public class DistributedSocketPubSubTest extends TestBase {
                                                                      31001,
                                                                      CENTRAL_SERVER_HOST,
                                                                      CENTRAL_SERVER_PORT);
+        addShutdown(clientDuplicateAddress);
         Future<Void> startClientDuplicateAddressFuture = toFuture(clientDuplicateAddress.start());
         sleep(250); // time to let client start        
         assertTrue(startClientDuplicateAddressFuture.isDone());

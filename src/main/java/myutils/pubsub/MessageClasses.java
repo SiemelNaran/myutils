@@ -125,8 +125,8 @@ interface MessageClasses {
         
         private final long clientTimestamp;
 
-        ClientGeneratedMessage() {
-            this.clientTimestamp = System.currentTimeMillis();
+        ClientGeneratedMessage(Long clientTimestamp) {
+            this.clientTimestamp = clientTimestamp != null ? clientTimestamp : System.currentTimeMillis();
         }
 
         long getClientTimestamp() {
@@ -145,6 +145,7 @@ interface MessageClasses {
         private final String machineId;
         
         Identification(String machineId) {
+            super(null);
             this.machineId = machineId;
         }
         
@@ -169,7 +170,8 @@ interface MessageClasses {
         private final String topic;
         private final String subscriberName;
 
-        public AddOrRemoveSubscriber(String topic, String subscriberName) {
+        public AddOrRemoveSubscriber(Long clientTimestamp, String topic, String subscriberName) {
+            super(clientTimestamp);
             this.topic = topic;
             this.subscriberName = subscriberName;
         }
@@ -183,7 +185,7 @@ interface MessageClasses {
         }
 
         private String basicLoggingString() {
-            return classType(this) + ", topic=" + topic + ", subscriberName=" + subscriberName;
+            return classType(this) + ", clientTimestamp=" + getClientTimestamp() + ", topic=" + topic + ", subscriberName=" + subscriberName;
         }
     }
     
@@ -197,8 +199,8 @@ interface MessageClasses {
         private final boolean tryDownload;
         private final boolean isResend;
         
-        public AddSubscriber(String topic, String subscriberName, boolean tryDownload, boolean isResend) {
-            super(topic, subscriberName);
+        public AddSubscriber(long createdAtTimestamp, String topic, String subscriberName, boolean tryDownload, boolean isResend) {
+            super(createdAtTimestamp, topic, subscriberName);
             this.tryDownload = tryDownload;
             this.isResend = isResend;
         }
@@ -226,7 +228,7 @@ interface MessageClasses {
         private static final long serialVersionUID = 1L;
         
         public RemoveSubscriber(String topic, String subscriberName) {
-            super(topic, subscriberName);
+            super(null, topic, subscriberName);
         }
 
         @Override
@@ -246,6 +248,7 @@ interface MessageClasses {
         private final String topic;
         
         public FetchPublisher(String topic) {
+            super(null);
             this.topic = topic;
         }
         
@@ -270,6 +273,7 @@ interface MessageClasses {
         private final ServerIndex endServerIndexInclusive;
 
         public DownloadPublishedMessages(ServerIndex startServerIndexInclusive, ServerIndex endServerIndexInclusive) {
+            super(null);
             this.startServerIndexInclusive = startServerIndexInclusive;
             this.endServerIndexInclusive = endServerIndexInclusive;
         }
@@ -334,7 +338,8 @@ interface MessageClasses {
         private final long clientIndex;
         private RelayFields relayFields; // null before message sent to server
         
-        RelayMessageBase(long clientIndex) {
+        RelayMessageBase(Long createdAtTimestamp, long clientIndex) {
+            super(createdAtTimestamp);
             this.clientIndex = clientIndex;
         }
         
@@ -352,6 +357,7 @@ interface MessageClasses {
 
         String basicLoggingString() {
             return classType(this)
+                    + ", clientTimestamp=" + getClientTimestamp()
                     + ", clientIndex=" + clientIndex
                     + ", " + relayFields;
         }
@@ -365,8 +371,8 @@ interface MessageClasses {
 
         private final @Nonnull String topic;
         
-        RelayTopicMessageBase(long clientIndex, @Nonnull String topic) {
-            super(clientIndex);
+        RelayTopicMessageBase(Long createdAtTimestamp, long clientIndex, @Nonnull String topic) {
+            super(null, clientIndex);
             this.topic = topic;
         }
         
@@ -391,8 +397,8 @@ interface MessageClasses {
         private final @Nonnull Class<?> publisherClass;
         private final boolean isResend;
 
-        CreatePublisher(long clientIndex, @Nonnull String topic, @Nonnull Class<?> publisherClass, boolean isResend) {
-            super(clientIndex, topic);
+        CreatePublisher(long createdAtTimestamp, long clientIndex, @Nonnull String topic, @Nonnull Class<?> publisherClass, boolean isResend) {
+            super(createdAtTimestamp, clientIndex, topic);
             this.publisherClass = publisherClass;
             this.isResend = isResend;
         }
@@ -423,7 +429,7 @@ interface MessageClasses {
         private final @Nonnull RetentionPriority priority;
         
         PublishMessage(long clientIndex, @Nonnull String topic, @Nonnull CloneableObject<?> message, RetentionPriority priority) {
-            super(clientIndex, topic);
+            super(null, clientIndex, topic);
             this.message = message;
             this.priority = priority;
         }
