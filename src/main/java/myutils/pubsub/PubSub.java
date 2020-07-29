@@ -104,7 +104,7 @@ public abstract class PubSub implements Shutdowneable {
     public PubSub(int numInMemoryHandlers,
                   Supplier<Queue<Subscriber>> queueCreator,
                   SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler) {
-        this.executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(numInMemoryHandlers, createThreadFactory("PubSubListener"));
+        this.executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(numInMemoryHandlers, createThreadFactory("PubSubListener", true));
         this.masterList = queueCreator.get();
         this.subscriptionMessageExceptionHandler = subscriptionMessageExceptionHandler;
         this.cleanable = addShutdownHook(this, new Cleanup(executorService, lock, notEmpty), PubSub.class);

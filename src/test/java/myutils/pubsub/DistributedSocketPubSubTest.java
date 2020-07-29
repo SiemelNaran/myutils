@@ -1081,17 +1081,27 @@ public class DistributedSocketPubSubTest extends TestBase {
         sleep(500); // time to let server and client start
     }
 
-    /*
     @Test
     void testShutdownHook() throws IOException, InterruptedException {
-        var processBuilder = new ProcessBuilder("java", "-version");
+        var processBuilder = new ProcessBuilder(
+                "java",
+                "-cp",
+                "target/classes:target/test-classes",
+                "-ea",
+                "-Djava.util.logging.config.file=target/test-classes/logging.properties",
+                "myutils.pubsub.DistributedSocketPubSubTest")
+                .inheritIO();
         var process = processBuilder.start();
-        process.getInputStream();
-        process.waitFor();
+        boolean finished = process.waitFor(5, TimeUnit.SECONDS);
+        System.out.println("finished=" + finished);
+        System.out.println("exitCode=" + process.exitValue());
+        
+        // the shutdown hook shuts down the client and server
+        // if we did not have a shutdown hook the port would still be in use
+        // and subsequent tests would fail
     }
-    */
-    
-    public static void main() throws IOException {
+
+    public static void main(String[] args) throws IOException {
         DistributedMessageServer centralServer = new DistributedMessageServer(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, Collections.emptyMap());
         centralServer.start();
         sleep(250); // time to let the central server start

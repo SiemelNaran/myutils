@@ -92,8 +92,8 @@ public class DistributedSocketPubSub extends PubSub {
     private final String machineId;
     private final SocketAddress localAddress;
     private final AtomicReference<SocketChannel> channelHolder;
-    private final ExecutorService channelExecutor = Executors.newFixedThreadPool(2, createThreadFactory("DistributedSocketPubSub"));
-    private final ScheduledExecutorService retryExecutor = Executors.newScheduledThreadPool(1, createThreadFactory("DistributedSocketPubSub.Retry"));
+    private final ExecutorService channelExecutor = Executors.newFixedThreadPool(2, createThreadFactory("DistributedSocketPubSub", true));
+    private final ScheduledExecutorService retryExecutor = Executors.newScheduledThreadPool(1, createThreadFactory("DistributedSocketPubSub.Retry", true));
     private final MessageWriter messageWriter;
     private final AtomicLong localMaxMessage = new AtomicLong();
     private final Map<String /*topic*/, CompletableFuture<Publisher>> fetchPublisherMap = new HashMap<>();
