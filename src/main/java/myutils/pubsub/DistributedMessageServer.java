@@ -1027,7 +1027,8 @@ public class DistributedMessageServer implements Shutdowneable {
 
         @Override
         public void run() {
-            LOGGER.log(Level.DEBUG, "Shutting down " + DistributedMessageServer.class.getSimpleName() + " " + getLocalAddress(channel) + getCallStack());
+            LOGGER.log(Level.DEBUG, "Shutting down " + DistributedMessageServer.class.getSimpleName() + " " + getLocalAddress(channel));
+            LOGGER.log(Level.TRACE, "Call stack at creation:" + getCallStack());
             closeExecutorQuietly(acceptExecutor);
             closeExecutorQuietly(channelExecutor);
             closeExecutorQuietly(retryExecutor);

@@ -31,6 +31,10 @@ class PubSubUtils {
             this.stackTrace = Arrays.stream(fullStackTrace).skip(3).limit(7).toArray(StackTraceElement[]::new);
         }
         
+        /**
+         * Return the call stack at creation.
+         * It starts with a newline and does not end with a newline.
+         */
         String getCallStack() {
             StringBuilder builder = new StringBuilder("\n");
             for (var element : stackTrace) {

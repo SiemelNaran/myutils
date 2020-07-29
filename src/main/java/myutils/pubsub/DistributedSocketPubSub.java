@@ -8,6 +8,7 @@ import static myutils.pubsub.PubSubUtils.getLocalAddress;
 import static myutils.pubsub.PubSubUtils.getRemoteAddress;
 import static myutils.util.concurrent.MoreExecutors.createThreadFactory;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.lang.System.Logger.Level;
 import java.lang.ref.Cleaner.Cleanable;
@@ -374,12 +375,14 @@ public class DistributedSocketPubSub extends PubSub {
                                    DistributedSocketPubSub.this.machineId, message.getClass().getSimpleName());
                     }
                 } catch (IOException e) {
-                    if (SocketTransformer.isClosed(e)) {
-                        LOGGER.log(Level.INFO, "Socket closed, ending reader: {0}", e.toString());
+                    if (e instanceof EOFException) {
+                        LOGGER.log(Level.WARNING, "Socket reached end of stream, ending reader");
                         attemptRestart = true;
                         if (channel.isOpen()) {
                             closeQuietly(channel);
                         }        
+                    } else if (SocketTransformer.isClosed(e)) {
+                        LOGGER.log(Level.INFO, "Socket closed, ending reader: {0}", e.toString());
                     } else {
                         LOGGER.log(Level.WARNING,
                                    String.format("Socket exception: machine={0}", DistributedSocketPubSub.this.machineId),
@@ -586,10 +589,11 @@ public class DistributedSocketPubSub extends PubSub {
 
         @Override
         public void run() {
-            LOGGER.log(Level.DEBUG, "Cleaning up " + machineId + " " + DistributedSocketPubSub.class.getSimpleName() + " " + getLocalAddress(channelHolder.get()) + getCallStack());
+            LOGGER.log(Level.DEBUG, "Cleaning up " + machineId + " " + DistributedSocketPubSub.class.getSimpleName() + " " + getLocalAddress(channelHolder.get()));
+            LOGGER.log(Level.TRACE, "Call stack at creation:" + getCallStack());
+            closeQuietly(channelHolder.get());
             closeExecutorQuietly(channelExecutor);
             closeExecutorQuietly(retryExecutor);
-            closeQuietly(channelHolder.get());
         }
     }
 }
