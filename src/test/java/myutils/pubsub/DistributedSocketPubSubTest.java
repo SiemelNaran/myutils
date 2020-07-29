@@ -58,6 +58,7 @@ public class DistributedSocketPubSubTest extends TestBase {
     
     @AfterEach
     void invokeShutdowns() {
+        System.out.println("invokeShutdowns");
         for (var iter = shutdowns.descendingIterator(); iter.hasNext(); ) {
             var s = iter.next();
             s.shutdown();
@@ -1057,6 +1058,67 @@ public class DistributedSocketPubSubTest extends TestBase {
         assertSame(publisher4, repeatFuturePublisher4.get());
         assertEquals("AddSubscriber=2, CreatePublisher=1, FetchPublisher=3, Identification=5", centralServer.getValidTypesReceived()); // unchanged
         assertEquals("CreatePublisher=3", centralServer.getTypesSent());
+    }
+    
+    @Test
+    void testShutdown() throws IOException {
+        DistributedMessageServer centralServer = new DistributedMessageServer(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, Collections.emptyMap());
+        addShutdown(centralServer);
+        centralServer.start();
+        sleep(250); // time to let the central server start
+        
+        var client1 = new TestDistributedSocketPubSub(1,
+                                                      PubSub.defaultQueueCreator(),
+                                                      PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                                      "client1",
+                                                      "localhost",
+                                                       30001,
+                                                       CENTRAL_SERVER_HOST,
+                                                       CENTRAL_SERVER_PORT);
+        addShutdown(client1);
+        client1.start();
+        
+        sleep(500); // time to let server and client start
+    }
+
+    /*
+    @Test
+    void testShutdownHook() throws IOException, InterruptedException {
+        var processBuilder = new ProcessBuilder("java", "-version");
+        var process = processBuilder.start();
+        process.getInputStream();
+        process.waitFor();
+    }
+    */
+    
+    public static void main() throws IOException {
+        DistributedMessageServer centralServer = new DistributedMessageServer(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, Collections.emptyMap());
+        centralServer.start();
+        sleep(250); // time to let the central server start
+        
+        var client1 = new TestDistributedSocketPubSub(1,
+                                                      PubSub.defaultQueueCreator(),
+                                                      PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                                      "client1",
+                                                      "localhost",
+                                                       30001,
+                                                       CENTRAL_SERVER_HOST,
+                                                       CENTRAL_SERVER_PORT);
+        client1.start();
+        
+        var client2 = new TestDistributedSocketPubSub(1,
+                                                      PubSub.defaultQueueCreator(),
+                                                      PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                                      "client2",
+                                                      "localhost",
+                                                      30002,
+                                                      CENTRAL_SERVER_HOST,
+                                                      CENTRAL_SERVER_PORT);
+        client2.start();
+
+        sleep(250); // time to let clients start, connect to the central server, and send identification
+
+        // the shutdown hook will close centralServer, client1, and client2
     }
 }
 

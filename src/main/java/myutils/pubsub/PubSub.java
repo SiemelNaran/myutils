@@ -426,7 +426,8 @@ public abstract class PubSub implements Shutdowneable {
 
         @Override
         public void run() {
-            LOGGER.log(Level.DEBUG, "Cleaning up " + PubSub.class.getSimpleName() + getCallStack());
+            LOGGER.log(Level.DEBUG, "Cleaning up " + PubSub.class.getSimpleName());
+            LOGGER.log(Level.TRACE, "Call stack at creation:" + getCallStack());
             closeExecutorQuietly(executorService);
             try {
                 boolean locked = lock.tryLock(100, TimeUnit.MILLISECONDS);
