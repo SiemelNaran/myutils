@@ -517,9 +517,9 @@ public class DistributedMessageServer implements Shutdowneable {
         this.host = host;
         this.port = port;
         this.asyncServerSocketChannel = AsynchronousServerSocketChannel.open();
-        this.acceptExecutor = Executors.newSingleThreadExecutor(createThreadFactory("DistributedMessageServer.accept"));
-        this.channelExecutor = Executors.newFixedThreadPool(NUM_CHANNEL_THREADS, createThreadFactory("DistributedMessageServer.socket"));
-        this.retryExecutor = Executors.newScheduledThreadPool(1, createThreadFactory("DistributedMessageServer.Retry"));
+        this.acceptExecutor = Executors.newSingleThreadExecutor(createThreadFactory("DistributedMessageServer.accept", true));
+        this.channelExecutor = Executors.newFixedThreadPool(NUM_CHANNEL_THREADS, createThreadFactory("DistributedMessageServer.socket", true));
+        this.retryExecutor = Executors.newScheduledThreadPool(1, createThreadFactory("DistributedMessageServer.Retry", true));
         this.mostRecentMessages = new MostRecentMessages(mostRecentMessagesToKeep);
         this.cleanable = addShutdownHook(this,
                                          new Cleanup(asyncServerSocketChannel,

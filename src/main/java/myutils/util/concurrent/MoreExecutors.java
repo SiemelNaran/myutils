@@ -112,11 +112,20 @@ public class MoreExecutors {
     }
     
     
-    public static ThreadFactory createThreadFactory(String basename) {
+    /**
+     * Create a thread factory.
+     * 
+     * @param basename the thread names will be basename-1, basename-2, etc
+     * @param daemon true if the new threads should be daemon threads
+     * @return
+     */
+    public static ThreadFactory createThreadFactory(String basename, boolean daemon) {
+        ThreadGroup threadGroup = new ThreadGroup(basename);
         final AtomicInteger count = new AtomicInteger();
         return runnable -> {
-            ThreadGroup threadGroup = new ThreadGroup(basename);
-            return new Thread(threadGroup, runnable, basename + "-" + count.incrementAndGet());
+            var thread = new Thread(threadGroup, runnable, basename + "-" + count.incrementAndGet());
+            thread.setDaemon(daemon);
+            return thread;
         };
     }
 }
