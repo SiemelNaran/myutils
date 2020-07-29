@@ -875,7 +875,10 @@ public class DistributedMessageServer implements Shutdowneable {
             upperBoundInclusive,
             publishMessage -> send(publishMessage, clientMachine, 0));
         if (numMessages != 0 || forceLogging) {
-            LOGGER.log(Level.INFO, String.format("Download messages to client: clientMachine=%s, trigger=%s, numMessagesDownloaded=%d", clientMachine.getMachineId(), trigger, numMessages));
+            LOGGER.log(Level.INFO, String.format("Download messages to client: clientMachine=%s, trigger=%s, numMessagesDownloaded=%d",
+                                                 clientMachine.getMachineId(),
+                                                 trigger,
+                                                 numMessages));
         }
     }
 
