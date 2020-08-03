@@ -50,7 +50,7 @@ class PubSubUtils {
     
     static Cleanable addShutdownHook(Object object, Runnable cleanup, Class<?> clazz) {
         Cleanable cleanable = cleaner.register(object, cleanup);
-        Thread thread = new Thread(() -> cleanable.clean(), clazz.getSimpleName() + ".shutdown");
+        Thread thread = new Thread(cleanable::clean, clazz.getSimpleName() + ".shutdown");
         Runtime.getRuntime().addShutdownHook(thread);
         return cleanable;
     }
@@ -112,28 +112,27 @@ class PubSubUtils {
     /**
      * Calculate the exponential backoff delay.
      * 
-     * @param baseMillis the time for the first event
+     * @param base the time in any unit for the first retry
      * @param retryNumber one for the first call to this function
      * @param capRetries if retryNumber is more than capRetries then set retryNumber to capRetires, to prevent exponential backoff from becoming too big
-     * @param jitterFraction add a small positive/negative random value to the returned value. Should typically be between [0, 0.20].
      * @return the exponential backoff in milliseconds
      */
-    static long computeExponentialBackoff(long baseMillis, int retryNumber, int capRetries) {
+    static long computeExponentialBackoff(long base, int retryNumber, int capRetries) {
         int count = Math.min(retryNumber,  capRetries) - 1;
-        return baseMillis * (1 << count);
+        return base * (1 << count);
     }
     
     /**
      * Calculate the exponential backoff delay.
-     * 
-     * @param baseMillis the time for the first event
+     *
+     * @param base the time in any unit for the first retry
      * @param retryNumber one for the first call to this function
      * @param capRetries if retryNumber is more than capRetries then set retryNumber to capRetires, to prevent exponential backoff from becoming too big
      * @param jitterFraction add a small positive/negative random value to the returned value. Should typically be between [0, 0.20].
      * @return the exponential backoff in milliseconds
      */
-    static long computeExponentialBackoff(long baseMillis, int retryNumber, int capRetries, double jitterFraction) {
-        long backoff = computeExponentialBackoff(baseMillis, retryNumber, capRetries);
+    static long computeExponentialBackoff(long base, int retryNumber, int capRetries, double jitterFraction) {
+        long backoff = computeExponentialBackoff(base, retryNumber, capRetries);
         double range = backoff * jitterFraction;
         long delta = (long) (Math.random() * range + 0.5);
         delta -= range / 2;
@@ -152,14 +151,6 @@ class PubSubUtils {
         if (message instanceof RelayMessageBase) {
             RelayMessageBase action = (RelayMessageBase) message;
             return action.getRelayFields().getServerIndex(); // may throw NullPointerException
-        }
-        return null;
-    }
-
-    static @Nullable String extractSourceMachine(MessageBase message) {
-        if (message instanceof RelayMessageBase) {
-            RelayMessageBase action = (RelayMessageBase) message;
-            return action.getRelayFields().getSourceMachineId();
         }
         return null;
     }
