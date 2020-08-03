@@ -94,19 +94,34 @@ public abstract class PubSub implements Shutdowneable {
     private final SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler;
     private final Cleanable cleanable;
 
+    public static final class PubSubConstructorArgs {
+        private final int numInMemoryHandlers;
+        private final Supplier<Queue<Subscriber>> queueCreator;
+        private final SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler;
+
+        /**
+         * Create a PubSub system.
+         *
+         * @param numInMemoryHandlers the number of threads handling messages that are published by all publishers.
+         * @param queueCreator the queue to store all message across all subscribers.
+         * @param subscriptionMessageExceptionHandler the general subscription handler for exceptions arising from all subscribers.
+         */
+        public PubSubConstructorArgs(int numInMemoryHandlers,
+                                     Supplier<Queue<Subscriber>> queueCreator,
+                                     SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler) {
+            this.numInMemoryHandlers = numInMemoryHandlers;
+            this.queueCreator = queueCreator;
+            this.subscriptionMessageExceptionHandler = subscriptionMessageExceptionHandler;
+        }
+    }
+
     /**
      * Create a PubSub system.
-     * 
-     * @param numInMemoryHandlers the number of threads handling messages that are published by all publishers.
-     * @param queueCreator the queue to store all message across all subscribers.
-     * @param subscriptionMessageExceptionHandler the general subscription handler for exceptions arising from all subscribers.
      */
-    public PubSub(int numInMemoryHandlers,
-                  Supplier<Queue<Subscriber>> queueCreator,
-                  SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler) {
-        this.executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(numInMemoryHandlers, createThreadFactory("PubSubListener", true));
-        this.masterList = queueCreator.get();
-        this.subscriptionMessageExceptionHandler = subscriptionMessageExceptionHandler;
+    public PubSub(PubSubConstructorArgs args) {
+        this.executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(args.numInMemoryHandlers, createThreadFactory("PubSubListener", true));
+        this.masterList = args.queueCreator.get();
+        this.subscriptionMessageExceptionHandler = args.subscriptionMessageExceptionHandler;
         this.cleanable = addShutdownHook(this, new Cleanup(executorService, lock, notEmpty), PubSub.class);
         startThreads();
     }

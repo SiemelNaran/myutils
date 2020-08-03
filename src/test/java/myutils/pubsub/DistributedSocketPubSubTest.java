@@ -856,6 +856,9 @@ public class DistributedSocketPubSubTest extends TestBase {
      * <p>On my computer,<br/>
      * With N as 1000 the test takes about 3.8sec.<br/>
      * With N as 100 the test takes around 0.8sec.<br/>
+     *
+     * <p>On my MacOS 2.3GHz Intel Core i9,<br/>
+     * With N as 1000 the test takes about 1.9sec.<br/>
      * 
      * <p>This test also tests that the server does not encounter WritePendingException
      * (where we one thread sends a message to a client while another is also sending a message to it).
@@ -1194,7 +1197,12 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
                                        int localPort,
                                        String messageServerHost,
                                        int messageServerPort) throws IOException {
-        super(numInMemoryHandlers, queueCreator, subscriptionMessageExceptionHandler, machineId, localServer, localPort, messageServerHost, messageServerPort);
+        super(new PubSubConstructorArgs(numInMemoryHandlers, queueCreator, subscriptionMessageExceptionHandler),
+              machineId,
+              localServer,
+              localPort,
+              messageServerHost,
+              messageServerPort);
     }
 
     void enableTamperServerIndex() {

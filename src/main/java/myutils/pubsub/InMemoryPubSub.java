@@ -1,8 +1,6 @@
 package myutils.pubsub;
 
-import java.util.Queue;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 import javax.annotation.Nonnull;
 
 
@@ -14,15 +12,12 @@ import javax.annotation.Nonnull;
 public class InMemoryPubSub extends PubSub {
     /**
      * Create a PubSub system.
-     * 
-     * @param numInMemoryHandlers the number of threads handling messages that are published by all publishers.
-     * @param queueCreator the queue to store all message across all subscribers.
-     * @param subscriptionMessageExceptionHandler the general subscription handler for exceptions arising from all subscribers.
+     *
+     * @param baseArgs the arguments for the in-memory pubsub system
+     * @see PubSubConstructorArgs for the arguments to the super class
      */
-    public InMemoryPubSub(int numInMemoryHandlers,
-                          Supplier<Queue<Subscriber>> queueCreator,
-                          SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler) {
-        super(numInMemoryHandlers, queueCreator, subscriptionMessageExceptionHandler);
+    public InMemoryPubSub(PubSubConstructorArgs baseArgs) {
+        super(baseArgs);
     }
 
     public final class InMemoryPublisher extends Publisher {

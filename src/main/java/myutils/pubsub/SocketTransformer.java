@@ -10,12 +10,9 @@ import java.io.InvalidClassException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.OptionalDataException;
-import java.io.Serializable;
 import java.io.StreamCorruptedException;
 import java.nio.ByteBuffer;
-import java.nio.channels.AsynchronousCloseException;
 import java.nio.channels.AsynchronousSocketChannel;
-import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.CompletionHandler;
 import java.nio.channels.SocketChannel;
@@ -26,14 +23,13 @@ import myutils.pubsub.MessageClasses.MessageBase;
 
 
 public class SocketTransformer {
-    private static Void NULL = null;
+    private static final Void NULL = null;
     
     private static class MessageAsByteBuffers {
         private final ByteBuffer lengthBuffer = ByteBuffer.allocate(2);
         private final ByteBuffer messageBuffer;
 
         MessageAsByteBuffers(MessageBase message, short maxLength) throws IOException {
-            assert message instanceof Serializable;
             messageBuffer = messageToByteBuffer(message, maxLength);
             lengthBuffer.putShort((short) messageBuffer.limit());
             lengthBuffer.flip();
@@ -97,10 +93,11 @@ public class SocketTransformer {
      * Write a message to a socket asynchronously.
      * The first 2 bytes is the length of the message.
      * The next bytes are the message.
-     * 
+     *
      * @param message the message to write, which must implement Serializable
      * @param maxLength the maximum length of the message
      * @param channel the channel to write to
+     * @return a completion stage resolved with null if the write was succesful, or rejected with the exception if the write failed
      * @throws IllegalArgumentException if the message is too long
      * @throws IOException if there was an IOException writing to the object output stream or to the socket
      */
@@ -138,7 +135,7 @@ public class SocketTransformer {
      * The next bytes are the message.
      * 
      * @param channel the channel to read from
-     * @return a completion stage resolved with the MessageBase
+     * @return a completion stage resolved with the MessageBase if the read was succesful, or rejected with the exception if the read failed
      */
     public static CompletionStage<MessageBase> readMessageFromSocketAsync(AsynchronousSocketChannel channel) {
         CompletableFuture<MessageBase> futureMessage = new CompletableFuture<>();
@@ -224,6 +221,6 @@ public class SocketTransformer {
      */
     static boolean isClosed(Throwable throwable) {
         Throwable e = throwable instanceof CompletionException ? throwable.getCause() : throwable;
-        return e instanceof EOFException || e instanceof ClosedChannelException || e instanceof AsynchronousCloseException || e instanceof ClosedByInterruptException;
+        return e instanceof EOFException || e instanceof ClosedChannelException;
     }
 }

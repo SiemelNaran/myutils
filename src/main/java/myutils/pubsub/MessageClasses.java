@@ -24,7 +24,7 @@ interface MessageClasses {
     }
     
     /**
-     * If a message can be resent to the server after it was already send and received, it should inherit from this class.
+     * If a message can be sent to the server after it was already send and received, it should inherit from this class.
      */
     interface Resendable {
         boolean isResend();
@@ -65,7 +65,7 @@ interface MessageClasses {
         private static final long serialVersionUID = 1L;
         
         private final Class<? extends MessageBase> classOfMessageToResend;
-        private final Long failedClientIndex; // optional because not all messages a clientIndex
+        private final Long failedClientIndex; // optional because not all messages have a clientIndex
         
         RequestIdentification(Class<? extends MessageBase> classOfMessageToResend, Long failedClientIndex) {
             this.classOfMessageToResend = classOfMessageToResend;
@@ -85,12 +85,18 @@ interface MessageClasses {
             return classType(this) + ", classOfMessageToResend=" + classOfMessageToResend.getSimpleName() + ", failedClientIndex=" + failedClientIndex;
         }
     }
-    
+
+    /**
+     * Class sent by server to tell client that a relay message it sent was invalid.
+     * This happens if client sends a message to server that server already processed.
+     * Required fields failedClientIndex, which identifies the message.
+     * Required field error, which is the error message.
+     */
     class InvalidRelayMessage extends ServerGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
-        private final long failedClientIndex; // optional because not all messages a clientIndex
-        private final String error;
+        private final long failedClientIndex;
+        private final @Nonnull String error;
 
         InvalidRelayMessage(long failedClientIndex, @Nonnull String error) {
             this.failedClientIndex = failedClientIndex;
@@ -101,7 +107,7 @@ interface MessageClasses {
             return failedClientIndex;
         }
 
-        public String getError() {
+        public @Nonnull String getError() {
             return error;
         }
 
@@ -118,7 +124,6 @@ interface MessageClasses {
     /**
      * Messages originating from client and sent to server, which they may be relayed to other clients.
      * Required field clientTimestamp, which is the time the client sent the message.
-     * Required field serverTimestamp, which is the time the server received the message, or 0 if the message is yet to be sent to the server.
      */
     abstract class ClientGeneratedMessage implements MessageBase {
         private static final long serialVersionUID = 1L;
@@ -291,7 +296,14 @@ interface MessageClasses {
             return classType(this) + ", startServerIndexInclusive=" + startServerIndexInclusive + ", endServerIndexInclusive=" + endServerIndexInclusive;
         }
     }
-    
+
+    /**
+     * Fields set by the server when it receives a relay message (CreatePublisher or PublishMessage).
+     * Required field serverTimestamp, which is the time the server received the message.
+     * Required field serverIndex, which is the unique monotonically increasing integer identifying the message.
+     * May not correlate with serverTimestamp.
+     * Required field sourceMachineId, which is the client machine that sent the message.
+     */
     class RelayFields implements Serializable {
         private static final long serialVersionUID = 1L;
         
@@ -329,8 +341,7 @@ interface MessageClasses {
      * Base class of all messages that can be relayed from one client to another via the server.
      * Required field sourceMachineId, which is the machine sending the message. The field is set by server.
      * Required field clientIndex, which is the message number on the client.
-     * Required field serverIndex, which is the message number on the server, or 0 if the message is yet to be sent to the server.
-     * It is unique across messages in all machines. 
+     * It is unique across messages in all machines.
      */
     abstract class RelayMessageBase extends ClientGeneratedMessage {
         private static final long serialVersionUID = 1L;
@@ -376,7 +387,7 @@ interface MessageClasses {
             this.topic = topic;
         }
         
-        String getTopic() {
+        @Nonnull String getTopic() {
             return topic;
         }
         
@@ -403,7 +414,7 @@ interface MessageClasses {
             this.isResend = isResend;
         }
 
-        Class<?> getPublisherClass() {
+        @Nonnull Class<?> getPublisherClass() {
             return publisherClass;
         }
 
@@ -428,17 +439,17 @@ interface MessageClasses {
         private final @Nonnull CloneableObject<?> message;
         private final @Nonnull RetentionPriority priority;
         
-        PublishMessage(long clientIndex, @Nonnull String topic, @Nonnull CloneableObject<?> message, RetentionPriority priority) {
+        PublishMessage(long clientIndex, @Nonnull String topic, @Nonnull CloneableObject<?> message, @Nonnull RetentionPriority priority) {
             super(null, clientIndex, topic);
             this.message = message;
             this.priority = priority;
         }
 
-        CloneableObject<?> getMessage() {
+        @Nonnull CloneableObject<?> getMessage() {
             return message;
         }
         
-        RetentionPriority getPriority() {
+        RetentionPriority getRetentionPriority() {
             return priority;
         }
 

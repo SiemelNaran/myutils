@@ -14,7 +14,7 @@ public enum RetentionPriority {
     RetentionPriority(int level) {
         this.level = level;
     }
-    
+
     int getLevel() {
         return level;
     }

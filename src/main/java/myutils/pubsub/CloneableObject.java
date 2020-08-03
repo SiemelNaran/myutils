@@ -12,6 +12,9 @@ import java.io.Serializable;
 public interface CloneableObject<T> extends Cloneable, Serializable {
     /**
      * Clone this object.
+     *
+     * <p>Default implementation could be to serialize and de-serialize the object,
+     * but we want to force implementors to write a more efficient implementation.
      */
     T clone();
 
