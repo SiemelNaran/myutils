@@ -11,7 +11,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 /**
  * Base test class that logs when tests are started and end, and when each test is started and ended.
- * This makes it easier to study console logs of running all tests (Eclipse does not 
+ * This makes it easier to study console logs of running all tests.
+ * Eclipse does not show the stdout/stderr for each test separately (but in IntelliJ when you click a test you see the stdout/stderr for that test).
  * 
  * <p>There is also a function getStartOfTime.
  */
