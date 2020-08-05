@@ -2,7 +2,10 @@ package myutils.util;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
 import java.util.function.ToLongFunction;
@@ -160,5 +163,30 @@ public class MoreCollections {
                     return -(page.getStartIndex() + (-subIndex - 1)) - 1;
             }
         }
-    }       
+    }
+    
+    
+    /**
+     * Given a sorted deque and an element that is most likely larger than the largest element in the list,
+     * add the element to the list so that the list is still sorted.
+     * The algorithm scans from the last element to the first to find the right place to insert the new element,
+     * so the worst case running time is O(N).
+     * However, the best case running time is O(1). 
+     * 
+     * @param <U> the type of elements in the collection
+     * @param sortedList a list sorted by the given comparator
+     * @param comparator a comparator to compare two values of type U
+     * @param value the value to add
+     */
+    public static <U> void addLargeElementToSortedList(LinkedList<U> sortedList, Comparator<? super U> comparator, U newValue) {
+        for (ListIterator<U> iter = sortedList.listIterator(sortedList.size()); iter.hasPrevious(); ) {
+            U value = iter.previous();
+            if (comparator.compare(newValue, value) >= 0) {
+                iter.next();
+                iter.add(newValue);
+                return;
+            }
+        }
+        sortedList.add(0, newValue);
+    }
 }

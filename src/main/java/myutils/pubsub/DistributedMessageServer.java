@@ -19,7 +19,6 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.NetworkChannel;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -61,6 +60,7 @@ import myutils.pubsub.MessageClasses.RemoveSubscriber;
 import myutils.pubsub.MessageClasses.RequestIdentification;
 import myutils.pubsub.MessageClasses.Resendable;
 import myutils.pubsub.PubSubUtils.CallStackCapturing;
+import myutils.util.MoreCollections;
 import myutils.util.ZipMinIterator;
 
 
@@ -430,12 +430,12 @@ public class DistributedMessageServer implements Shutdowneable {
     }
 
     /**
-     * A datastructure to store the most recently published messages in memory.
+     * A data structure to store the most recently published messages in memory.
      * We only save the last N messages of each retention priority.
      */
     private static class MostRecentMessages {
         private final int[] numberOfMostRecentMessagesToKeep;
-        private final List<Deque<PublishMessage>> messages = List.of(new LinkedList<>(), new LinkedList<>()); // MEDIUM priority, HIGH priority
+        private final List<LinkedList<PublishMessage>> messages = List.of(new LinkedList<>(), new LinkedList<>()); // MEDIUM priority, HIGH priority
         private final Map<ClientMachine, Map<String /*topic*/, ServerIndex /*maxIndex*/>> highestIndexMap = new HashMap<>();
         
         MostRecentMessages(Map<RetentionPriority, Integer> numberOfMostRecentMessagesToKeep) {
@@ -452,12 +452,16 @@ public class DistributedMessageServer implements Shutdowneable {
 
         synchronized void save(PublishMessage publishMessage) {
             int ordinal = publishMessage.getRetentionPriority().ordinal();
-            Deque<PublishMessage> deque = messages.get(ordinal);
-            deque.add(publishMessage);
-            if (deque.size() > numberOfMostRecentMessagesToKeep[ordinal]) {
-                deque.removeFirst();
+            LinkedList<PublishMessage> linkedList = messages.get(ordinal);
+            MoreCollections.addLargeElementToSortedList(linkedList, COMPARE_BY_SERVER_INDEX, publishMessage);
+            if (linkedList.size() > numberOfMostRecentMessagesToKeep[ordinal]) {
+                linkedList.removeFirst();
             }
         }
+        
+        private static final Comparator<PublishMessage> COMPARE_BY_SERVER_INDEX = (lhs, rhs) -> {
+            return lhs.getRelayFields().getServerIndex().compareTo(rhs.getRelayFields().getServerIndex());
+        };
 
         /**
          * This function is used to send saved messages to a client.
