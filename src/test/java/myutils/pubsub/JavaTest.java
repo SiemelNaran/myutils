@@ -15,6 +15,9 @@ import org.junit.jupiter.api.Test;
 
 
 public class JavaTest extends TestBase {
+    /**
+     * The purpose of this test is to show that stream iteration can also throw ConcurrentModificationException.
+     */
     @Test
     void testConcurrentModificationWhileStreaming() throws InterruptedException {
         StringBuffer result = new StringBuffer();

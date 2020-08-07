@@ -509,12 +509,12 @@ public class DistributedSocketPubSubTest extends TestBase {
 
     /**
      * In this test the server and two clients start.
-     * The server dies.
-     * One client creates a publisher and publishes messages.
-     * Ensure that the other client receives the messages when the server comes back online.
+     * The server dies and a new one is started.
+     * One client creates a publisher, another subscribes, and the first client publishes messages.
+     * Ensure that the other client receives the messages.
      */
     @Test
-    void testServerRestartsWhileClientRunning() throws IOException {
+    void testServerRestartsWhileClientRunning1() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         
         var centralServer = new TestDistributedMessageServer(CENTRAL_SERVER_HOST,
@@ -589,9 +589,10 @@ public class DistributedSocketPubSubTest extends TestBase {
 
     /**
      * In this test the server and two clients start.
-     * One client creates a publisher and subscribes to the topic, the other client subscribes to the same topic twice, and then the server dies.
-     * The client publishes messages.
-     * Ensure that the other client receives the messages when the server comes back online.
+     * One client creates a publisher and subscribes to the topic, the other client subscribes to the same topic twice.
+     * The server dies.
+     * The first client publishes messages. The subscribers in the first client receive the messages right away.
+     * Ensure that the other client receives the messages when a new server is started.
      */
     @Test
     void testServerRestartsWhileClientRunning2() throws IOException {

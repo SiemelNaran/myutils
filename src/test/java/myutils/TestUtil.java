@@ -16,6 +16,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import org.hamcrest.BaseMatcher;
+import org.hamcrest.Description;
 import org.junit.jupiter.params.ParameterizedTest;
 
 
@@ -198,6 +201,35 @@ public class TestUtil {
                     + " or an exception derived from it, " + "but got " + e.getClass().getSimpleName());
             assertEquals(expectedMessage, e.getMessage());
             return (U) e;
+        }
+    }
+    
+    public static <T extends Comparable<T>> Between<T> between(T low, T high) {
+        return new Between<T>(low, high);
+    }
+    
+    static class Between<T extends Comparable<T>> extends BaseMatcher<T> {
+        private final T low;
+        private final T high;
+        
+        public Between(T low, T high) {
+            if (low.compareTo(high) > 0) {
+                throw new IllegalArgumentException("low (" + low + ") should be less than or equal to high (" + high + ")");
+            }
+            this.low = low;
+            this.high = high;
+        }
+
+        @Override
+        public boolean matches(Object actualObject) {
+            @SuppressWarnings("unchecked")
+            T actual = (T) actualObject;
+            return low.compareTo(actual) <= 0 && high.compareTo(actual) >= 0;
+        }
+
+        @Override
+        public void describeTo(Description description) {
+            description.appendText("between " + low + " and " + high + " inclusive");
         }
     }
 }
