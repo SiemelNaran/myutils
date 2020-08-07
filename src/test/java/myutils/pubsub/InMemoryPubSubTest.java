@@ -102,8 +102,24 @@ public class InMemoryPubSubTest {
         Consumer<CloneableString> handleString2 = str -> words.add(str.append("-s2"));
         pubSub.subscribe("hello", "Subscriber2", CloneableString.class, handleString2);
 
+        PubSub.Publisher secondPublisher = pubSub.createPublisher("world", CloneableString.class);
+
         assertEquals("hello", publisher.getTopic());
+        assertEquals("CloneableString", publisher.getPublisherClass().getSimpleName());
+        assertEquals((double) System.currentTimeMillis(), (double) publisher.getCreatedAtTimestamp(), 20.0);
+        assertEquals(2, publisher.getSubscibers().size());
+        
+        assertEquals("world", secondPublisher.getTopic());
+        assertEquals("CloneableString", secondPublisher.getPublisherClass().getSimpleName());
+        assertEquals((double) System.currentTimeMillis(), (double) secondPublisher.getCreatedAtTimestamp(), 20.0);
+        assertEquals(0, secondPublisher.getSubscibers().size());
+        
+        List<String> allTopics = Collections.synchronizedList(new ArrayList<>());
+        pubSub.forEachPublisher(p -> allTopics.add(p.getTopic())); // protected function forEachPublisher
+        assertThat(allTopics, Matchers.containsInAnyOrder("hello", "world"));
+        
         assertEquals("hello", subscriber1.getTopic());
+        assertEquals((double) System.currentTimeMillis(), (double) subscriber1.getCreatedAtTimestamp(), 20.0);
 
         // test publish
         // since the handlers modify the messages, this also verifies that each subscriber handler gets a copy of the message
@@ -445,9 +461,33 @@ public class InMemoryPubSubTest {
     void testErrorOnCreatePublisherTwice() {
         PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
         pubSub.createPublisher("hello", CloneableString.class);
-        assertException(() -> pubSub.createPublisher("hello", CloneableString.class), IllegalArgumentException.class, "publisher already exists: hello");
+        assertException(() -> pubSub.createPublisher("hello", CloneableString.class), IllegalStateException.class, "publisher already exists: topic=hello");
     }
 
+
+    @Test
+    void testErrorOnSubscribeTwice1() {
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
+        pubSub.createPublisher("hello", CloneableString.class);
+        pubSub.subscribe("hello", "Subscriber", CloneableString.class, str -> { });
+        assertException(() -> pubSub.subscribe("hello", "Subscriber", CloneableString.class, str -> { }), IllegalStateException.class, "already subscribed: topic=hello, subscriberName=Subscriber");
+    }
+
+    @Test
+    void testErrorOnSubscribeTwice2() {
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
+        pubSub.subscribe("hello", "Subscriber", CloneableString.class, str -> { });
+        assertException(() -> pubSub.subscribe("hello", "Subscriber", CloneableString.class, str -> { }), IllegalStateException.class, "already subscribed: topic=hello, subscriberName=Subscriber");
+    }
+
+    @Test
+    void testErrorOnUnsubscribeTwice() {
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
+        pubSub.createPublisher("hello", CloneableString.class);
+        Subscriber subscriber = pubSub.subscribe("hello", "Subscriber", CloneableString.class, str -> { });
+        pubSub.unsubscribe(subscriber);
+        assertException(() -> pubSub.unsubscribe(subscriber), IllegalStateException.class, "not subscribed: topic=hello, subscriberName=Subscriber");
+    }
     @Test
     @SuppressWarnings("checkstyle:LineLength")
     void testErrorOnSubscriberWrongClassType() {

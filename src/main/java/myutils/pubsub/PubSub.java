@@ -248,7 +248,7 @@ public abstract class PubSub implements Shutdowneable {
     public final synchronized <T> Publisher createPublisher(String topic, Class<T> publisherClass) {
         var publisher = topicMap.get(topic);
         if (publisher != null) {
-            throw new IllegalArgumentException("publisher already exists: " + topic);
+            throw new IllegalStateException("publisher already exists: topic=" + topic);
         }
         publisher = newPublisher(topic, publisherClass);
         topicMap.put(topic, publisher);
@@ -293,6 +293,7 @@ public abstract class PubSub implements Shutdowneable {
      * @param callback the callback function
      * @return a new subscriber
      * @throws IllegalArgumentException if subscriber class is not the same or inherits from the publisher class
+     * @throws IllegalStateException if the PubSub is already subscribed to the topic with the same subscriberName
 -     */
     @SuppressWarnings("unchecked")
     public final synchronized <T extends CloneableObject<?>> Subscriber subscribe(@Nonnull String topic,
@@ -300,14 +301,24 @@ public abstract class PubSub implements Shutdowneable {
                                                                                   @Nonnull Class<T> subscriberClass,
                                                                                   @Nonnull Consumer<T> callback) {
         Consumer<CloneableObject<?>> callbackCasted = (Consumer<CloneableObject<?>>) callback;
-        var subscriber = newSubscriber(topic, subscriberName, subscriberClass, callbackCasted);
+        Supplier<Subscriber> subscriberCreator = () -> newSubscriber(topic, subscriberName, subscriberClass, callbackCasted);
+        final Subscriber subscriber;
         var publisher = topicMap.get(topic);
         if (publisher != null) {
+            if (publisher.subscribers.stream().anyMatch(s -> s.getSubscriberName().equals(subscriberName))) {
+                throw new IllegalStateException("already subscribed: topic=" + topic + ", subscriberName=" + subscriberName);
+            }
             checkClassType(publisher.publisherClass, subscriberClass);
+            subscriber = subscriberCreator.get();
             addSubscriber(publisher, subscriber, /*skipOnAdd*/ false);
         } else {
             MultimapUtils<String, Subscriber> multimap = new MultimapUtils<>(deferredSubscribersMap, ArrayList::new);
-            multimap.put(topic, subscriber);
+            var subscribers = multimap.getOrCreate(topic);
+            if (subscribers != null && subscribers.stream().anyMatch(s -> s.getSubscriberName().equals(subscriberName))) {
+                throw new IllegalStateException("already subscribed: topic=" + topic + ", subscriberName=" + subscriberName);
+            }
+            subscriber = subscriberCreator.get();
+            subscribers.add(subscriber);
             onAddSubscriber(subscriber);
         }
         return subscriber;
@@ -347,6 +358,8 @@ public abstract class PubSub implements Shutdowneable {
         masterList.removeIf(iterSubscriber -> iterSubscriber == subscriber);
         if (publisher.subscribers.remove(subscriber)) {
             onRemoveSubscriber(subscriber);
+        } else {
+            throw new IllegalStateException("not subscribed: topic=" + subscriber.getTopic() + ", subscriberName=" + subscriber.getSubscriberName());
         }
     }
     

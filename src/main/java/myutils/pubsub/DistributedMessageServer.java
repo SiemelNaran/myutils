@@ -224,7 +224,7 @@ public class DistributedMessageServer implements Shutdowneable {
             
             private void setNotifyClientsToNullIfEmpty() {
                 if (notifyClients != null && notifyClients.isEmpty()) {
-                    notifyClients = null;
+                    notifyClients = null; // COVERAGE: why not hit?
                 }
             }
         }
@@ -243,7 +243,7 @@ public class DistributedMessageServer implements Shutdowneable {
             boolean clientMachineAlreadySubscribedToTopic = isClientMachineAlreadySubscribedToTopic(info, clientMachine); // checkstyle:VariableDeclarationUsageDistance
             var newEndpoint = new SubscriberEndpoint(clientMachine, subscriberName, clientTimestamp);
             if (info.subscriberEndpoints.contains(newEndpoint)) {
-                throw new IllegalStateException("Already subscribed to topic: "
+                throw new IllegalStateException("Already subscribed to topic: " // COVERAGE: test to resubscribe (shut down client, start new one, subscribe again), put comment here that this code is likely to be hit in this condition if needed; COVERAGE: same test will create publisher again maybe verifying line 322; COVERAGE: test in PubSub to subscribe twice with same subscriber name
                         + "clientMachine=" + clientMachine.getMachineId()
                         + ", topic=" + topic
                         + ", subscriberName=" + subscriberName);
@@ -284,7 +284,7 @@ public class DistributedMessageServer implements Shutdowneable {
         }
 
         public synchronized void removeSubscriberEndpoint(String topic, String subscriberName) {
-            TopicInfo info = topicMap.computeIfAbsent(topic, unused -> new TopicInfo());
+            TopicInfo info = topicMap.computeIfAbsent(topic, unused -> new TopicInfo()); // COVERAGE: will get work?
             info.subscriberEndpoints.removeIf(subscriberEndpoint -> subscriberEndpoint.getSubscriberName().equals(subscriberName));
         }
         
@@ -425,7 +425,7 @@ public class DistributedMessageServer implements Shutdowneable {
         
         @Override
         public int hashCode() {
-            return Objects.hash(clientMachine, subscriberName);
+            return Objects.hash(clientMachine, subscriberName); // COVERAGE: test equals and hashCode of this class and ClientMachine
         }
     }
 
@@ -494,7 +494,7 @@ public class DistributedMessageServer implements Shutdowneable {
             while (iter.hasNext()) {
                 PublishMessage message = iter.next();
                 if (message.getRelayFields().getServerIndex().compareTo(upperBoundInclusive) > 0) {
-                    break;
+                    break; // COVERAGE: download test also test subset of messages
                 }
                 if (message.getRelayFields().getServerIndex().compareTo(lowerBoundInclusive) < 0) {
                     continue;
@@ -526,7 +526,7 @@ public class DistributedMessageServer implements Shutdowneable {
         private @Nonnull ServerIndex getMaxIndex(ClientMachine clientMachine, String topic) {
             Map<String, ServerIndex> map = highestIndexMap.computeIfAbsent(clientMachine, unused -> new HashMap<>());
             var index = map.get(topic);
-            return index != null ? index : ServerIndex.MIN_VALUE;
+            return index != null ? index : ServerIndex.MIN_VALUE; // COVERAGE: test message published with no subscribers, then subscriber added
         }
 
         /**
@@ -686,7 +686,7 @@ public class DistributedMessageServer implements Shutdowneable {
                             DistributedMessageServer.this.handleRemoveSubscriber(clientMachine, (RemoveSubscriber) message);
                         } else if (message instanceof RelayMessageBase) {
                             RelayMessageBase relay = (RelayMessageBase) message;
-                            if (relay.getRelayFields() == null) {
+                            if (relay.getRelayFields() == null) { // COVERAGE: why is this not getting hit? 
                                 ServerIndex nextServerId = maxMessage.updateAndGet(ServerIndex::increment);
                                 relay.setRelayFields(new RelayFields(System.currentTimeMillis(), nextServerId, clientMachine.getMachineId()));
                             }
@@ -703,7 +703,7 @@ public class DistributedMessageServer implements Shutdowneable {
             } else {
                 unhandledClientMachine = getRemoteAddress(channel);
             }
-            if (unhandledClientMachine != null) {
+            if (unhandledClientMachine != null) { // COVERAGE: test to send unhandled message
                 LOGGER.log(Level.DEBUG,
                            String.format("Unhandled message from client: clientMachine=%s, %s",
                                          unhandledClientMachine,
@@ -751,11 +751,11 @@ public class DistributedMessageServer implements Shutdowneable {
      */
     private void addIfNotPresent(Identification identification, AsynchronousSocketChannel channel) {
         if (findClientMachineByChannel(channel) != null) {
-            LOGGER.log(Level.WARNING, "Channel channel already present: clientChannel={0}", getRemoteAddress(channel));
+            LOGGER.log(Level.ERROR, "Channel channel already present: clientChannel={0}", getRemoteAddress(channel));
             return;
         }
         if (findClientMachineByMachineId(identification.getMachineId()) != null) {
-            LOGGER.log(Level.WARNING, "Client machine already present: clientMachine={0}", identification.getMachineId());
+            LOGGER.log(Level.ERROR, "Client machine already present: clientMachine={0}", identification.getMachineId()); // COVERAGE: test adding 2nd machine with same name
             return;
         }
         
@@ -810,11 +810,11 @@ public class DistributedMessageServer implements Shutdowneable {
         for (var iter = clientMachines.iterator(); iter.hasNext(); ) {
             var clientMachine = iter.next();
             if (clientMachine.getChannel().equals(channel)) {
-                iter.remove();
+                iter.remove();  // COVERAGE: why is this not getting hit? There is a test doing client3.shutdown()
                 LOGGER.log(Level.INFO, "Removed client machine: clientMachine={0} clientChannel={1}", clientMachine.getMachineId(), getRemoteAddress(channel));
             }
         }
-        publishersAndSubscribers.removeClientMachine(channel);
+        publishersAndSubscribers.removeClientMachine(channel); // COVERAGE: why is this not getting hit?
     }
     
     private void handleFetchPublisher(ClientMachine clientMachine, String topic) {
