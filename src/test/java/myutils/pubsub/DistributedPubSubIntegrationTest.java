@@ -37,9 +37,9 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-
+import myutils.LogFailureToConsoleTestWatcher;
 import myutils.TestBase;
-import myutils.pubsub.InMemoryPubSubTest.CloneableString;
+import myutils.pubsub.InMemoryPubSubIntegrationTest.CloneableString;
 import myutils.pubsub.MessageClasses.MessageBase;
 import myutils.pubsub.MessageClasses.PublishMessage;
 import myutils.pubsub.MessageClasses.RelayFields;
@@ -50,14 +50,27 @@ import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 
-public class DistributedSocketPubSubTest extends TestBase {
+/**
+ * Integration test that covers.
+ * - PubSub.java
+ * - CloneableObject.java
+ * - DistributedSocketPubSub.java
+ * - DistributedMessageServer.java
+ * - MessageClasses.java
+ * - SocketTransformer.java
+ * - PubSubUtils.java
+ * - ServerIndex.javva
+ * - RetentionPriority.java
+ */
+@ExtendWith(LogFailureToConsoleTestWatcher.class)
+public class DistributedPubSubIntegrationTest extends TestBase {
     private LinkedList<Shutdowneable> shutdowns = new LinkedList<>();
     
     @BeforeEach
     void clearShutdowns() {
-        sleep(500);
     }
     
     @AfterEach

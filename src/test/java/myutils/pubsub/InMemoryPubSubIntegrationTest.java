@@ -37,8 +37,15 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 
 
+/**
+ * Integration test that covers.
+ * - PubSub.java
+ * - CloneableObject.java
+ * - InMemoryPubSub.java
+ * - PubSubUtils.java
+ */
 @ExtendWith(LogFailureToConsoleTestWatcher.class)
-public class InMemoryPubSubTest {
+public class InMemoryPubSubIntegrationTest {
     long startOfTime;
     
     @BeforeAll
@@ -493,6 +500,7 @@ public class InMemoryPubSubTest {
         pubSub.unsubscribe(subscriber);
         assertException(() -> pubSub.unsubscribe(subscriber), IllegalStateException.class, "not subscribed: topic=hello, subscriberName=Subscriber");
     }
+    
     @Test
     @SuppressWarnings("checkstyle:LineLength")
     void testErrorOnSubscriberWrongClassType() {

@@ -898,7 +898,10 @@ public class DistributedMessageServer implements Shutdowneable {
         if (clientMachine != null) {
             String topicsAffected = publishersAndSubscribers.removeClientMachine(clientMachine.getMachineId()).toString();
             clientMachines.remove(clientMachine);
-            LOGGER.log(Level.INFO, "Removed client machine: clientMachine={0}, clientChannel={1}, topicsAffected={2}", clientMachine.getMachineId(), getRemoteAddress(channel), topicsAffected);
+            LOGGER.log(Level.INFO, "Removed client machine: clientMachine={0}, clientChannel={1}, topicsAffected={2}",
+                       clientMachine.getMachineId(),
+                       getRemoteAddress(channel),
+                       topicsAffected);
         }
     }
     
@@ -915,7 +918,10 @@ public class DistributedMessageServer implements Shutdowneable {
         long clientTimestamp = subscriberInfo.getClientTimestamp();
         boolean doDownload = false;
         boolean forceLogging = subscriberInfo.isResend();
-        PublishersAndSubscribers.AddSubscriberResult addSubscriberResult = publishersAndSubscribers.addSubscriberEndpoint(topic, subscriberName, clientTimestamp, clientMachine.getMachineId());
+        PublishersAndSubscribers.AddSubscriberResult addSubscriberResult = publishersAndSubscribers.addSubscriberEndpoint(topic,
+                                                                                                                          subscriberName,
+                                                                                                                          clientTimestamp,
+                                                                                                                          clientMachine.getMachineId());
         if (addSubscriberResult.getRevisedClientTimestamp() != null) {
             clientTimestamp = addSubscriberResult.getRevisedClientTimestamp();
         }

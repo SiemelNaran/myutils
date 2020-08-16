@@ -1,13 +1,11 @@
 package myutils.pubsub;
 
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static myutils.TestUtil.between;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 
 import myutils.TestBase;
 import org.junit.jupiter.api.Test;
-
-
 
 
 public class PubSubUtilsTest extends TestBase {
