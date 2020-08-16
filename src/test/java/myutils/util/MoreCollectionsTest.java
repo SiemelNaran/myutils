@@ -30,5 +30,5 @@ public class MoreCollectionsTest {
         
         MoreCollections.addLargeElementToSortedList(sortedList, Comparator.naturalOrder(), 5);
         assertEquals(List.of(1, 2, 3, 4, 5, 6), sortedList);
-   }
+    }
 }

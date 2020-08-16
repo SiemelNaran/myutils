@@ -176,7 +176,7 @@ public class MoreCollections {
      * @param <U> the type of elements in the collection
      * @param sortedList a list sorted by the given comparator
      * @param comparator a comparator to compare two values of type U
-     * @param value the value to add
+     * @param newValue the value to add
      */
     public static <U> void addLargeElementToSortedList(LinkedList<U> sortedList, Comparator<? super U> comparator, U newValue) {
         for (ListIterator<U> iter = sortedList.listIterator(sortedList.size()); iter.hasPrevious(); ) {
