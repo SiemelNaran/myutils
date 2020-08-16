@@ -90,6 +90,11 @@ public class InMemoryPubSubTest {
                 throw new RuntimeException(e);
             }
         }
+        
+        @Override
+        public String toString() {
+            return "CloneableString:" + str;
+        }
     }
 
     @Test
