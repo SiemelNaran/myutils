@@ -8,6 +8,7 @@ import static myutils.TestUtil.toFuture;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -22,6 +23,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
@@ -34,6 +36,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+
 import myutils.TestBase;
 import myutils.pubsub.InMemoryPubSubTest.CloneableString;
 import myutils.pubsub.MessageClasses.MessageBase;
@@ -53,7 +57,7 @@ public class DistributedSocketPubSubTest extends TestBase {
     
     @BeforeEach
     void clearShutdowns() {
-        shutdowns.clear();
+        sleep(500);
     }
     
     @AfterEach
@@ -63,6 +67,7 @@ public class DistributedSocketPubSubTest extends TestBase {
             var s = iter.next();
             s.shutdown();
         }
+        shutdowns.clear();
     }
     
     void addShutdown(Shutdowneable s) {
@@ -85,6 +90,7 @@ public class DistributedSocketPubSubTest extends TestBase {
      * When all subscribers to a topic in one machine unsubscribe, then the server no longer relays messages to this client.
      */
     @Test
+    // TODO: test fails
     void testSubscribeAndPublishAndUnsubscribe() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         
@@ -514,7 +520,7 @@ public class DistributedSocketPubSubTest extends TestBase {
      * Ensure that the other client receives the messages.
      */
     @Test
-    void testServerRestartsWhileClientRunning1() throws IOException {
+    void testShutdownAndStartNewServer1() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         
         var centralServer = new TestDistributedMessageServer(CENTRAL_SERVER_HOST,
@@ -583,7 +589,7 @@ public class DistributedSocketPubSubTest extends TestBase {
         assertEquals(6, client1.getCountTypesSent()); // +5 = Identification, CreatePublisher, AddSubscriber, PublishMessage, PublishMessage
         assertEquals(0, client1.getCountTypesReceived());
         assertEquals(4, client2.getCountTypesSent()); // +3 = Identification, AddSubscriber, AddSubscriber
-        assertEquals(3, client2.getCountTypesReceived()); // +2 = CreatePublisher, PublishMessage, PublishMessage
+        assertEquals("CreatePublisher=1, PublishMessage=2", client2.getTypesReceived());
         assertThat(words, Matchers.containsInAnyOrder("one-s1", "two-s1", "one-s2a", "one-s2b", "two-s2a", "two-s2b"));
     }
 
@@ -595,7 +601,7 @@ public class DistributedSocketPubSubTest extends TestBase {
      * Ensure that the other client receives the messages when a new server is started.
      */
     @Test
-    void testServerRestartsWhileClientRunning2() throws IOException {
+    void testShutdownAndStartNewServer2() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         
         var centralServer = new TestDistributedMessageServer(CENTRAL_SERVER_HOST,
@@ -677,6 +683,157 @@ public class DistributedSocketPubSubTest extends TestBase {
     }
     
     /**
+     * In this test there is a server and 2 clients.
+     * Both clients die and new ones are started.
+     * Verify that the server removes the client machines when it detects they are gone.
+     * Verify that the new client receives publisher and subscriber already exist errors when they call createPublisher and addSubscriber.
+     */
+    @Test
+    void testSthutdownAndStartNewClient() throws IOException {
+        List<String> words = Collections.synchronizedList(new ArrayList<>());
+
+        var centralServer = new TestDistributedMessageServer(CENTRAL_SERVER_HOST,
+                                                             CENTRAL_SERVER_PORT,
+                                                             Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 8));
+        addShutdown(centralServer);
+        centralServer.start();
+        
+        {
+            // START: this block of code almost the same as in both blocks
+
+            var client1 = new TestDistributedSocketPubSub(1,
+                                                          PubSub.defaultQueueCreator(),
+                                                          PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                                          "client1",
+                                                          "localhost",
+                                                          31001,
+                                                          CENTRAL_SERVER_HOST,
+                                                          CENTRAL_SERVER_PORT);
+            addShutdown(client1);
+            client1.start();
+            Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
+            client1.subscribe("hello", "ClientOneSubscriber", CloneableString.class, str -> words.add(str.append("-s1")));
+            
+            var client2 = new TestDistributedSocketPubSub(1,
+                                                          PubSub.defaultQueueCreator(),
+                                                          PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                                          "client2",
+                                                          "localhost",
+                                                          31002,
+                                                          CENTRAL_SERVER_HOST,
+                                                          CENTRAL_SERVER_PORT);
+            addShutdown(client2);
+            client2.start();
+            client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a")));
+            client2.subscribe("hello", "ClientTwoSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b")));
+            sleep(250); // time to let server and clients start, and messages to be relayed
+            System.out.println("after server and clients started: actual=" + words);
+            assertEquals("AddSubscriber=1, CreatePublisher=1, Identification=1", client1.getTypesSent());
+            assertEquals("", client1.getTypesReceived());
+            assertEquals("AddSubscriber=2, Identification=1", client2.getTypesSent());
+            assertEquals("CreatePublisher=1", client2.getTypesReceived());
+            assertThat(words, Matchers.empty());
+            
+            words.clear();
+            publisher1.publish(new CloneableString("one"));
+            publisher1.publish(new CloneableString("two"));
+            sleep(250); // time to let server and clients start, and messages to be relayed
+            System.out.println("after two messages (one, two) published: actual=" + words);
+            assertEquals("AddSubscriber=1, CreatePublisher=1, Identification=1, PublishMessage=2", client1.getTypesSent());
+            assertEquals("", client1.getTypesReceived());
+            assertEquals("AddSubscriber=2, Identification=1", client2.getTypesSent());
+            assertEquals("CreatePublisher=1, PublishMessage=2", client2.getTypesReceived());
+            assertThat(words, Matchers.contains("one-s1", "two-s1", "one-s2a", "one-s2b", "two-s2a", "two-s2b"));
+
+            assertThat(centralServer.getRemoteClients(), Matchers.containsInAnyOrder("client1", "client2"));
+            
+            // END: this block of code almost the same as in both blocks
+            
+            // shutdown clients:
+
+            client2.shutdown();
+            sleep(250); // time to let client shutdown
+            
+            words.clear();
+            
+            publisher1.publish(new CloneableString("three"));
+            publisher1.publish(new CloneableString("four"));
+            sleep(250); // time to let server and clients start, and messages to be relayed
+            System.out.println("after two messages (three, four) published and client2 shutdown: actual=" + words);
+            assertEquals("AddSubscriber=1, CreatePublisher=1, Identification=1, PublishMessage=4", client1.getTypesSent()); // PublishMessage +2
+            assertEquals("", client1.getTypesReceived());
+            assertEquals("AddSubscriber=2, Identification=1", client2.getTypesSent()); // unchanged
+            assertEquals("CreatePublisher=1, PublishMessage=2", client2.getTypesReceived()); // unchanged as client2 is shutdown
+            assertThat(words, Matchers.contains("three-s1", "four-s1"));
+
+            client1.shutdown();
+            sleep(250); // time to let client shutdown
+        }
+        
+        assertEquals("AddSubscriber=3, CreatePublisher=1, Identification=2, PublishMessage=4", centralServer.getValidTypesReceived());
+        assertEquals("CreatePublisher=1, PublishMessage=2", centralServer.getTypesSent());
+        assertEquals(Set.of(), centralServer.getRemoteClients());
+        
+        words.clear();
+        System.out.println("about to start new clients");
+        
+        {
+            // START: this block of code almost the same as in both blocks
+            
+            var client1 = new TestDistributedSocketPubSub(1,
+                                                          PubSub.defaultQueueCreator(),
+                                                          PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                                          "client1",
+                                                          "localhost",
+                                                          31001,
+                                                          CENTRAL_SERVER_HOST,
+                                                          CENTRAL_SERVER_PORT);
+            addShutdown(client1);
+            client1.start();
+            Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
+            client1.subscribe("hello", "ClientOneSubscriber", CloneableString.class, str -> words.add(str.append("-s1")));
+            
+            var client2 = new TestDistributedSocketPubSub(1,
+                                                          PubSub.defaultQueueCreator(),
+                                                          PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                                          "client2",
+                                                          "localhost",
+                                                          31002,
+                                                          CENTRAL_SERVER_HOST,
+                                                          CENTRAL_SERVER_PORT);
+            addShutdown(client2);
+            client2.start();
+            client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a")));
+            client2.subscribe("hello", "ClientTwoSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b")));
+            sleep(250); // time to let server and clients start, and messages to be relayed
+            System.out.println("after clients restarted: actual=" + words);
+            assertEquals("AddSubscriber=1, CreatePublisher=1, Identification=1", client1.getTypesSent());
+            assertEquals("", client1.getTypesReceived());
+            assertEquals("AddSubscriber=2, Identification=1", client2.getTypesSent());
+            assertEquals("CreatePublisher=1, PublishMessage=2", client2.getTypesReceived()); // differences: PublishMessage +2 because "three" and "four" send to client
+            assertThat(words, Matchers.contains("three-s2a", "three-s2b", "four-s2a", "four-s2b")); // differences: handle 2 new messages
+            
+            words.clear();
+            publisher1.publish(new CloneableString("five")); // difference: above we publish "three"
+            publisher1.publish(new CloneableString("six")); // difference: above we publish "four"
+            sleep(250); // time to let server and clients start, and messages to be relayed
+            System.out.println("after clients restarted two messages (five, six) published: actual=" + words);
+            assertEquals("AddSubscriber=1, CreatePublisher=1, Identification=1, PublishMessage=2", client1.getTypesSent());
+            assertEquals("", client1.getTypesReceived());
+            assertEquals("AddSubscriber=2, Identification=1", client2.getTypesSent());
+            assertEquals("CreatePublisher=1, PublishMessage=4", client2.getTypesReceived()); // PublishMessage +2
+            assertThat(words, Matchers.contains("five-s1", "six-s1", "five-s2a", "five-s2b", "six-s2a", "six-s2b"));
+            
+            assertThat(centralServer.getRemoteClients(), Matchers.containsInAnyOrder("client1", "client2"));
+
+            // END: this block of code almost the same as in both blocks
+        }
+        
+        assertEquals("AddSubscriber=6, CreatePublisher=2, Identification=4, PublishMessage=6", centralServer.getValidTypesReceived());
+        assertEquals("CreatePublisher=2, PublishMessage=6", centralServer.getTypesSent());
+    }
+    
+    /**
      * Test uniqueness of server id is when server is restarted.
      * There is a central server and 2 clients, and client1 publishes two messages.
      * Central server shuts down and a new one is started.
@@ -726,7 +883,7 @@ public class DistributedSocketPubSubTest extends TestBase {
         client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a")));
         client2.subscribe("hello", "ClientTwoSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b")));
         sleep(250); // time to let server and clients start, and messages to be relayed
-        System.out.println("after first two messages published: actual=" + words);
+        System.out.println("after server and clients started: actual=" + words);
         assertEquals("AddSubscriber=1, CreatePublisher=1, Identification=1", client1.getTypesSent());
         assertEquals("", client1.getTypesReceived());
         assertEquals("AddSubscriber=2, Identification=1", client2.getTypesSent());
@@ -779,6 +936,7 @@ public class DistributedSocketPubSubTest extends TestBase {
      * This indicates that the server is receiving a message that it already processed.
      * Ensure that the server ignores it.
      */
+    // TODO: test fails
     @Test
     void testServerIgnoresMessagesAlreadyProcessed() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
@@ -961,14 +1119,16 @@ public class DistributedSocketPubSubTest extends TestBase {
     
     /**
      * Test the fetch subscriber API.
-     * There are 5 clients.
+     * There are 7 clients.
      * 2nd client subscribes and fetches publisher.
-     * 3rd client fetches.
+     * 3rd client fetches publisher and subscribes.
+     * 4th client fetches.
      * 1st client creates publisher.
-     * 4th client fetches publisher after it is already in the server.
-     * 5th client does nothing.
-     * Verify that server sends 3 CreatePublisher messages (to client2, client3, client4).
+     * 5th client fetches publisher after it is already in the server.
+     * 6th client does nothing.
+     * Verify that server sends 4 CreatePublisher messages (to client2, client3, client4, client5).
      */
+    // TODO: test fails
     @Test
     void testFetchPublisher() throws IOException, InterruptedException, ExecutionException, TimeoutException {
         var centralServer = new TestDistributedMessageServer(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, Collections.emptyMap());
@@ -1030,38 +1190,70 @@ public class DistributedSocketPubSubTest extends TestBase {
         addShutdown(client5);
         client5.start();
         
-        sleep(250); // time to let subscribe and fetchPublisher commands be registered
+        var client6 = new TestDistributedSocketPubSub(1,
+                                                      PubSub.defaultQueueCreator(),
+                                                      PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                                      "client6",
+                                                      "localhost",
+                                                      30006,
+                                                      CENTRAL_SERVER_HOST,
+                                                      CENTRAL_SERVER_PORT);
+        addShutdown(client6);
+        client6.start();
 
+        sleep(250); // time to let clients start
+
+        // 2nd client subscribes and fetches publisher.
         client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> { });
         client2.subscribe("hello", "ClientTwoSubscriber_Second", CloneableString.class, str -> { });
         CompletableFuture<Publisher> futurePublisher2 = client2.fetchPublisher("hello");
+        
+        // 3rd client fetches publisher and subscribes.
         CompletableFuture<Publisher> futurePublisher3 = client3.fetchPublisher("hello");
-        sleep(250); // time to let subscribe and fetchPublisher commands be registered
+        client3.subscribe("hello", "ClientThreeSubscriber_First", CloneableString.class, str -> { });
+        client3.subscribe("hello", "ClientThreeSubscriber_Second", CloneableString.class, str -> { });
+        sleep(250); // time to let server register futurePublisher3 and deregister it because of the addSubscriber command, and to wait for futurePublisher4 to run
+
+        // 4th client fetches.
+        CompletableFuture<Publisher> futurePublisher4 = client4.fetchPublisher("hello");
+        
+        sleep(500); // time to let subscribe and fetchPublisher commands be registered
         assertFalse(futurePublisher2.isDone());
         assertFalse(futurePublisher3.isDone());
-        assertEquals("AddSubscriber=2, FetchPublisher=2, Identification=5", centralServer.getValidTypesReceived());
+        assertFalse(futurePublisher4.isDone());
+        assertEquals("AddSubscriber=4, FetchPublisher=3, Identification=6", centralServer.getValidTypesReceived());
         assertEquals("", centralServer.getTypesSent());
         
+        // 1st client creates publisher.
         client1.createPublisher("hello", CloneableString.class);
         sleep(250); // time to let createSubscriber be handled and publishers sent down to clients
         assertTrue(futurePublisher2.isDone());
         assertTrue(futurePublisher3.isDone());
-        assertEquals("AddSubscriber=2, CreatePublisher=1, FetchPublisher=2, Identification=5", centralServer.getValidTypesReceived());
-        assertEquals("CreatePublisher=2", centralServer.getTypesSent());
-
-        CompletableFuture<Publisher> futurePublisher4 = client4.fetchPublisher("hello");
-        assertFalse(futurePublisher4.isDone());
-        Publisher publisher4 = futurePublisher4.get(1000, TimeUnit.MILLISECONDS);
-        assertEquals("hello", publisher4.getTopic());
-        assertEquals("CloneableString", publisher4.getPublisherClass().getSimpleName());
-        assertEquals("AddSubscriber=2, CreatePublisher=1, FetchPublisher=3, Identification=5", centralServer.getValidTypesReceived());
+        assertTrue(futurePublisher4.isDone());
+        assertEquals("AddSubscriber=4, CreatePublisher=1, FetchPublisher=3, Identification=6", centralServer.getValidTypesReceived());
         assertEquals("CreatePublisher=3", centralServer.getTypesSent());
 
-        CompletableFuture<Publisher> repeatFuturePublisher4 = client4.fetchPublisher("hello");
-        assertTrue(repeatFuturePublisher4.isDone());
-        assertSame(publisher4, repeatFuturePublisher4.get());
-        assertEquals("AddSubscriber=2, CreatePublisher=1, FetchPublisher=3, Identification=5", centralServer.getValidTypesReceived()); // unchanged
-        assertEquals("CreatePublisher=3", centralServer.getTypesSent());
+        // 5th client fetches publisher after it is already in the server.
+        CompletableFuture<Publisher> futurePublisher5 = client5.fetchPublisher("hello");
+        CompletableFuture<Publisher> futurePublisher5b = client5.fetchPublisher("hello");
+        assertFalse(futurePublisher5.isDone());
+        assertSame(futurePublisher5, futurePublisher5b);
+        Publisher publisher5 = futurePublisher5.get(1000, TimeUnit.MILLISECONDS);
+        assertEquals("hello", publisher5.getTopic());
+        assertEquals("CloneableString", publisher5.getPublisherClass().getSimpleName());
+        assertEquals("AddSubscriber=4, CreatePublisher=1, FetchPublisher=4, Identification=6", centralServer.getValidTypesReceived()); // FetchPublisher +1
+        assertEquals("CreatePublisher=4", centralServer.getTypesSent()); // CreatePublisher +1
+
+        CompletableFuture<Publisher> repeatFuturePublisher5 = client5.fetchPublisher("hello");
+        assertTrue(repeatFuturePublisher5.isDone());
+        assertNotSame(futurePublisher5, repeatFuturePublisher5);
+        assertSame(publisher5, repeatFuturePublisher5.get());
+        
+        // 6th client does nothing.
+        
+        // Verify that server sends 4 CreatePublisher messages (to client2, client3, client4, client5).
+        assertEquals("AddSubscriber=4, CreatePublisher=1, FetchPublisher=4, Identification=6", centralServer.getValidTypesReceived()); // unchanged
+        assertEquals("CreatePublisher=4", centralServer.getTypesSent());
     }
     
     @Test
@@ -1181,6 +1373,10 @@ class TestDistributedMessageServer extends DistributedMessageServer {
     String getTypesSent() {
         return countElementsInListByType(typesSent);
     }
+    
+    Set<String> getRemoteClients() {
+        return getRemoteClientsStream().map(ClientMachine::getMachineId).map(clientMachine -> clientMachine.toString()).collect(Collectors.toSet());
+    }
 }
 
 
@@ -1226,7 +1422,7 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
     protected void onBeforeSendMessage(MessageBase message) {
         if (enableTamperServerIndex && message instanceof RelayMessageBase) {
             RelayMessageBase relayMessage = (RelayMessageBase) message;
-            relayMessage.setRelayFields(new RelayFields(System.currentTimeMillis(), ServerIndex.MIN_VALUE.increment(), "bogus"));
+            relayMessage.setRelayFields(new RelayFields(System.currentTimeMillis(), ServerIndex.MIN_VALUE.increment(), new ClientMachineId("bogus")));
         }
     }
     

@@ -86,7 +86,7 @@ public class DistributedSocketPubSub extends PubSub {
     
     private final String messageServerHost;
     private final int messageServerPort;
-    private final String machineId;
+    private final ClientMachineId machineId;
     private final SocketAddress localAddress;
     private final AtomicReference<SocketChannel> channelHolder;
     private final ExecutorService channelExecutor = Executors.newFixedThreadPool(2, createThreadFactory("DistributedSocketPubSub", true)); // read thread and write thread
@@ -119,12 +119,12 @@ public class DistributedSocketPubSub extends PubSub {
         super(baseArgs);
         this.messageServerHost = messageServerHost;
         this.messageServerPort = messageServerPort;
-        this.machineId = machineId != null ? machineId : InetAddress.getLocalHost().getHostName();
+        this.machineId = new ClientMachineId(machineId != null ? machineId : InetAddress.getLocalHost().getHostName());
         this.localAddress = new InetSocketAddress(localServer, localPort);
         this.channelHolder = new AtomicReference<>(createNewSocket());
         this.messageWriter = createMessageWriter();
         this.cleanable = addShutdownHook(this,
-                                         new Cleanup(machineId, channelHolder, channelExecutor, retryExecutor),
+                                         new Cleanup(this.machineId, channelHolder, channelExecutor, retryExecutor),
                                          DistributedSocketPubSub.class);
     }
     
@@ -158,7 +158,7 @@ public class DistributedSocketPubSub extends PubSub {
     }
     
     private void doStart(boolean sendAllPublishersAndSubscribers, CompletableFuture<Void> future, int retry) {
-        String snippet = String.format("DistributedSocketPubSub clientMachine=%s centralServer=%s:%d",
+        String snippet = String.format("DistributedSocketPubSub: clientMachine=%s, centralServer=%s:%d",
                                        machineId,
                                        messageServerHost,
                                        messageServerPort);
@@ -568,12 +568,12 @@ public class DistributedSocketPubSub extends PubSub {
      * Cleanup this class. Close the socket channel and shutdown the executor.
      */
     private static class Cleanup extends CallStackCapturing implements Runnable {
-        private final String machineId;
+        private final ClientMachineId machineId;
         private final AtomicReference<SocketChannel> channelHolder;
         private final ExecutorService channelExecutor;
         private final ExecutorService retryExecutor;
 
-        private Cleanup(String machineId, AtomicReference<SocketChannel> channelHolder, ExecutorService channelExecutor, ExecutorService retryExecutor) {
+        private Cleanup(ClientMachineId machineId, AtomicReference<SocketChannel> channelHolder, ExecutorService channelExecutor, ExecutorService retryExecutor) {
             this.machineId = machineId;
             this.channelHolder = channelHolder;
             this.channelExecutor = channelExecutor;

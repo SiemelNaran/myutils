@@ -147,14 +147,14 @@ interface MessageClasses {
     class Identification extends ClientGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
-        private final String machineId;
+        private final ClientMachineId machineId;
         
-        Identification(String machineId) {
+        Identification(ClientMachineId machineId) {
             super(null);
             this.machineId = machineId;
         }
         
-        String getMachineId() {
+        ClientMachineId getMachineId() {
             return machineId;
         }
 
@@ -309,9 +309,9 @@ interface MessageClasses {
         
         private final long serverTimestamp;
         private final ServerIndex serverIndex;
-        private final String sourceMachineId;
+        private final ClientMachineId sourceMachineId;
         
-        RelayFields(long serverTimestamp, ServerIndex serverIndex, String sourceMachineId) {
+        RelayFields(long serverTimestamp, ServerIndex serverIndex, ClientMachineId sourceMachineId) {
             this.serverTimestamp = serverTimestamp;
             this.serverIndex = serverIndex;
             this.sourceMachineId = sourceMachineId;
@@ -325,7 +325,7 @@ interface MessageClasses {
             return serverIndex;
         }
 
-        String getSourceMachineId() {
+        ClientMachineId getSourceMachineId() {
             return sourceMachineId;
         }
 
@@ -339,8 +339,8 @@ interface MessageClasses {
     
     /**
      * Base class of all messages that can be relayed from one client to another via the server.
-     * Required field sourceMachineId, which is the machine sending the message. The field is set by server.
      * Required field clientIndex, which is the message number on the client.
+     * Optional field relayFields, which is null when the client has not yet sent the message to the server, and not null once the server processes it.
      * It is unique across messages in all machines.
      */
     abstract class RelayMessageBase extends ClientGeneratedMessage {
