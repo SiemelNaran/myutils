@@ -194,7 +194,7 @@ public class SocketTransformer {
             oos.writeObject(message);
             byte[] array = bos.toByteArray();
             if (array.length > maxLength) {
-                throw new IllegalArgumentException("message is too long: " + array.length + " > " + maxLength);
+                throw new IllegalArgumentException("message is too long: " + array.length + " > " + maxLength); // COVERAGE: missed
             }
             return ByteBuffer.wrap(bos.toByteArray());
         } finally {

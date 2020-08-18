@@ -71,7 +71,7 @@ public class TestUtil {
      * Only works if the class inherits from Future, as CompletableFuture does.
      */
     @SuppressWarnings("unchecked")
-    public static <T> Future<T> ttoFuture(CompletionStage<T> future) {
+    public static <T> Future<T> toFuture(CompletionStage<T> future) {
         return (Future<T>) future;
     }
 

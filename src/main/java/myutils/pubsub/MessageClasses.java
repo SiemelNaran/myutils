@@ -52,7 +52,7 @@ interface MessageClasses {
         }
 
         long getServerTimestamp() {
-            return serverTimestamp;
+            return serverTimestamp; // COVERAGE: missed
         }
     }
 
@@ -318,7 +318,7 @@ interface MessageClasses {
         }
         
         long getServerTimestamp() {
-            return serverTimestamp;
+            return serverTimestamp; // COVERAGE: missed
         }
         
         ServerIndex getServerIndex() {

@@ -129,7 +129,7 @@ public class DistributedMessageServer implements Shutdowneable {
      * Class representing a remote machine.
      * Key fields are machineId (a string) and channel (an AsynchronousSocketChannel).
      */
-    protected static final class ClientMachine implements Comparable<ClientMachine> {
+    protected static final class ClientMachine {
         private final @Nonnull ClientMachineId machineId;
         private final @Nonnull String remoteAddress;
         private final @Nonnull AsynchronousSocketChannel channel;
@@ -168,10 +168,10 @@ public class DistributedMessageServer implements Shutdowneable {
             return this.machineId.equals(that.machineId);
         }
 
-        @Override
-        public int compareTo(ClientMachine that) {
-            return this.machineId.compareTo(that.machineId);
-        }
+//        @Override
+//        public int compareTo(ClientMachine that) {
+//            return this.machineId.compareTo(that.machineId);
+//        }
 
         @Nonnull WriteManager getWriteManager() {
             return writeManager;
@@ -395,7 +395,7 @@ public class DistributedMessageServer implements Shutdowneable {
                     }
                 }
                 if (info.notifyClients != null) {
-                    info.notifyClients.removeIf(notifyClientMachineId -> notifyClientMachineId.equals(clientMachineId));
+                    info.notifyClients.removeIf(notifyClientMachineId -> notifyClientMachineId.equals(clientMachineId)); // COVERAGE: missed: client requests notification and is shut down
                     info.setNotifyClientsToNullIfEmpty();
                 }
                 if (removeCount > 1 && returnTopicsAffected) {
@@ -497,7 +497,7 @@ public class DistributedMessageServer implements Shutdowneable {
         
         @Override
         public String toString() {
-            return clientMachineId + "/" + subscriberName;
+            return clientMachineId + "/" + subscriberName; // not hit in code coverage, used to represent the object in the debugger
         }
     }
 
@@ -575,7 +575,7 @@ public class DistributedMessageServer implements Shutdowneable {
                 if (topic == null || topic.equals(message.getTopic())) {
                     lastMessage = message;
                     if (message.getRelayFields().getSourceMachineId().equals(clientMachine.getMachineId())) {
-                        continue;
+                        continue; // COVERAGE: missed
                     }
                     if (minClientTimestamp == null || message.getClientTimestamp() >= minClientTimestamp) {
                         consumer.accept(message);
@@ -1004,7 +1004,7 @@ public class DistributedMessageServer implements Shutdowneable {
             // the messages published since the server died (b) need to be sent to all subscribers
             relayAction = (otherClientMachineId, minClientTimestamp) -> {
                 if (minClientTimestamp == null) {
-                    send(relay, lookupClientMachine(otherClientMachineId), 0);
+                    send(relay, lookupClientMachine(otherClientMachineId), 0); // COVERAGE: missed
                 } else {
                     download("handleCreatePublisher",
                              lookupClientMachine(otherClientMachineId),
@@ -1044,7 +1044,7 @@ public class DistributedMessageServer implements Shutdowneable {
         }
     }
 
-    private void sendRequestIdentification(AsynchronousSocketChannel channel, MessageBase message) {
+    private void sendRequestIdentification(AsynchronousSocketChannel channel, MessageBase message) { // COVERAGE: missed
         ClientMachine clientMachine = new ClientMachine(new ClientMachineId("<unregistered>"), channel);
         RequestIdentification request = new RequestIdentification(message.getClass(), extractClientIndex(message));
         send(request, clientMachine, 0);
@@ -1073,6 +1073,7 @@ public class DistributedMessageServer implements Shutdowneable {
                              .exceptionally(e -> retrySend(message, clientMachine, retry, e))
                              .thenRun(() -> sendQueuedMessageOrReleaseLock(clientMachine));
         } catch (IOException e) {
+            // COVERAGE: missed
             LOGGER.log(Level.WARNING,
                        String.format("Send message failed: clientMachine=%s, retry=%d, retryDone=%b",
                                      clientMachine.getMachineId(), retry, true),
@@ -1093,6 +1094,7 @@ public class DistributedMessageServer implements Shutdowneable {
     }
     
     private Void retrySend(MessageBase message, ClientMachine clientMachine, int retry, Throwable e) {
+        // COVERAGE: missed
         boolean retryDone = retry >= MAX_RETRIES || SocketTransformer.isClosed(e) || e instanceof RuntimeException || e instanceof Error;
         Level level = retryDone ? Level.WARNING : Level.TRACE;
         LOGGER.log(level, () -> String.format("Send message failed: clientMachine=%s, retry=%d, retryDone=%b",

@@ -7,6 +7,7 @@ import static myutils.TestUtil.sleep;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -18,7 +19,9 @@ import java.nio.channels.NetworkChannel;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +42,7 @@ import java.util.stream.Collectors;
 import myutils.LogFailureToConsoleTestWatcher;
 import myutils.TestBase;
 import myutils.TestUtil;
+import myutils.pubsub.DistributedMessageServer.ClientMachine;
 import myutils.pubsub.InMemoryPubSubIntegrationTest.CloneableString;
 import myutils.pubsub.MessageClasses.MessageBase;
 import myutils.pubsub.MessageClasses.PublishMessage;
@@ -729,7 +733,8 @@ public class DistributedPubSubIntegrationTest extends TestBase {
             assertEquals("CreatePublisher=1, PublishMessage=2", client2.getTypesReceived());
             assertThat(words, Matchers.contains("one-s1", "two-s1", "one-s2a", "one-s2b", "two-s2a", "two-s2b"));
 
-            assertThat(centralServer.getRemoteClients(), Matchers.containsInAnyOrder("client1", "client2"));
+            assertThat(centralServer.getRemoteClients().stream().map(clientMachine -> clientMachine.getMachineId().toString()).collect(Collectors.toSet()),
+                       Matchers.containsInAnyOrder("client1", "client2"));
             
             // END: this block of code almost the same as in both blocks
             
@@ -811,13 +816,32 @@ public class DistributedPubSubIntegrationTest extends TestBase {
             assertEquals("CreatePublisher=1, PublishMessage=4", client2.getTypesReceived()); // PublishMessage +2
             assertThat(words, Matchers.contains("five-s1", "six-s1", "five-s2a", "five-s2b", "six-s2a", "six-s2b"));
             
-            assertThat(centralServer.getRemoteClients(), Matchers.containsInAnyOrder("client1", "client2"));
+            assertThat(centralServer.getRemoteClients().stream().map(clientMachine -> clientMachine.getMachineId().toString()).collect(Collectors.toSet()),
+                       Matchers.containsInAnyOrder("client1", "client2"));
 
             // END: this block of code almost the same as in both blocks
         }
         
         assertEquals("AddSubscriber=6, CreatePublisher=2, Identification=4, PublishMessage=6", centralServer.getValidTypesReceived());
         assertEquals("CreatePublisher=2, PublishMessage=6", centralServer.getTypesSent());
+        
+        codeCoverageForClientMachine(centralServer.getRemoteClients().toArray(new ClientMachine[0]));
+    }
+    
+    @SuppressWarnings("unlikely-arg-type")
+    private void codeCoverageForClientMachine(ClientMachine[] remoteClients) {
+        assertEquals(2, remoteClients.length);
+        Arrays.sort(remoteClients, Comparator.comparing(ClientMachine::getMachineId));
+        ClientMachine client1 = remoteClients[0];
+        ClientMachine client2 = remoteClients[1];
+        assertEquals("client1", client1.getMachineId().toString());
+        assertEquals("client2", client2.getMachineId().toString());
+        assertNotEquals(client1.hashCode(), client2.hashCode());
+        assertFalse(client1.equals(null));
+        assertFalse(client1.equals("abc")); // unlikely-arg-type
+        // ClientMachine::toString is mostly used for how the debugger renders the object
+        assertEquals("client1@/127.0.0.1:31001", client1.toString());
+        assertEquals("client2@/127.0.0.1:31002", client2.toString());
     }
     
     /**
@@ -1345,16 +1369,19 @@ class TestDistributedMessageServer extends DistributedMessageServer {
      */
     @Override
     protected void onBeforeSocketBound(NetworkChannel channel) throws IOException {
+        super.onBeforeSocketBound(channel);
         channel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
     }
     
     @Override
     protected void onMessageSent(MessageBase message) {
+        super.onMessageSent(message);
         typesSent.add(message.getClass().getSimpleName());
     }
     
     @Override
     protected void onValidMessageReceived(MessageBase message) {
+        super.onValidMessageReceived(message);
         validTypesReceived.add(message.getClass().getSimpleName());
     }
     
@@ -1374,8 +1401,8 @@ class TestDistributedMessageServer extends DistributedMessageServer {
         return countElementsInListByType(typesSent);
     }
     
-    Set<String> getRemoteClients() {
-        return getRemoteClientsStream().map(ClientMachine::getMachineId).map(clientMachine -> clientMachine.toString()).collect(Collectors.toSet());
+    Set<ClientMachine> getRemoteClients() {
+        return getRemoteClientsStream().collect(Collectors.toSet());
     }
 }
 
@@ -1415,11 +1442,13 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
      */
     @Override
     protected void onBeforeSocketBound(NetworkChannel channel) throws IOException {
+        super.onBeforeSocketBound(channel);
         channel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
     }
    
     @Override
     protected void onBeforeSendMessage(MessageBase message) {
+        super.onBeforeSendMessage(message);
         if (enableTamperServerIndex && message instanceof RelayMessageBase) {
             RelayMessageBase relayMessage = (RelayMessageBase) message;
             relayMessage.setRelayFields(new RelayFields(System.currentTimeMillis(), ServerIndex.MIN_VALUE.increment(), new ClientMachineId("bogus")));
@@ -1428,6 +1457,7 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
     
     @Override
     protected void onMessageSent(MessageBase message) {
+        super.onMessageSent(message);
         typesSent.add(message.getClass().getSimpleName());
     }
     

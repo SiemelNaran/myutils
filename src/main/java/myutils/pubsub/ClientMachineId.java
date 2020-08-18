@@ -8,7 +8,7 @@ import java.util.Optional;
 import javax.annotation.Nonnull;
 
 
-public final class ClientMachineId implements java.io.Serializable, Comparable<ClientMachineId>, Constable, ConstantDesc, CharSequence {
+public final class ClientMachineId implements java.io.Serializable, Comparable<ClientMachineId>, CharSequence, Constable, ConstantDesc {
     private static final long serialVersionUID = 1L;
     
     private final @Nonnull String value;
@@ -41,16 +41,6 @@ public final class ClientMachineId implements java.io.Serializable, Comparable<C
     public int compareTo(ClientMachineId that) {
         return this.value.compareTo(that.value);
     }
-    
-    @Override
-    public Optional<? extends ConstantDesc> describeConstable() {
-        return value.describeConstable();
-    }
-
-    @Override
-    public Object resolveConstantDesc(Lookup lookup) throws ReflectiveOperationException {
-        return value.resolveConstantDesc(lookup);
-    }
 
     @Override
     public int length() {
@@ -65,5 +55,15 @@ public final class ClientMachineId implements java.io.Serializable, Comparable<C
     @Override
     public CharSequence subSequence(int start, int end) {
         return value.subSequence(start, end);
+    }
+    
+    @Override
+    public Optional<ClientMachineId> describeConstable() {
+        return Optional.of(this);
+    }
+
+    @Override
+    public ClientMachineId resolveConstantDesc(Lookup lookup) {
+        return this;
     }
 }
