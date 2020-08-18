@@ -54,7 +54,7 @@ public class TestUtil {
      * @throws CancellationException if any future was cancelled
      * @throws CompletionException if any future encountered an ExecutionException or InterruptedException
      */
-    public static <T> List<T> toList(Collection<Future<T>> collection) {
+    public static <T> List<T> toList(Collection<? extends Future<T>> collection) {
         List<T> list = new ArrayList<>(collection.size());
         for (var future : collection) {
             try {
@@ -71,7 +71,7 @@ public class TestUtil {
      * Only works if the class inherits from Future, as CompletableFuture does.
      */
     @SuppressWarnings("unchecked")
-    public static <T> Future<T> toFuture(CompletionStage<T> future) {
+    public static <T> Future<T> ttoFuture(CompletionStage<T> future) {
         return (Future<T>) future;
     }
 

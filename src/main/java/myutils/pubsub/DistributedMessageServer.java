@@ -31,7 +31,6 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -641,13 +640,13 @@ public class DistributedMessageServer implements Shutdowneable {
     }
     
     /**
-     * Start the message server.
+     * Start the message server asynchronously.
      * Returns a future that is resolved when everything starts, or rejected if starting fails.
      * If there was an IOException in starting the future is rejected with this exception.
      * 
      * @throws java.util.concurrent.RejectedExecutionException if server was shutdown
      */
-    public CompletionStage<Void> start() {
+    public CompletableFuture<Void> start() {
         CompletableFuture<Void> future = new CompletableFuture<>();
         retryExecutor.submit(() -> doStart(future));
         return future;
@@ -1198,7 +1197,7 @@ public class DistributedMessageServer implements Shutdowneable {
 
         @Override
         public void run() {
-            LOGGER.log(Level.DEBUG, "Shutting down " + DistributedMessageServer.class.getSimpleName() + " " + getLocalAddress(channel));
+            LOGGER.log(Level.INFO, "Shutting down " + DistributedMessageServer.class.getSimpleName() + ": serverAddress=" + getLocalAddress(channel));
             LOGGER.log(Level.TRACE, "Call stack at creation:" + getCallStack());
             closeExecutorQuietly(acceptExecutor);
             closeExecutorQuietly(channelExecutor);
