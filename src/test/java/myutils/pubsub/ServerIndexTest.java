@@ -2,6 +2,7 @@ package myutils.pubsub;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 
@@ -42,6 +43,8 @@ public class ServerIndexTest extends TestBase {
         assertNotSame(nextServerIndex, otherServerIndex);
         assertEquals(nextServerIndex, otherServerIndex);
         assertEquals(nextServerIndex.hashCode(), otherServerIndex.hashCode());
+        
+        assertFalse(nextServerIndex.equals(null));
     }
     
     @Test
