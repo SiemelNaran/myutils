@@ -427,10 +427,7 @@ public class DistributedMessageServer implements Shutdowneable {
                                                           @Nullable ClientMachineId excludeMachineId,
                                                           boolean fetchClientsWantingNotification,
                                                           BiConsumer<ClientMachineId, Long /*@Nullable minClientTimestamp*/> consumer) {
-            TopicInfo info = topicMap.get(topic);
-            if (info == null) {
-                return;
-            }
+            TopicInfo info = Objects.requireNonNull(topicMap.get(topic));
             if (info.createPublisher == null) {
                 return;
             }
@@ -497,7 +494,7 @@ public class DistributedMessageServer implements Shutdowneable {
         
         @Override
         public String toString() {
-            return clientMachineId + "/" + subscriberName; // not hit in code coverage, used to represent the object in the debugger
+            return clientMachineId + "/" + subscriberName;
         }
     }
 
@@ -574,9 +571,6 @@ public class DistributedMessageServer implements Shutdowneable {
                 }
                 if (topic == null || topic.equals(message.getTopic())) {
                     lastMessage = message;
-                    if (message.getRelayFields().getSourceMachineId().equals(clientMachine.getMachineId())) {
-                        continue; // COVERAGE: missed
-                    }
                     if (minClientTimestamp == null || message.getClientTimestamp() >= minClientTimestamp) {
                         consumer.accept(message);
                         count++;
@@ -893,15 +887,13 @@ public class DistributedMessageServer implements Shutdowneable {
      * Running time O(N).
      */
     private void removeChannel(AsynchronousSocketChannel channel) {
-        ClientMachine clientMachine = findClientMachineByChannel(channel);
-        if (clientMachine != null) {
-            String topicsAffected = publishersAndSubscribers.removeClientMachine(clientMachine.getMachineId()).toString();
-            clientMachines.remove(clientMachine);
-            LOGGER.log(Level.INFO, "Removed client machine: clientMachine={0}, clientChannel={1}, topicsAffected={2}",
-                       clientMachine.getMachineId(),
-                       getRemoteAddress(channel),
-                       topicsAffected);
-        }
+        ClientMachine clientMachine = Objects.requireNonNull(findClientMachineByChannel(channel));
+        String topicsAffected = publishersAndSubscribers.removeClientMachine(clientMachine.getMachineId()).toString();
+        clientMachines.remove(clientMachine);
+        LOGGER.log(Level.INFO, "Removed client machine: clientMachine={0}, clientChannel={1}, topicsAffected={2}",
+                   clientMachine.getMachineId(),
+                   getRemoteAddress(channel),
+                   topicsAffected);
     }
     
     private void handleFetchPublisher(ClientMachine clientMachine, String topic) {
