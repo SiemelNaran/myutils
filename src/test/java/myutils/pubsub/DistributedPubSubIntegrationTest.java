@@ -95,6 +95,57 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     private static final int CENTRAL_SERVER_PORT = 2101;
     
     /**
+     * Test duplicate clients.
+     * 2 clients subscribe with the same name.
+     * Verify that the second one is ignored.
+     */
+    @Test
+    void testDuplicateClient() throws IOException, InterruptedException, ExecutionException, TimeoutException {
+        List<CompletableFuture<?>> startFutures = new ArrayList<>();
+
+        var centralServer = createServer(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, Collections.emptyMap());
+        startFutures.add(centralServer.start());
+        
+        var client1 = createClient(1,
+                                   PubSub.defaultQueueCreator(),
+                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                   "client1",
+                                   "localhost",
+                                   30001,
+                                   CENTRAL_SERVER_HOST,
+                                   CENTRAL_SERVER_PORT);
+
+        startFutures.add(client1.start());
+        waitFor(startFutures);
+        sleep(250); 
+        
+        assertEquals("Identification=1", centralServer.getValidTypesReceived());
+        assertEquals("", centralServer.getTypesSent());
+        assertThat(centralServer.getRemoteClients().stream().map(clientMachine -> clientMachine.getMachineId().toString()).collect(Collectors.toList()),
+                   Matchers.contains("client1"));
+
+        // start a new client on a different port but with the same machine name
+        var client1b = createClient(1,
+                                    PubSub.defaultQueueCreator(),
+                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                    "client1", // same name as above
+                                    "localhost",
+                                    30002,
+                                    CENTRAL_SERVER_HOST,
+                                    CENTRAL_SERVER_PORT);
+        var startClient1bFuture = client1b.start();
+        waitFor(Collections.singletonList(startClient1bFuture));
+        
+        assertEquals("Identification=2", centralServer.getValidTypesReceived());
+        assertEquals("", centralServer.getTypesSent());
+        assertThat(centralServer.getRemoteClients().stream().map(clientMachine -> clientMachine.getMachineId().toString()).collect(Collectors.toList()),
+                   Matchers.contains("client1"));
+
+        startClient1bFuture.get();
+        //assertExceptionFromCallable(() -> startClient2Future.get(), ExecutionException.class, "java.nio.channels.AlreadyConnectedException");
+    }
+    
+    /**
      * Basic test for publish + subscribe + unsubscribe.
      * There is a central server, 3 clients, and 4 subscribers (2 subscribers in client2).
      * We create subscribers first as this could happen in a real system.
@@ -1121,14 +1172,14 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     }
     
     /**
-     * Test the fetch subscriber API.
+     * Test the fetch publisher API.
      * There are 7 clients.
      * 2nd client subscribes and fetches publisher.
      * 3rd client fetches publisher and subscribes.
      * 4th client fetches.
      * 1st client creates publisher.
      * 5th client fetches publisher after it is already in the server.
-     * 6th client does nothing.
+     * 6th client fetches a different publisher. Upon being shut down and a new one started, a CreatePublisher is not sent to the client machine with the same name.
      * Verify that server sends 4 CreatePublisher messages (to client2, client3, client4, client5).
      */
     @Test
@@ -1246,11 +1297,31 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertNotSame(futurePublisher5, repeatFuturePublisher5);
         assertSame(publisher5, repeatFuturePublisher5.get());
         
-        // 6th client does nothing.
+        // 6th client fetches a different publisher.
+        CompletableFuture<Publisher> futurePublisher6 = client5.fetchPublisher("world");
+        sleep(250); // wait for server to receive fetch command
+        assertFalse(futurePublisher6.isDone());
+        client6.shutdown();
+        sleep(250); // wait for server to detect that client6 is shutdown
         
         // Verify that server sends 4 CreatePublisher messages (to client2, client3, client4, client5).
-        assertEquals("AddSubscriber=4, CreatePublisher=1, FetchPublisher=4, Identification=6", centralServer.getValidTypesReceived()); // unchanged
+        assertEquals("AddSubscriber=4, CreatePublisher=1, FetchPublisher=5, Identification=6", centralServer.getValidTypesReceived()); // unchanged
         assertEquals("CreatePublisher=4", centralServer.getTypesSent());
+        
+        // Upon being shut down and a new one started, a CreatePublisher is not sent to the client machine with the same name.
+        var client6b = createClient(1,
+                                    PubSub.defaultQueueCreator(),
+                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                    "client6",
+                                    "localhost",
+                                    30006,
+                                    CENTRAL_SERVER_HOST,
+                                    CENTRAL_SERVER_PORT);
+        waitFor(Collections.singletonList(client6b.start()));
+        sleep(250); // wait for central server to send any CreatePublisher commands
+        assertEquals("AddSubscriber=4, CreatePublisher=1, FetchPublisher=5, Identification=7", centralServer.getValidTypesReceived()); // unchanged: i.e. FetchPublisher for client6 not sent
+        assertEquals("CreatePublisher=4", centralServer.getTypesSent()); // CreatePublisher not sent to client6b
+        assertFalse(futurePublisher6.isDone());
     }
     
     /**
