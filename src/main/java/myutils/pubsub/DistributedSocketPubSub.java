@@ -24,7 +24,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -140,18 +139,18 @@ public class DistributedSocketPubSub extends PubSub {
     }
 
     /**
-     * Start the message client by connecting to the server and starting all threads.
+     * Start the message client asynchronously by connecting to the server and starting all threads.
      * Returns a future that is resolved when everything starts, or rejected if starting fails.
      * If the server is not available, retries connecting to the server with exponential backoff starting at 1 second, 2 seconds, 4 seconds, 8 seconds, 8 seconds.
      * If there was another IOException in starting the future is rejected with this exception.
      * 
      * @throws java.util.concurrent.RejectedExecutionException if client was shutdown
      */
-    public CompletionStage<Void> start() {
+    public CompletableFuture<Void> start() {
         return doStart(false);
     }
     
-    private CompletionStage<Void> doStart(boolean sendAllPublishersAndSubscribers) {
+    private CompletableFuture<Void> doStart(boolean sendAllPublishersAndSubscribers) {
         CompletableFuture<Void> future = new CompletableFuture<>();
         retryExecutor.submit(() -> doStart(sendAllPublishersAndSubscribers, future, 0));
         return future;
@@ -190,7 +189,7 @@ public class DistributedSocketPubSub extends PubSub {
             future.completeExceptionally(e);
         }
     }
-    
+
     private void doSendAllPublishersAndSubscribers() {
         forEachPublisher(basePublisher -> {
             DistributedPublisher publisher = (DistributedPublisher) basePublisher;
@@ -582,7 +581,7 @@ public class DistributedSocketPubSub extends PubSub {
 
         @Override
         public void run() {
-            LOGGER.log(Level.DEBUG, "Cleaning up " + machineId + " " + DistributedSocketPubSub.class.getSimpleName() + " " + getLocalAddress(channelHolder.get()));
+            LOGGER.log(Level.INFO, "Shutting down " + DistributedSocketPubSub.class.getSimpleName() + ": clientId=" + machineId + ", clientAddress=" + getLocalAddress(channelHolder.get()));
             LOGGER.log(Level.TRACE, "Call stack at creation:" + getCallStack());
             closeQuietly(channelHolder.get());
             closeExecutorQuietly(channelExecutor);
