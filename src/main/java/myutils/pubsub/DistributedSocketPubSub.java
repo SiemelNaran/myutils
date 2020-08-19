@@ -202,6 +202,14 @@ public class DistributedSocketPubSub extends PubSub {
             }
         });
     }
+    
+    /**
+     * Return the socket channel.
+     * Used for testing.
+     */
+    SocketChannel getInternalSocketChannel() {
+        return channelHolder.get();
+    }
 
     /**
      * Download as many messages starting with startIndex from the server.

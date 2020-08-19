@@ -14,6 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.lang.System.Logger.Level;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.net.StandardSocketOptions;
 import java.nio.channels.NetworkChannel;
 import java.time.Duration;
@@ -28,6 +30,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -403,7 +406,6 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         
         client2.download(ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE);
         sleep(250); // time to let messages be sent to client2
-        sleep(250); // time to let messages be sent to client2 as there are so many messages to send 
         System.out.println("actual=" + words);
         assertThat(words,
                    Matchers.contains("ImportantTwo-s2a", "ImportantTwo-s2b", "ImportantThree-s2a", "ImportantThree-s2b",
@@ -412,7 +414,19 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals(0, client1.getCountTypesReceived());
         assertEquals(4, client2.getCountTypesSent());
         assertEquals(6, client2.getCountTypesReceived());
-    }
+
+        words.clear();
+        client2.download(ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE);
+        sleep(250); // time to let messages be sent to client2
+        System.out.println("actual=" + words);
+        assertThat(words,
+                   Matchers.contains("ImportantTwo-s2a", "ImportantTwo-s2b", "ImportantThree-s2a", "ImportantThree-s2b",
+                                     "banana-s2a", "banana-s2b", "carrot-s2a", "carrot-s2b", "dragonfruit-s2a", "dragonfruit-s2b"));
+        assertEquals(10, client1.getCountTypesSent());
+        assertEquals(0, client1.getCountTypesReceived());
+        assertEquals(4, client2.getCountTypesSent());
+        assertEquals(6, client2.getCountTypesReceived());
+}
     
     /**
      * In this test we shutdown the client and server.
@@ -782,7 +796,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
             assertEquals("", client1.getTypesReceived());
             assertEquals("AddSubscriber=2, Identification=1", client2.getTypesSent());
             assertEquals("CreatePublisher=1, PublishMessage=2", client2.getTypesReceived());
-            assertThat(words, Matchers.contains("one-s1", "two-s1", "one-s2a", "one-s2b", "two-s2a", "two-s2b"));
+            assertThat(words, Matchers.containsInAnyOrder("one-s1", "two-s1", "one-s2a", "one-s2b", "two-s2a", "two-s2b"));
 
             assertThat(centralServer.getRemoteClients().stream().map(clientMachine -> clientMachine.getMachineId().toString()).collect(Collectors.toSet()),
                        Matchers.containsInAnyOrder("client1", "client2"));
@@ -1323,6 +1337,128 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals("CreatePublisher=4", centralServer.getTypesSent()); // CreatePublisher not sent to client6b
         assertFalse(futurePublisher6.isDone());
     }
+
+    /**
+     * In this test a client sends CreatePublisher before it has sent Identification, causing the server to reject the CreatePublisher.
+     * The client then starts normally and sends messages that the server does not know how to handle.
+     * @throws  
+     */
+    @Test
+    void testUnsupportedMessages() throws IOException, NoSuchFieldException, NoSuchMethodException, SecurityException, IllegalAccessException, IllegalArgumentException, InvocationTargetException {
+        List<CompletableFuture<?>> startFutures = new ArrayList<>();
+        
+        var centralServer = createServer(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, Collections.emptyMap());
+        startFutures.add(centralServer.start());
+        
+        var client1 = createClient(1,
+                                   PubSub.defaultQueueCreator(),
+                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                   "client1",
+                                   "localhost",
+                                   30001,
+                                   CENTRAL_SERVER_HOST,
+                                   CENTRAL_SERVER_PORT);
+        startFutures.add(client1.start());
+        
+        waitFor(startFutures);
+        sleep(250);
+
+        assertEquals("Identification=1", client1.getTypesSent());
+        assertEquals("Identification=1", centralServer.getValidTypesReceived());
+        assertEquals("", centralServer.getTypesSent());
+        assertEquals("", centralServer.getTypesSent());
+        
+        var messageWriterField = DistributedSocketPubSub.class.getDeclaredField("messageWriter");
+        messageWriterField.setAccessible(true);
+        var messageWriter = messageWriterField.get(client1);
+        var sendMethod = messageWriter.getClass().getDeclaredMethod("internalPutMessage", MessageBase.class);
+        sendMethod.setAccessible(true);
+        
+        BogusClientGeneratedMessage bogus1 = new BogusClientGeneratedMessage();
+        sendMethod.invoke(messageWriter, bogus1);
+        sleep(250);
+        assertEquals("BogusClientGeneratedMessage=1, Identification=1", client1.getTypesSent());
+        assertEquals("Identification=1", centralServer.getValidTypesReceived());
+        assertEquals("UnsupportedMessage=1", centralServer.getTypesSent());
+        assertEquals("UnsupportedMessage=1", client1.getTypesReceived());
+        
+        BogusMessage bogus2 = new BogusMessage();
+        sendMethod.invoke(messageWriter, bogus2);
+        sleep(250);
+        assertEquals("BogusClientGeneratedMessage=1, BogusMessage=1, Identification=1", client1.getTypesSent());
+        assertEquals("Identification=1", centralServer.getValidTypesReceived());
+        assertEquals("UnsupportedMessage=2", centralServer.getTypesSent());
+        assertEquals("UnsupportedMessage=2", client1.getTypesReceived()); // because nothing received as message reader is not started
+        
+        // verify that log shows
+        // WARNING: Unsupported  message from client: clientMachine=client1, BogusClientGeneratedMessage
+        // WARNING: Unsupported  message from client: clientMachine=/127.0.0.1:30001, BogusMessage
+    }
+    
+    private static class BogusClientGeneratedMessage extends MessageClasses.ClientGeneratedMessage {
+        private static final long serialVersionUID = 1L;
+
+        BogusClientGeneratedMessage() {
+            super(System.currentTimeMillis());
+        }
+
+        @Override
+        public String toLoggingString() {
+            return "BogusClientGeneratedMessage";
+        }
+    }
+    
+    private static class BogusMessage implements MessageClasses.MessageBase {
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        public String toLoggingString() {
+            return "BogusMessage";
+        }
+    }
+    
+    /**
+     * In this test a client sends CreatePublisher before it has sent Identification, causing the server to reject the CreatePublisher.
+     */
+    @Test
+    void testRequestIdentification() throws IOException, NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException {
+        List<CompletableFuture<?>> startFutures = new ArrayList<>();
+
+        var centralServer = createServer(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, Collections.emptyMap());
+        startFutures.add(centralServer.start());
+        
+        var client1 = createClient(1,
+                                   PubSub.defaultQueueCreator(),
+                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                   "client1",
+                                   "localhost",
+                                   30001,
+                                   CENTRAL_SERVER_HOST,
+                                   CENTRAL_SERVER_PORT);
+        startFutures.add(client1.start());
+        
+        waitFor(startFutures);
+        sleep(250);
+        assertEquals("Identification=1", client1.getTypesSent());
+        assertEquals("Identification=1", centralServer.getValidTypesReceived());
+        assertEquals("", centralServer.getTypesSent());
+        assertEquals("", client1.getTypesReceived());
+        
+        // remove this clientMachine from the central server
+        // this simulates the case that the server does not record of a ClientMachine
+        // no idea how this would happen in real life, but I guess it could
+        var field = DistributedMessageServer.class.getDeclaredField("clientMachines");
+        field.setAccessible(true);
+        CopyOnWriteArrayList<?> clientMachines = (CopyOnWriteArrayList<?>) field.get(centralServer);
+        clientMachines.clear();
+        
+        client1.createPublisher("hello", CloneableString.class);
+        sleep(250);
+        assertEquals("CreatePublisher=1, Identification=1", client1.getTypesSent());
+        assertEquals("Identification=1", centralServer.getValidTypesReceived());
+        assertEquals("RequestIdentification=1", centralServer.getTypesSent());
+        assertEquals("RequestIdentification=1", client1.getTypesReceived());
+    }
     
     /**
      * Call the main function in a new process.
@@ -1376,6 +1512,29 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         // the shutdown hook will close centralServer, client1, and client2
     }
     
+    @Test
+    void codeCoverageForSubscriberEndpoint() throws NoSuchMethodException, SecurityException, InstantiationException, IllegalAccessException, IllegalArgumentException, InvocationTargetException {
+        Class<?> subscriberEndpointClass = Arrays.stream(DistributedMessageServer.class.getDeclaredClasses()).filter(clazz -> clazz.getSimpleName().equals("SubscriberEndpoint")).findFirst().get();
+        Constructor<?> constructor = subscriberEndpointClass.getDeclaredConstructor(ClientMachineId.class, String.class, long.class);
+        constructor.setAccessible(true);
+        ClientMachineId clientMachineId1 = new ClientMachineId("client1");
+        ClientMachineId clientMachineId2 = new ClientMachineId("client2");
+        Object subscriberEndpoint1 = constructor.newInstance(clientMachineId1, "SubscriberName1", 500L);
+        Object subscriberEndpoint1b = constructor.newInstance(clientMachineId1, "SubscriberName1", 1500L);
+        Object subscriberEndpoint2 = constructor.newInstance(clientMachineId1, "SubscriberName2", 500L);
+        Object subscriberEndpoint3 = constructor.newInstance(clientMachineId2, "SubscriberName3", 500L);
+        
+        assertFalse(subscriberEndpoint1.equals(null));
+        
+        assertEquals(subscriberEndpoint1, subscriberEndpoint1b);
+        assertEquals(subscriberEndpoint1.hashCode(), subscriberEndpoint1b.hashCode());
+        
+        assertNotEquals(subscriberEndpoint1, subscriberEndpoint2);
+        assertNotEquals(subscriberEndpoint1, subscriberEndpoint3);
+        assertNotEquals(subscriberEndpoint1.hashCode(), subscriberEndpoint2.hashCode());
+        
+        assertEquals("client1/SubscriberName1", subscriberEndpoint1.toString());
+    }
     
     /**
      * Create a server and add it to list of objects to be shutdown at the end of the test function.
@@ -1534,6 +1693,7 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
     
     @Override
     protected void onMessageReceived(MessageBase message) {
+        super.onMessageReceived(message);
         typesReceived.add(message.getClass().getSimpleName());
         if (messageReceivedListener != null) {
             messageReceivedListener.accept(message);

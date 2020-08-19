@@ -55,34 +55,56 @@ interface MessageClasses {
             return serverTimestamp; // COVERAGE: missed
         }
     }
-
+    
     /**
-     * Class sent by server to client to request identification.
-     * Sent when server receives a command from a machine it does not know about.
+     * Class sent by server when it receives an invalid message.
      * Required field failedClientIndex, which identifies the message which failed, indicating to the client that it should resend this message;
      */
-    class RequestIdentification extends ServerGeneratedMessage {
+    class AbstractInvalidMessage extends ServerGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
-        private final Class<? extends MessageBase> classOfMessageToResend;
+        private final Class<? extends MessageBase> classOfMessage;
         private final Long failedClientIndex; // optional because not all messages have a clientIndex
         
-        RequestIdentification(Class<? extends MessageBase> classOfMessageToResend, Long failedClientIndex) {
-            this.classOfMessageToResend = classOfMessageToResend;
+        AbstractInvalidMessage(Class<? extends MessageBase> classOfMessage, Long failedClientIndex) {
+            this.classOfMessage = classOfMessage;
             this.failedClientIndex = failedClientIndex;
         }
         
-        Class<? extends MessageBase> getClassOfMessageToResend() {
-            return classOfMessageToResend;
+        Class<? extends MessageBase> getClassOfMessage() {
+            return classOfMessage;
         }
         
-        long getFailedClientIndex() {
+        Long getFailedClientIndex() {
             return failedClientIndex;
         }
 
         @Override
         public String toLoggingString() {
-            return classType(this) + ", classOfMessageToResend=" + classOfMessageToResend.getSimpleName() + ", failedClientIndex=" + failedClientIndex;
+            return classType(this) + ", classOfMessage=" + classOfMessage.getSimpleName() + ", failedClientIndex=" + failedClientIndex;
+        }
+    }
+
+    /**
+     * Class sent by server when it receives an object type it does not know how to handle.
+     * This could happen if the client and server are on different versions.
+     */
+    class UnsupportedMessage extends AbstractInvalidMessage {
+        private static final long serialVersionUID = 1L;
+
+        UnsupportedMessage(Class<? extends MessageBase> classOfMessage, Long failedClientIndex) {
+            super(classOfMessage, failedClientIndex);
+        }
+    }
+
+    /**
+     * Class sent by server to client to request identification.
+     */
+    class RequestIdentification extends AbstractInvalidMessage {
+        private static final long serialVersionUID = 1L;
+        
+        RequestIdentification(Class<? extends MessageBase> classOfMessage, Long failedClientIndex) {
+            super(classOfMessage, failedClientIndex);
         }
     }
 
