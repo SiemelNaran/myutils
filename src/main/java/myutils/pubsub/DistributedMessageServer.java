@@ -60,6 +60,7 @@ import myutils.pubsub.MessageClasses.RelayTopicMessageBase;
 import myutils.pubsub.MessageClasses.RemoveSubscriber;
 import myutils.pubsub.MessageClasses.RequestIdentification;
 import myutils.pubsub.MessageClasses.Resendable;
+import myutils.pubsub.MessageClasses.UnsupportedMessage;
 import myutils.pubsub.PubSubUtils.CallStackCapturing;
 import myutils.util.MoreCollections;
 import myutils.util.ZipMinIterator;
@@ -130,6 +131,10 @@ public class DistributedMessageServer implements Shutdowneable {
      * Key fields are machineId (a string) and channel (an AsynchronousSocketChannel).
      */
     protected static final class ClientMachine {
+        private static ClientMachine unregistered(@Nonnull AsynchronousSocketChannel channel) {
+            return new ClientMachine(new ClientMachineId("<unregistered>"), channel);
+        }
+        
         private final @Nonnull ClientMachineId machineId;
         private final @Nonnull String remoteAddress;
         private final @Nonnull AsynchronousSocketChannel channel;
@@ -395,7 +400,7 @@ public class DistributedMessageServer implements Shutdowneable {
                     }
                 }
                 if (info.notifyClients != null) {
-                    info.notifyClients.removeIf(notifyClientMachineId -> notifyClientMachineId.equals(clientMachineId)); // COVERAGE: missed: client requests notification and is shut down
+                    info.notifyClients.removeIf(notifyClientMachineId -> notifyClientMachineId.equals(clientMachineId));
                     info.setNotifyClientsToNullIfEmpty();
                 }
                 if (removeCount > 1 && returnTopicsAffected) {
@@ -489,7 +494,7 @@ public class DistributedMessageServer implements Shutdowneable {
         
         @Override
         public int hashCode() {
-            return Objects.hash(clientMachineId, subscriberName); // COVERAGE: test equals and hashCode of this class and ClientMachine
+            return Objects.hash(clientMachineId, subscriberName);
         }
         
         @Override
@@ -710,8 +715,8 @@ public class DistributedMessageServer implements Shutdowneable {
         }
         
         private @Nullable ClientMachine handle(AsynchronousSocketChannel channel, MessageBase message) {
-            ClientMachine returnClientMachine = null;
-            String unhandledClientMachine = null;
+            ClientMachine clientMachine = null;
+            boolean unhandled = false;
             if (message instanceof ClientGeneratedMessage) {
                 if (message instanceof Identification) {
                     LOGGER.log(Level.TRACE,
@@ -722,15 +727,15 @@ public class DistributedMessageServer implements Shutdowneable {
                     Identification identification = (Identification) message;
                     DistributedMessageServer.this.addIfNotPresent(identification, channel);
                 } else {
-                    ClientMachine clientMachine = findClientMachineByChannel(channel);
-                    returnClientMachine = clientMachine;
+                    clientMachine = findClientMachineByChannel(channel);
                     if (clientMachine == null) {
                         sendRequestIdentification(channel, message);
                     } else {
+                        ClientMachine clientMachineAsFinal = clientMachine;
                         Runnable logging = () -> {
                             LOGGER.log(Level.TRACE,
                                        String.format("Received message from client: clientMachine=%s, %s",
-                                                     clientMachine.getMachineId(),
+                                                     clientMachineAsFinal.getMachineId(),
                                                      message.toLoggingString()));
                             onValidMessageReceived(message);
                         };
@@ -753,7 +758,7 @@ public class DistributedMessageServer implements Shutdowneable {
                             DistributedMessageServer.this.handleRemoveSubscriber(clientMachine, (RemoveSubscriber) message);
                         } else if (message instanceof RelayMessageBase) {
                             RelayMessageBase relay = (RelayMessageBase) message;
-                            if (relay.getRelayFields() == null) { // COVERAGE: why is this not getting hit? 
+                            if (relay.getRelayFields() == null) {
                                 ServerIndex nextServerId = maxMessage.updateAndGet(ServerIndex::increment);
                                 relay.setRelayFields(new RelayFields(System.currentTimeMillis(), nextServerId, clientMachine.getMachineId()));
                             }
@@ -763,20 +768,25 @@ public class DistributedMessageServer implements Shutdowneable {
                             logging.run();
                             DistributedMessageServer.this.handleDownload(clientMachine, (DownloadPublishedMessages) message);
                         } else {
-                            unhandledClientMachine = clientMachine.getMachineId().toString();
+                            unhandled = true;
                         }
                     }
                 }
             } else {
-                unhandledClientMachine = getRemoteAddress(channel);
+                clientMachine = findClientMachineByChannel(channel);
+                unhandled = true;
             }
-            if (unhandledClientMachine != null) { // COVERAGE: test to send unhandled message
-                LOGGER.log(Level.DEBUG,
-                           String.format("Unhandled message from client: clientMachine=%s, %s",
-                                         unhandledClientMachine,
+            if (unhandled) {
+                if (clientMachine == null) {
+                    clientMachine = ClientMachine.unregistered(channel);
+                }
+                LOGGER.log(Level.WARNING,
+                           String.format("Unsupported message from client: clientMachine=%s, %s",
+                                         clientMachine,
                                          message.toLoggingString()));
+                DistributedMessageServer.this.send(new UnsupportedMessage(message.getClass(), extractClientIndex(message)), clientMachine, 0);
             }
-            return returnClientMachine;
+            return clientMachine;
         }
         
         private void onComplete(@Nullable ClientMachine clientMachine, Throwable exception) {
@@ -1036,8 +1046,8 @@ public class DistributedMessageServer implements Shutdowneable {
         }
     }
 
-    private void sendRequestIdentification(AsynchronousSocketChannel channel, MessageBase message) { // COVERAGE: missed
-        ClientMachine clientMachine = new ClientMachine(new ClientMachineId("<unregistered>"), channel);
+    private void sendRequestIdentification(AsynchronousSocketChannel channel, MessageBase message) {
+        ClientMachine clientMachine = ClientMachine.unregistered(channel);
         RequestIdentification request = new RequestIdentification(message.getClass(), extractClientIndex(message));
         send(request, clientMachine, 0);
     }

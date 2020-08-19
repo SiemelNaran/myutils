@@ -508,7 +508,7 @@ public class InMemoryPubSubIntegrationTest {
         pubSub.createPublisher("hello", CloneableString.class);
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         Consumer<Base> handleBase = base -> words.add(base.toString());
-        assertException(() -> pubSub.subscribe("hello", "Subscriber", Base.class, handleBase), IllegalArgumentException.class, "subscriber class must be the same as or inherit from the publisher class: publisherClass=myutils.pubsub.InMemoryPubSubTest$CloneableString subscriberClass=myutils.pubsub.InMemoryPubSubTest$Base");
+        assertException(() -> pubSub.subscribe("hello", "Subscriber", Base.class, handleBase), IllegalArgumentException.class, "subscriber class must be the same as or inherit from the publisher class: publisherClass=myutils.pubsub.InMemoryPubSubIntegrationTest$CloneableString subscriberClass=myutils.pubsub.InMemoryPubSubIntegrationTest$Base");
     }
 
     @Test
@@ -526,7 +526,7 @@ public class InMemoryPubSubIntegrationTest {
         /*
         WARNING: Exception invoking subscriber
         java.lang.RuntimeException: Test Exception
-        at myutils.util.concurrent.InMemoryPubSubTest.lambda$testExceptionOnSubscriberCallback$12(InMemoryPubSubTest.java:243)
+        at myutils.util.concurrent.InMemoryPubSubIntegrationTest.lambda$testExceptionOnSubscriberCallback$12(InMemoryPubSubIntegrationTest.java:243)
         */
     }
 
@@ -629,6 +629,6 @@ public class InMemoryPubSubIntegrationTest {
         sleep(100); // wait for message handler to work
         assertThat(words,
                    Matchers.contains("SubscriberThatThrows-TestEvent : Test Exception",
-                                     "message must be or inherit from myutils.pubsub.InMemoryPubSubTest$TestEvent"));
+                                     "message must be or inherit from myutils.pubsub.InMemoryPubSubIntegrationTest$TestEvent"));
     }
 }
