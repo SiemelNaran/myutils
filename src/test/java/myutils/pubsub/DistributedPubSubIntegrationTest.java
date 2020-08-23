@@ -1083,8 +1083,8 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      * 3 clients publish N messages each, and one of them also publishes another N messages.
      * The 4th client receives all of the messages and has 2 subscribers.
      * 
-     * <p>On my computer,<br/>
-     * With N as 1000 the test takes about 1.4sec.<br/>
+     * <p>On my Linux laptop Intel Core i7-3720QM CPU @ 2.60GHz * 4,<br/>
+     * With N as 1000 the test takes about 2.1sec at INFO level, and 5.4sec at TRACE level<br/>
      *
      * <p>On my MacOS 2.3GHz Intel Core i9,<br/>
      * With N as 1000 the test takes about 1.9sec.<br/>

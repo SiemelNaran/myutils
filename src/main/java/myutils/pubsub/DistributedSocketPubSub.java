@@ -258,9 +258,9 @@ public class DistributedSocketPubSub extends PubSub {
 
         private CompletableFuture<Void> send(MessageBase message) {
             LOGGER.log(Level.TRACE,
-                       String.format("Sending message to server: clientMachine=%s, %s",
-                                     machineId,
-                                     message.toLoggingString()));
+                       () -> String.format("Sending message to server: clientMachine=%s, %s",
+                                           machineId,
+                                           message.toLoggingString()));
             CompletableFuture<Void> future = new CompletableFuture<>();
             send(future, message, 0);
             return future;
@@ -354,9 +354,9 @@ public class DistributedSocketPubSub extends PubSub {
                 try {
                     MessageBase message = SocketTransformer.readMessageFromSocket(channel);
                     LOGGER.log(Level.TRACE,
-                               String.format("Received message from server: clientMachine=%s, %s",
-                                             DistributedSocketPubSub.this.machineId,
-                                             message.toLoggingString()));
+                               () -> String.format("Received message from server: clientMachine=%s, %s",
+                                                   DistributedSocketPubSub.this.machineId,
+                                                   message.toLoggingString()));
                     DistributedSocketPubSub.this.onMessageReceived(message);
                     if (message instanceof CreatePublisher) {
                         CreatePublisher createPublisher = (CreatePublisher) message;
@@ -589,8 +589,7 @@ public class DistributedSocketPubSub extends PubSub {
 
         @Override
         public void run() {
-            LOGGER.log(Level.INFO, "Shutting down " + DistributedSocketPubSub.class.getSimpleName()
-                    + ": clientId=" + machineId + ", clientAddress=" + getLocalAddress(channelHolder.get()));
+            LOGGER.log(Level.INFO, "Shutting down " + DistributedSocketPubSub.class.getSimpleName() + ": clientId=" + machineId + ", clientAddress=" + getLocalAddress(channelHolder.get()));
             LOGGER.log(Level.TRACE, "Call stack at creation:" + getCallStack());
             closeQuietly(channelHolder.get());
             closeExecutorQuietly(channelExecutor);
