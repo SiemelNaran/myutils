@@ -424,8 +424,8 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                      "banana-s2a", "banana-s2b", "carrot-s2a", "carrot-s2b", "dragonfruit-s2a", "dragonfruit-s2b"));
         assertEquals(10, client1.getCountTypesSent());
         assertEquals(0, client1.getCountTypesReceived());
-        assertEquals(4, client2.getCountTypesSent());
-        assertEquals(6, client2.getCountTypesReceived());
+        assertEquals(5, client2.getCountTypesSent()); // +1 = DownloadPublishedMessages
+        assertEquals(11, client2.getCountTypesReceived()); // +5 = PublishMessage
 }
     
     /**
