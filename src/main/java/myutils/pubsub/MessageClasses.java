@@ -219,6 +219,7 @@ interface MessageClasses {
     /**
      * Class to notify the server that we are subscribing to a particular topic.
      * Required field shouldTryDownload.
+     * Required field isResend (true if server died and client is resending its addSubscriber commands).
      */
     class AddSubscriber extends AddOrRemoveSubscriber implements Resendable {
         private static final long serialVersionUID = 1L;

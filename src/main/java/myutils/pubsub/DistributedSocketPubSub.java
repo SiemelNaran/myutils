@@ -589,7 +589,8 @@ public class DistributedSocketPubSub extends PubSub {
 
         @Override
         public void run() {
-            LOGGER.log(Level.INFO, "Shutting down " + DistributedSocketPubSub.class.getSimpleName() + ": clientId=" + machineId + ", clientAddress=" + getLocalAddress(channelHolder.get()));
+            LOGGER.log(Level.INFO, "Shutting down " + DistributedSocketPubSub.class.getSimpleName()
+                    + ": clientId=" + machineId + ", clientAddress=" + getLocalAddress(channelHolder.get()));
             LOGGER.log(Level.TRACE, "Call stack at creation:" + getCallStack());
             closeQuietly(channelHolder.get());
             closeExecutorQuietly(channelExecutor);

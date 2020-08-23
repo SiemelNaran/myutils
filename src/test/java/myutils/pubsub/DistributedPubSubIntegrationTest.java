@@ -426,7 +426,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals(0, client1.getCountTypesReceived());
         assertEquals(5, client2.getCountTypesSent()); // +1 = DownloadPublishedMessages
         assertEquals(11, client2.getCountTypesReceived()); // +5 = PublishMessage
-}
+    }
     
     /**
      * In this test we shutdown the client and server.
@@ -1341,7 +1341,6 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     /**
      * In this test a client sends CreatePublisher before it has sent Identification, causing the server to reject the CreatePublisher.
      * The client then starts normally and sends messages that the server does not know how to handle.
-     * @throws  
      */
     @Test
     void testUnsupportedMessages() throws IOException, NoSuchFieldException, NoSuchMethodException, SecurityException, IllegalAccessException, IllegalArgumentException, InvocationTargetException {
