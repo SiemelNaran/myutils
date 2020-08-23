@@ -172,11 +172,6 @@ public class DistributedMessageServer implements Shutdowneable {
             return this.machineId.equals(that.machineId);
         }
 
-//        @Override
-//        public int compareTo(ClientMachine that) {
-//            return this.machineId.compareTo(that.machineId);
-//        }
-
         @Nonnull WriteManager getWriteManager() {
             return writeManager;
         }

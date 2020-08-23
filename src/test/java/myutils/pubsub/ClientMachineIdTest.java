@@ -7,10 +7,10 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import myutils.LogFailureToConsoleTestWatcher;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import myutils.LogFailureToConsoleTestWatcher;
 
 
 @ExtendWith(LogFailureToConsoleTestWatcher.class)
