@@ -738,9 +738,9 @@ public class DistributedMessageServer implements Shutdowneable {
             if (message instanceof ClientGeneratedMessage) {
                 if (message instanceof Identification) {
                     LOGGER.log(Level.TRACE,
-                               String.format("Received message from client: clientAddress=%s, %s",
-                                             getRemoteAddress(channel),
-                                             message.toLoggingString()));
+                               () -> String.format("Received message from client: clientAddress=%s, %s",
+                                                   getRemoteAddress(channel),
+                                                   message.toLoggingString()));
                     onValidMessageReceived(message);
                     Identification identification = (Identification) message;
                     DistributedMessageServer.this.addIfNotPresent(identification, channel);
@@ -1117,9 +1117,9 @@ public class DistributedMessageServer implements Shutdowneable {
     
     private void afterMessageSent(ClientMachine clientMachine, MessageBase message) {
         LOGGER.log(Level.TRACE,
-                   String.format("Sent message to client: clientMachine=%s, %s",
-                                 clientMachine.getMachineId(),
-                                 message.toLoggingString()));
+                   () -> String.format("Sent message to client: clientMachine=%s, %s",
+                                       clientMachine.getMachineId(),
+                                       message.toLoggingString()));
         onMessageSent(message);
     }
     
