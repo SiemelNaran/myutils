@@ -19,6 +19,7 @@ import java.net.SocketAddress;
 import java.nio.channels.AlreadyConnectedException;
 import java.nio.channels.NetworkChannel;
 import java.nio.channels.SocketChannel;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -120,6 +121,7 @@ public class DistributedSocketPubSub extends PubSub {
     private static final System.Logger LOGGER = System.getLogger(DistributedSocketPubSub.class.getName());
     private static final ThreadLocal<RelayMessageBase> threadLocalRemoteRelayMessage = new ThreadLocal<>();
     private static final int MAX_RETRIES = 3;
+    private static final int MAX_RELAY_MESSAGES_TO_SAVE = 256;
     
     private final Map<String /*topic*/, DormantInfo> dormantInfoMap = new ConcurrentHashMap<>();
     private final SocketTransformer socketTransformer;
@@ -130,6 +132,7 @@ public class DistributedSocketPubSub extends PubSub {
     private final ScheduledExecutorService retryExecutor = Executors.newScheduledThreadPool(1, createThreadFactory("DistributedSocketPubSub.Retry", true));
     private final MessageWriter messageWriter;
     private final AtomicLong localMaxMessage = new AtomicLong();
+    private final Deque<RelayTopicMessageBase> recentRelayMessages = new ArrayDeque<>();
     private final Map<String /*topic*/, CompletableFuture<Publisher>> fetchPublisherMap = new HashMap<>();
     private final Cleanable cleanable;
     private final MessageServerConnectionListener messageServerConnectionListener = new MessageServerConnectionListener();
@@ -666,6 +669,24 @@ public class DistributedSocketPubSub extends PubSub {
                                             DistributedSocketPubSub.this.machineId,
                                             message.toLoggingString()));
                     DistributedSocketPubSub.this.onMessageReceived(message);
+
+                    if (message instanceof RelayTopicMessageBase) {
+                        RelayTopicMessageBase relay = (RelayTopicMessageBase) message;
+                        ServerIndex serverIndex = relay.getRelayFields().getServerIndex();
+                        if (recentRelayMessages.stream()
+                                                .filter(previousMessage -> previousMessage.getRelayFields().getServerIndex().equals(serverIndex))
+                                                .findFirst()
+                                                .isPresent()) {
+                            LOGGER.log(Level.WARNING, "Duplicate relay message received: clientMachine={0}, messageClass={1}, serverIndex={2}",
+                                       DistributedSocketPubSub.this.machineId, message.getClass().getSimpleName(), serverIndex);
+                        } else {
+                            if (recentRelayMessages.size() >= MAX_RELAY_MESSAGES_TO_SAVE) {
+                                recentRelayMessages.removeFirst();
+                            }
+                            recentRelayMessages.add(relay);
+                        }
+                    }
+
                     if (message instanceof CreatePublisher) {
                         // we are receiving a CreatePublisher from the server in response to a client.subscribe
                         handleCreatePublisher((CreatePublisher) message);
