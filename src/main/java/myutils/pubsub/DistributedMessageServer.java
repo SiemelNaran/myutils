@@ -40,7 +40,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 import javax.annotation.Nonnull;
@@ -425,13 +424,15 @@ public class DistributedMessageServer implements Shutdowneable {
          * @param excludeMachineId exclude this machine (used to not relay message to client who sent the message)
          * @param fetchClientsWantingNotification if true fetch client machines that want a notification (used for clients who want to download a publisher but not subscribe to it)
          * @param consumer apply this action to each client machine.
-         *        The 2nd argument is the subscriber minimum client timestamp (useful if one client machine has many subscribers),
-         *        and is null if we are only notifying a client (i.e. for the fetchPublisher command).  
+         *        The 2nd argument is the a struct consisting of
+         *          - the subscriber minimum client timestamp (useful if one client machine has many subscribers),
+         *            and is null if we are only notifying a client (i.e. for the fetchPublisher command).  
+         *          - the current max message id for this subscriber.
          */
         synchronized void forClientsSubscribedToPublisher(String topic,
                                                           @Nullable ClientMachineId excludeMachineId,
                                                           boolean fetchClientsWantingNotification,
-                                                          BiConsumer<ClientMachineId, Long /*@Nullable minClientTimestamp*/> consumer) {
+                                                          Consumer<SubscriberParamsForCallback> consumer) {
             TopicInfo info = Objects.requireNonNull(topicMap.get(topic));
             if (info.createPublisher == null) {
                 return;
@@ -442,7 +443,8 @@ public class DistributedMessageServer implements Shutdowneable {
                     continue;
                 }
                 if (!subscriberEndpoint.getClientMachineId().equals(prevClientMachineId)) {
-                    consumer.accept(subscriberEndpoint.getClientMachineId(), subscriberEndpoint.getClientTimestamp());
+                    var params = new SubscriberParamsForCallback(subscriberEndpoint.getClientMachineId(), subscriberEndpoint.getClientTimestamp());
+                    consumer.accept(params);
                     prevClientMachineId = subscriberEndpoint.getClientMachineId();
                 }
             }
@@ -450,8 +452,30 @@ public class DistributedMessageServer implements Shutdowneable {
             if (fetchClientsWantingNotification && info.notifyClients != null) {
                 Stream<ClientMachineId> notifyClients = info.notifyClients.stream();
                 info.notifyClients = null;
-                notifyClients.forEach(clientMachineId -> consumer.accept(clientMachineId, null));
+                notifyClients.forEach(clientMachineId -> consumer.accept(new SubscriberParamsForCallback(clientMachineId, null)));
             }
+        }
+    }
+    
+    /**
+     * A struct describing parameters about a subscriber, used when we fetch subscribers to a topic and want to invoke an action of each them,
+     * such as relaying a published message to these subscribers.
+     */
+    private static class SubscriberParamsForCallback {
+        private final ClientMachineId clientMachineId;
+        private final Long minClientTimestamp;
+        
+        private SubscriberParamsForCallback(ClientMachineId clientMachineId, Long minClientTimestamp) {
+            this.clientMachineId = clientMachineId;
+            this.minClientTimestamp = minClientTimestamp;
+        }
+
+        ClientMachineId getClientMachineId() {
+            return clientMachineId;
+        }
+
+        Long getMinClientTimestamp() {
+            return minClientTimestamp;
         }
     }
     
@@ -524,13 +548,17 @@ public class DistributedMessageServer implements Shutdowneable {
             return result;
         }
 
-        synchronized void save(PublishMessage publishMessage) {
+        /**
+         * Save a message and call a callback function atomically.
+         */
+        synchronized void save(PublishMessage publishMessage, Runnable callback) {
             int ordinal = publishMessage.getRetentionPriority().ordinal();
             LinkedList<PublishMessage> linkedList = messages.get(ordinal);
             MoreCollections.addLargeElementToSortedList(linkedList, COMPARE_BY_SERVER_INDEX, publishMessage);
             if (linkedList.size() > numberOfMostRecentMessagesToKeep[ordinal]) {
                 linkedList.removeFirst();
             }
+            callback.run();
         }
         
         private static final Comparator<PublishMessage> COMPARE_BY_SERVER_INDEX = (lhs, rhs) -> {
@@ -539,17 +567,12 @@ public class DistributedMessageServer implements Shutdowneable {
 
         /**
          * This function is used to send saved messages to a client.
-         * It is the calling function's responsibility to check if this client is subscribed to the topic.
          * 
-         * <p>Messages that originated from clientMachine are not sent to it because save/onMessageRelayed would have been called,
-         * setting the maxIndex for this clientMachine and topic,
-         * and this functions only retrieves messages larger than maxIndex.
-         * 
-         * <p>If topic is null it means find all messages (used when user downloads messages).
-         * If topic is not null is means only messages published to this topic (used when user calls addSubscriber).
-         * 
-         * <p>If minClientTimestamp is null it means find all messages (used when user downloads messages).
-         * If minClientTimestamp is not null is means only messages published on or after this client date (used when user calls addSubscriber).
+         * @param clientMachine the client to send messages to
+         * @param topic null means send messages for all topics, otherwise send messages only for this topic
+         * @param minClientTimestamp null means send all messages, otherwise send messages on or after this time
+         * @param upperBoundInclusive send messages till this point
+         * @param callback function that sends messages
          */
         synchronized int forSavedMessages(ClientMachine clientMachine,
                                           @Nullable String topic,
@@ -956,61 +979,63 @@ public class DistributedMessageServer implements Shutdowneable {
 
     private void handleRelayMessage(@Nonnull ClientMachine clientMachine, RelayMessageBase relay) {
         if (relay instanceof RelayTopicMessageBase) {
-            handleRelayTopicMessage(clientMachine, (RelayTopicMessageBase) relay);
+            if (relay instanceof CreatePublisher) {
+                handleCreatePublisher(clientMachine, (CreatePublisher) relay);
+            } else if (relay instanceof PublishMessage) {
+                handlePublishMessage(clientMachine, (PublishMessage) relay);
+            } else {
+                throw new UnsupportedOperationException();
+            }
         }
     }
     
-    private void handleRelayTopicMessage(ClientMachine clientMachine, RelayTopicMessageBase relay) {
+    private void handleCreatePublisher(ClientMachine clientMachine, CreatePublisher relay) {
         boolean skipRelayMessage = false;
         boolean isResendPublisher = false;
         boolean fetchClientsWantingNotification = false;
-        if (relay instanceof CreatePublisher) {
-            CreatePublisher createPublisherPassedInToThisFunction = (CreatePublisher) relay;
-            PublishersAndSubscribers.CreatePublisherResult createPublisherResult = publishersAndSubscribers.savePublisher(createPublisherPassedInToThisFunction);
-            if (createPublisherResult.alreadyExistsCreatePublisher == null) {
-                LOGGER.log(Level.INFO, "Added publisher: topic={0}, topicClass={1}", relay.getTopic(), createPublisherPassedInToThisFunction.getPublisherClass().getSimpleName());
-                if (createPublisherPassedInToThisFunction.isResend()) {
-                    isResendPublisher = true;
-                }
-                fetchClientsWantingNotification = true;
-            } else {
-                CreatePublisher alreadyExistsCreatePublisher = createPublisherResult.alreadyExistsCreatePublisher;
-                LOGGER.log(Level.INFO,
-                           String.format("Publisher already exists: topic=%s, topicClass=%s, clientTimestamp=%d, serverIndex=%s, discarding newServerIndex=%s",
-                                         alreadyExistsCreatePublisher.getTopic(),
-                                         alreadyExistsCreatePublisher.getPublisherClass().getSimpleName(),
-                                         alreadyExistsCreatePublisher.getClientTimestamp(),
-                                         alreadyExistsCreatePublisher.getRelayFields().getServerIndex().toString(),
-                                         relay.getRelayFields().getServerIndex()));
-                skipRelayMessage = true;
+        CreatePublisher createPublisherPassedInToThisFunction = (CreatePublisher) relay;
+        PublishersAndSubscribers.CreatePublisherResult createPublisherResult = publishersAndSubscribers.savePublisher(createPublisherPassedInToThisFunction);
+        if (createPublisherResult.alreadyExistsCreatePublisher == null) {
+            LOGGER.log(Level.INFO, "Added publisher: topic={0}, topicClass={1}", relay.getTopic(), createPublisherPassedInToThisFunction.getPublisherClass().getSimpleName());
+            if (createPublisherPassedInToThisFunction.isResend()) {
+                isResendPublisher = true;
             }
-        } else if (relay instanceof PublishMessage) {
-            PublishMessage publishMessage = (PublishMessage) relay;
-            mostRecentMessages.save(publishMessage);
+            fetchClientsWantingNotification = true;
+        } else {
+            CreatePublisher alreadyExistsCreatePublisher = createPublisherResult.alreadyExistsCreatePublisher;
+            LOGGER.log(Level.INFO,
+                       String.format("Publisher already exists: topic=%s, topicClass=%s, clientTimestamp=%d, serverIndex=%s, discarding newServerIndex=%s",
+                                     alreadyExistsCreatePublisher.getTopic(),
+                                     alreadyExistsCreatePublisher.getPublisherClass().getSimpleName(),
+                                     alreadyExistsCreatePublisher.getClientTimestamp(),
+                                     alreadyExistsCreatePublisher.getRelayFields().getServerIndex().toString(),
+                                     relay.getRelayFields().getServerIndex()));
+            skipRelayMessage = true;
         }
         if (!skipRelayMessage) {
             relayMessageToOtherClients(clientMachine, relay, isResendPublisher, fetchClientsWantingNotification);
         }
     }
     
-    private void relayMessageToOtherClients(ClientMachine clientMachine, RelayTopicMessageBase relay, boolean isResendPublisher, boolean fetchClientsWantingNotification) {
-        BiConsumer<ClientMachineId, Long> relayAction;
+    private void relayMessageToOtherClients(ClientMachine clientMachine, CreatePublisher relay, boolean isResendPublisher, boolean fetchClientsWantingNotification) {
+        Consumer<SubscriberParamsForCallback> relayAction;
         if (!isResendPublisher) {
             // relay CreatePublisher or PublishMessage to clients subscribed to this topic
-            relayAction = (otherClientMachineId, unused) -> send(relay, lookupClientMachine(otherClientMachineId), 0);
+            relayAction = params -> send(relay, lookupClientMachine(params.getClientMachineId()), 0);
         } else {
             // client is resending publisher after a server restart
             // download all messages in the cache from the subscriber timestamp
             // this handles the case that (a) server dies, (b) clients publish messages, (c) server restarts,
             // and (d) clients send the messages and resend their AddSubscriber and CreatePublisher commands to the server
             // the messages published since the server died (b) need to be sent to all subscribers
-            relayAction = (otherClientMachineId, minClientTimestamp) -> {
-                if (minClientTimestamp == null) {
-                    send(relay, lookupClientMachine(otherClientMachineId), 0); // COVERAGE: missed
+            relayAction = params -> {
+                if (params.getMinClientTimestamp() == null) {
+                    send(relay, lookupClientMachine(params.getClientMachineId()), 0);
                 } else {
                     download("handleCreatePublisher",
-                             lookupClientMachine(otherClientMachineId),
-                             relay.getTopic(), minClientTimestamp,
+                             lookupClientMachine(params.getClientMachineId()),
+                             relay.getTopic(),
+                             params.getMinClientTimestamp(),
                              null /*lowerBoundInclusive*/,
                              ServerIndex.MAX_VALUE,
                              true /*forceLogging*/);
@@ -1018,6 +1043,18 @@ public class DistributedMessageServer implements Shutdowneable {
             };
         }
         publishersAndSubscribers.forClientsSubscribedToPublisher(relay.getTopic(), clientMachine.getMachineId(), fetchClientsWantingNotification, relayAction);
+    }
+    
+    private void handlePublishMessage(ClientMachine clientMachine, PublishMessage relay) {
+        PublishMessage publishMessage = (PublishMessage) relay;
+        Consumer<SubscriberParamsForCallback> relayAction = params -> {
+            var otherClientMachine = lookupClientMachine(params.getClientMachineId());
+            send(relay, otherClientMachine, 0);
+            mostRecentMessages.onMessageRelayed(otherClientMachine, relay);
+        };
+        mostRecentMessages.save(publishMessage, () -> {
+            publishersAndSubscribers.forClientsSubscribedToPublisher(relay.getTopic(), clientMachine.getMachineId(), false, relayAction);
+        });
     }
     
     private void handleDownload(ClientMachine clientMachine, DownloadPublishedMessages download) {
@@ -1089,10 +1126,6 @@ public class DistributedMessageServer implements Shutdowneable {
                                  clientMachine.getMachineId(),
                                  message.toLoggingString()));
         onMessageSent(message);
-        if (message instanceof PublishMessage) {
-            PublishMessage publishMessage = (PublishMessage) message;
-            mostRecentMessages.onMessageRelayed(clientMachine, publishMessage);
-        }
     }
     
     private Void retrySend(MessageBase message, ClientMachine clientMachine, int retry, Throwable e) {
