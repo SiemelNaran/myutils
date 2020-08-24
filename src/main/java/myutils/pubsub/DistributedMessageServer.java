@@ -31,6 +31,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -40,6 +41,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 import javax.annotation.Nonnull;
@@ -215,11 +218,10 @@ public class DistributedMessageServer implements Shutdowneable {
     
     /**
      * List of all publishers and subscribers in the system.
-     * 
-     * @implNote The synchronized functions in this class could be synchronized on TopicInfo.notifyClients instead, and topicMap would have to be a ConcurrentHashMap.
      */
     private static class PublishersAndSubscribers {
         private static class TopicInfo {
+            private final ReadWriteLock lock = new ReentrantReadWriteLock();
             private CreatePublisher createPublisher;
             private final List<SubscriberEndpoint> subscriberEndpoints = new ArrayList<>(); // unique by ClientMachine, subscriberName; sorted by ClientMachine, clientTimestamp
             private Set<ClientMachineId> notifyClients; // clients to notify when a publisher is created
@@ -232,7 +234,7 @@ public class DistributedMessageServer implements Shutdowneable {
             }
         }
         
-        private final Map<String /*topic*/, TopicInfo> topicMap = new TreeMap<>();
+        private final Map<String /*topic*/, TopicInfo> topicMap = new ConcurrentHashMap<>();
         
         /**
          * Add subscriber to this topic.
@@ -241,52 +243,58 @@ public class DistributedMessageServer implements Shutdowneable {
          * @return the CreatePublisher if one exists, and true if the client machine is not already subscribed
          */
         @SuppressWarnings("checkstyle:VariableDeclarationUsageDistance")
-        synchronized @Nonnull AddSubscriberResult addSubscriberEndpoint(final String topic, final String subscriberName, long clientTimestamp, ClientMachineId clientMachineId) {
+        @Nonnull AddSubscriberResult addSubscriberEndpoint(final String topic, final String subscriberName, long clientTimestamp, ClientMachineId clientMachineId) {
             TopicInfo info = topicMap.computeIfAbsent(topic, unused -> new TopicInfo());
-            Long revisedClientTimestamp = null;
-            
-            // in case client died and a new one is started, get clientTimestamp from the previous subscriber
-            // running time O(N) where N is the number of inactive subscribers for this topic
-            // O(1) is possible using HashSet or HashMap lookup as inactiveSubscriberEndpoints is a HashSet
-            for (var iter = info.inactiveSubscriberEndpoints.iterator(); iter.hasNext(); ) {
-                var oldEndpoint = iter.next();
-                if (oldEndpoint.getSubscriberName().equals(subscriberName) && oldEndpoint.getClientMachineId().equals(clientMachineId)) {
-                    iter.remove();
-                    clientTimestamp = oldEndpoint.getClientTimestamp();
-                    revisedClientTimestamp = clientTimestamp;
-                    break;
+            var lock = info.lock.writeLock();
+            lock.lock();
+            try {
+                Long revisedClientTimestamp = null;
+                
+                // in case client died and a new one is started, get clientTimestamp from the previous subscriber
+                // running time O(N) where N is the number of inactive subscribers for this topic
+                // O(1) is possible using HashSet or HashMap lookup as inactiveSubscriberEndpoints is a HashSet
+                for (var iter = info.inactiveSubscriberEndpoints.iterator(); iter.hasNext(); ) {
+                    var oldEndpoint = iter.next();
+                    if (oldEndpoint.getSubscriberName().equals(subscriberName) && oldEndpoint.getClientMachineId().equals(clientMachineId)) {
+                        iter.remove();
+                        clientTimestamp = oldEndpoint.getClientTimestamp();
+                        revisedClientTimestamp = clientTimestamp;
+                        break;
+                    }
                 }
+                
+                // check if client machine is already subscribed
+                // this must be done before adding subscriber endpoint
+                // running time O(N) where N is the number of active subscribers for this topic
+                // O(lg(N)) is possible using binary search
+                boolean clientMachineAlreadySubscribedToTopic = isClientMachineAlreadySubscribedToTopic(info, clientMachineId); // checkstyle:VariableDeclarationUsageDistance
+                
+                // add subscriber in sorted order
+                // sort order is clientMachine then client timestamp
+                // running time O(N*lg(N)) where N is the number of active subscribers
+                // O(lg(N) + N) is possible using binary search followed by insert at the right location
+                var newEndpoint = new SubscriberEndpoint(clientMachineId, subscriberName, clientTimestamp);
+                if (info.subscriberEndpoints.contains(newEndpoint)) {
+                    throw new IllegalStateException("Already subscribed to topic: "// COVERAGE: missed
+                            + "clientMachine=" + clientMachineId
+                            + ", topic=" + topic
+                            + ", subscriberName=" + subscriberName);
+                }
+                info.subscriberEndpoints.add(newEndpoint);
+                info.subscriberEndpoints.sort(Comparator.comparing(SubscriberEndpoint::getClientMachineId)
+                                                        .thenComparing(SubscriberEndpoint::getClientTimestamp));
+                
+                // remove client machine from notifyClients as clients who subscribe to a topic are always notified when the publisher is created
+                // running time O(N) where N is the number of clients wanting a notification when the publisher is created
+                if (info.notifyClients != null) {
+                    info.notifyClients.removeIf(c -> c.equals(clientMachineId));
+                    info.setNotifyClientsToNullIfEmpty();
+                }
+                
+                return new AddSubscriberResult(info.createPublisher, clientMachineAlreadySubscribedToTopic, revisedClientTimestamp);
+            } finally {
+                lock.unlock();
             }
-            
-            // check if client machine is already subscribed
-            // this must be done before adding subscriber endpoint
-            // running time O(N) where N is the number of active subscribers for this topic
-            // O(lg(N)) is possible using binary search
-            boolean clientMachineAlreadySubscribedToTopic = isClientMachineAlreadySubscribedToTopic(info, clientMachineId); // checkstyle:VariableDeclarationUsageDistance
-            
-            // add subscriber in sorted order
-            // sort order is clientMachine then client timestamp
-            // running time O(N*lg(N)) where N is the number of active subscribers
-            // O(lg(N) + N) is possible using binary search followed by insert at the right location
-            var newEndpoint = new SubscriberEndpoint(clientMachineId, subscriberName, clientTimestamp);
-            if (info.subscriberEndpoints.contains(newEndpoint)) {
-                throw new IllegalStateException("Already subscribed to topic: "// COVERAGE: missed
-                        + "clientMachine=" + clientMachineId
-                        + ", topic=" + topic
-                        + ", subscriberName=" + subscriberName);
-            }
-            info.subscriberEndpoints.add(newEndpoint);
-            info.subscriberEndpoints.sort(Comparator.comparing(SubscriberEndpoint::getClientMachineId)
-                                                    .thenComparing(SubscriberEndpoint::getClientTimestamp));
-            
-            // remove client machine from notifyClients as clients who subscribe to a topic are always notified when the publisher is created
-            // running time O(N) where N is the number of clients wanting a notification when the publisher is created
-            if (info.notifyClients != null) {
-                info.notifyClients.removeIf(c -> c.equals(clientMachineId));
-                info.setNotifyClientsToNullIfEmpty();
-            }
-            
-            return new AddSubscriberResult(info.createPublisher, clientMachineAlreadySubscribedToTopic, revisedClientTimestamp);
         }
         
         private boolean isClientMachineAlreadySubscribedToTopic(TopicInfo info, ClientMachineId clientMachineId) {
@@ -320,11 +328,17 @@ public class DistributedMessageServer implements Shutdowneable {
             }
         }
 
-        public synchronized void removeSubscriberEndpoint(String topic, ClientMachineId clientMachineId, String subscriberName) {
+        public void removeSubscriberEndpoint(String topic, ClientMachineId clientMachineId, String subscriberName) {
             TopicInfo info = Objects.requireNonNull(topicMap.get(topic));
-            info.subscriberEndpoints.removeIf(subscriberEndpoint -> subscriberEndpoint.getSubscriberName().equals(subscriberName));
-            if (info.inactiveSubscriberEndpoints != null) {
-                info.inactiveSubscriberEndpoints.removeIf(endpoint -> endpoint.getClientMachineId().equals(clientMachineId) && endpoint.getSubscriberName().equals(subscriberName));
+            var lock = info.lock.writeLock();
+            lock.lock();
+            try {
+                info.subscriberEndpoints.removeIf(subscriberEndpoint -> subscriberEndpoint.getSubscriberName().equals(subscriberName));
+                if (info.inactiveSubscriberEndpoints != null) {
+                    info.inactiveSubscriberEndpoints.removeIf(endpoint -> endpoint.getClientMachineId().equals(clientMachineId) && endpoint.getSubscriberName().equals(subscriberName));
+                }
+            } finally {
+                lock.unlock();
             }
         }
         
@@ -335,32 +349,44 @@ public class DistributedMessageServer implements Shutdowneable {
          *
          * @return the CreatePublisher if one exists
          */
-        synchronized CreatePublisher maybeAddNotifyClient(String topic, ClientMachineId clientMachineId) {
+        CreatePublisher maybeAddNotifyClient(String topic, ClientMachineId clientMachineId) {
             TopicInfo info = topicMap.computeIfAbsent(topic, unused -> new TopicInfo());
-            if (info.createPublisher == null && info.subscriberEndpoints.stream().anyMatch(subscriberEndpoint -> subscriberEndpoint.getClientMachineId().equals(clientMachineId))) {
+            var lock = info.lock.writeLock();
+            lock.lock();
+            try {
+                if (info.createPublisher == null && info.subscriberEndpoints.stream().anyMatch(subscriberEndpoint -> subscriberEndpoint.getClientMachineId().equals(clientMachineId))) {
+                    return null;
+                }
+                if (info.createPublisher != null) {
+                    return info.createPublisher;
+                }
+                if (info.notifyClients == null) {
+                    info.notifyClients = new HashSet<>();
+                }
+                info.notifyClients.add(clientMachineId);
                 return null;
+            } finally {
+                lock.unlock();
             }
-            if (info.createPublisher != null) {
-                return info.createPublisher;
-            }
-            if (info.notifyClients == null) {
-                info.notifyClients = new HashSet<>();
-            }
-            info.notifyClients.add(clientMachineId);
-            return null;
         }
         
         /**
          * Add createPublisher command.
          */
-        synchronized CreatePublisherResult savePublisher(CreatePublisher createPublisher) {
+        CreatePublisherResult savePublisher(CreatePublisher createPublisher) {
             var topic = createPublisher.getTopic();
             TopicInfo info = topicMap.computeIfAbsent(topic, unused -> new TopicInfo());
-            if (info.createPublisher == null) {
-                info.createPublisher = createPublisher;
-                return new CreatePublisherResult(null);
-            } else {
-                return new CreatePublisherResult(info.createPublisher);
+            var lock = info.lock.writeLock();
+            lock.lock();
+            try {
+                if (info.createPublisher == null) {
+                    info.createPublisher = createPublisher;
+                    return new CreatePublisherResult(null);
+                } else {
+                    return new CreatePublisherResult(info.createPublisher);
+                }
+            } finally {
+                lock.unlock();
             }
         }
         
@@ -378,7 +404,7 @@ public class DistributedMessageServer implements Shutdowneable {
          * 
          * @return a list of topics that were unsubscribed from (but not the number of subscribers for each topic), or ? if INFO level is not enabled
          */
-        synchronized StringBuilder removeClientMachine(ClientMachineId clientMachineId) {
+        StringBuilder removeClientMachine(ClientMachineId clientMachineId) {
             boolean returnTopicsAffected = LOGGER.isLoggable(Level.INFO);
             StringBuilder topicsAffected = new StringBuilder();
             if (returnTopicsAffected) {
@@ -386,21 +412,27 @@ public class DistributedMessageServer implements Shutdowneable {
             }
             for (var entry : topicMap.entrySet()) {
                 TopicInfo info = entry.getValue();
-                int removeCount = 0;
-                for (var iter = info.subscriberEndpoints.iterator(); iter.hasNext(); ) {
-                    var endpoint = iter.next();
-                    if (endpoint.getClientMachineId().equals(clientMachineId)) {
-                        iter.remove();
-                        removeCount++;
-                        info.inactiveSubscriberEndpoints.add(endpoint);
+                var lock = info.lock.writeLock();
+                lock.lock();
+                try {
+                    int removeCount = 0;
+                    for (var iter = info.subscriberEndpoints.iterator(); iter.hasNext(); ) {
+                        var endpoint = iter.next();
+                        if (endpoint.getClientMachineId().equals(clientMachineId)) {
+                            iter.remove();
+                            removeCount++;
+                            info.inactiveSubscriberEndpoints.add(endpoint);
+                        }
                     }
-                }
-                if (info.notifyClients != null) {
-                    info.notifyClients.removeIf(notifyClientMachineId -> notifyClientMachineId.equals(clientMachineId));
-                    info.setNotifyClientsToNullIfEmpty();
-                }
-                if (removeCount > 1 && returnTopicsAffected) {
-                    topicsAffected.append(entry.getKey()).append('(').append(removeCount).append("),");
+                    if (info.notifyClients != null) {
+                        info.notifyClients.removeIf(notifyClientMachineId -> notifyClientMachineId.equals(clientMachineId));
+                        info.setNotifyClientsToNullIfEmpty();
+                    }
+                    if (removeCount > 1 && returnTopicsAffected) {
+                        topicsAffected.append(entry.getKey()).append('(').append(removeCount).append("),");
+                    }
+                } finally {
+                    lock.unlock();
                 }
             }
             if (returnTopicsAffected) {
@@ -426,30 +458,36 @@ public class DistributedMessageServer implements Shutdowneable {
          *            and is null if we are only notifying a client (i.e. for the fetchPublisher command).  
          *          - the current max message id for this subscriber.
          */
-        synchronized void forClientsSubscribedToPublisher(String topic,
+        void forClientsSubscribedToPublisher(String topic,
                                                           @Nullable ClientMachineId excludeMachineId,
                                                           boolean fetchClientsWantingNotification,
                                                           Consumer<SubscriberParamsForCallback> consumer) {
             TopicInfo info = Objects.requireNonNull(topicMap.get(topic));
-            if (info.createPublisher == null) {
-                return;
-            }
-            ClientMachineId prevClientMachineId = null;
-            for (SubscriberEndpoint subscriberEndpoint : info.subscriberEndpoints) {
-                if (subscriberEndpoint.getClientMachineId().equals(excludeMachineId)) {
-                    continue;
+            var lock = info.lock.readLock();
+            lock.lock();
+            try {
+                if (info.createPublisher == null) {
+                    return;
                 }
-                if (!subscriberEndpoint.getClientMachineId().equals(prevClientMachineId)) {
-                    var params = new SubscriberParamsForCallback(subscriberEndpoint.getClientMachineId(), subscriberEndpoint.getClientTimestamp());
-                    consumer.accept(params);
-                    prevClientMachineId = subscriberEndpoint.getClientMachineId();
+                ClientMachineId prevClientMachineId = null;
+                for (SubscriberEndpoint subscriberEndpoint : info.subscriberEndpoints) {
+                    if (subscriberEndpoint.getClientMachineId().equals(excludeMachineId)) {
+                        continue;
+                    }
+                    if (!subscriberEndpoint.getClientMachineId().equals(prevClientMachineId)) {
+                        var params = new SubscriberParamsForCallback(subscriberEndpoint.getClientMachineId(), subscriberEndpoint.getClientTimestamp());
+                        consumer.accept(params);
+                        prevClientMachineId = subscriberEndpoint.getClientMachineId();
+                    }
                 }
-            }
-
-            if (fetchClientsWantingNotification && info.notifyClients != null) {
-                Stream<ClientMachineId> notifyClients = info.notifyClients.stream();
-                info.notifyClients = null;
-                notifyClients.forEach(clientMachineId -> consumer.accept(new SubscriberParamsForCallback(clientMachineId, null)));
+    
+                if (fetchClientsWantingNotification && info.notifyClients != null) {
+                    Stream<ClientMachineId> notifyClients = info.notifyClients.stream();
+                    info.notifyClients = null;
+                    notifyClients.forEach(clientMachineId -> consumer.accept(new SubscriberParamsForCallback(clientMachineId, null)));
+                }
+            } finally {
+                lock.unlock();
             }
         }
     }
@@ -632,6 +670,8 @@ public class DistributedMessageServer implements Shutdowneable {
             }
         }
     }
+    
+    synchronized;
     
     /**
      * Create a message server.
