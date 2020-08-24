@@ -109,6 +109,60 @@ interface MessageClasses {
     }
 
     /**
+     * Class sent by server to tell client to start read and write threads.
+     */
+    class ClientAccepted extends ServerGeneratedMessage {
+        private static final long serialVersionUID = 1L;
+        
+        private CentralServerId centralServerId;
+        
+        ClientAccepted(CentralServerId centralServerId) {
+            this.centralServerId = centralServerId;
+        }
+        
+        CentralServerId getCentralServerId() {
+            return centralServerId;
+        }
+
+        @Override
+        public String toLoggingString() {
+            return classType(this) + ", centralServerId=" + centralServerId;
+        }
+    }
+
+    /**
+     * Class sent by server to tell client that it failed to start.
+     */
+    class ClientRejected extends ServerGeneratedMessage {
+        private static final long serialVersionUID = 1L;
+        
+        private CentralServerId centralServerId;
+        private final @Nonnull String error;
+        
+        ClientRejected(CentralServerId centralServerId, @Nonnull String error) {
+            this.centralServerId = centralServerId;
+            this.error = error;
+        }
+        
+        CentralServerId getCentralServerId() {
+            return centralServerId;
+        }
+        
+        @Nonnull String getError() {
+            return error;
+        }
+ 
+        @Override
+        public String toLoggingString() {
+            return classType(this) + ", centralServerId=" + centralServerId + ", error=" + error;
+        }
+        
+        PubSubException toException() {
+            return new PubSubException(error);
+        }
+    }
+
+    /**
      * Class sent by server to tell client that a relay message it sent was invalid.
      * This happens if client sends a message to server that server already processed.
      * Required fields failedClientIndex, which identifies the message.

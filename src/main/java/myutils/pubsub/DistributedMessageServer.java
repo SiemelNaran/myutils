@@ -45,7 +45,9 @@ import java.util.stream.Stream;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import myutils.pubsub.MessageClasses.AddSubscriber;
+import myutils.pubsub.MessageClasses.ClientAccepted;
 import myutils.pubsub.MessageClasses.ClientGeneratedMessage;
+import myutils.pubsub.MessageClasses.ClientRejected;
 import myutils.pubsub.MessageClasses.CreatePublisher;
 import myutils.pubsub.MessageClasses.DownloadPublishedMessages;
 import myutils.pubsub.MessageClasses.FetchPublisher;
@@ -119,7 +121,7 @@ public class DistributedMessageServer implements Shutdowneable {
     private final ExecutorService channelExecutor;
     private final ScheduledExecutorService retryExecutor;
     private final List<ClientMachine> clientMachines = new CopyOnWriteArrayList<>();
-    private final AtomicReference<ServerIndex> maxMessage = new AtomicReference<>(ServerIndex.createDefaultFromNow());
+    private final AtomicReference<ServerIndex> maxMessage = new AtomicReference<>(new ServerIndex(CentralServerId.createDefaultFromNow()));
     private final PublishersAndSubscribers publishersAndSubscribers = new PublishersAndSubscribers();
     private final MostRecentMessages mostRecentMessages;
     private final Cleanable cleanable;
@@ -737,10 +739,11 @@ public class DistributedMessageServer implements Shutdowneable {
             boolean unhandled = false;
             if (message instanceof ClientGeneratedMessage) {
                 if (message instanceof Identification) {
-                    LOGGER.log(Level.TRACE,
-                               () -> String.format("Received message from client: clientAddress=%s, %s",
-                                                   getRemoteAddress(channel),
-                                                   message.toLoggingString()));
+                    LOGGER.log(
+                        Level.TRACE,
+                        () -> String.format("Received message from client: clientAddress=%s, %s",
+                                            getRemoteAddress(channel),
+                                            message.toLoggingString()));
                     onValidMessageReceived(message);
                     Identification identification = (Identification) message;
                     DistributedMessageServer.this.addIfNotPresent(identification, channel);
@@ -837,20 +840,27 @@ public class DistributedMessageServer implements Shutdowneable {
     }
     
     /**
-     * Add a client machine to the topology.
-     * If a machine with this id is already present, we log a warning message.
-     * If a machine with this channel is already present, we log a warning message.
+     * Add a client machine to the topology and send a ClientAccepted message.
+     * If a machine with this id is already present, we send a ClientRejected and log an error.
+     * If a machine with this channel is already present, we send a ClientRejected and log an error.
      * 
      * @param identification the identification sent by the client
      * @param channel the channel the message was sent on
      */
     private void addIfNotPresent(Identification identification, AsynchronousSocketChannel channel) {
         if (findClientMachineByChannel(channel) != null) {
-            LOGGER.log(Level.ERROR, "Channel channel already present: clientChannel={0}", getRemoteAddress(channel));
+            var clientRejected = new ClientRejected(maxMessage.get().extractCentralServerId(), ErrorMessageEnum.CHANNEL_ALREADY_REGISTERED.format(getRemoteAddress(channel)));
+            LOGGER.log(Level.ERROR, clientRejected.toLoggingString());
+            send(clientRejected, ClientMachine.unregistered(channel), 0);
             return;
         }
-        if (findClientMachineByMachineId(identification.getMachineId()) != null) {
-            LOGGER.log(Level.ERROR, "Client machine already present: clientMachine={0}", identification.getMachineId()); // COVERAGE: test adding 2nd machine with same name
+        ClientMachine existingClientMachine = findClientMachineByMachineId(identification.getMachineId());
+        if (existingClientMachine != null) {
+            var clientRejected = new ClientRejected(maxMessage.get().extractCentralServerId(),
+                                                    ErrorMessageEnum.DUPLICATE_CLIENT_MACHINE_ID.format(identification.getMachineId(),
+                                                                                                        getRemoteAddress(existingClientMachine.getChannel())));
+            LOGGER.log(Level.ERROR, clientRejected.toLoggingString());
+            send(clientRejected, ClientMachine.unregistered(channel), 0);
             return;
         }
         
@@ -858,6 +868,8 @@ public class DistributedMessageServer implements Shutdowneable {
         var clientMachine = new ClientMachine(identification.getMachineId(), channel);
         clientMachines.add(clientMachine);
         LOGGER.log(Level.INFO, "Added client machine: clientMachine={0}, clientAddress={1}", clientMachine.getMachineId(), getRemoteAddress(channel));
+        var clientAccepted = new ClientAccepted(maxMessage.get().extractCentralServerId());
+        send(clientAccepted, clientMachine, 0);
     }
     
     /**
@@ -1116,10 +1128,11 @@ public class DistributedMessageServer implements Shutdowneable {
     }
     
     private void afterMessageSent(ClientMachine clientMachine, MessageBase message) {
-        LOGGER.log(Level.TRACE,
-                   () -> String.format("Sent message to client: clientMachine=%s, %s",
-                                       clientMachine.getMachineId(),
-                                       message.toLoggingString()));
+        LOGGER.log(
+            Level.TRACE,
+            () -> String.format("Sent message to client: clientMachine=%s, %s",
+                                clientMachine.getMachineId(),
+                                message.toLoggingString()));
         onMessageSent(message);
     }
     
@@ -1187,6 +1200,16 @@ public class DistributedMessageServer implements Shutdowneable {
     }
 
     private enum ErrorMessageEnum {
+        /**
+         * A client sent an Identification, but the server already has a machine with this channel.
+         */
+        CHANNEL_ALREADY_REGISTERED("Channel already registered: channel=%s"),
+
+        /**
+         * A client sent an Identification, but the server already has a machine with this client id.
+         */
+        DUPLICATE_CLIENT_MACHINE_ID("Duplicate channel: clientMachine=%s, otherClientChannel=%s"),
+        
         /**
          * Server already saw this message and gave it a serverIndex.
          * Yet client sent this message back to the server.
