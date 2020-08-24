@@ -15,18 +15,10 @@ public class ServerIndex extends Number implements Comparable<ServerIndex> {
     public static final ServerIndex MIN_VALUE = new ServerIndex(BigInteger.ZERO);
     public static final ServerIndex MAX_VALUE = new ServerIndex(BigInteger.valueOf(Long.MAX_VALUE).shiftLeft(Long.SIZE).or(new BigInteger("FFFFFFFFFFFFFFFF", 16)));
     
-    public static ServerIndex createDefaultFromNow() {
-        return new ServerIndex();
-    }
-    
     private final BigInteger value;
     
-    private ServerIndex() {
-        this(System.currentTimeMillis());
-    }
-    
-    ServerIndex(long now) {
-        value = BigInteger.valueOf(now).shiftLeft(Long.SIZE);
+    ServerIndex(CentralServerId centralServerId) {
+        value = BigInteger.valueOf(centralServerId.longValue()).shiftLeft(Long.SIZE);
     }
     
     private ServerIndex(BigInteger value) {
@@ -83,5 +75,9 @@ public class ServerIndex extends Number implements Comparable<ServerIndex> {
 
     public static int compare(ServerIndex lhs, ServerIndex rhs) {
         return lhs.value.compareTo(rhs.value);
+    }
+    
+    public CentralServerId extractCentralServerId() {
+        return new CentralServerId(value.shiftRight(Long.SIZE).longValue());
     }
 }
