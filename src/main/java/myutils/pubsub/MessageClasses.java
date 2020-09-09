@@ -1,6 +1,8 @@
 package myutils.pubsub;
 
 import java.io.Serializable;
+import java.util.List;
+
 import javax.annotation.Nonnull;
 
 
@@ -351,13 +353,19 @@ interface MessageClasses {
     class DownloadPublishedMessages extends ClientGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
+        private final List<String> topics;
         private final ServerIndex startServerIndexInclusive;
         private final ServerIndex endServerIndexInclusive;
 
-        public DownloadPublishedMessages(ServerIndex startServerIndexInclusive, ServerIndex endServerIndexInclusive) {
+        public DownloadPublishedMessages(List<String> topics, ServerIndex startServerIndexInclusive, ServerIndex endServerIndexInclusive) {
             super(null);
+            this.topics = topics;
             this.startServerIndexInclusive = startServerIndexInclusive;
             this.endServerIndexInclusive = endServerIndexInclusive;
+        }
+        
+        List<String> getTopics() {
+        	return topics;
         }
         
         ServerIndex getStartServerIndexInclusive() {

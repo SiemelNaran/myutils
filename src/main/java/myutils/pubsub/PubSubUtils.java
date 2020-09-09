@@ -11,6 +11,8 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import myutils.pubsub.MessageClasses.MessageBase;
 import myutils.pubsub.MessageClasses.RelayMessageBase;
@@ -108,6 +110,13 @@ class PubSubUtils {
         } catch (InterruptedException | RuntimeException | Error ignored) {
         }
     }
+
+	public static void unlockSafely(@Nonnull Lock lock) throws IllegalMonitorStateException {
+        try {
+            lock.unlock();
+        } catch (IllegalMonitorStateException ignored) {
+        }
+	}
 
     /**
      * Calculate the exponential backoff delay.
