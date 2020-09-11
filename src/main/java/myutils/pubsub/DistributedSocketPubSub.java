@@ -19,6 +19,7 @@ import java.net.SocketAddress;
 import java.nio.channels.AlreadyConnectedException;
 import java.nio.channels.NetworkChannel;
 import java.nio.channels.SocketChannel;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -270,13 +271,14 @@ public class DistributedSocketPubSub extends PubSub {
      * Download as many messages starting with startIndex from the server.
      * The server does not retain messages forever, so it may not find the oldest messages.
      * 
+     * @param topics the topics to download
      * @param startIndexInclusive the start index. Use 0 or 1 for no minimum.
      * @param endIndexInclusive the end index. Use ServerIndex.MAX_VALUE for no maximum.
      * @see DistributedMessageServer#DistributedMessageServer(String, int, java.util.Map) for the number of messages of each RetentionPriority to remember
      * @see RetentionPriority
      */
-    public void download(ServerIndex startIndexInclusive, ServerIndex endIndexInclusive) {
-        messageWriter.download(startIndexInclusive, endIndexInclusive);
+    public void download(Collection<String> topics, ServerIndex startIndexInclusive, ServerIndex endIndexInclusive) {
+        messageWriter.download(topics, startIndexInclusive, endIndexInclusive);
     }
 
     /**
@@ -365,8 +367,8 @@ public class DistributedSocketPubSub extends PubSub {
             internalPutMessage(publishMessage);
         }
 
-        public void download(ServerIndex startIndexInclusive, ServerIndex endIndexInclusive) {
-            internalPutMessage(new DownloadPublishedMessages(startIndexInclusive, endIndexInclusive));
+        public void download(Collection<String> topics, ServerIndex startIndexInclusive, ServerIndex endIndexInclusive) {
+            internalPutMessage(new DownloadPublishedMessages(topics, startIndexInclusive, endIndexInclusive));
         }
 
         public void addFetchPublisher(String topic) {

@@ -388,7 +388,7 @@ public class DistributedMessageServer implements Shutdowneable {
          * @param createPublisher the create publisher command sent from the client
          * @param onPublisherCreatedCallback the function to call once the publisher is created.
          *        Not called if there is an exception.
-         *        Return relayAction if we should not relay this createPublisher command to other clients.
+         *        Return relayAction if we should relay this createPublisher command to other clients.
          */
         void savePublisher(CreatePublisher createPublisher,
         		           Function<CreatePublisherResult, Consumer<SubscriberParamsForCallback>> onPublisherCreatedCallback) {
@@ -536,13 +536,13 @@ public class DistributedMessageServer implements Shutdowneable {
          * 
          * @param clientMachine the client to send messages to
          * @param topic null means send messages for all topics, otherwise send messages only for this topic
-         * @param minClientTimestamp null means send all messages, otherwise send messages on or after this time
+         * @param minClientTimestamp find messages on or after this client timestamp
          * @param upperBoundInclusive send messages till this point
          * @param callback function that sends messages
          */
 		int forSavedMessages(ClientMachine clientMachine,
 				             List<String> topics,
-				             Long minClientTimestamp,
+				             long minClientTimestamp,
 				             ServerIndex lowerBoundInclusive,
 				             ServerIndex upperBoundInclusive,
 				             Consumer<PublishMessage> callback) {
@@ -570,11 +570,6 @@ public class DistributedMessageServer implements Shutdowneable {
                 Comparator<PublishMessage> comparator = (lhs, rhs) -> ServerIndex.compare(lhs.getRelayFields().getServerIndex(), rhs.getRelayFields().getServerIndex()); 
                 Iterator<PublishMessage> iter = new ZipMinIterator<>(allMessagesAcrossTopics, comparator);
 
-                // if lowerBoundInclusive is null, find all messages
-                if (lowerBoundInclusive == null) {
-                    lowerBoundInclusive = ServerIndex.MIN_VALUE;
-                }
-                
                 int count = 0;
 
                 // iterate over all messages and if in range invoke the callback to relay
@@ -586,7 +581,7 @@ public class DistributedMessageServer implements Shutdowneable {
 	                if (message.getRelayFields().getServerIndex().compareTo(lowerBoundInclusive) < 0) {
 	                    continue;
 	                }
-                    if (minClientTimestamp == null || message.getClientTimestamp() >= minClientTimestamp) {
+                    if (minClientTimestamp <= message.getClientTimestamp()) {
                         callback.accept(message);
                         count++;
 	                }
@@ -1071,7 +1066,7 @@ public class DistributedMessageServer implements Shutdowneable {
                 send(addSubscriberResult.getCreatePublisher(), clientMachine, 0);
             }
             if (doDownload) {
-                download("handleAddSubscriber", clientMachine, Collections.singletonList(topic), clientTimestamp, null, ServerIndex.MAX_VALUE, forceLogging);
+                download("handleAddSubscriber", clientMachine, Collections.singletonList(topic), clientTimestamp, ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE, forceLogging);
             }
         };
         
@@ -1149,7 +1144,7 @@ public class DistributedMessageServer implements Shutdowneable {
                              lookupClientMachine(params.getClientMachineId()),
                              Collections.singletonList(relay.getTopic()),
                              params.getMinClientTimestamp(),
-                             null /*lowerBoundInclusive*/,
+                             ServerIndex.MIN_VALUE,
                              ServerIndex.MAX_VALUE,
                              true /*forceLogging*/);
                 }
@@ -1167,14 +1162,20 @@ public class DistributedMessageServer implements Shutdowneable {
     }
     
     private void handleDownload(ClientMachine clientMachine, DownloadPublishedMessages download) {
-        download("download", clientMachine, null, null, download.getStartServerIndexInclusive(), download.getEndServerIndexInclusive(), /*forceLogging*/ true);
+        download("download",
+                 clientMachine,
+                 null,
+                 0 /*minClientTimestamp*/,
+                 download.getStartServerIndexInclusive(),
+                 download.getEndServerIndexInclusive(),
+                 /*forceLogging*/ true);
     }
     
     private void download(@Nonnull String trigger,
                           ClientMachine clientMachine,
                           List<String> topics,
-                          @Nullable Long minClientTimestamp,
-                          @Nullable ServerIndex lowerBoundInclusive,
+                          long minClientTimestamp,
+                          ServerIndex lowerBoundInclusive,
                           ServerIndex upperBoundInclusive,
                           boolean forceLogging) {
         int numMessages = publishersAndSubscribers.forSavedMessages(clientMachine,

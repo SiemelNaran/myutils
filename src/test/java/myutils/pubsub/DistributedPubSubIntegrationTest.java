@@ -350,31 +350,42 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals(1, client1.getCountTypesSent());
         assertEquals(1, client1.getCountTypesReceived());
         
-        // create publisher on client1
+        // create publishers on client1
         // as client2 does not exist yet, nor is subscribed, it does not receive the publisher
-        Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
-        client1.subscribe("hello", "ClientOneSubscriber", CloneableString.class, str -> words.add(str.append("-s1")));
+        Publisher helloPublisher1 = client1.createPublisher("hello", CloneableString.class);
+        Publisher worldPublisher1 = client1.createPublisher("world", CloneableString.class);
+        client1.subscribe("hello", "ClientOneSubscriber", CloneableString.class, str -> words.add(str.append("-s1-hello")));
+        client1.subscribe("world", "ClientOneSubscriber", CloneableString.class, str -> words.add(str.append("-s1-world")));
         sleep(250); // time to let publisher be propagated to client2, but this client does not exist yet
-        assertEquals(3, client1.getCountTypesSent()); // sent identification, create publisher, add subscriber
-        assertEquals(1, client1.getCountTypesReceived());
+        assertEquals(5, client1.getCountTypesSent()); // sent identification, create publisher * 2, add subscriber * 2
+        assertEquals(1, client1.getCountTypesReceived()); // ClientAccepted
         
         // publish messages with different retentions
-        // the server will remember the last 2 messages with low retention, and the last 2 messages with high retention
+        // the server will remember the last 3 messages with low retention, and the last 2 messages with high retention
         // the subscriber running on client1 will pick it up immediately
         // the message will get replicated to all other subscribers, but client2 is not yet running
-        publisher1.publish(new CloneableString("ImportantOne"), RetentionPriority.HIGH);
-        publisher1.publish(new CloneableString("ImportantTwo"), RetentionPriority.HIGH);
-        publisher1.publish(new CloneableString("ImportantThree"), RetentionPriority.HIGH);
-        publisher1.publish(new CloneableString("apple"), RetentionPriority.MEDIUM);
-        publisher1.publish(new CloneableString("banana"), RetentionPriority.MEDIUM);
-        publisher1.publish(new CloneableString("carrot"));
-        publisher1.publish(new CloneableString("dragonfruit"), RetentionPriority.MEDIUM);
+        helloPublisher1.publish(new CloneableString("ImportantOne"), RetentionPriority.HIGH);
+        helloPublisher1.publish(new CloneableString("ImportantTwo"), RetentionPriority.HIGH);
+        helloPublisher1.publish(new CloneableString("ImportantThree"), RetentionPriority.HIGH);
+        helloPublisher1.publish(new CloneableString("apple"), RetentionPriority.MEDIUM);
+        helloPublisher1.publish(new CloneableString("banana"), RetentionPriority.MEDIUM);
+        helloPublisher1.publish(new CloneableString("carrot"));
+        helloPublisher1.publish(new CloneableString("dragonfruit"), RetentionPriority.MEDIUM);
+        worldPublisher1.publish(new CloneableString("ImportantOne"), RetentionPriority.HIGH);
+        worldPublisher1.publish(new CloneableString("ImportantTwo"), RetentionPriority.HIGH);
+        worldPublisher1.publish(new CloneableString("ImportantThree"), RetentionPriority.HIGH);
+        worldPublisher1.publish(new CloneableString("apple"), RetentionPriority.MEDIUM);
+        worldPublisher1.publish(new CloneableString("banana"), RetentionPriority.MEDIUM);
+        worldPublisher1.publish(new CloneableString("carrot"));
+        worldPublisher1.publish(new CloneableString("dragonfruit"), RetentionPriority.MEDIUM);
         sleep(250); // time to let messages be published to client2
         System.out.println("actual=" + words);
         assertThat(words,
-                   Matchers.contains("ImportantOne-s1", "ImportantTwo-s1", "ImportantThree-s1",
-                                     "apple-s1", "banana-s1", "carrot-s1", "dragonfruit-s1"));
-        assertEquals(10, client1.getCountTypesSent());
+                   Matchers.contains("ImportantOne-s1-hello", "ImportantTwo-s1-hello", "ImportantThree-s1-hello",
+                                     "apple-s1-hello", "banana-s1-hello", "carrot-s1-hello", "dragonfruit-s1-hello",
+                                     "ImportantOne-s1-world", "ImportantTwo-s1-world", "ImportantThree-s1-world",
+                                     "apple-s1-world", "banana-s1-world", "carrot-s1-world", "dragonfruit-s1-world"));
+        assertEquals(15, client1.getCountTypesSent());
         assertEquals(1, client1.getCountTypesReceived());
 
         words.clear();
@@ -389,43 +400,48 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertFalse(client2.getPublisher("hello").isPresent());
         waitFor(Collections.singletonList(client2.start()));
         sleep(250); // time to let client2 start
-        assertEquals(10, client1.getCountTypesSent());
+        assertEquals(15, client1.getCountTypesSent());
         assertEquals(1, client1.getCountTypesReceived());
         assertEquals(1, client2.getCountTypesSent());
         assertEquals(1, client2.getCountTypesReceived()); // does not receive as client2 not subscribed to topic "hello"
         
-        client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a")));
-        client2.subscribe("hello", "ClientTwoSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b")));
+        client2.subscribe("hello", "ClientTwo_HelloSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a-hello")));
+        client2.subscribe("hello", "ClientTwo_HelloSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b-hello")));
+        client2.subscribe("world", "ClientTwo_WorldSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a-world")));
         sleep(250); // time to let client2 subscribe and for server to send down the publisher
         assertTrue(client2.getPublisher("hello").isPresent());
+        assertTrue(client2.getPublisher("world").isPresent());
         assertThat(words, Matchers.empty());
-        assertEquals(10, client1.getCountTypesSent());
+        assertEquals(15, client1.getCountTypesSent());
         assertEquals(1, client1.getCountTypesReceived());
-        assertEquals(3, client2.getCountTypesSent()); // +2 = add subscriber
-        assertEquals(2, client2.getCountTypesReceived()); // +1 = create publisher
+        assertEquals(4, client2.getCountTypesSent()); // +3 = add subscriber
+        assertEquals(3, client2.getCountTypesReceived()); // +2 = create publisher
         
-        client2.download(ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE);
+        client2.download(List.of("hello", "world"), ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE);
         sleep(250); // time to let messages be sent to client2
         System.out.println("actual=" + words);
         assertThat(words,
-                   Matchers.contains("ImportantTwo-s2a", "ImportantTwo-s2b", "ImportantThree-s2a", "ImportantThree-s2b",
-                                     "banana-s2a", "banana-s2b", "carrot-s2a", "carrot-s2b", "dragonfruit-s2a", "dragonfruit-s2b"));
-        assertEquals(10, client1.getCountTypesSent());
-        assertEquals(1, client1.getCountTypesReceived());
-        assertEquals(4, client2.getCountTypesSent());
-        assertEquals(7, client2.getCountTypesReceived()); // +6 = PublishMessage
-
-        words.clear();
-        client2.download(ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE);
-        sleep(250); // time to let messages be sent to client2
-        System.out.println("actual=" + words);
-        assertThat(words,
-                   Matchers.contains("ImportantTwo-s2a", "ImportantTwo-s2b", "ImportantThree-s2a", "ImportantThree-s2b",
-                                     "banana-s2a", "banana-s2b", "carrot-s2a", "carrot-s2b", "dragonfruit-s2a", "dragonfruit-s2b"));
-        assertEquals(10, client1.getCountTypesSent());
+                   Matchers.contains("ImportantTwo-s2a-hello", "ImportantTwo-s2b-hello", "ImportantThree-s2a-hello", "ImportantThree-s2b-hello",
+                                     "banana-s2a-hello", "banana-s2b-hello", "carrot-s2a-hello", "carrot-s2b-hello", "dragonfruit-s2a-hello", "dragonfruit-s2b-hello",
+                                     "ImportantTwo-s2a-world", "ImportantTwo-s2b-world", "ImportantThree-s2a-world", "ImportantThree-s2b-world",
+                                     "banana-s2a-world", "banana-s2b-world", "carrot-s2a-world", "carrot-s2b-world", "dragonfruit-s2a-world", "dragonfruit-s2b-world"));
+        assertEquals(15, client1.getCountTypesSent());
         assertEquals(1, client1.getCountTypesReceived());
         assertEquals(5, client2.getCountTypesSent()); // +1 = DownloadPublishedMessages
-        assertEquals(12, client2.getCountTypesReceived()); // +5 = PublishMessage
+        assertEquals(13, client2.getCountTypesReceived()); // +10 = PublishMessage
+
+        // verify that messages can be downloaded a second time
+        words.clear();
+        client2.download(List.of("hello"), ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE);
+        sleep(250); // time to let messages be sent to client2
+        System.out.println("actual=" + words);
+        assertThat(words,
+                   Matchers.contains("ImportantTwo-s2a-hello", "ImportantTwo-s2b-hello", "ImportantThree-s2a-hello", "ImportantThree-s2b-hello",
+                                     "banana-s2a-hello", "banana-s2b-hello", "carrot-s2a-hello", "carrot-s2b-hello", "dragonfruit-s2a-hello", "dragonfruit-s2b-hello"));
+        assertEquals(15, client1.getCountTypesSent());
+        assertEquals(1, client1.getCountTypesReceived());
+        assertEquals(6, client2.getCountTypesSent()); // +1 = DownloadPublishedMessages
+        assertEquals(18, client2.getCountTypesReceived()); // +5 = PublishMessage
     }
     
     /**
