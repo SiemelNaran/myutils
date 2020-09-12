@@ -379,7 +379,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         worldPublisher1.publish(new CloneableString("carrot"));
         worldPublisher1.publish(new CloneableString("dragonfruit"), RetentionPriority.MEDIUM);
         sleep(250); // time to let messages be published to client2
-        System.out.println("actual=" + words);
+        System.out.println("before client2 exists: actual=" + words);
         assertThat(words,
                    Matchers.contains("ImportantOne-s1-hello", "ImportantTwo-s1-hello", "ImportantThree-s1-hello",
                                      "apple-s1-hello", "banana-s1-hello", "carrot-s1-hello", "dragonfruit-s1-hello",
@@ -403,7 +403,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals(19, client1.getCountTypesSent());
         assertEquals(1, client1.getCountTypesReceived());
         assertEquals(1, client2.getCountTypesSent());
-        assertEquals(1, client2.getCountTypesReceived()); // does not receive as client2 not subscribed to topic "hello"
+        assertEquals("ClientAccepted=1", client2.getTypesReceived()); // does not receive as client2 not subscribed to topic "hello"
         
         client2.subscribe("hello", "ClientTwo_HelloSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a-hello")));
         client2.subscribe("hello", "ClientTwo_HelloSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b-hello")));
@@ -415,11 +415,11 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals(19, client1.getCountTypesSent());
         assertEquals(1, client1.getCountTypesReceived());
         assertEquals(4, client2.getCountTypesSent()); // +3 = add subscriber
-        assertEquals(3, client2.getCountTypesReceived()); // +2 = create publisher
+        assertEquals("ClientAccepted=1, CreatePublisher=2", client2.getTypesReceived()); // +2 = create publisher
         
         client2.download(List.of("hello", "world"), ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE);
         sleep(250); // time to let messages be sent to client2
-        System.out.println("actual=" + words);
+        System.out.println("after client2 downloads: actual=" + words);
         assertThat(words,
                    Matchers.contains("ImportantTwo-s2a-hello", "ImportantTwo-s2b-hello", "ImportantThree-s2a-hello", "ImportantThree-s2b-hello",
                                      "banana-s2a-hello", "banana-s2b-hello", "carrot-s2a-hello", "carrot-s2b-hello", "dragonfruit-s2a-hello", "dragonfruit-s2b-hello",
@@ -428,20 +428,44 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals(19, client1.getCountTypesSent());
         assertEquals(1, client1.getCountTypesReceived());
         assertEquals(5, client2.getCountTypesSent()); // +1 = DownloadPublishedMessages
-        assertEquals(13, client2.getCountTypesReceived()); // +10 = PublishMessage
+        assertEquals("ClientAccepted=1, CreatePublisher=2, PublishMessage=10", client2.getTypesReceived()); // +10 = PublishMessage
 
         // verify that messages can be downloaded a second time
         words.clear();
         client2.download(List.of("hello"), ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE);
         sleep(250); // time to let messages be sent to client2
-        System.out.println("actual=" + words);
+        System.out.println("after client2 downloads a second time: actual=" + words);
         assertThat(words,
                    Matchers.contains("ImportantTwo-s2a-hello", "ImportantTwo-s2b-hello", "ImportantThree-s2a-hello", "ImportantThree-s2b-hello",
                                      "banana-s2a-hello", "banana-s2b-hello", "carrot-s2a-hello", "carrot-s2b-hello", "dragonfruit-s2a-hello", "dragonfruit-s2b-hello"));
         assertEquals(19, client1.getCountTypesSent());
         assertEquals(1, client1.getCountTypesReceived());
         assertEquals(6, client2.getCountTypesSent()); // +1 = DownloadPublishedMessages
-        assertEquals(18, client2.getCountTypesReceived()); // +5 = PublishMessage
+        assertEquals("ClientAccepted=1, CreatePublisher=2, PublishMessage=15", client2.getTypesReceived()); // +5 = PublishMessage
+        
+        // verify error if download a topic that does not exist
+        words.clear();
+        client2.download(List.of("NewTopic"), ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE);
+        sleep(250); // time to let messages be sent to client2
+        System.out.println("download topic that does not exist: actual=" + words);
+        assertThat(words, Matchers.empty());
+        assertEquals(19, client1.getCountTypesSent());
+        assertEquals(1, client1.getCountTypesReceived());
+        assertEquals(7, client2.getCountTypesSent()); // +1 = DownloadPublishedMessages
+        assertEquals("ClientAccepted=1, CreatePublisher=2, InvalidMessage=1, PublishMessage=15", client2.getTypesReceived()); // +1 = InvalidMessage
+
+        // verify error if download a topic to which we are not subscribed
+        client1.createPublisher("NewTopic", CloneableString.class);
+        sleep(250); // time to let messages be sent to client2
+        words.clear();
+        client2.download(List.of("NewTopic"), ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE);
+        sleep(250); // time to let messages be sent to client2
+        System.out.println("download messages for a topic to which we are not subscribed: actual=" + words);
+        assertThat(words, Matchers.empty());
+        assertEquals(20, client1.getCountTypesSent());
+        assertEquals(1, client1.getCountTypesReceived());
+        assertEquals(8, client2.getCountTypesSent()); // +1 = DownloadPublishedMessages
+        assertEquals("ClientAccepted=1, CreatePublisher=2, InvalidMessage=2, PublishMessage=15", client2.getTypesReceived()); // +1 = InvalidMessage
     }
     
     /**

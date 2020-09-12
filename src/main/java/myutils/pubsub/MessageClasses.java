@@ -61,7 +61,7 @@ interface MessageClasses {
      * Class sent by server when it receives an invalid message.
      * Required field failedClientIndex, which identifies the message which failed, indicating to the client that it should resend this message;
      */
-    class AbstractInvalidMessage extends ServerGeneratedMessage {
+    abstract class AbstractInvalidMessage extends ServerGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
         private final Class<? extends MessageBase> classOfMessage;
@@ -164,24 +164,16 @@ interface MessageClasses {
     }
 
     /**
-     * Class sent by server to tell client that a relay message it sent was invalid.
-     * This happens if client sends a message to server that server already processed.
-     * Required fields failedClientIndex, which identifies the message.
+     * Class sent by server to tell client that a message it sent sent is invalid.
      * Required field error, which is the error message.
      */
-    class InvalidRelayMessage extends ServerGeneratedMessage {
+    class InvalidMessage extends ServerGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
-        private final long failedClientIndex;
         private final @Nonnull String error;
 
-        InvalidRelayMessage(long failedClientIndex, @Nonnull String error) {
-            this.failedClientIndex = failedClientIndex;
+        InvalidMessage(@Nonnull String error) {
             this.error = error;
-        }
-
-        public long getFailedClientIndex() {
-            return failedClientIndex;
         }
 
         public @Nonnull String getError() {
@@ -190,7 +182,33 @@ interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return classType(this) + ", failedClientIndex=" + failedClientIndex + ", error='" + error + "'";
+            return classType(this) + ", error='" + error + "'";
+        }
+    }
+
+
+    /**
+     * Class sent by server to tell client that a relay message it sent was invalid.
+     * For example, this could happen if client sends a message to server that server already processed.
+     * Required fields failedClientIndex, which identifies the message.
+     */
+    class InvalidRelayMessage extends InvalidMessage {
+        private static final long serialVersionUID = 1L;
+        
+        private final long failedClientIndex;
+
+        InvalidRelayMessage(@Nonnull String error, long failedClientIndex) {
+            super(error);
+            this.failedClientIndex = failedClientIndex;
+        }
+
+        public long getFailedClientIndex() {
+            return failedClientIndex;
+        }
+
+        @Override
+        public String toLoggingString() {
+            return super.toLoggingString() + ", failedClientIndex=" + failedClientIndex;
         }
     }
 

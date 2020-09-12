@@ -43,6 +43,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -543,23 +544,34 @@ public class DistributedMessageServer implements Shutdowneable {
          * @param lowerBoundInclusive send messages from this point. If null, calculate lowerBoundInclusive as the current server index the client is on plus one.
          * @param upperBoundInclusive send messages till this point
          * @param callback function that sends messages
-         * @throws IllegalArgumentException if lowerBoundInclusive is null and there are zero or more than one topics
+         * @param errorCallback function that sends a message if the download request is invalid
          */
         int forSavedMessages(ClientMachine clientMachine,
                              Collection<String> topics,
                              long minClientTimestamp,
                              @Nullable ServerIndex lowerBoundInclusive,
                              ServerIndex upperBoundInclusive,
-                             Consumer<PublishMessage> callback) {
-            List<TopicInfo> infos = topics.stream()
-                                          .map(topic -> Objects.requireNonNull(topicMap.get(topic)))
-                                          .collect(Collectors.toList());
-            List<Lock> locks = new ArrayList<>(infos.size());
+                             Consumer<PublishMessage> callback,
+                             @Nullable Consumer<PubSubException> errorCallback) {
+            BiFunction<String, TopicInfo, TopicInfo> checkClientSubscribedToTopic = (topic, info) -> {
+                if (info == null) {
+                    throw new PubSubException(ErrorMessageEnum.CLIENT_NOT_SUBSCRIBED_TO_TOPIC.format(clientMachine.getMachineId(), topic));
+                }
+                return info;
+            };
+            
+            int count = 0;
+
+            List<Lock> locks = new ArrayList<>(topics.size());
             try {
+                List<TopicInfo> infos = topics.stream()
+                                              .map(topic -> checkClientSubscribedToTopic.apply(topic, topicMap.get(topic)))
+                                              .collect(Collectors.toList());
+                
                 // lock all topics
                 infos.stream().forEach(info -> {
                     if (!isClientMachineAlreadySubscribedToTopic(info, clientMachine.getMachineId())) {
-                        throw new IllegalStateException("Download fails because " + clientMachine.getMachineId() + " not subscribed to topic " + info.topic);
+                        checkClientSubscribedToTopic.apply(info.topic, null);
                     }
                     Lock lock = info.lock;
                     lock.lock();
@@ -584,8 +596,6 @@ public class DistributedMessageServer implements Shutdowneable {
                     lowerBoundInclusive = lowerBoundInclusive.increment();
                 }
                 
-                int count = 0;
-
                 // iterate over all messages and if in range invoke the callback to relay
                 while (iter.hasNext()) {
                     PublishMessage message = iter.next();
@@ -600,13 +610,19 @@ public class DistributedMessageServer implements Shutdowneable {
                         count++;
                     }
                 }
-                
-                // return the number of messages relayed
-                return count;
+            } catch (PubSubException e) {
+                if (errorCallback != null) {
+                    errorCallback.accept(e);
+                } else {
+                    throw e;
+                }
             } finally {
                 // unlock all topics
                 locks.forEach(lock -> PubSubUtils.unlockSafely(lock));
             }
+            
+            // return the number of messages relayed
+            return count;
         }
     }
     
@@ -1080,7 +1096,7 @@ public class DistributedMessageServer implements Shutdowneable {
                 send(addSubscriberResult.getCreatePublisher(), clientMachine, 0);
             }
             if (doDownload) {
-                download("handleAddSubscriber", clientMachine, Collections.singletonList(topic), clientTimestamp, null, ServerIndex.MAX_VALUE, forceLogging);
+                download("handleAddSubscriber", clientMachine, Collections.singletonList(topic), clientTimestamp, null, ServerIndex.MAX_VALUE, null, forceLogging);
             }
         };
         
@@ -1160,6 +1176,7 @@ public class DistributedMessageServer implements Shutdowneable {
                              params.getMinClientTimestamp(),
                              null /*lowerBoundInclusive*/,
                              ServerIndex.MAX_VALUE,
+                             null,
                              true /*forceLogging*/);
                 }
             };
@@ -1182,6 +1199,7 @@ public class DistributedMessageServer implements Shutdowneable {
                  0 /*minClientTimestamp*/,
                  download.getStartServerIndexInclusive(),
                  download.getEndServerIndexInclusive(),
+                 exception -> send(exception.toInvalidMessage(), clientMachine, 0),
                  /*forceLogging*/ true);
     }
     
@@ -1191,6 +1209,7 @@ public class DistributedMessageServer implements Shutdowneable {
                           long minClientTimestamp,
                           @Nullable ServerIndex lowerBoundInclusive,
                           ServerIndex upperBoundInclusive,
+                          @Nullable Consumer<PubSubException> errorCallback,
                           boolean forceLogging) {
         int numMessages = publishersAndSubscribers.forSavedMessages(
             clientMachine,
@@ -1198,7 +1217,8 @@ public class DistributedMessageServer implements Shutdowneable {
             minClientTimestamp,
             lowerBoundInclusive, 
             upperBoundInclusive,
-            publishMessage -> send(publishMessage, clientMachine, 0));
+            publishMessage -> send(publishMessage, clientMachine, 0),
+            errorCallback);
         if (numMessages != 0 || forceLogging) {
             LOGGER.log(Level.INFO, String.format("Download messages to client: clientMachine=%s, trigger=%s, numMessagesDownloaded=%d",
                                                  clientMachine.getMachineId(),
@@ -1214,7 +1234,7 @@ public class DistributedMessageServer implements Shutdowneable {
     }
 
     private void sendInvalidRelayMessage(ClientMachine clientMachine, RelayMessageBase relayMessage, String error) {
-        InvalidRelayMessage invalid = new InvalidRelayMessage(relayMessage.getClientIndex(), error);
+        InvalidRelayMessage invalid = new InvalidRelayMessage(error, relayMessage.getClientIndex());
         send(invalid, clientMachine, 0);
     }
     
@@ -1331,7 +1351,12 @@ public class DistributedMessageServer implements Shutdowneable {
          * Server already saw this message and gave it a serverIndex.
          * Yet client sent this message back to the server.
          */
-        MESSAGE_ALREADY_PROCESSED("Message already processed by server: clientIndex=%s");
+        MESSAGE_ALREADY_PROCESSED("Message already processed by server: clientIndex=%s"),
+        
+        /**
+         * Client is downloading messages for a topic which does not exist or for which it is not subscribed.
+         */
+        CLIENT_NOT_SUBSCRIBED_TO_TOPIC("Client is not subscribed to topic: clientMachine=%s, topic=%s");
         
         private final String formatString;
 
