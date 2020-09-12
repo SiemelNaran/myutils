@@ -739,6 +739,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                           Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         waitFor(Collections.singletonList(centralServer2.start()));
         sleep(1000); // time to let client1 connect to server as part of exponential backoff
+        sleep(250); // more time to let messages be downloaded to client2
         
         // client1 will send the message to centralServer2 which relays it to the other clients
         System.out.println("after central server restarted: actual=" + words);
