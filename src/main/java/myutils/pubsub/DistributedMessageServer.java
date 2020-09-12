@@ -540,13 +540,15 @@ public class DistributedMessageServer implements Shutdowneable {
          * @param clientMachine the client to send messages to
          * @param topic null means send messages for all topics, otherwise send messages only for this topic
          * @param minClientTimestamp find messages on or after this client timestamp
+         * @param lowerBoundInclusive send messages from this point. If null, calculate lowerBoundInclusive as the current server index the client is on plus one.
          * @param upperBoundInclusive send messages till this point
          * @param callback function that sends messages
+         * @throws IllegalArgumentException if lowerBoundInclusive is null and there are zero or more than one topics
          */
         int forSavedMessages(ClientMachine clientMachine,
                              Collection<String> topics,
                              long minClientTimestamp,
-                             ServerIndex lowerBoundInclusive,
+                             @Nullable ServerIndex lowerBoundInclusive,
                              ServerIndex upperBoundInclusive,
                              Consumer<PublishMessage> callback) {
             List<TopicInfo> infos = topics.stream()
@@ -573,6 +575,15 @@ public class DistributedMessageServer implements Shutdowneable {
                 Comparator<PublishMessage> comparator = (lhs, rhs) -> ServerIndex.compare(lhs.getRelayFields().getServerIndex(), rhs.getRelayFields().getServerIndex()); 
                 Iterator<PublishMessage> iter = new ZipMinIterator<>(allMessagesAcrossTopics, comparator);
 
+                // calculate lowerBoundInclusive if not explicitly passed in
+                if (lowerBoundInclusive == null) {
+                    if (topics.size() != 1) {
+                        throw new IllegalArgumentException("lowerBoundInclusive can only be null if downloading messages for one topic");
+                    }
+                    lowerBoundInclusive = infos.get(0).mostRecentMessages.getMaxIndex(clientMachine.getMachineId());
+                    lowerBoundInclusive = lowerBoundInclusive.increment();
+                }
+                
                 int count = 0;
 
                 // iterate over all messages and if in range invoke the callback to relay
@@ -1048,7 +1059,7 @@ public class DistributedMessageServer implements Shutdowneable {
         String topic = subscriberInfo.getTopic();
         String subscriberName = subscriberInfo.getSubscriberName();
         
-        Consumer<PublishersAndSubscribers.AddSubscriberResult> afterSubscriberAdded = (addSubscriberResult) -> {
+        Consumer<PublishersAndSubscribers.AddSubscriberResult> afterSubscriberAdded = addSubscriberResult -> {
             boolean doDownload = false;
             boolean forceLogging = subscriberInfo.isResend();
             long clientTimestamp = addSubscriberResult.getClientTimestamp();
@@ -1069,7 +1080,7 @@ public class DistributedMessageServer implements Shutdowneable {
                 send(addSubscriberResult.getCreatePublisher(), clientMachine, 0);
             }
             if (doDownload) {
-                download("handleAddSubscriber", clientMachine, Collections.singletonList(topic), clientTimestamp, ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE, forceLogging);
+                download("handleAddSubscriber", clientMachine, Collections.singletonList(topic), clientTimestamp, null, ServerIndex.MAX_VALUE, forceLogging);
             }
         };
         
@@ -1147,7 +1158,7 @@ public class DistributedMessageServer implements Shutdowneable {
                              lookupClientMachine(params.getClientMachineId()),
                              Collections.singletonList(relay.getTopic()),
                              params.getMinClientTimestamp(),
-                             ServerIndex.MIN_VALUE,
+                             null /*lowerBoundInclusive*/,
                              ServerIndex.MAX_VALUE,
                              true /*forceLogging*/);
                 }
@@ -1178,7 +1189,7 @@ public class DistributedMessageServer implements Shutdowneable {
                           ClientMachine clientMachine,
                           Collection<String> topics,
                           long minClientTimestamp,
-                          ServerIndex lowerBoundInclusive,
+                          @Nullable ServerIndex lowerBoundInclusive,
                           ServerIndex upperBoundInclusive,
                           boolean forceLogging) {
         int numMessages = publishersAndSubscribers.forSavedMessages(

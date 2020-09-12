@@ -883,7 +883,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
             assertEquals("AddSubscriber=1, CreatePublisher=1, Identification=1", client1.getTypesSent());
             assertEquals("ClientAccepted=1", client1.getTypesReceived());
             assertEquals("AddSubscriber=2, Identification=1", client2.getTypesSent());
-            assertEquals("ClientAccepted=1, CreatePublisher=1, PublishMessage=2", client2.getTypesReceived()); // differences: PublishMessage +2 because "three" and "four" send to client
+            assertEquals("ClientAccepted=1, CreatePublisher=1, PublishMessage=2", client2.getTypesReceived()); // differences: PublishMessage +2 because "three" and "four" sent to client
             assertThat(words, Matchers.contains("three-s2a", "three-s2b", "four-s2a", "four-s2b")); // differences: handle 2 new messages
             
             words.clear();
@@ -1100,7 +1100,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      * The 4th client receives all of the messages and has 2 subscribers.
      * 
      * <p>On my Linux laptop Intel Core i7-3720QM CPU @ 2.60GHz * 4,<br/>
-     * With N as 1000 the test takes about 2.1sec at INFO level, and 5.4sec at TRACE level<br/>
+     * With N as 1000 the test takes about 1.0sec at INFO level, and 2.9sec at TRACE level<br/>
      *
      * <p>On my MacOS 2.3GHz Intel Core i9,<br/>
      * With N as 1000 the test takes about 1.9sec.<br/>
