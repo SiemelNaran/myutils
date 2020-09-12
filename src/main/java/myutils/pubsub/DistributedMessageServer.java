@@ -242,24 +242,24 @@ public class DistributedMessageServer implements Shutdowneable {
             }
         }
         
-		private final Map<RetentionPriority, Integer> mostRecentMessagesToKeep;
+        private final Map<RetentionPriority, Integer> mostRecentMessagesToKeep;
         private final Map<String /*topic*/, TopicInfo> topicMap = new ConcurrentHashMap<>();
         
         PublishersAndSubscribers(Map<RetentionPriority, Integer> mostRecentMessagesToKeep) {
-			this.mostRecentMessagesToKeep = mostRecentMessagesToKeep;
-		}
+            this.mostRecentMessagesToKeep = mostRecentMessagesToKeep;
+        }
 
-		/**
+        /**
          * Acquire a lock and add subscriber to this topic.
          * Note that the publisher may not yet be created.
          * Upon adding the subscriber, invoke the callback.
          */
         @SuppressWarnings("checkstyle:VariableDeclarationUsageDistance")
         void addSubscriberEndpoint(final String topic,
-        		                   final String subscriberName,
-        		                   long clientTimestamp,
-        		                   ClientMachineId clientMachineId,
-        		                   Consumer<AddSubscriberResult> afterSubscriberAdded) {
+                                   final String subscriberName,
+                                   long clientTimestamp,
+                                   ClientMachineId clientMachineId,
+                                   Consumer<AddSubscriberResult> afterSubscriberAdded) {
             TopicInfo info = topicMap.computeIfAbsent(topic, unused -> new TopicInfo(topic, mostRecentMessagesToKeep));
             info.lock.lock();
             try {
@@ -348,7 +348,8 @@ public class DistributedMessageServer implements Shutdowneable {
             try {
                 info.subscriberEndpoints.removeIf(subscriberEndpoint -> subscriberEndpoint.getSubscriberName().equals(subscriberName));
                 if (info.inactiveSubscriberEndpoints != null) {
-                    info.inactiveSubscriberEndpoints.removeIf(endpoint -> endpoint.getClientMachineId().equals(clientMachineId) && endpoint.getSubscriberName().equals(subscriberName));
+                    info.inactiveSubscriberEndpoints.removeIf(endpoint -> endpoint.getClientMachineId().equals(clientMachineId)
+                                                                  && endpoint.getSubscriberName().equals(subscriberName));
                 }
             } finally {
                 info.lock.unlock();
@@ -366,7 +367,8 @@ public class DistributedMessageServer implements Shutdowneable {
             TopicInfo info = topicMap.computeIfAbsent(topic, unused -> new TopicInfo(topic, mostRecentMessagesToKeep));
             info.lock.lock();
             try {
-                if (info.createPublisher == null && info.subscriberEndpoints.stream().anyMatch(subscriberEndpoint -> subscriberEndpoint.getClientMachineId().equals(clientMachineId))) {
+                if (info.createPublisher == null
+                        && info.subscriberEndpoints.stream().anyMatch(subscriberEndpoint -> subscriberEndpoint.getClientMachineId().equals(clientMachineId))) {
                     return null;
                 }
                 if (info.createPublisher != null) {
@@ -391,24 +393,24 @@ public class DistributedMessageServer implements Shutdowneable {
          *        Return relayAction if we should relay this createPublisher command to other clients.
          */
         void savePublisher(CreatePublisher createPublisher,
-        		           Function<CreatePublisherResult, Consumer<SubscriberParamsForCallback>> onPublisherCreatedCallback) {
+                           Function<CreatePublisherResult, Consumer<SubscriberParamsForCallback>> onPublisherCreatedCallback) {
             var topic = createPublisher.getTopic();
             TopicInfo info = topicMap.computeIfAbsent(topic, unused -> new TopicInfo(topic, mostRecentMessagesToKeep));
             info.lock.lock();
             try {
                 CreatePublisherResult result;
-            	if (info.createPublisher == null) {
+                if (info.createPublisher == null) {
                     info.createPublisher = createPublisher;
                     result = new CreatePublisherResult(null);
                 } else {
                     result = new CreatePublisherResult(info.createPublisher);
                 }
-            	Consumer<SubscriberParamsForCallback> relayAction = onPublisherCreatedCallback.apply(result);
+                Consumer<SubscriberParamsForCallback> relayAction = onPublisherCreatedCallback.apply(result);
                 if (relayAction != null) {
                     forClientsSubscribedToPublisher(createPublisher.getTopic(),
-                    		                        createPublisher.getRelayFields().getSourceMachineId(),
-                    		                        true /*fetchClientsWantingNotification*/,
-                    		                        relayAction);
+                                                    createPublisher.getRelayFields().getSourceMachineId(),
+                                                    true /*fetchClientsWantingNotification*/,
+                                                    relayAction);
                 }
             } finally {
                 info.lock.unlock();
@@ -515,21 +517,22 @@ public class DistributedMessageServer implements Shutdowneable {
             }
         }
 
-		public void saveMessage(PublishMessage publishMessage, Consumer<SubscriberParamsForCallback> relayAction) {
+        public void saveMessage(PublishMessage publishMessage, Consumer<SubscriberParamsForCallback> relayAction) {
             String topic = publishMessage.getTopic();
-			TopicInfo info = Objects.requireNonNull(topicMap.get(topic));
-            relayAction = relayAction.andThen(subscriberParamsForCallack -> info.mostRecentMessages.onMessageRelayed(subscriberParamsForCallack.getClientMachineId(), publishMessage));
+            TopicInfo info = Objects.requireNonNull(topicMap.get(topic));
+            relayAction = relayAction.andThen(
+                subscriberParamsForCallack -> info.mostRecentMessages.onMessageRelayed(subscriberParamsForCallack.getClientMachineId(), publishMessage));
             info.lock.lock();
             try {
-            	info.mostRecentMessages.save(publishMessage);
-            	forClientsSubscribedToPublisher(topic,
-            							     	publishMessage.getRelayFields().getSourceMachineId(),
-            							     	false,
-            							     	relayAction);
+                info.mostRecentMessages.save(publishMessage);
+                forClientsSubscribedToPublisher(topic,
+                                                 publishMessage.getRelayFields().getSourceMachineId(),
+                                                 false,
+                                                 relayAction);
             }  finally {
                 info.lock.unlock();
             }
-		}
+        }
 
         /**
          * This function is used to send saved messages to a client.
@@ -540,60 +543,60 @@ public class DistributedMessageServer implements Shutdowneable {
          * @param upperBoundInclusive send messages till this point
          * @param callback function that sends messages
          */
-		int forSavedMessages(ClientMachine clientMachine,
-				             List<String> topics,
-				             long minClientTimestamp,
-				             ServerIndex lowerBoundInclusive,
-				             ServerIndex upperBoundInclusive,
-				             Consumer<PublishMessage> callback) {
-			List<TopicInfo> infos = topics.stream()
-			                              .map(topic -> Objects.requireNonNull(topicMap.get(topic)))
-			                              .collect(Collectors.toList());
-			List<Lock> locks = new ArrayList<>(infos.size());
-			try {
-				// lock all topics
-			    infos.stream().forEach(info -> {
+        int forSavedMessages(ClientMachine clientMachine,
+                             Collection<String> topics,
+                             long minClientTimestamp,
+                             ServerIndex lowerBoundInclusive,
+                             ServerIndex upperBoundInclusive,
+                             Consumer<PublishMessage> callback) {
+            List<TopicInfo> infos = topics.stream()
+                                          .map(topic -> Objects.requireNonNull(topicMap.get(topic)))
+                                          .collect(Collectors.toList());
+            List<Lock> locks = new ArrayList<>(infos.size());
+            try {
+                // lock all topics
+                infos.stream().forEach(info -> {
                     if (!isClientMachineAlreadySubscribedToTopic(info, clientMachine.getMachineId())) {
                         throw new IllegalStateException("Download fails because " + clientMachine.getMachineId() + " not subscribed to topic " + info.topic);
                     }
-			        Lock lock = info.lock;
-					lock.lock();
-					locks.add(lock);
-				});
+                    Lock lock = info.lock;
+                    lock.lock();
+                    locks.add(lock);
+                });
 
-			    // construct an iterator across all topics and retention priorities
-			    // the items will be returned in the order of serverIndex
-				List<List<PublishMessage>> allMessagesAcrossTopics = new ArrayList<>();
-				for (var info : infos) {
-				    allMessagesAcrossTopics.addAll(info.mostRecentMessages.getMessagesOfAllRetentionPriorities());
-				}
+                // construct an iterator across all topics and retention priorities
+                // the items will be returned in the order of serverIndex
+                List<List<PublishMessage>> allMessagesAcrossTopics = new ArrayList<>();
+                for (var info : infos) {
+                    allMessagesAcrossTopics.addAll(info.mostRecentMessages.getMessagesOfAllRetentionPriorities());
+                }
                 Comparator<PublishMessage> comparator = (lhs, rhs) -> ServerIndex.compare(lhs.getRelayFields().getServerIndex(), rhs.getRelayFields().getServerIndex()); 
                 Iterator<PublishMessage> iter = new ZipMinIterator<>(allMessagesAcrossTopics, comparator);
 
                 int count = 0;
 
                 // iterate over all messages and if in range invoke the callback to relay
-	            while (iter.hasNext()) {
-	                PublishMessage message = iter.next();
-	                if (message.getRelayFields().getServerIndex().compareTo(upperBoundInclusive) > 0) {
-	                    break;
-	                }
-	                if (message.getRelayFields().getServerIndex().compareTo(lowerBoundInclusive) < 0) {
-	                    continue;
-	                }
+                while (iter.hasNext()) {
+                    PublishMessage message = iter.next();
+                    if (message.getRelayFields().getServerIndex().compareTo(upperBoundInclusive) > 0) {
+                        break;
+                    }
+                    if (message.getRelayFields().getServerIndex().compareTo(lowerBoundInclusive) < 0) {
+                        continue;
+                    }
                     if (minClientTimestamp <= message.getClientTimestamp()) {
                         callback.accept(message);
                         count++;
-	                }
-	            }
-	            
-	            // return the number of messages relayed
-	            return count;
-			} finally {
-			    // unlock all topics
-				locks.forEach(lock -> PubSubUtils.unlockSafely(lock));
-			}
-		}
+                    }
+                }
+                
+                // return the number of messages relayed
+                return count;
+            } finally {
+                // unlock all topics
+                locks.forEach(lock -> PubSubUtils.unlockSafely(lock));
+            }
+        }
     }
     
     /**
@@ -1101,28 +1104,28 @@ public class DistributedMessageServer implements Shutdowneable {
         Function<PublishersAndSubscribers.CreatePublisherResult, Consumer<SubscriberParamsForCallback>> onPublisherCreatedCallback = createPublisherResult -> {
             boolean skipRelayMessage = false;
             boolean isResendPublisher = false;
-	        if (createPublisherResult.alreadyExistsCreatePublisher == null) {
-	            LOGGER.log(Level.INFO, "Added publisher: topic={0}, topicClass={1}", relay.getTopic(), createPublisherPassedInToThisFunction.getPublisherClass().getSimpleName());
-	            if (createPublisherPassedInToThisFunction.isResend()) {
-	                isResendPublisher = true;
-	            }
-	        } else {
-	            CreatePublisher alreadyExistsCreatePublisher = createPublisherResult.alreadyExistsCreatePublisher;
-	            LOGGER.log(Level.INFO,
-	                       String.format("Publisher already exists: topic=%s, topicClass=%s, clientTimestamp=%d, serverIndex=%s, discarding newServerIndex=%s",
-	                                     alreadyExistsCreatePublisher.getTopic(),
-	                                     alreadyExistsCreatePublisher.getPublisherClass().getSimpleName(),
-	                                     alreadyExistsCreatePublisher.getClientTimestamp(),
-	                                     alreadyExistsCreatePublisher.getRelayFields().getServerIndex().toString(),
-	                                     relay.getRelayFields().getServerIndex()));
-	            skipRelayMessage = true;
-	        }
-	        if (!skipRelayMessage) {
-	        	return relayCreatePublisherToOtherClientsAction(relay, isResendPublisher);
-	        } else {
-	        	return null;
-	        }
-	    };
+            if (createPublisherResult.alreadyExistsCreatePublisher == null) {
+                LOGGER.log(Level.INFO, "Added publisher: topic={0}, topicClass={1}", relay.getTopic(), createPublisherPassedInToThisFunction.getPublisherClass().getSimpleName());
+                if (createPublisherPassedInToThisFunction.isResend()) {
+                    isResendPublisher = true;
+                }
+            } else {
+                CreatePublisher alreadyExistsCreatePublisher = createPublisherResult.alreadyExistsCreatePublisher;
+                LOGGER.log(Level.INFO,
+                           String.format("Publisher already exists: topic=%s, topicClass=%s, clientTimestamp=%d, serverIndex=%s, discarding newServerIndex=%s",
+                                         alreadyExistsCreatePublisher.getTopic(),
+                                         alreadyExistsCreatePublisher.getPublisherClass().getSimpleName(),
+                                         alreadyExistsCreatePublisher.getClientTimestamp(),
+                                         alreadyExistsCreatePublisher.getRelayFields().getServerIndex().toString(),
+                                         relay.getRelayFields().getServerIndex()));
+                skipRelayMessage = true;
+            }
+            if (!skipRelayMessage) {
+                return relayCreatePublisherToOtherClientsAction(relay, isResendPublisher);
+            } else {
+                return null;
+            }
+        };
         publishersAndSubscribers.savePublisher(createPublisherPassedInToThisFunction, onPublisherCreatedCallback);
     }
     
@@ -1164,7 +1167,7 @@ public class DistributedMessageServer implements Shutdowneable {
     private void handleDownload(ClientMachine clientMachine, DownloadPublishedMessages download) {
         download("download",
                  clientMachine,
-                 null,
+                 download.getTopics(),
                  0 /*minClientTimestamp*/,
                  download.getStartServerIndexInclusive(),
                  download.getEndServerIndexInclusive(),
@@ -1173,17 +1176,18 @@ public class DistributedMessageServer implements Shutdowneable {
     
     private void download(@Nonnull String trigger,
                           ClientMachine clientMachine,
-                          List<String> topics,
+                          Collection<String> topics,
                           long minClientTimestamp,
                           ServerIndex lowerBoundInclusive,
                           ServerIndex upperBoundInclusive,
                           boolean forceLogging) {
-        int numMessages = publishersAndSubscribers.forSavedMessages(clientMachine,
-														            topics,
-														            minClientTimestamp,
-														            lowerBoundInclusive, 
-														            upperBoundInclusive,
-														            publishMessage -> send(publishMessage, clientMachine, 0));
+        int numMessages = publishersAndSubscribers.forSavedMessages(
+            clientMachine,
+            topics,
+            minClientTimestamp,
+            lowerBoundInclusive, 
+            upperBoundInclusive,
+            publishMessage -> send(publishMessage, clientMachine, 0));
         if (numMessages != 0 || forceLogging) {
             LOGGER.log(Level.INFO, String.format("Download messages to client: clientMachine=%s, trigger=%s, numMessagesDownloaded=%d",
                                                  clientMachine.getMachineId(),

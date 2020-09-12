@@ -111,12 +111,12 @@ class PubSubUtils {
         }
     }
 
-	public static void unlockSafely(@Nonnull Lock lock) throws IllegalMonitorStateException {
+    public static void unlockSafely(@Nonnull Lock lock) throws IllegalMonitorStateException {
         try {
             lock.unlock();
         } catch (IllegalMonitorStateException ignored) {
         }
-	}
+    }
 
     /**
      * Calculate the exponential backoff delay.

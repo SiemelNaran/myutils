@@ -385,7 +385,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                      "apple-s1-hello", "banana-s1-hello", "carrot-s1-hello", "dragonfruit-s1-hello",
                                      "ImportantOne-s1-world", "ImportantTwo-s1-world", "ImportantThree-s1-world",
                                      "apple-s1-world", "banana-s1-world", "carrot-s1-world", "dragonfruit-s1-world"));
-        assertEquals(15, client1.getCountTypesSent());
+        assertEquals(19, client1.getCountTypesSent()); // +14 = PublishMessage
         assertEquals(1, client1.getCountTypesReceived());
 
         words.clear();
@@ -400,7 +400,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertFalse(client2.getPublisher("hello").isPresent());
         waitFor(Collections.singletonList(client2.start()));
         sleep(250); // time to let client2 start
-        assertEquals(15, client1.getCountTypesSent());
+        assertEquals(19, client1.getCountTypesSent());
         assertEquals(1, client1.getCountTypesReceived());
         assertEquals(1, client2.getCountTypesSent());
         assertEquals(1, client2.getCountTypesReceived()); // does not receive as client2 not subscribed to topic "hello"
@@ -412,7 +412,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertTrue(client2.getPublisher("hello").isPresent());
         assertTrue(client2.getPublisher("world").isPresent());
         assertThat(words, Matchers.empty());
-        assertEquals(15, client1.getCountTypesSent());
+        assertEquals(19, client1.getCountTypesSent());
         assertEquals(1, client1.getCountTypesReceived());
         assertEquals(4, client2.getCountTypesSent()); // +3 = add subscriber
         assertEquals(3, client2.getCountTypesReceived()); // +2 = create publisher
@@ -423,9 +423,9 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertThat(words,
                    Matchers.contains("ImportantTwo-s2a-hello", "ImportantTwo-s2b-hello", "ImportantThree-s2a-hello", "ImportantThree-s2b-hello",
                                      "banana-s2a-hello", "banana-s2b-hello", "carrot-s2a-hello", "carrot-s2b-hello", "dragonfruit-s2a-hello", "dragonfruit-s2b-hello",
-                                     "ImportantTwo-s2a-world", "ImportantTwo-s2b-world", "ImportantThree-s2a-world", "ImportantThree-s2b-world",
-                                     "banana-s2a-world", "banana-s2b-world", "carrot-s2a-world", "carrot-s2b-world", "dragonfruit-s2a-world", "dragonfruit-s2b-world"));
-        assertEquals(15, client1.getCountTypesSent());
+                                     "ImportantTwo-s2a-world", "ImportantThree-s2a-world",
+                                     "banana-s2a-world", "carrot-s2a-world", "dragonfruit-s2a-world"));
+        assertEquals(19, client1.getCountTypesSent());
         assertEquals(1, client1.getCountTypesReceived());
         assertEquals(5, client2.getCountTypesSent()); // +1 = DownloadPublishedMessages
         assertEquals(13, client2.getCountTypesReceived()); // +10 = PublishMessage
@@ -438,7 +438,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertThat(words,
                    Matchers.contains("ImportantTwo-s2a-hello", "ImportantTwo-s2b-hello", "ImportantThree-s2a-hello", "ImportantThree-s2b-hello",
                                      "banana-s2a-hello", "banana-s2b-hello", "carrot-s2a-hello", "carrot-s2b-hello", "dragonfruit-s2a-hello", "dragonfruit-s2b-hello"));
-        assertEquals(15, client1.getCountTypesSent());
+        assertEquals(19, client1.getCountTypesSent());
         assertEquals(1, client1.getCountTypesReceived());
         assertEquals(6, client2.getCountTypesSent()); // +1 = DownloadPublishedMessages
         assertEquals(18, client2.getCountTypesReceived()); // +5 = PublishMessage

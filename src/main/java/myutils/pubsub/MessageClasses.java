@@ -2,8 +2,6 @@ package myutils.pubsub;
 
 import java.io.Serializable;
 import java.util.Collection;
-import java.util.List;
-
 import javax.annotation.Nonnull;
 
 
@@ -366,7 +364,7 @@ interface MessageClasses {
         }
         
         Collection<String> getTopics() {
-        	return topics;
+            return topics;
         }
         
         ServerIndex getStartServerIndexInclusive() {
