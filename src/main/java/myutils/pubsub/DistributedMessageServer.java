@@ -352,6 +352,7 @@ public class DistributedMessageServer implements Shutdowneable {
                     info.inactiveSubscriberEndpoints.removeIf(endpoint -> endpoint.getClientMachineId().equals(clientMachineId)
                                                                   && endpoint.getSubscriberName().equals(subscriberName));
                 }
+                info.mostRecentMessages.removeClientMachineState(clientMachineId);
             } finally {
                 info.lock.unlock();
             }
@@ -554,7 +555,7 @@ public class DistributedMessageServer implements Shutdowneable {
                              Consumer<PublishMessage> callback,
                              @Nullable Consumer<PubSubException> errorCallback) {
             BiFunction<String, TopicInfo, TopicInfo> checkClientSubscribedToTopic = (topic, info) -> {
-                if (info == null) {
+                if (info == null || !isClientMachineAlreadySubscribedToTopic(info, clientMachine.getMachineId())) {
                     throw new PubSubException(ErrorMessageEnum.CLIENT_NOT_SUBSCRIBED_TO_TOPIC.format(clientMachine.getMachineId(), topic));
                 }
                 return info;
@@ -570,9 +571,6 @@ public class DistributedMessageServer implements Shutdowneable {
                 
                 // lock all topics
                 infos.stream().forEach(info -> {
-                    if (!isClientMachineAlreadySubscribedToTopic(info, clientMachine.getMachineId())) {
-                        checkClientSubscribedToTopic.apply(info.topic, null);
-                    }
                     Lock lock = info.lock;
                     lock.lock();
                     locks.add(lock);
@@ -737,7 +735,7 @@ public class DistributedMessageServer implements Shutdowneable {
         List<LinkedList<PublishMessage>> getMessagesOfAllRetentionPriorities() {
             return allMessages;
         }
-
+        
         void onMessageRelayed(ClientMachineId clientMachineId, PublishMessage publishMessage) {
             setMaxIndexIfLarger(clientMachineId, publishMessage.getRelayFields().getServerIndex());
         }
@@ -758,6 +756,13 @@ public class DistributedMessageServer implements Shutdowneable {
             if (index == null || newMax.compareTo(index) > 0) {
                 highestIndexMap.put(clientMachineId, newMax);
             }
+        }
+
+        /**
+         * Function must be called with lock held.
+         */
+        void removeClientMachineState(ClientMachineId clientMachineId) {
+            highestIndexMap.remove(clientMachineId);
         }
     }
     
