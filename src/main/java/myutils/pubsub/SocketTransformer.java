@@ -19,6 +19,7 @@ import java.nio.channels.SocketChannel;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutionException;
 import myutils.pubsub.MessageClasses.MessageBase;
 
 
@@ -47,7 +48,7 @@ public class SocketTransformer {
      * @throws IllegalArgumentException if the message is too long
      * @throws IOException if there was an IOException writing to the object output stream or to the socket
      */
-    static void writeMessageToSocket(MessageBase message, short maxLength, SocketChannel channel) throws IOException {
+    public void writeMessageToSocket(MessageBase message, short maxLength, SocketChannel channel) throws IOException {
         var byteBuffers = new MessageAsByteBuffers(message, maxLength); 
         writeAllBytes(channel, byteBuffers.lengthBuffer);
         writeAllBytes(channel, byteBuffers.messageBuffer);
@@ -68,7 +69,7 @@ public class SocketTransformer {
      * @return a MessageBase
      * @throws IOException if there was an IOException or the class not found or does not inherit from MessageBase
      */
-    static MessageBase readMessageFromSocket(SocketChannel channel) throws IOException {
+    public MessageBase readMessageFromSocket(SocketChannel channel) throws IOException {
         ByteBuffer lengthBuffer = ByteBuffer.allocate(Short.BYTES);
         readAllBytes(channel, lengthBuffer);
         short length = lengthBuffer.getShort();
@@ -97,11 +98,11 @@ public class SocketTransformer {
      * @param message the message to write, which must implement Serializable
      * @param maxLength the maximum length of the message
      * @param channel the channel to write to
-     * @return a completion stage resolved with null if the write was succesful, or rejected with the exception if the write failed
+     * @return a completion stage resolved with null if the write was successful, or rejected with the exception if the write failed
      * @throws IllegalArgumentException if the message is too long
      * @throws IOException if there was an IOException writing to the object output stream or to the socket
      */
-    public static CompletionStage<Void> writeMessageToSocketAsync(MessageBase message, short maxLength, AsynchronousSocketChannel channel) throws IOException {
+    public CompletionStage<Void> writeMessageToSocketAsync(MessageBase message, short maxLength, AsynchronousSocketChannel channel) throws IOException {
         CompletableFuture<Void> futureMessage = new CompletableFuture<>();
         var byteBuffers = new MessageAsByteBuffers(message, maxLength); 
         channel.write(byteBuffers.lengthBuffer, NULL, new CompletionHandler<>() {
@@ -135,9 +136,9 @@ public class SocketTransformer {
      * The next bytes are the message.
      * 
      * @param channel the channel to read from
-     * @return a completion stage resolved with the MessageBase if the read was succesful, or rejected with the exception if the read failed
+     * @return a completion stage resolved with the MessageBase if the read was successful, or rejected with the exception if the read failed
      */
-    public static CompletionStage<MessageBase> readMessageFromSocketAsync(AsynchronousSocketChannel channel) {
+    public CompletionStage<MessageBase> readMessageFromSocketAsync(AsynchronousSocketChannel channel) {
         CompletableFuture<MessageBase> futureMessage = new CompletableFuture<>();
         ByteBuffer lengthBuffer = ByteBuffer.allocate(Short.BYTES);
         channel.read(lengthBuffer, NULL, new CompletionHandler<>() {
@@ -220,7 +221,7 @@ public class SocketTransformer {
      * The list includes EOFException and all of the channel exceptions that have the word Closed in them.
      */
     static boolean isClosed(Throwable throwable) {
-        Throwable e = throwable instanceof CompletionException ? throwable.getCause() : throwable;
+        Throwable e = throwable instanceof CompletionException || throwable instanceof ExecutionException ? throwable.getCause() : throwable;
         return e instanceof EOFException || e instanceof ClosedChannelException;
     }
 }

@@ -54,7 +54,7 @@ public class TestUtil {
      * @throws CancellationException if any future was cancelled
      * @throws CompletionException if any future encountered an ExecutionException or InterruptedException
      */
-    public static <T> List<T> toList(Collection<? extends Future<T>> collection) {
+    public static <T> List<T> toList(Collection<? super Future<T>> collection) {
         List<T> list = new ArrayList<>(collection.size());
         for (var future : collection) {
             try {
