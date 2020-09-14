@@ -17,7 +17,9 @@ import java.lang.System.Logger.Level;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.net.StandardSocketOptions;
+import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.NetworkChannel;
+import java.nio.channels.SocketChannel;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -30,6 +32,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -1501,6 +1504,96 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     }
     
     /**
+     * In this test a client sends calls CreatePublisher but the write fails.
+     * Verify that the client retries with exponential backoff up to a maximum of 3 times.
+     * 
+     * <p>The next part of the test has the server send a CreatePublisher to the client but the write fails.
+     * Verify that the server retries with exponential backoff up to a maximum of 3 times.
+     */
+    @Test
+    void testRetryWhenWriteFails() throws IOException, NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException {
+        List<CompletableFuture<?>> startFutures = new ArrayList<>();
+
+        var serverSocketTransformer = new TestSocketTransformer();
+        var centralServer = createServer(serverSocketTransformer, CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, Collections.emptyMap());
+        startFutures.add(centralServer.start());
+        
+        var clientSocketTransformer = new TestSocketTransformer();
+        var client1 = createClient(clientSocketTransformer,
+                                   1,
+                                   PubSub.defaultQueueCreator(),
+                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                   "client1",
+                                   "localhost",
+                                   30001,
+                                   CENTRAL_SERVER_HOST,
+                                   CENTRAL_SERVER_PORT);
+        var client2 = createClient(1,
+                                   PubSub.defaultQueueCreator(),
+                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                   "client2",
+                                   "localhost",
+                                   30002,
+                                   CENTRAL_SERVER_HOST,
+                                   CENTRAL_SERVER_PORT);
+        startFutures.add(client1.start());
+        startFutures.add(client2.start());
+        
+        waitFor(startFutures);
+        sleep(250);
+        assertEquals("Identification=1", client1.getTypesSent());
+        assertEquals("Identification=1", client2.getTypesSent());
+        assertEquals("Identification=2", centralServer.getValidTypesReceived());
+        assertEquals("ClientAccepted=2", centralServer.getTypesSent());
+        assertEquals("ClientAccepted=1", client1.getTypesReceived());
+        assertEquals("ClientAccepted=1", client2.getTypesReceived());
+    
+        // client1 create publisher but we mock so that each call to send message to server fails
+        // verify that there is one initial send and 3 retries but all fail
+        System.out.println("Test client retry");
+        clientSocketTransformer.setWriteFailCount(4);
+        client1.createPublisher("hello", CloneableString.class);
+        sleep(1000 + 2000 + 4000); // 1st retry after 1sec, 2nd retry after 2sec, 3rd and last retry after 4sec
+        sleep(250); // wait for message to reach client
+        assertEquals("Identification=1", client1.getTypesSent());
+        assertEquals("Identification=1", client2.getTypesSent());
+        assertEquals("Identification=2", centralServer.getValidTypesReceived());
+        assertEquals("ClientAccepted=2", centralServer.getTypesSent());
+        assertEquals("ClientAccepted=1", client1.getTypesReceived());
+        assertEquals("ClientAccepted=1", client2.getTypesReceived());
+        assertThat(client1.getSendFailures(), Matchers.contains("CreatePublisher: TestSocketTransformer write failure"));
+
+        // client1 create publisher but this time the send to server succeeds
+        client1.clearSendFailures();
+        client1.createPublisher("world", CloneableString.class);
+        sleep(250); // wait for message to reach client
+        assertEquals("CreatePublisher=1, Identification=1", client1.getTypesSent());
+        assertEquals("Identification=1", client2.getTypesSent());
+        assertEquals("CreatePublisher=1, Identification=2", centralServer.getValidTypesReceived());
+        assertEquals("ClientAccepted=2", centralServer.getTypesSent());
+        assertEquals("ClientAccepted=1", client1.getTypesReceived());
+        assertEquals("ClientAccepted=1", client2.getTypesReceived());
+        assertThat(client1.getSendFailures(), Matchers.empty());
+        assertThat(centralServer.getSendFailures(), Matchers.empty());
+        
+        // client2 subscribes to the topic, which sends the createPublisher command down to them
+        // we mock so that each call to send message to server fails
+        // verify that there is one initial send and 3 retries but all fail on the server
+        System.out.println("Test server retry");
+        serverSocketTransformer.setWriteFailCount(4);
+        client2.subscribe("world", "ClientTwoSubscriber", CloneableString.class, str -> { });
+        sleep(1000 + 2000 + 4000); // 1st retry after 1sec, 2nd retry after 2sec, 3rd and last retry after 4sec
+        sleep(250); // wait for message to reach client
+        assertEquals("CreatePublisher=1, Identification=1", client1.getTypesSent());
+        assertEquals("AddSubscriber=1, Identification=1", client2.getTypesSent());
+        assertEquals("AddSubscriber=1, CreatePublisher=1, Identification=2", centralServer.getValidTypesReceived());
+        assertEquals("ClientAccepted=2", centralServer.getTypesSent());
+        assertEquals("ClientAccepted=1", client1.getTypesReceived());
+        assertEquals("ClientAccepted=1", client2.getTypesReceived());
+        assertThat(centralServer.getSendFailures(), Matchers.contains("CreatePublisher: TestSocketTransformer write failure"));
+    }
+    
+    /**
      * Call the main function in a new process.
      * The main function starts a server and client, but does not shut them down.
      * The shutdown hook called when the process ends will shut down the client and server.
@@ -1588,6 +1681,18 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     }
     
     /**
+     * Create a server and add it to list of objects to be shutdown at the end of the test function.
+     */
+    private TestDistributedMessageServer createServer(SocketTransformer socketTransformer,
+                                                      String host,
+                                                      int port,
+                                                      Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
+        var server = new TestDistributedMessageServer(socketTransformer, host, port, mostRecentMessagesToKeep);
+        addShutdown(server);
+        return server;
+    }
+    
+    /**
      * Create a client and add it to list of objects to be shutdown at the end of the test function.
      */
     private TestDistributedSocketPubSub createClient(int numInMemoryHandlers,
@@ -1599,6 +1704,31 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                                      String messageServerHost,
                                                      int messageServerPort) throws IOException {
         var client = new TestDistributedSocketPubSub(numInMemoryHandlers,
+                                                     queueCreator,
+                                                     subscriptionMessageExceptionHandler,
+                                                     machineId,
+                                                     localServer,
+                                                     localPort,
+                                                     messageServerHost,
+                                                     messageServerPort);
+        addShutdown(client);
+        return client;
+    }
+    
+    /**
+     * Create a client and add it to list of objects to be shutdown at the end of the test function.
+     */
+    private TestDistributedSocketPubSub createClient(SocketTransformer socketTransformer,
+                                                     int numInMemoryHandlers,
+                                                     Supplier<Queue<Subscriber>> queueCreator,
+                                                     SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler,
+                                                     String machineId,
+                                                     String localServer,
+                                                     int localPort,
+                                                     String messageServerHost,
+                                                     int messageServerPort) throws IOException {
+        var client = new TestDistributedSocketPubSub(socketTransformer,
+                                                     numInMemoryHandlers,
                                                      queueCreator,
                                                      subscriptionMessageExceptionHandler,
                                                      machineId,
@@ -1625,13 +1755,21 @@ public class DistributedPubSubIntegrationTest extends TestBase {
 
 
 class TestDistributedMessageServer extends DistributedMessageServer {
-    private List<String> validTypesReceived = Collections.synchronizedList(new ArrayList<>());
-    private List<String> typesSent = Collections.synchronizedList(new ArrayList<>());
+    private final List<String> validTypesReceived = Collections.synchronizedList(new ArrayList<>());
+    private final List<String> typesSent = Collections.synchronizedList(new ArrayList<>());
+    private final List<String> sendFailures = Collections.synchronizedList(new ArrayList<>());
 
     public TestDistributedMessageServer(String host,
                                         int port,
                                         Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
         super(host, port, mostRecentMessagesToKeep);
+    }
+
+    public TestDistributedMessageServer(SocketTransformer socketTransformer,
+                                        String host,
+                                        int port,
+                                        Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
+        super(socketTransformer, host, port, mostRecentMessagesToKeep);
     }
 
     /**
@@ -1655,6 +1793,12 @@ class TestDistributedMessageServer extends DistributedMessageServer {
         validTypesReceived.add(message.getClass().getSimpleName());
     }
     
+    @Override
+    protected void onSendMessageFailed(MessageBase message, Throwable e) {
+        super.onSendMessageFailed(message, e);
+        sendFailures.add(message.getClass().getSimpleName() + ": " + e.getMessage());
+    }
+    
     int getCountValidTypesReceived() {
         return validTypesReceived.size();
     }
@@ -1674,15 +1818,20 @@ class TestDistributedMessageServer extends DistributedMessageServer {
     Set<ClientMachine> getRemoteClients() {
         return getRemoteClientsStream().collect(Collectors.toSet());
     }
+    
+    List<String> getSendFailures() {
+        return sendFailures;
+    }
 }
 
 
 class TestDistributedSocketPubSub extends DistributedSocketPubSub {
+    private final List<String> typesReceived = Collections.synchronizedList(new ArrayList<>());
+    private final List<String> typesSent = Collections.synchronizedList(new ArrayList<>());
+    private final List<String> sendFailures = Collections.synchronizedList(new ArrayList<>());
     private boolean enableTamperServerIndex;
-    private List<String> typesReceived = Collections.synchronizedList(new ArrayList<>());
-    private List<String> typesSent = Collections.synchronizedList(new ArrayList<>());
     private Consumer<MessageBase> messageReceivedListener;
-
+ 
     public TestDistributedSocketPubSub(int numInMemoryHandlers,
                                        Supplier<Queue<Subscriber>> queueCreator,
                                        SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler,
@@ -1692,6 +1841,24 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
                                        String messageServerHost,
                                        int messageServerPort) throws IOException {
         super(new PubSubConstructorArgs(numInMemoryHandlers, queueCreator, subscriptionMessageExceptionHandler),
+              machineId,
+              localServer,
+              localPort,
+              messageServerHost,
+              messageServerPort);
+    }
+
+    public TestDistributedSocketPubSub(SocketTransformer socketTransformer,
+                                       int numInMemoryHandlers,
+                                       Supplier<Queue<Subscriber>> queueCreator,
+                                       SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler,
+                                       String machineId,
+                                       String localServer,
+                                       int localPort,
+                                       String messageServerHost,
+                                       int messageServerPort) throws IOException {
+        super(socketTransformer,
+              new PubSubConstructorArgs(numInMemoryHandlers, queueCreator, subscriptionMessageExceptionHandler),
               machineId,
               localServer,
               localPort,
@@ -1740,6 +1907,12 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
         }
     }
 
+    @Override
+    protected void onSendMessageFailed(MessageBase message, IOException e) {
+        super.onSendMessageFailed(message, e);
+        sendFailures.add(message.getClass().getSimpleName() + ": " + e.getMessage());
+    }
+    
     int getCountTypesReceived() {
         return typesReceived.size();
     }
@@ -1755,4 +1928,65 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
     String getTypesSent() {
         return countElementsInListByType(typesSent);
     }
+    
+    void clearSendFailures() {
+        sendFailures.clear();
+    }
+    
+    List<String> getSendFailures() {
+        return sendFailures;
+    }
+}
+
+
+/**
+ * Test socket transformer that ensures first N calls to read/write fail.
+ */
+class TestSocketTransformer extends SocketTransformer {
+    private int writeFailCount;
+    private int writeCount;
+    private int readFailCount;
+    private int readCount;
+    
+    void setWriteFailCount(int writeFailCount) {
+        this.writeFailCount = writeFailCount;
+        this.writeCount = 0;
+    }
+    
+    void setReadFailCountCount(int readFailCount) {
+        this.readFailCount = readFailCount;
+        this.readCount = 0;
+    }
+    
+    @Override
+    public void writeMessageToSocket(MessageBase message, short maxLength, SocketChannel channel) throws IOException {
+        if (++writeCount <= writeFailCount) {
+            throw new IOException("TestSocketTransformer write failure");
+        }
+        super.writeMessageToSocket(message, maxLength, channel);
+    }
+
+    @Override
+    public MessageBase readMessageFromSocket(SocketChannel channel) throws IOException {
+        if (++readCount <= readFailCount) {
+            throw new IOException("TestSocketTransformer read failure");
+        }
+        return super.readMessageFromSocket(channel);
+    }
+
+    @Override
+    public CompletionStage<Void> writeMessageToSocketAsync(MessageBase message, short maxLength, AsynchronousSocketChannel channel) throws IOException {
+        if (++writeCount <= writeFailCount) {
+            return CompletableFuture.failedFuture(new IOException("TestSocketTransformer write failure"));
+        }
+        return super.writeMessageToSocketAsync(message, maxLength, channel);
+    }
+
+    @Override
+    public CompletionStage<MessageBase> readMessageFromSocketAsync(AsynchronousSocketChannel channel) {
+        if (++readCount <= readFailCount) {
+            return CompletableFuture.failedFuture(new IOException("TestSocketTransformer read failure"));
+        }
+        return super.readMessageFromSocketAsync(channel);
+    }    
 }

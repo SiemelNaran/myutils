@@ -85,6 +85,7 @@ public class DistributedSocketPubSub extends PubSub {
     private static final ThreadLocal<RelayMessageBase> threadLocalRemoteRelayMessage = new ThreadLocal<>();
     private static final int MAX_RETRIES = 3;
     
+    private final SocketTransformer socketTransformer;
     private final String messageServerHost;
     private final int messageServerPort;
     private final ClientMachineId machineId;
@@ -136,12 +137,23 @@ public class DistributedSocketPubSub extends PubSub {
      * @see PubSubConstructorArgs for the arguments to the super class
      */
     public DistributedSocketPubSub(PubSubConstructorArgs baseArgs,
-                                   @Nullable String machineId,
-                                   String localServer,
-                                   int localPort,
-                                   String messageServerHost,
-                                   int messageServerPort) throws IOException {
+            @Nullable String machineId,
+            String localServer,
+            int localPort,
+            String messageServerHost,
+            int messageServerPort) throws IOException {
+        this(new SocketTransformer(), baseArgs, machineId, localServer, localPort, messageServerHost, messageServerPort);
+    }
+    
+    DistributedSocketPubSub(SocketTransformer socketTransformer,
+                            PubSubConstructorArgs baseArgs,
+                            @Nullable String machineId,
+                            String localServer,
+                            int localPort,
+                            String messageServerHost,
+                            int messageServerPort) throws IOException {
         super(baseArgs);
+        this.socketTransformer = socketTransformer;
         this.messageServerHost = messageServerHost;
         this.messageServerPort = messageServerPort;
         this.machineId = new ClientMachineId(machineId != null ? machineId : InetAddress.getLocalHost().getHostName());
@@ -322,7 +334,7 @@ public class DistributedSocketPubSub extends PubSub {
         private void send(CompletableFuture<Void> future, MessageBase message, int retry) {
             try {
                 DistributedSocketPubSub.this.onBeforeSendMessage(message);
-                SocketTransformer.writeMessageToSocket(message, Short.MAX_VALUE, getInternalSocketChannel());
+                socketTransformer.writeMessageToSocket(message, Short.MAX_VALUE, getInternalSocketChannel());
                 DistributedSocketPubSub.this.onMessageSent(message);
                 future.complete(null);
             } catch (IOException e) {
@@ -338,6 +350,7 @@ public class DistributedSocketPubSub extends PubSub {
                     retryExecutor.schedule(() -> send(future, message, nextRetry), delayMillis, TimeUnit.MILLISECONDS);
                 } else {
                     future.completeExceptionally(e);
+                    onSendMessageFailed(message, e);
                 }
             } catch (RuntimeException | Error e) {
                 LOGGER.log(Level.WARNING,
@@ -405,7 +418,7 @@ public class DistributedSocketPubSub extends PubSub {
             var channel = getInternalSocketChannel();
             while (channel.isConnected()) {
                 try {
-                    MessageBase message = SocketTransformer.readMessageFromSocket(channel);
+                    MessageBase message = socketTransformer.readMessageFromSocket(channel);
                     LOGGER.log(
                         Level.TRACE,
                         () -> String.format("Received message from server: clientMachine=%s, %s",
@@ -628,6 +641,13 @@ public class DistributedSocketPubSub extends PubSub {
      * For example, the unit tests override this to record the number of messages received.
      */
     protected void onMessageReceived(MessageBase message) {
+    }
+    
+    /**
+     * Override this function to do something when sending a message failed.
+     * For example, the unit tests override this to record the failures.
+     */
+    protected void onSendMessageFailed(MessageBase message, IOException e) {
     }
 
 

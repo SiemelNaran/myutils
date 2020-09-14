@@ -31,6 +31,7 @@ import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
@@ -120,6 +121,7 @@ public class DistributedMessageServer implements Shutdowneable {
     private static final int NUM_CHANNEL_THREADS = 4;
     private static final int MAX_RETRIES = 3;
 
+    private final SocketTransformer socketTransformer;
     private final String host;
     private final int port;
     private final AsynchronousServerSocketChannel asyncServerSocketChannel;
@@ -697,6 +699,7 @@ public class DistributedMessageServer implements Shutdowneable {
 
     /**
      * A data structure to store the most recently published messages in memory.
+     * Each topic has one instance of MostRecentMessages.
      * We only save the last N messages of each retention priority.
      */
     private static class MostRecentMessages {
@@ -775,6 +778,14 @@ public class DistributedMessageServer implements Shutdowneable {
      * @throws IOException if there is an error opening a socket (but no error if the host:port is already in use)
      */
     public DistributedMessageServer(@Nonnull String host, int port, Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
+        this(new SocketTransformer(), host, port, mostRecentMessagesToKeep);
+    }
+    
+    DistributedMessageServer(SocketTransformer socketTransformer,
+                             @Nonnull String host,
+                             int port,
+                             Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
+        this.socketTransformer = socketTransformer;
         this.host = host;
         this.port = port;
         this.asyncServerSocketChannel = AsynchronousServerSocketChannel.open();
@@ -862,7 +873,7 @@ public class DistributedMessageServer implements Shutdowneable {
 
         @Override
         public void run() {
-            SocketTransformer.readMessageFromSocketAsync(channel)
+            socketTransformer.readMessageFromSocketAsync(channel)
                              .thenApplyAsync(message -> handle(channel, message), channelExecutor)
                              .whenComplete(this::onComplete);
         }
@@ -1198,14 +1209,15 @@ public class DistributedMessageServer implements Shutdowneable {
     }
     
     private void handleDownload(ClientMachine clientMachine, DownloadPublishedMessages download) {
-        download("download",
-                 clientMachine,
-                 download.getTopics(),
-                 0 /*minClientTimestamp*/,
-                 download.getStartServerIndexInclusive(),
-                 download.getEndServerIndexInclusive(),
-                 exception -> send(exception.toInvalidMessage(), clientMachine, 0),
-                 /*forceLogging*/ true);
+        download(
+            "download",
+            clientMachine,
+            download.getTopics(),
+            0 /*minClientTimestamp*/,
+            download.getStartServerIndexInclusive(),
+            download.getEndServerIndexInclusive(),
+            exception -> send(exception.toInvalidMessage(), clientMachine, 0),
+            /*forceLogging*/ true);
     }
     
     private void download(@Nonnull String trigger,
@@ -1256,7 +1268,7 @@ public class DistributedMessageServer implements Shutdowneable {
      */
     private void internalSend(MessageBase message, ClientMachine clientMachine, int retry) {
         try {
-            SocketTransformer.writeMessageToSocketAsync(message, Short.MAX_VALUE, clientMachine.getChannel())
+            socketTransformer.writeMessageToSocketAsync(message, Short.MAX_VALUE, clientMachine.getChannel())
                              .thenAcceptAsync(unused -> afterMessageSent(clientMachine, message), channelExecutor)
                              .exceptionally(e -> retrySend(message, clientMachine, retry, e))
                              .thenRun(() -> sendQueuedMessageOrReleaseLock(clientMachine));
@@ -1278,8 +1290,8 @@ public class DistributedMessageServer implements Shutdowneable {
         onMessageSent(message);
     }
     
-    private Void retrySend(MessageBase message, ClientMachine clientMachine, int retry, Throwable e) {
-        // COVERAGE: missed
+    private Void retrySend(MessageBase message, ClientMachine clientMachine, int retry, Throwable throwable) {
+        Throwable e = throwable instanceof CompletionException || throwable instanceof ExecutionException ? throwable.getCause() : throwable;
         boolean retryDone = retry >= MAX_RETRIES || SocketTransformer.isClosed(e) || e instanceof RuntimeException || e instanceof Error;
         Level level = retryDone ? Level.WARNING : Level.TRACE;
         LOGGER.log(level, () -> String.format("Send message failed: clientMachine=%s, retry=%d, retryDone=%b",
@@ -1289,6 +1301,8 @@ public class DistributedMessageServer implements Shutdowneable {
             int nextRetry = retry + 1;
             long delayMillis = computeExponentialBackoff(1000, nextRetry, MAX_RETRIES);
             retryExecutor.schedule(() -> send(message, clientMachine, nextRetry), delayMillis, TimeUnit.MILLISECONDS);
+        } else {
+            onSendMessageFailed(message, e);
         }
         return null;
     }
@@ -1335,6 +1349,13 @@ public class DistributedMessageServer implements Shutdowneable {
      * Basically, it is not called for class types that the server does not support.
      */
     protected void onValidMessageReceived(MessageBase message) {
+    }
+    
+    /**
+     * Override this function to do something when sending a message failed.
+     * For example, the unit tests override this to record the failures.
+     */
+    protected void onSendMessageFailed(MessageBase message, Throwable e) {
     }
     
     protected final Stream<ClientMachine> getRemoteClientsStream() {
