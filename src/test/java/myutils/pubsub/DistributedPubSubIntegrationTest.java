@@ -73,14 +73,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
  * - MessageClasses.java
  * - SocketTransformer.java
  * - PubSubUtils.java
- * - ServerIndex.javva
+ * - ServerIndex.java
  * - RetentionPriority.java
  */
 @ExtendWith(LogFailureToConsoleTestWatcher.class)
 public class DistributedPubSubIntegrationTest extends TestBase {
     private static final System.Logger LOGGER = System.getLogger(DistributedPubSubIntegrationTest.class.getName());
 
-    private LinkedList<Shutdowneable> shutdowns = new LinkedList<>();
+    private final LinkedList<Shutdowneable> shutdowns = new LinkedList<>();
     
     @BeforeEach
     void beforeEachTest() {
@@ -99,58 +99,50 @@ public class DistributedPubSubIntegrationTest extends TestBase {
 
     private static final String CENTRAL_SERVER_HOST = "localhost";
     private static final int CENTRAL_SERVER_PORT = 2101;
-    
+
     /**
      * Test duplicate clients.
      * 2 clients subscribe with the same name.
      * Verify that the second one is ignored.
      */
     @Test
-    void testDuplicateClient() throws IOException, InterruptedException, ExecutionException, TimeoutException {
-        List<CompletableFuture<?>> startFutures = new ArrayList<>();
+    void testDuplicateClient() throws IOException {
+        List<CompletableFuture<Void>> startFutures = new ArrayList<>();
 
-        var centralServer = createServer(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, Collections.emptyMap());
+        var centralServer = createServer(Collections.emptyMap());
         startFutures.add(centralServer.start());
-        
-        var client1 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+
+        var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   "localhost",
-                                   30001,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   30001);
 
         startFutures.add(client1.start());
         waitFor(startFutures);
-        sleep(250); 
-        
+        sleep(250);
+
         assertEquals("Identification=1", centralServer.getValidTypesReceived());
         assertEquals("ClientAccepted=1", centralServer.getTypesSent());
         assertThat(centralServer.getRemoteClients().stream().map(clientMachine -> clientMachine.getMachineId().toString()).collect(Collectors.toList()),
                    Matchers.contains("client1"));
 
         // start a new client on a different port but with the same machine name
-        var client1b = createClient(1,
-                                    PubSub.defaultQueueCreator(),
+        var client1b = createClient(PubSub.defaultQueueCreator(),
                                     PubSub.defaultSubscriptionMessageExceptionHandler(),
                                     "client1", // same name as above
-                                    "localhost",
-                                    30002,
-                                    CENTRAL_SERVER_HOST,
-                                    CENTRAL_SERVER_PORT);
+                                    30002);
         var startClient1bFuture = client1b.start();
         sleep(250); // wait for server to receive message
-        
-        assertExceptionFromCallable(() -> startClient1bFuture.get(), ExecutionException.class,
+
+        assertExceptionFromCallable(startClient1bFuture::get, ExecutionException.class,
                                     "myutils.pubsub.PubSubException: Duplicate channel: clientMachine=client1, otherClientChannel=/127.0.0.1:30001");
-        
+
         assertEquals("Identification=2", centralServer.getValidTypesReceived());
         assertEquals("ClientAccepted=1, ClientRejected=1", centralServer.getTypesSent());
         assertThat(centralServer.getRemoteClients().stream().map(clientMachine -> clientMachine.getMachineId().toString()).collect(Collectors.toList()),
                    Matchers.contains("client1"));
     }
-    
+
     /**
      * Basic test for publish + subscribe + unsubscribe.
      * There is a central server, 3 clients, and 4 subscribers (2 subscribers in client2).
@@ -164,40 +156,31 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     @Test
     void testSubscribeAndPublishAndUnsubscribe() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
-        List<CompletableFuture<?>> startFutures = new ArrayList<>();
-        
-        var centralServer = createServer(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, Collections.emptyMap());
+        List<CompletableFuture<Void>> startFutures = new ArrayList<>();
+
+        var centralServer = createServer(Collections.emptyMap());
         startFutures.add(centralServer.start());
         sleep(250); // time to let the central server start
-        
-        var client1 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+
+        var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   "localhost",
-                                   30001,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   30001
+        );
         startFutures.add(client1.start());
-        
-        var client2 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+
+        var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
-                                   "localhost",
-                                   30002,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   30002
+        );
         startFutures.add(client2.start());
-        
-        var client3 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+
+        var client3 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client3",
-                                   "localhost",
-                                   30003,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   30003
+        );
         startFutures.add(client3.start());
 
         waitFor(startFutures);
@@ -223,7 +206,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals(1, client2.getCountTypesReceived());
         assertEquals(2, client3.getCountTypesSent()); // +1
         assertEquals(1, client3.getCountTypesReceived());
-        
+
         // create publisher on client1
         // this will get replicated to client2 and client3
         Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
@@ -233,12 +216,12 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals(3, client1.getCountTypesSent()); // +1 sent CreatePublisher
         assertEquals(1, client1.getCountTypesReceived());
         assertEquals(3, client2.getCountTypesSent());
-        assertEquals(2, client2.getCountTypesReceived()); // +1 received CreaetPublisher
+        assertEquals(2, client2.getCountTypesReceived()); // +1 received CreatePublisher
         assertEquals(2, client3.getCountTypesSent());
-        assertEquals(2, client3.getCountTypesReceived()); // +1 received CreaetPublisher
+        assertEquals(2, client3.getCountTypesReceived()); // +1 received CreatePublisher
         assertTrue(client2.getPublisher("hello").isPresent());
         assertTrue(client3.getPublisher("hello").isPresent());
-        
+
         // publish two messages
         // the subscriber running on client1 will pick it up immediately
         // the message will get replicated to all other subscribers, and in client2 the system will call publisher2.publish(), and similarly for client3
@@ -253,7 +236,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals(4, client2.getCountTypesReceived()); // +2
         assertEquals(2, client3.getCountTypesSent());
         assertEquals(4, client3.getCountTypesReceived()); // +2
-        
+
         // explicitly shutdown client3 (normally this happens in the shutdown hook)
         // publish two messages
         // as client3 has been shutdown it will not receive the message
@@ -265,7 +248,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals(4, client2.getCountTypesReceived());
         assertEquals(2, client3.getCountTypesSent());
         assertEquals(4, client3.getCountTypesReceived());
-        words.clear();       
+        words.clear();
         publisher1.publish(new CloneableString("three"));
         publisher1.publish(new CloneableString("four"));
         sleep(250); // time to let messages be published to remote clients
@@ -277,7 +260,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals(6, client2.getCountTypesReceived()); // +2
         assertEquals(2, client3.getCountTypesSent());
         assertEquals(4, client3.getCountTypesReceived());
-        
+
         // unsubscribe one subscriber in client2
         // publish two messages
         // as client2 still has one subscriber in the "hello" topic, client2 still receives the message
@@ -293,7 +276,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         publisher1.publish(new CloneableString("five"));
         publisher1.publish(new CloneableString("six"));
         sleep(250); // time to let messages be published to client2
-        System.out.println("after unsubsribe2b: actual=" + words);
+        System.out.println("after unsubscribe2b: actual=" + words);
         assertThat(words, Matchers.containsInAnyOrder("five-s1", "six-s1", "five-s2a", "six-s2a"));
         assertEquals(9, client1.getCountTypesSent()); // +2
         assertEquals(1, client1.getCountTypesReceived());
@@ -317,7 +300,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         publisher1.publish(new CloneableString("seven"));
         publisher1.publish(new CloneableString("eight"));
         sleep(250); // time to let messages be published to client2
-        System.out.println("after unsubsribe2a: actual=" + words);
+        System.out.println("after unsubscribe2a: actual=" + words);
         assertThat(words, Matchers.containsInAnyOrder("seven-s1", "eight-s1"));
         assertEquals(11, client1.getCountTypesSent()); // +2
         assertEquals(1, client1.getCountTypesReceived());
@@ -336,19 +319,14 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     void testDownloadMessages() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         
-        var centralServer = createServer(CENTRAL_SERVER_HOST,
-                                         CENTRAL_SERVER_PORT,
-                                         Map.of(RetentionPriority.HIGH, 2, RetentionPriority.MEDIUM, 3));
+        var centralServer = createServer(Map.of(RetentionPriority.HIGH, 2, RetentionPriority.MEDIUM, 3));
         waitFor(Collections.singletonList(centralServer.start()));
         
-        var client1 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   "localhost",
-                                   31001,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   31001
+        );
         waitFor(Collections.singletonList(client1.start()));
         assertEquals(1, client1.getCountTypesSent());
         assertEquals(1, client1.getCountTypesReceived());
@@ -392,14 +370,11 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals(1, client1.getCountTypesReceived());
 
         words.clear();
-        var client2 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
-                                   "localhost",
-                                   31002,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   31002
+        );
         assertFalse(client2.getPublisher("hello").isPresent());
         waitFor(Collections.singletonList(client2.start()));
         sleep(250); // time to let client2 start
@@ -477,22 +452,17 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      */
     @Test
     void testRestartFails() throws IOException, InterruptedException, ExecutionException {
-        var centralServer = createServer(CENTRAL_SERVER_HOST,
-                                         CENTRAL_SERVER_PORT,
-                                         Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
+        var centralServer = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         Future<Void> startCentralServerFuture = centralServer.start();
         assertFalse(startCentralServerFuture.isDone());
         startCentralServerFuture.get(); // assert no exception
         assertTrue(startCentralServerFuture.isDone());
 
-        var client1 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   "localhost",
-                                   31001,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   31001
+        );
         Future<Void> startClient1Future = client1.start();
         assertFalse(startClient1Future.isDone());
         startClient1Future.get(); // assert no exception
@@ -505,44 +475,39 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertFalse(startCentralServerFutureAgain.isDone());
         sleep(250); // time to let server start        
         assertTrue(startCentralServerFutureAgain.isDone());
-        assertExceptionFromCallable(() -> startCentralServerFutureAgain.get(), ExecutionException.class, "java.nio.channels.AlreadyConnectedException");
+        assertExceptionFromCallable(startCentralServerFutureAgain::get, ExecutionException.class, "java.nio.channels.AlreadyConnectedException");
 
         // start another server on same host:port
-        var centralServerDuplicateAddress = createServer(CENTRAL_SERVER_HOST,
-                                                         CENTRAL_SERVER_PORT,
-                                                         Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
+        var centralServerDuplicateAddress = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         Future<Void> startServerDuplicateAddressFuture = centralServerDuplicateAddress.start();
         sleep(250); // time to let server start        
         assertTrue(startServerDuplicateAddressFuture.isDone());
-        assertExceptionFromCallable(() -> startServerDuplicateAddressFuture.get(), ExecutionException.class, "java.net.BindException: Address already in use");
+        assertExceptionFromCallable(startServerDuplicateAddressFuture::get, ExecutionException.class, "java.net.BindException: Address already in use");
         
         // start client again
         Future<Void> startClient1FutureAgain = client1.start();
         sleep(250); // time to let client start        
         assertTrue(startClient1FutureAgain.isDone());
-        assertExceptionFromCallable(() -> startClient1FutureAgain.get(), ExecutionException.class, "java.nio.channels.AlreadyConnectedException");
+        assertExceptionFromCallable(startClient1FutureAgain::get, ExecutionException.class, "java.nio.channels.AlreadyConnectedException");
 
         // connect another client on same host:port
-        var clientDuplicateAddress = createClient(1,
-                                                  PubSub.defaultQueueCreator(),
+        var clientDuplicateAddress = createClient(PubSub.defaultQueueCreator(),
                                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
                                                   "client2",
-                                                  "localhost",
-                                                  31001,
-                                                  CENTRAL_SERVER_HOST,
-                                                  CENTRAL_SERVER_PORT);
+                                                  31001
+        );
         Future<Void> startClientDuplicateAddressFuture = clientDuplicateAddress.start();
         sleep(250); // time to let client start        
         assertTrue(startClientDuplicateAddressFuture.isDone());
-        assertExceptionFromCallable(() -> startClientDuplicateAddressFuture.get(), ExecutionException.class, "java.net.BindException: Cannot assign requested address");
+        assertExceptionFromCallable(startClientDuplicateAddressFuture::get, ExecutionException.class, "java.net.BindException: Cannot assign requested address");
         
         client1.shutdown();
         sleep(250); // time to let client shutdown
-        assertExceptionFromCallable(() -> client1.start(), RejectedExecutionException.class);
+        assertExceptionFromCallable(client1::start, RejectedExecutionException.class);
 
         centralServer.shutdown();
         sleep(250); // time to let server shutdown
-        assertExceptionFromCallable(() -> centralServer.start(), RejectedExecutionException.class);
+        assertExceptionFromCallable(centralServer::start, RejectedExecutionException.class);
     }
 
     /**
@@ -554,14 +519,11 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     void testCreateClientBeforeServer() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         
-        var client1 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   "localhost",
-                                   31001,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   31001
+        );
         CompletableFuture<Void> client1Started = client1.start();
         Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
         client1.subscribe("hello", "ClientOneSubscriber", CloneableString.class, str -> words.add(str.append("-s1")));
@@ -570,14 +532,11 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals(0, client1.getCountTypesSent());
         assertEquals(0, client1.getCountTypesReceived());
         
-        var client2 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
-                                   "localhost",
-                                   31002,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   31002
+        );
         client2.start();
         client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a")));
         client2.subscribe("hello", "ClientTwoSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b")));
@@ -604,9 +563,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertFalse(client1Started.isDone());
 
         words.clear();
-        var centralServer = createServer(CENTRAL_SERVER_HOST,
-                                         CENTRAL_SERVER_PORT,
-                                         Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
+        var centralServer = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         centralServer.start();
         sleep(250); // time to let the central server start
         sleep(2000); // clients try to connect to the server every 1sec, 2sec, 4sec, 8sec, 8sec so more time to let the clients connect to the central server
@@ -631,31 +588,23 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     void testShutdownAndStartNewServer1() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         
-        var centralServer = createServer(CENTRAL_SERVER_HOST,
-                                         CENTRAL_SERVER_PORT,
-                                         Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
+        var centralServer = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         waitFor(Collections.singletonList(centralServer.start()));
         
-        var client1 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   "localhost",
-                                   31001,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   31001
+        );
         waitFor(Collections.singletonList(client1.start()));
         assertEquals(1, client1.getCountTypesSent()); // Identification
         assertEquals(1, client1.getCountTypesReceived()); // ClientAccepted
         
-        var client2 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
-                                   "localhost",
-                                   31002,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   31002
+        );
         waitFor(Collections.singletonList(client2.start()));
         assertEquals(1, client1.getCountTypesSent());
         assertEquals(1, client1.getCountTypesReceived());
@@ -665,9 +614,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         centralServer.shutdown();
         sleep(250); // time to let central server shutdown
 
-        var centralServer2 = createServer(CENTRAL_SERVER_HOST,
-                                          CENTRAL_SERVER_PORT,
-                                          Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
+        var centralServer2 = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         waitFor(Collections.singletonList(centralServer2.start()));
         sleep(1000); // time to let client1 connect to server as part of exponential backoff
                 
@@ -704,41 +651,33 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     void testShutdownAndStartNewServer2() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         
-        var centralServer = createServer(CENTRAL_SERVER_HOST,
-                                         CENTRAL_SERVER_PORT,
-                                         Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
+        var centralServer = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         waitFor(Collections.singletonList(centralServer.start()));
         
-        var client1 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   "localhost",
-                                   31001,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   31001
+        );
         waitFor(Collections.singletonList(client1.start()));
         Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
         client1.subscribe("hello", "ClientOneSubscriber", CloneableString.class, str -> words.add(str.append("-s1")));
         sleep(250); // wait for CreatePublisher and AddSubscriber commands to be sent
-        assertEquals(3, client1.getCountTypesSent()); // Identification, CreatePublisher, AddSubsriber
+        assertEquals(3, client1.getCountTypesSent()); // Identification, CreatePublisher, AddSubscriber
         assertEquals(1, client1.getCountTypesReceived()); // ClientAccepted
-        
-        var client2 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+
+        var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
-                                   "localhost",
-                                   31002,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   31002
+        );
         waitFor(Collections.singletonList(client2.start()));
         client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a")));
         client2.subscribe("hello", "ClientTwoSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b")));
         sleep(250); // wait for CreatePublisher and AddSubscriber commands to be sent
         assertEquals(3, client1.getCountTypesSent());
         assertEquals(1, client1.getCountTypesReceived());
-        assertEquals(3, client2.getCountTypesSent()); // Identification, AddSubsriber, AddSubsriber
+        assertEquals(3, client2.getCountTypesSent()); // Identification, AddSubscriber, AddSubscriber
         assertEquals(2, client2.getCountTypesReceived()); // ClientAccepted, CreatePublisher
         assertTrue(client2.getPublisher("hello").isPresent());
         
@@ -761,9 +700,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         
         words.clear();
         
-        var centralServer2 = createServer(CENTRAL_SERVER_HOST,
-                                          CENTRAL_SERVER_PORT,
-                                          Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
+        var centralServer2 = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         waitFor(Collections.singletonList(centralServer2.start()));
         sleep(1000); // time to let client1 connect to server as part of exponential backoff
         sleep(250); // more time to let messages be downloaded to client2
@@ -784,37 +721,29 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      * Verify that the new client receives publisher and subscriber already exist errors when they call createPublisher and addSubscriber.
      */
     @Test
-    void testSthutdownAndStartNewClient() throws IOException {
+    void testShutdownAndStartNewClient() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
 
-        var centralServer = createServer(CENTRAL_SERVER_HOST,
-                                         CENTRAL_SERVER_PORT,
-                                         Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 8));
+        var centralServer = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 8));
         waitFor(Collections.singletonList(centralServer.start()));
         
         {
             // START: this block of code almost the same as in both blocks
 
-            List<CompletableFuture<?>> startFutures = new ArrayList<>();
+            List<CompletableFuture<Void>> startFutures = new ArrayList<>();
             
-            var client1 = createClient(1,
-                                       PubSub.defaultQueueCreator(),
+            var client1 = createClient(PubSub.defaultQueueCreator(),
                                        PubSub.defaultSubscriptionMessageExceptionHandler(),
                                        "client1",
-                                       "localhost",
-                                       31001,
-                                       CENTRAL_SERVER_HOST,
-                                       CENTRAL_SERVER_PORT);
+                                       31001
+            );
             startFutures.add(client1.start());
             
-            var client2 = createClient(1,
-                                       PubSub.defaultQueueCreator(),
+            var client2 = createClient(PubSub.defaultQueueCreator(),
                                        PubSub.defaultSubscriptionMessageExceptionHandler(),
                                        "client2",
-                                       "localhost",
-                                       31002,
-                                       CENTRAL_SERVER_HOST,
-                                       CENTRAL_SERVER_PORT);
+                                       31002
+            );
             startFutures.add(client2.start());
 
             waitFor(startFutures);
@@ -878,26 +807,20 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         {
             // START: this block of code almost the same as in both blocks
             
-            List<CompletableFuture<?>> startFutures = new ArrayList<>();
+            List<CompletableFuture<Void>> startFutures = new ArrayList<>();
 
-            var client1 = createClient(1,
-                                       PubSub.defaultQueueCreator(),
+            var client1 = createClient(PubSub.defaultQueueCreator(),
                                        PubSub.defaultSubscriptionMessageExceptionHandler(),
                                        "client1",
-                                       "localhost",
-                                       31001,
-                                       CENTRAL_SERVER_HOST,
-                                       CENTRAL_SERVER_PORT);
+                                       31001
+            );
             startFutures.add(client1.start());
             
-            var client2 = createClient(1,
-                                       PubSub.defaultQueueCreator(),
+            var client2 = createClient(PubSub.defaultQueueCreator(),
                                        PubSub.defaultSubscriptionMessageExceptionHandler(),
                                        "client2",
-                                       "localhost",
-                                       31002,
-                                       CENTRAL_SERVER_HOST,
-                                       CENTRAL_SERVER_PORT);
+                                       31002
+            );
             startFutures.add(client2.start());
 
             waitFor(startFutures);
@@ -937,7 +860,6 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         codeCoverageForClientMachine(centralServer.getRemoteClients().toArray(new ClientMachine[0]));
     }
     
-    @SuppressWarnings("unlikely-arg-type")
     private void codeCoverageForClientMachine(ClientMachine[] remoteClients) {
         assertEquals(2, remoteClients.length);
         Arrays.sort(remoteClients, Comparator.comparing(ClientMachine::getMachineId));
@@ -946,8 +868,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals("client1", client1.getMachineId().toString());
         assertEquals("client2", client2.getMachineId().toString());
         assertNotEquals(client1.hashCode(), client2.hashCode());
-        assertFalse(client1.equals(null));
-        assertFalse(client1.equals("abc")); // unlikely-arg-type
+        assertNotEquals(client1, null);
         // ClientMachine::toString is mostly used for how the debugger renders the object
         assertEquals("client1@/127.0.0.1:31001", client1.toString());
         assertEquals("client2@/127.0.0.1:31002", client2.toString());
@@ -961,36 +882,28 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      * Verify that all 4 server generated ids are unique and increasing.
      */
     @Test
-    void testServerGeneratedId() throws IOException, InterruptedException, ExecutionException, TimeoutException {
+    void testServerGeneratedId() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
-        List<CompletableFuture<?>> startFutures = new ArrayList<>();
+        List<CompletableFuture<Void>> startFutures = new ArrayList<>();
 
-        var centralServer = createServer(CENTRAL_SERVER_HOST,
-                                         CENTRAL_SERVER_PORT,
-                                         Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
+        var centralServer = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         startFutures.add(centralServer.start());
         
-        var client1 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   "localhost",
-                                   31001,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   31001
+        );
         startFutures.add(client1.start());
         Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
         client1.subscribe("hello", "ClientOneSubscriber", CloneableString.class, str -> words.add(str.append("-s1")));
         
         var serverIndexesOfPublishMessageReceivedInClient2 = Collections.synchronizedList(new ArrayList<ServerIndex>());
-        var client2 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
-                                   "localhost",
-                                   31002,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   31002
+        );
         client2.setMessageReceivedListener(message -> {
             if (message instanceof PublishMessage) {
                 ServerIndex serverIndex = PubSubUtils.extractServerIndex(message);
@@ -1023,9 +936,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         centralServer.shutdown();
         sleep(250); // time to let central server shutdown
 
-        var centralServer2 = createServer(CENTRAL_SERVER_HOST,
-                                          CENTRAL_SERVER_PORT,
-                                          Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
+        var centralServer2 = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         waitFor(Collections.singletonList(centralServer2.start()));
         sleep(1000); // time to let client1 connect to server as part of exponential backoff
         
@@ -1057,45 +968,37 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     @Test
     void testServerIgnoresMessagesAlreadyProcessed() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
-        List<CompletableFuture<?>> startFutures = new ArrayList<>();
+        List<CompletableFuture<Void>> startFutures = new ArrayList<>();
 
-        var centralServer = createServer(CENTRAL_SERVER_HOST,
-                                         CENTRAL_SERVER_PORT,
-                                         Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
+        var centralServer = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         startFutures.add(centralServer.start());
         
-        var client1 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   "localhost",
-                                   31001,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   31001
+        );
         startFutures.add(client1.start());
         Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
         client1.subscribe("hello", "ClientOneSubscriber", CloneableString.class, str -> words.add(str.append("-s1")));
         waitFor(startFutures);
         sleep(250); // wait for CreatePublisher and AddSubscriber commands to be sent
         assertTrue(client1.getPublisher("hello").isPresent());
-        assertEquals(3, client1.getCountTypesSent()); // Identification, CreatePublisher, AddSubsriber
+        assertEquals(3, client1.getCountTypesSent()); // Identification, CreatePublisher, AddSubscriber
         assertEquals(1, client1.getCountTypesReceived()); // ClientAccepted
 
-        var client2 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
-                                   "localhost",
-                                   31002,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   31002
+        );
         waitFor(Collections.singletonList(client2.start()));
         client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a")));
         client2.subscribe("hello", "ClientTwoSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b")));
         sleep(250); // wait for CreatePublisher and AddSubscriber commands to be sent
         assertEquals(3, client1.getCountTypesSent());
         assertEquals(1, client1.getCountTypesReceived());
-        assertEquals(3, client2.getCountTypesSent()); // Identification, AddSubsriber, AddSubsriber
+        assertEquals(3, client2.getCountTypesSent()); // Identification, AddSubscriber, AddSubscriber
         assertEquals(2, client2.getCountTypesReceived()); // ClientAccepted, CreatePublisher
         assertTrue(client2.getPublisher("hello").isPresent());
         
@@ -1131,7 +1034,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      * With N as 1000 the test takes about 1.0sec at INFO level, and 2.9sec at TRACE level<br/>
      *
      * <p>On my MacOS 2.3GHz Intel Core i9,<br/>
-     * With N as 1000 the test takes about 1.9sec.<br/>
+     * With N as 1000 the test takes about 2.1sec.<br/>
      * 
      * <p>This test also tests that the server does not encounter WritePendingException
      * (where we one thread sends a message to a client while another is also sending a message to it).
@@ -1139,49 +1042,37 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     @Test
     void testPerformance() throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
-        List<CompletableFuture<?>> startFutures = new ArrayList<>();
+        List<CompletableFuture<Void>> startFutures = new ArrayList<>();
         
-        var centralServer = createServer(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, Collections.emptyMap());
+        var centralServer = createServer(Collections.emptyMap());
         startFutures.add(centralServer.start());
         
-        var client1 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   "localhost",
-                                   30001,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   30001
+        );
         startFutures.add(client1.start());
         
-        var client2 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
-                                   "localhost",
-                                   30002,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   30002
+        );
         startFutures.add(client2.start());
         
-        var client3 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client3 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client3",
-                                   "localhost",
-                                   30003,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   30003
+        );
         startFutures.add(client3.start());
 
-        var client4 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client4 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client4",
-                                   "localhost",
-                                   30004,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   30004
+        );
         startFutures.add(client4.start());
 
         waitFor(startFutures);
@@ -1242,69 +1133,51 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      */
     @Test
     void testFetchPublisher() throws IOException, InterruptedException, ExecutionException, TimeoutException {
-        List<CompletableFuture<?>> startFutures = new ArrayList<>();
+        List<CompletableFuture<Void>> startFutures = new ArrayList<>();
 
-        var centralServer = createServer(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, Collections.emptyMap());
+        var centralServer = createServer(Collections.emptyMap());
         startFutures.add(centralServer.start());
         
-        var client1 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   "localhost",
-                                   30001,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   30001
+        );
         startFutures.add(client1.start());
         
-        var client2 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
-                                   "localhost",
-                                   30002,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   30002
+        );
         startFutures.add(client2.start());
         
-        var client3 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client3 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client3",
-                                   "localhost",
-                                   30003,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   30003
+        );
         startFutures.add(client3.start());
 
-        var client4 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client4 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client4",
-                                   "localhost",
-                                   30004,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   30004
+        );
         startFutures.add(client4.start());
         
-        var client5 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client5 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client5",
-                                   "localhost",
-                                   30005,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   30005
+        );
         startFutures.add(client5.start());
         
-        var client6 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client6 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client6",
-                                   "localhost",
-                                   30006,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   30006
+        );
         startFutures.add(client6.start());
 
         waitFor(startFutures);
@@ -1367,14 +1240,11 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals("ClientAccepted=6, CreatePublisher=4", centralServer.getTypesSent());
         
         // Upon being shut down and a new one started, a CreatePublisher is not sent to the client machine with the same name.
-        var client6b = createClient(1,
-                                    PubSub.defaultQueueCreator(),
+        var client6b = createClient(PubSub.defaultQueueCreator(),
                                     PubSub.defaultSubscriptionMessageExceptionHandler(),
                                     "client6",
-                                    "localhost",
-                                    30006,
-                                    CENTRAL_SERVER_HOST,
-                                    CENTRAL_SERVER_PORT);
+                                    30006
+        );
         waitFor(Collections.singletonList(client6b.start()));
         sleep(250); // wait for central server to send any CreatePublisher commands
         assertEquals("AddSubscriber=4, CreatePublisher=1, FetchPublisher=5, Identification=7", centralServer.getValidTypesReceived()); // unchanged: i.e. FetchPublisher for client6 not sent
@@ -1388,19 +1258,16 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      */
     @Test
     void testUnsupportedMessages() throws IOException, NoSuchFieldException, NoSuchMethodException, SecurityException, IllegalAccessException, IllegalArgumentException, InvocationTargetException {
-        List<CompletableFuture<?>> startFutures = new ArrayList<>();
+        List<CompletableFuture<Void>> startFutures = new ArrayList<>();
         
-        var centralServer = createServer(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, Collections.emptyMap());
+        var centralServer = createServer(Collections.emptyMap());
         startFutures.add(centralServer.start());
         
-        var client1 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   "localhost",
-                                   30001,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   30001
+        );
         startFutures.add(client1.start());
         
         waitFor(startFutures);
@@ -1465,19 +1332,16 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      */
     @Test
     void testRequestIdentification() throws IOException, NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException {
-        List<CompletableFuture<?>> startFutures = new ArrayList<>();
+        List<CompletableFuture<Void>> startFutures = new ArrayList<>();
 
-        var centralServer = createServer(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, Collections.emptyMap());
+        var centralServer = createServer(Collections.emptyMap());
         startFutures.add(centralServer.start());
         
-        var client1 = createClient(1,
-                                   PubSub.defaultQueueCreator(),
+        var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   "localhost",
-                                   30001,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   30001
+        );
         startFutures.add(client1.start());
         
         waitFor(startFutures);
@@ -1511,31 +1375,24 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      * Verify that the server retries with exponential backoff up to a maximum of 3 times.
      */
     @Test
-    void testRetryWhenWriteFails() throws IOException, NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException {
-        List<CompletableFuture<?>> startFutures = new ArrayList<>();
+    void testRetryWhenWriteFails() throws IOException, SecurityException, IllegalArgumentException  {
+        List<CompletableFuture<Void>> startFutures = new ArrayList<>();
 
         var serverSocketTransformer = new TestSocketTransformer();
-        var centralServer = createServer(serverSocketTransformer, CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, Collections.emptyMap());
+        var centralServer = createServer(serverSocketTransformer, Collections.emptyMap());
         startFutures.add(centralServer.start());
         
         var clientSocketTransformer = new TestSocketTransformer();
         var client1 = createClient(clientSocketTransformer,
-                                   1,
                                    PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   "localhost",
-                                   30001,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
-        var client2 = createClient(1,
+                                   30001);
+        var client2 = createClient(new SocketTransformer(),
                                    PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
-                                   "localhost",
-                                   30002,
-                                   CENTRAL_SERVER_HOST,
-                                   CENTRAL_SERVER_PORT);
+                                   30002);
         startFutures.add(client1.start());
         startFutures.add(client2.start());
         
@@ -1551,7 +1408,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         // client1 create publisher but we mock so that each call to send message to server fails
         // verify that there is one initial send and 3 retries but all fail
         System.out.println("Test client retry");
-        clientSocketTransformer.setWriteFailCount(4);
+        clientSocketTransformer.setWriteFailCount();
         client1.createPublisher("hello", CloneableString.class);
         sleep(1000 + 2000 + 4000); // 1st retry after 1sec, 2nd retry after 2sec, 3rd and last retry after 4sec
         sleep(250); // wait for message to reach client
@@ -1580,7 +1437,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         // we mock so that each call to send message to server fails
         // verify that there is one initial send and 3 retries but all fail on the server
         System.out.println("Test server retry");
-        serverSocketTransformer.setWriteFailCount(4);
+        serverSocketTransformer.setWriteFailCount();
         client2.subscribe("world", "ClientTwoSubscriber", CloneableString.class, str -> { });
         sleep(1000 + 2000 + 4000); // 1st retry after 1sec, 2nd retry after 2sec, 3rd and last retry after 4sec
         sleep(250); // wait for message to reach client
@@ -1656,8 +1513,8 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         Object subscriberEndpoint1b = constructor.newInstance(clientMachineId1, "SubscriberName1", 1500L);
         Object subscriberEndpoint2 = constructor.newInstance(clientMachineId1, "SubscriberName2", 500L);
         Object subscriberEndpoint3 = constructor.newInstance(clientMachineId2, "SubscriberName3", 500L);
-        
-        assertFalse(subscriberEndpoint1.equals(null));
+
+        assertNotEquals(subscriberEndpoint1, null);
         
         assertEquals(subscriberEndpoint1, subscriberEndpoint1b);
         assertEquals(subscriberEndpoint1.hashCode(), subscriberEndpoint1b.hashCode());
@@ -1672,10 +1529,8 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     /**
      * Create a server and add it to list of objects to be shutdown at the end of the test function.
      */
-    private TestDistributedMessageServer createServer(String host,
-                                                      int port,
-                                                      Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
-        var server = new TestDistributedMessageServer(host, port, mostRecentMessagesToKeep);
+    private TestDistributedMessageServer createServer(Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
+        var server = new TestDistributedMessageServer(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, mostRecentMessagesToKeep);
         addShutdown(server);
         return server;
     }
@@ -1684,10 +1539,8 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      * Create a server and add it to list of objects to be shutdown at the end of the test function.
      */
     private TestDistributedMessageServer createServer(SocketTransformer socketTransformer,
-                                                      String host,
-                                                      int port,
                                                       Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
-        var server = new TestDistributedMessageServer(socketTransformer, host, port, mostRecentMessagesToKeep);
+        var server = new TestDistributedMessageServer(socketTransformer, CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, mostRecentMessagesToKeep);
         addShutdown(server);
         return server;
     }
@@ -1695,22 +1548,18 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     /**
      * Create a client and add it to list of objects to be shutdown at the end of the test function.
      */
-    private TestDistributedSocketPubSub createClient(int numInMemoryHandlers,
-                                                     Supplier<Queue<Subscriber>> queueCreator,
+    private TestDistributedSocketPubSub createClient(Supplier<Queue<Subscriber>> queueCreator,
                                                      SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler,
                                                      String machineId,
-                                                     String localServer,
-                                                     int localPort,
-                                                     String messageServerHost,
-                                                     int messageServerPort) throws IOException {
-        var client = new TestDistributedSocketPubSub(numInMemoryHandlers,
+                                                     int localPort) throws IOException {
+        var client = new TestDistributedSocketPubSub(1,
                                                      queueCreator,
                                                      subscriptionMessageExceptionHandler,
                                                      machineId,
-                                                     localServer,
+                                                     "localhost",
                                                      localPort,
-                                                     messageServerHost,
-                                                     messageServerPort);
+                                                     DistributedPubSubIntegrationTest.CENTRAL_SERVER_HOST,
+                                                     DistributedPubSubIntegrationTest.CENTRAL_SERVER_PORT);
         addShutdown(client);
         return client;
     }
@@ -1719,23 +1568,19 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      * Create a client and add it to list of objects to be shutdown at the end of the test function.
      */
     private TestDistributedSocketPubSub createClient(SocketTransformer socketTransformer,
-                                                     int numInMemoryHandlers,
                                                      Supplier<Queue<Subscriber>> queueCreator,
                                                      SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler,
                                                      String machineId,
-                                                     String localServer,
-                                                     int localPort,
-                                                     String messageServerHost,
-                                                     int messageServerPort) throws IOException {
+                                                     int port) throws IOException {
         var client = new TestDistributedSocketPubSub(socketTransformer,
-                                                     numInMemoryHandlers,
+                                                     1,
                                                      queueCreator,
                                                      subscriptionMessageExceptionHandler,
                                                      machineId,
-                                                     localServer,
-                                                     localPort,
-                                                     messageServerHost,
-                                                     messageServerPort);
+                                                     "localhost",
+                                                     port,
+                                                     DistributedPubSubIntegrationTest.CENTRAL_SERVER_HOST,
+                                                     DistributedPubSubIntegrationTest.CENTRAL_SERVER_PORT);
         addShutdown(client);
         return client;
     }
@@ -1744,7 +1589,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         shutdowns.add(s);
     }
     
-    private static void waitFor(List<CompletableFuture<?>> futures) {
+    private static <T> void waitFor(List<CompletableFuture<T>> futures) {
         Instant startTime = Instant.now();
         TestUtil.toList(futures);
         Duration timeTaken = Duration.between(startTime, Instant.now());
@@ -1948,13 +1793,13 @@ class TestSocketTransformer extends SocketTransformer {
     private int readFailCount;
     private int readCount;
     
-    void setWriteFailCount(int writeFailCount) {
-        this.writeFailCount = writeFailCount;
+    void setWriteFailCount() {
+        this.writeFailCount = 4;
         this.writeCount = 0;
     }
     
-    void setReadFailCountCount(int readFailCount) {
-        this.readFailCount = readFailCount;
+    void setReadFailCount() {
+        this.readFailCount = 1;
         this.readCount = 0;
     }
     
