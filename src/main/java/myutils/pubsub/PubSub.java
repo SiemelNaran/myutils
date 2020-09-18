@@ -250,6 +250,7 @@ public abstract class PubSub implements Shutdowneable {
         if (publisher != null) {
             throw new IllegalStateException("publisher already exists: topic=" + topic);
         }
+        onBeforeAddPublisher(topic, publisherClass);
         publisher = newPublisher(topic, publisherClass);
         topicMap.put(topic, publisher);
         addDeferredSubscribers(publisher);
@@ -301,7 +302,10 @@ public abstract class PubSub implements Shutdowneable {
                                                                                   @Nonnull Class<T> subscriberClass,
                                                                                   @Nonnull Consumer<T> callback) {
         Consumer<CloneableObject<?>> callbackCasted = (Consumer<CloneableObject<?>>) callback;
-        Supplier<Subscriber> subscriberCreator = () -> newSubscriber(topic, subscriberName, subscriberClass, callbackCasted);
+        Supplier<Subscriber> subscriberCreator = () -> {
+            onBeforeAddSubscriber(topic, subscriberName, subscriberClass);
+            return newSubscriber(topic, subscriberName, subscriberClass, callbackCasted);
+        };
         final Subscriber subscriber;
         var publisher = topicMap.get(topic);
         if (publisher != null) {
@@ -363,6 +367,14 @@ public abstract class PubSub implements Shutdowneable {
         }
     }
     
+    private <T> void onBeforeAddPublisher(String topic, Class<T> publisherClass) {
+        verifyTopicChars(topic);
+    }
+    
+    protected <T> void onBeforeAddSubscriber(String topic, String subscriberName, Class<T> subscriberClass) {
+        verifyTopicChars(topic);
+    }
+
     protected void onPublisherAdded(Publisher publisher) {
     }
     
@@ -372,6 +384,26 @@ public abstract class PubSub implements Shutdowneable {
     protected void onRemoveSubscriber(Subscriber subscriber) {
     }
 
+    /**
+     * Verify if the topic name matches the naming standards.
+     * The default implementation is that the name must match <code>\w</code>.
+     */
+    protected void verifyTopicChars(String topic) {
+        topic.codePoints().forEach(c -> {
+            if (!(Character.isAlphabetic(c) || Character.isDigit(c) || c == '_')) {
+                throw new TopicRegexException(topic, "\\w");
+            }
+        });
+    }
+    
+    public static class TopicRegexException extends PubSubException {
+        private static final long serialVersionUID = 1L;
+
+        public TopicRegexException(String topic, String regex) {
+            super("Topic does not match regex: topic=" + topic + ", regex=" + regex);
+        }
+    }
+    
     private void startThreads() {
         for (int i = 0; i < executorService.getCorePoolSize(); i++) {
             executorService.submit(new Listener(masterList, lock, notEmpty, subscriptionMessageExceptionHandler));

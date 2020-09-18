@@ -1,6 +1,8 @@
 package myutils.pubsub;
 
+
 import static myutils.TestUtil.assertException;
+import static myutils.TestUtil.assertExceptionFromCallable;
 import static myutils.TestUtil.sleep;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -528,6 +530,14 @@ public class InMemoryPubSubIntegrationTest {
         java.lang.RuntimeException: Test Exception
         at myutils.util.concurrent.InMemoryPubSubIntegrationTest.lambda$testExceptionOnSubscriberCallback$12(InMemoryPubSubIntegrationTest.java:243)
         */
+    }
+    
+    @Test
+    @SuppressWarnings("checkstyle:LineLength")
+    void testInvalidTopicName() {
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
+        assertExceptionFromCallable(() -> pubSub.createPublisher("hello-world", CloneableString.class), PubSub.TopicRegexException.class, "Topic does not match regex: topic=hello-world, regex=\\w");
+        assertExceptionFromCallable(() -> pubSub.subscribe("hello-world", "InvalidSubscriber", CloneableString.class, unused -> { }), PubSub.TopicRegexException.class, "Topic does not match regex: topic=hello-world, regex=\\w");
     }
 
     public static class TestEvent implements CloneableObject<TestEvent> {
