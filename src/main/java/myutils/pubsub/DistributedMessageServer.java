@@ -1273,7 +1273,6 @@ public class DistributedMessageServer implements Shutdowneable {
                              .exceptionally(e -> retrySend(message, clientMachine, retry, e))
                              .thenRun(() -> sendQueuedMessageOrReleaseLock(clientMachine));
         } catch (IOException e) {
-            // COVERAGE: missed
             LOGGER.log(Level.WARNING,
                        String.format("Send message failed: clientMachine=%s, retry=%d, retryDone=%b",
                                      clientMachine.getMachineId(), retry, true),

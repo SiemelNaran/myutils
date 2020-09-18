@@ -663,8 +663,8 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
         client1.subscribe("hello", "ClientOneSubscriber", CloneableString.class, str -> words.add(str.append("-s1")));
         sleep(250); // wait for CreatePublisher and AddSubscriber commands to be sent
-        assertEquals(3, client1.getCountTypesSent()); // Identification, CreatePublisher, AddSubscriber
-        assertEquals(1, client1.getCountTypesReceived()); // ClientAccepted
+        assertEquals("AddSubscriber=1, CreatePublisher=1, Identification=1", client1.getTypesSent());
+        assertEquals("ClientAccepted=1", client1.getTypesReceived());
 
         var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
@@ -675,10 +675,10 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a")));
         client2.subscribe("hello", "ClientTwoSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b")));
         sleep(250); // wait for CreatePublisher and AddSubscriber commands to be sent
-        assertEquals(3, client1.getCountTypesSent());
-        assertEquals(1, client1.getCountTypesReceived());
-        assertEquals(3, client2.getCountTypesSent()); // Identification, AddSubscriber, AddSubscriber
-        assertEquals(2, client2.getCountTypesReceived()); // ClientAccepted, CreatePublisher
+        assertEquals("AddSubscriber=1, CreatePublisher=1, Identification=1", client1.getTypesSent());
+        assertEquals("ClientAccepted=1", client1.getTypesReceived());
+        assertEquals("AddSubscriber=2, Identification=1", client2.getTypesSent());
+        assertEquals("ClientAccepted=1, CreatePublisher=1", client2.getTypesReceived());
         assertTrue(client2.getPublisher("hello").isPresent());
         
         centralServer.shutdown();
@@ -692,10 +692,10 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         publisher1.publish(new CloneableString("two"));
         sleep(250); // time to let messages be published to remote clients
         System.out.println("right after central server shutdown: actual=" + words);
-        assertEquals(3, client1.getCountTypesSent());
-        assertEquals(1, client1.getCountTypesReceived());
-        assertEquals(3, client2.getCountTypesSent());
-        assertEquals(2, client2.getCountTypesReceived());
+        assertEquals("AddSubscriber=1, CreatePublisher=1, Identification=1", client1.getTypesSent());
+        assertEquals("ClientAccepted=1", client1.getTypesReceived());
+        assertEquals("AddSubscriber=2, Identification=1", client2.getTypesSent());
+        assertEquals("ClientAccepted=1, CreatePublisher=1", client2.getTypesReceived());
         assertThat(words, Matchers.containsInAnyOrder("one-s1", "two-s1"));
         
         words.clear();
@@ -707,10 +707,10 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         
         // client1 will send the message to centralServer2 which relays it to the other clients
         System.out.println("after central server restarted: actual=" + words);
-        assertEquals(8, client1.getCountTypesSent()); // +5 = Identification, CreatePublisher, AddSubscriber, PublishMessage, PublishMessage
-        assertEquals(2, client1.getCountTypesReceived());
-        assertEquals(6, client2.getCountTypesSent()); // +3 = Identification, AddSubscriber, AddSubscriber
-        assertEquals(5, client2.getCountTypesReceived()); // +3 = ClientAccepted, PublishMessage, PublishMessage
+        assertEquals("AddSubscriber=2, CreatePublisher=2, Identification=2, PublishMessage=2", client1.getTypesSent()); // +5 = Identification, CreatePublisher, AddSubscriber, PublishMessage, PublishMessage
+        assertEquals("ClientAccepted=2", client1.getTypesReceived());
+        assertEquals("AddSubscriber=4, Identification=2", client2.getTypesSent());
+        assertEquals("ClientAccepted=2, CreatePublisher=1, PublishMessage=2", client2.getTypesReceived());
         assertThat(words, Matchers.containsInAnyOrder("one-s2a", "one-s2b", "two-s2a", "two-s2b"));
     }
     
