@@ -22,6 +22,7 @@ import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -376,16 +377,27 @@ public class DistributedSocketPubSub extends PubSub {
         }
 
         private void addSubscriber(long createdAtTimestamp, @Nonnull String topic, @Nonnull String subscriberName, boolean isResend) {
-            internalPutMessage(new AddSubscriber(createdAtTimestamp, topic, subscriberName, true, isResend));
+            var addSubscriber = new AddSubscriber(createdAtTimestamp, topic, subscriberName, true, isResend);
+            Map<String, String> customProperties = new LinkedHashMap<>();
+            DistributedSocketPubSub.this.addCustomPropertiesForAddSubscriber(customProperties, topic, subscriberName);
+            addSubscriber.setCustomProperties(customProperties);
+            internalPutMessage(addSubscriber);
         }
 
         private void removeSubscriber(@Nonnull String topic, @Nonnull String subscriberName) {
-            internalPutMessage(new RemoveSubscriber(topic, subscriberName));
+            var removeSubscriber = new RemoveSubscriber(topic, subscriberName);
+            Map<String, String> customProperties = new LinkedHashMap<>();
+            DistributedSocketPubSub.this.addCustomPropertiesForRemoveSubscriber(customProperties, topic, subscriberName);
+            removeSubscriber.setCustomProperties(customProperties);
+            internalPutMessage(removeSubscriber);
         }
 
         private void createPublisher(long createdAtTimestamp, @Nonnull String topic, @Nonnull Class<?> publisherClass, RelayFields relayFields, boolean isResend) {
             var createPublisher = new CreatePublisher(createdAtTimestamp, localMaxMessage.incrementAndGet(), topic, publisherClass, isResend);
             createPublisher.setRelayFields(relayFields);
+            Map<String, String> customProperties = new LinkedHashMap<>();
+            DistributedSocketPubSub.this.addCustomPropertiesForCreatePublisher(customProperties, topic);
+            createPublisher.setCustomProperties(customProperties);
             internalPutMessage(createPublisher);
         }
 
@@ -878,6 +890,26 @@ public class DistributedSocketPubSub extends PubSub {
         resolveFetchPublisher(publisher);
     }
     
+    /**
+     * Add custom properties to a create publisher command.
+     * Derived classes may add a secret key. The implementor should override a corresponding function in the server class to verify the secret key.
+     */
+    protected void addCustomPropertiesForCreatePublisher(Map<String, String> customProperties, String topic) {
+    }
+
+    /**
+     * Add custom properties to an add subscriber command.
+     * Derived classes may add a secret key. The implementor should override a corresponding function in the server class to verify the secret key.
+     */
+    protected void addCustomPropertiesForAddSubscriber(Map<String, String> customProperties, String topic, String subscriberName) {
+    }
+
+    /**
+     * Add custom properties to a remove subscriber command.
+     * Derived classes may add a secret key. The implementor should override a corresponding function in the server class to verify the secret key.
+     */
+    protected void addCustomPropertiesForRemoveSubscriber(Map<String, String> customProperties, String topic, String subscriberName) {
+    }
 
     /**
      * Remove the subscriber from the central server.

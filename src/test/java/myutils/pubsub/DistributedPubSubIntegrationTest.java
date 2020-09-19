@@ -47,11 +47,16 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+
+import javax.annotation.Nullable;
+
 import myutils.LogFailureToConsoleTestWatcher;
 import myutils.TestBase;
 import myutils.TestUtil;
 import myutils.pubsub.DistributedMessageServer.ClientMachine;
 import myutils.pubsub.InMemoryPubSubIntegrationTest.CloneableString;
+import myutils.pubsub.MessageClasses.AddOrRemoveSubscriber;
+import myutils.pubsub.MessageClasses.CreatePublisher;
 import myutils.pubsub.MessageClasses.MessageBase;
 import myutils.pubsub.MessageClasses.PublishMessage;
 import myutils.pubsub.MessageClasses.RelayFields;
@@ -432,6 +437,134 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals(12, client2.getCountTypesReceived()); // unchanged, client2 does not receive messages as it is no longer subscribed
         assertEquals(2, client3.getCountTypesSent());
         assertEquals(5, client3.getCountTypesReceived());
+    }
+    
+    /**
+     * This test demonstrates how to use secret keys to allow only clients with the secret key to create a publisher and subscriber to a topic.
+     */
+    @Test
+    void testSecurity() throws IOException {
+        List<String> words = Collections.synchronizedList(new ArrayList<>());
+        List<CompletableFuture<Void>> startFutures = new ArrayList<>();
+
+        var centralServer = createServer(Collections.emptyMap());
+        centralServer.setSecurityKey("hello123");
+        startFutures.add(centralServer.start());
+
+        var client1 = createClient(PubSub.defaultQueueCreator(),
+                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                   "client1",
+                                   30001);
+        startFutures.add(client1.start());
+
+        var client2 = createClient(PubSub.defaultQueueCreator(),
+                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                   "client2",
+                                   30002);
+        startFutures.add(client2.start());
+
+        waitFor(startFutures);
+        assertEquals("Identification=1", client1.getTypesSent());
+        assertEquals("Identification=1", client1.getTypesReceived());
+        assertEquals("Identification=1", client2.getTypesSent());
+        assertEquals("Identification=1", client2.getTypesReceived());
+
+        // create publisher on client1 but the security key is not present or invalid so it fails
+        Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
+        sleep(250); // time to let publisher be propagated to all other clients
+        assertTrue(publisher1.isInvalid());
+        assertNull(client1.getPublisher("hello"));
+        assertEquals("CreatePublisher=1, Identification=1", client1.getTypesSent());
+        assertEquals("Identification=1, CreatePublisherInvalid=1", client1.getTypesReceived());
+        assertEquals("Identification=1", client2.getTypesSent());
+        assertEquals("Identification=1", client2.getTypesReceived());
+
+        // create publisher on client1 succesfully
+        publisher1 = client1.createPublisher("hello", CloneableString.class);
+        client1.enableSecurityKey("hello123");
+        sleep(250); // time to let publisher be propagated to all other clients
+        assertFalse(publisher1.isInvalid());
+        assertSame(publisher1, client1.getPublisher("hello"));
+        assertEquals("CreatePublisher=2, Identification=1", client1.getTypesSent());
+        assertEquals("Identification=1, CreatePublisherInvalid=1, PublisherCreated=1", client1.getTypesReceived());
+        assertEquals("Identification=1", client2.getTypesSent());
+        assertEquals("Identification=1", client2.getTypesReceived());
+
+        // client2 subscribes but the security key is not present or invalid so it fails
+        Subscriber subscriber2 = client2.subscribe("hello", "ClientTwoSubscriber", CloneableString.class, str -> words.add(str.append("-s2")));
+        sleep(250); // time to let subscriber be sent to server
+        assertTrue(subscriber2.isInvalid());
+        assertEquals("CreatePublisher=2, Identification=1", client1.getTypesSent());
+        assertEquals("Identification=1, CreatePublisherFailed=1, PublisherCreated=1", client1.getTypesReceived());
+        assertEquals("AddSubscriber=1, Identification=1", client2.getTypesSent());
+        assertEquals("AddSubscriberFailed=1, Identification=1", client2.getTypesReceived());
+
+        // publish a message from client1
+        // verify that client2 does not receive it
+        publisher1.publish(new CloneableString("one"));
+        sleep(250); // time to let messages be published to remote clients
+        System.out.println("after publish 'one': actual=" + words);
+        assertThat(words, Matchers.empty());
+
+        // client2 subscribes successfully
+        // verify that message "one" is sent over
+        client2.enableSecurityKey("hello123");
+        subscriber2 = client2.subscribe("hello", "ClientTwoSubscriber", CloneableString.class, str -> words.add(str.append("-s2")));
+        sleep(250); // time to let subscriber be sent to server
+        System.out.println("after subscribe succesful: actual=" + words);
+        assertFalse(subscriber2.isInvalid());
+        assertEquals("CreatePublisher=2, Identification=1, PublishMessage=1", client1.getTypesSent());
+        assertEquals("Identification=1, CreatePublisherFailed=1, PublisherCreated=1", client1.getTypesReceived());
+        assertEquals("AddSubscriber=2, Identification=1", client2.getTypesSent());
+        assertEquals("AddSubscriberFailed=1, Identification=1, PublishMessage=1. SubscriberAdded=1", client2.getTypesReceived());
+        assertThat(words, Matchers.contains("one-s2"));
+
+        // publish a message from client1
+        // verify that client2 receives it
+        publisher1.publish(new CloneableString("two"));
+        sleep(250); // time to let messages be published to remote clients
+        System.out.println("after publish 'two': actual=" + words);
+        assertEquals("CreatePublisher=2, Identification=1, PublishMessage=2", client1.getTypesSent());
+        assertEquals("Identification=1, CreatePublisherFailed=1, PublisherCreated=1", client1.getTypesReceived());
+        assertEquals("AddSubscriber=2, Identification=1", client2.getTypesSent());
+        assertEquals("AddSubscriberFailed=1, Identification=1, PublishMessage=2, SubscriberAdded=1", client2.getTypesReceived());
+        assertThat(words, Matchers.contains("one-s2", "two-s2"));
+
+        // unsubscribe one subscriber in client2 but security key is missing or invalid
+        client2.enableSecurityKey("wrong");
+        client2.unsubscribe(subscriber2);
+        sleep(250); // time to let central server know that one subscribe in client2 unsubscribed
+        assertEquals("CreatePublisher=2, Identification=1, PublishMessage=2", client1.getTypesSent());
+        assertEquals("Identification=1, CreatePublisherFailed=1, PublisherCreated=1", client1.getTypesReceived());
+        assertEquals("AddSubscriber=2, Identification=1, RemoveSubscriber=1", client2.getTypesSent());
+        assertEquals("AddSubscriberFailed=1, Identification=1, RemoveSubscriberFailed=1, PublishMessage=2, SubscriberAdded=1", client2.getTypesReceived());
+
+        // publish a message from client1
+        // verify that client2 receives it
+        publisher1.publish(new CloneableString("three"));
+        sleep(250); // time to let messages be published to remote clients
+        System.out.println("after publish 'three': actual=" + words);
+        assertEquals("CreatePublisher=2, Identification=1, PublishMessage=3", client1.getTypesSent());
+        assertEquals("Identification=1, CreatePublisherFailed=1, PublisherCreated=1", client1.getTypesReceived());
+        assertEquals("AddSubscriber=2, Identification=1", client2.getTypesSent());
+        assertEquals("AddSubscriberFailed=1, Identification=1, PublishMessage=3, SubscriberAdded=1", client2.getTypesReceived());
+        assertThat(words, Matchers.contains("one-s2", "two-s2", "three-s2"));
+
+        // unsubscribe one subscriber in client2 and this time it is a success
+        client2.enableSecurityKey("hello123");
+        client2.unsubscribe(subscriber2);
+        sleep(250); // time to let central server know that one subscribe in client2 unsubscribed
+        assertEquals("CreatePublisher=2, Identification=1, PublishMessage=2", client1.getTypesSent());
+        assertEquals("Identification=1, CreatePublisherFailed=1, PublisherCreated=1", client1.getTypesReceived());
+        assertEquals("AddSubscriber=2, Identification=1, RemoveSubscriber=2", client2.getTypesSent());
+        assertEquals("AddSubscriberFailed=1, Identification=1, RemoveSubscriberFailed=1, PublishMessage=2, SubscriberAdded=1, SubscriberRemoved=1", client2.getTypesReceived());
+
+        // publish a message from client1
+        // verify that client2 does not receive it
+        publisher1.publish(new CloneableString("four"));
+        sleep(250); // time to let messages be published to remote clients
+        System.out.println("after publish 'four': actual=" + words);
+        assertThat(words, Matchers.contains("one-s2", "two-s2", "three-s2"));
     }
 
     /**
@@ -1745,6 +1878,7 @@ class TestDistributedMessageServer extends DistributedMessageServer {
     private final List<String> validTypesReceived = Collections.synchronizedList(new ArrayList<>());
     private final List<String> typesSent = Collections.synchronizedList(new ArrayList<>());
     private final List<String> sendFailures = Collections.synchronizedList(new ArrayList<>());
+    private String securityKey;
 
     public TestDistributedMessageServer(String host,
                                         int port,
@@ -1759,6 +1893,10 @@ class TestDistributedMessageServer extends DistributedMessageServer {
         super(socketTransformer, host, port, mostRecentMessagesToKeep);
     }
 
+    public void setSecurityKey(String key) {
+        securityKey = key;
+    }
+
     /**
      * Set SO_REUSEADDR so that the unit tests can close and open channels immediately, not waiting for TIME_WAIT seconds.
      */
@@ -1766,6 +1904,30 @@ class TestDistributedMessageServer extends DistributedMessageServer {
     protected void onBeforeSocketBound(NetworkChannel channel) throws IOException {
         super.onBeforeSocketBound(channel);
         channel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
+    }
+    
+    @Override
+    protected @Nullable String canCreatePublisher(CreatePublisher createPublisher) {
+        String error = super.canCreatePublisher(createPublisher);
+        if (securityKey != null) {
+            String securityKeyPassedByClient = createPublisher.getCustomProperties().get("SECURITY_KEY");
+            if (!securityKey.equals(securityKeyPassedByClient)) {
+                error = "Invalid security key";
+            }
+        }
+        return error;
+    }
+
+    @Override
+    protected @Nullable String canSubscribe(AddOrRemoveSubscriber addOrRemoveSubscriber) {
+        String error = super.canSubscribe(addOrRemoveSubscriber);
+        if (securityKey != null) {
+            String securityKeyPassedByClient = addOrRemoveSubscriber.getCustomProperties().get("SECURITY_KEY");
+            if (!securityKey.equals(securityKeyPassedByClient)) {
+                error = "Invalid security key";
+            }
+        }
+        return error;
     }
     
     @Override
@@ -1816,6 +1978,7 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
     private final List<String> typesReceived = Collections.synchronizedList(new ArrayList<>());
     private final List<String> typesSent = Collections.synchronizedList(new ArrayList<>());
     private final List<String> sendFailures = Collections.synchronizedList(new ArrayList<>());
+    private String securityKey;
     private boolean enableTamperServerIndex;
     private Consumer<MessageBase> messageReceivedListener;
  
@@ -1853,6 +2016,10 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
               messageServerPort);
     }
 
+    void enableSecurityKey(String key) {
+        securityKey = key;
+    }
+
     void enableTamperServerIndex() {
         enableTamperServerIndex = true;        
     }
@@ -1870,6 +2037,14 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
         channel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
     }
    
+    @Override
+    protected void addCustomPropertiesForRemoveSubscriber(Map<String, String> customProperties, String topic, String subscriberName) {
+        super.addCustomPropertiesForRemoveSubscriber(customProperties, topic, subscriberName);
+        if (securityKey != null) {
+            customProperties.put("SECURITY_KEY", securityKey);
+        }
+    }
+
     @Override
     protected void onBeforeSendMessage(MessageBase message) {
         super.onBeforeSendMessage(message);

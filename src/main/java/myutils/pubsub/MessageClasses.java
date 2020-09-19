@@ -2,6 +2,8 @@ package myutils.pubsub;
 
 import java.io.Serializable;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
 import javax.annotation.Nonnull;
 
 
@@ -210,7 +212,7 @@ interface MessageClasses {
         public String toLoggingString() {
             return super.toLoggingString() + ", failedClientIndex=" + failedClientIndex;
         }
-    }
+}
 
     
     /**
@@ -324,6 +326,7 @@ interface MessageClasses {
         private static final long serialVersionUID = 1L;
         
         private final long clientTimestamp;
+        private Map<String, String> customProperties;
 
         ClientGeneratedMessage(Long clientTimestamp) {
             this.clientTimestamp = clientTimestamp != null ? clientTimestamp : System.currentTimeMillis();
@@ -331,6 +334,14 @@ interface MessageClasses {
 
         long getClientTimestamp() {
             return clientTimestamp;
+        }
+        
+        void setCustomProperties(Map<String, String> customProperties) {
+            this.customProperties = customProperties;
+        }
+        
+        Map<String, String> getCustomProperties() {
+            return Collections.unmodifiableMap(customProperties);
         }
     }
 
