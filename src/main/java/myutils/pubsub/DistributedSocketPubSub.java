@@ -46,9 +46,13 @@ import myutils.pubsub.MessageClasses.Identification;
 import myutils.pubsub.MessageClasses.InvalidRelayMessage;
 import myutils.pubsub.MessageClasses.MessageBase;
 import myutils.pubsub.MessageClasses.PublishMessage;
+import myutils.pubsub.MessageClasses.PublisherCreated;
 import myutils.pubsub.MessageClasses.RelayFields;
 import myutils.pubsub.MessageClasses.RelayMessageBase;
 import myutils.pubsub.MessageClasses.RemoveSubscriber;
+import myutils.pubsub.MessageClasses.SubscriberAdded;
+import myutils.pubsub.MessageClasses.SubscriberRemoved;
+import myutils.pubsub.PubSub.Publisher;
 import myutils.pubsub.PubSubUtils.CallStackCapturing;
 
 /**
@@ -430,11 +434,22 @@ public class DistributedSocketPubSub extends PubSub {
                         threadLocalRemoteRelayMessage.set(createPublisher);
                         DistributedSocketPubSub.this.createPublisher(createPublisher.getTopic(),
                                                                      createPublisher.getPublisherClass());
+                    } else if (message instanceof PublisherCreated) {
+                        PublisherCreated publisherCreated = (PublisherCreated) message;
+                        var publisher = DistributedSocketPubSub.this.getPublisher(publisherCreated.getTopic());
+                        publisher.setRemoteRelayFields(publisherCreated.getRelayFields());
+                    } else if (message instanceof SubscriberAdded) {
+                        SubscriberAdded subscriberAdded = (SubscriberAdded) message;
+                        LOGGER.log(Level.TRACE, "Confirm subscriber added: topic={0}, subscriberName={1}", subscriberAdded.getTopic(), subscriberAdded.getSubscriberName());
+                        var publisher = DistributedSocketPubSub.this.getPublisher(subscriberAdded.getTopic());
+                    } else if (message instanceof SubscriberRemoved) {
+                        SubscriberRemoved subscriberRemoved = (SubscriberRemoved) message;
+                        LOGGER.log(Level.TRACE, "Confirm subscriber removed: topic={0}, subscriberName={1}", subscriberRemoved.getTopic(), subscriberRemoved.getSubscriberName());
                     } else if (message instanceof PublishMessage) {
                         PublishMessage publishMessage = (PublishMessage) message;
                         threadLocalRemoteRelayMessage.set(publishMessage);
-                        Optional<Publisher> publisher = DistributedSocketPubSub.this.getPublisher(publishMessage.getTopic());
-                        publisher.ifPresent(value -> value.publish(publishMessage.getMessage()));
+                        Publisher publisher = DistributedSocketPubSub.this.getPublisher(publishMessage.getTopic());
+                        publisher.publish(publishMessage.getMessage());
                     } else if (message instanceof InvalidRelayMessage) {
                         InvalidRelayMessage invalid = (InvalidRelayMessage) message;
                         LOGGER.log(Level.WARNING, invalid.getError());
@@ -494,15 +509,20 @@ public class DistributedSocketPubSub extends PubSub {
      * Publisher that forwards publish commands to the message server.
      */
     public final class DistributedPublisher extends Publisher {
-        private final RelayFields remoteRelayFields;
+        private RelayFields remoteRelayFields;
 
         private DistributedPublisher(@Nonnull String topic, @Nonnull Class<?> publisherClass, RelayFields remoteRelayFields) {
             super(topic, publisherClass);
             this.remoteRelayFields = remoteRelayFields;
         }
+        
+        void setRemoteRelayFields(RelayFields remoteRelayFields) {
+            assert this.remoteRelayFields == null;
+            this.remoteRelayFields = remoteRelayFields;
+        }
 
         boolean isRemote() {
-            return remoteRelayFields != null;
+            return remoteRelayFields != null && !remoteRelayFields.getSourceMachineId().equals(DistributedSocketPubSub.this.machineId);
         }
 
         RelayFields getRemoteRelayFields() {
@@ -561,8 +581,8 @@ public class DistributedSocketPubSub extends PubSub {
     public final CompletableFuture<Publisher> fetchPublisher(@Nonnull String topic) {
         synchronized (fetchPublisherMap) {
             var publisher = getPublisher(topic);
-            if (publisher.isPresent()) {
-                return CompletableFuture.completedFuture(publisher.get());
+            if (publisher != null) {
+                return CompletableFuture.completedFuture(publisher);
             } else {
                 return fetchPublisherMap.computeIfAbsent(topic, t -> {
                     messageWriter.addFetchPublisher(t);
@@ -589,6 +609,11 @@ public class DistributedSocketPubSub extends PubSub {
     public void shutdown() {
         super.shutdown();
         cleanable.clean();
+    }
+    
+    @Override
+    public DistributedPublisher getPublisher(@Nonnull String topic) {
+        return (DistributedPublisher) super.getPublisher(topic);
     }
     
     /**

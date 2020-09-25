@@ -159,7 +159,7 @@ public class InMemoryPubSubIntegrationTest {
         Consumer<CloneableString> handleString3 = str -> words.add(str.append("-s3"));
         pubSub.subscribe("hello", "Subscriber3", CloneableString.class, handleString3);
         words.clear();
-        pubSub.getPublisher("hello").ifPresent(samePublisher -> samePublisher.publish(new CloneableString("four")));
+        pubSub.getPublisher("hello").publish(new CloneableString("four"));
         sleep(100); // wait for subscribers to work
         assertThat(words, Matchers.contains("four-s2", "four-s3"));
     }

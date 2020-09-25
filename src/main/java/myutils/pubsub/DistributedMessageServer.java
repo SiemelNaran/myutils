@@ -62,12 +62,15 @@ import myutils.pubsub.MessageClasses.Identification;
 import myutils.pubsub.MessageClasses.InvalidRelayMessage;
 import myutils.pubsub.MessageClasses.MessageBase;
 import myutils.pubsub.MessageClasses.PublishMessage;
+import myutils.pubsub.MessageClasses.PublisherCreated;
 import myutils.pubsub.MessageClasses.RelayFields;
 import myutils.pubsub.MessageClasses.RelayMessageBase;
 import myutils.pubsub.MessageClasses.RelayTopicMessageBase;
 import myutils.pubsub.MessageClasses.RemoveSubscriber;
 import myutils.pubsub.MessageClasses.RequestIdentification;
 import myutils.pubsub.MessageClasses.Resendable;
+import myutils.pubsub.MessageClasses.SubscriberAdded;
+import myutils.pubsub.MessageClasses.SubscriberRemoved;
 import myutils.pubsub.MessageClasses.UnsupportedMessage;
 import myutils.pubsub.PubSubUtils.CallStackCapturing;
 import myutils.util.MoreCollections;
@@ -395,6 +398,7 @@ public class DistributedMessageServer implements Shutdowneable {
          * @param onPublisherCreatedCallback the function to call once the publisher is created.
          *        Not called if there is an exception.
          *        Return relayAction if we should relay this createPublisher command to other clients.
+         *        This function is called on on each subscriber.
          */
         void savePublisher(CreatePublisher createPublisher,
                            Function<CreatePublisherResult, Consumer<SubscriberParamsForCallback>> onPublisherCreatedCallback) {
@@ -412,7 +416,7 @@ public class DistributedMessageServer implements Shutdowneable {
                 Consumer<SubscriberParamsForCallback> relayAction = onPublisherCreatedCallback.apply(result);
                 if (relayAction != null) {
                     forClientsSubscribedToPublisher(createPublisher.getTopic(),
-                                                    createPublisher.getRelayFields().getSourceMachineId(),
+                                                    createPublisher.getRelayFields().getSourceMachineId() /*excludeMachineId*/,
                                                     true /*fetchClientsWantingNotification*/,
                                                     relayAction);
                 }
@@ -530,9 +534,9 @@ public class DistributedMessageServer implements Shutdowneable {
             try {
                 info.mostRecentMessages.save(publishMessage);
                 forClientsSubscribedToPublisher(topic,
-                                                 publishMessage.getRelayFields().getSourceMachineId(),
-                                                 false,
-                                                 relayAction);
+                                                publishMessage.getRelayFields().getSourceMachineId(),
+                                                false,
+                                                relayAction);
             }  finally {
                 info.lock.unlock();
             }
@@ -1108,6 +1112,9 @@ public class DistributedMessageServer implements Shutdowneable {
             LOGGER.log(Level.INFO,
                        "Added subscriber : topic={0}, subscriberName={1}, clientMachine={2}, sendingPublisher={3}, doDownload={4}",
                        topic, subscriberName, clientMachine.getMachineId(), sendingPublisher, doDownload);
+            if (!subscriberInfo.isResend()) {
+                send(new SubscriberAdded(topic, subscriberName), clientMachine, 0);
+            }
             if (sendingPublisher) {
                 send(addSubscriberResult.getCreatePublisher(), clientMachine, 0);
             }
@@ -1127,6 +1134,7 @@ public class DistributedMessageServer implements Shutdowneable {
         String topic = subscriberInfo.getTopic();
         String subscriberName = subscriberInfo.getSubscriberName();
         publishersAndSubscribers.removeSubscriberEndpoint(topic, clientMachine.getMachineId(), subscriberName);
+        send(new SubscriberRemoved(topic, subscriberName), clientMachine, 0);
         LOGGER.log(Level.INFO, "Removed subscriber : topic={0} subscriberName={1} clientMachine={2}", topic, subscriberName, clientMachine.getMachineId());
     }
 
@@ -1147,6 +1155,9 @@ public class DistributedMessageServer implements Shutdowneable {
         Function<PublishersAndSubscribers.CreatePublisherResult, Consumer<SubscriberParamsForCallback>> onPublisherCreatedCallback = createPublisherResult -> {
             boolean skipRelayMessage = false;
             boolean isResendPublisher = false;
+            if (!createPublisherPassedInToThisFunction.isResend()) {
+                send(new PublisherCreated(relay.getTopic(), relay.getRelayFields()), clientMachine, 0);
+            }
             if (createPublisherResult.alreadyExistsCreatePublisher == null) {
                 LOGGER.log(Level.INFO, "Added publisher: topic={0}, topicClass={1}", relay.getTopic(), createPublisherPassedInToThisFunction.getPublisherClass().getSimpleName());
                 if (createPublisherPassedInToThisFunction.isResend()) {
@@ -1174,8 +1185,11 @@ public class DistributedMessageServer implements Shutdowneable {
     
     private Consumer<SubscriberParamsForCallback> relayCreatePublisherToOtherClientsAction(CreatePublisher relay, boolean isResendPublisher) {
         if (!isResendPublisher) {
-            // relay CreatePublisher or PublishMessage to clients subscribed to this topic
-            return params -> send(relay, lookupClientMachine(params.getClientMachineId()), 0);
+            // relay CreatePublisher to clients subscribed to this topic
+            return params -> {
+                ClientMachine clientMachine = lookupClientMachine(params.getClientMachineId());
+                send(relay, clientMachine, 0);
+            };
         } else {
             // client is resending publisher after a server restart
             // download all messages in the cache from the subscriber timestamp
@@ -1184,6 +1198,7 @@ public class DistributedMessageServer implements Shutdowneable {
             // the messages published since the server died (b) need to be sent to all subscribers
             return params -> {
                 if (params.getMinClientTimestamp() == null) {
+                    // this block called for clients just wanting notification of a publisher
                     send(relay, lookupClientMachine(params.getClientMachineId()), 0);
                 } else {
                     download("handleCreatePublisher",
@@ -1274,8 +1289,8 @@ public class DistributedMessageServer implements Shutdowneable {
                              .thenRun(() -> sendQueuedMessageOrReleaseLock(clientMachine));
         } catch (IOException e) {
             LOGGER.log(Level.WARNING,
-                       String.format("Send message failed: clientMachine=%s, retry=%d, retryDone=%b",
-                                     clientMachine.getMachineId(), retry, true),
+                       String.format("Send message failed: clientMachine=%s, messageClass=%s, retry=%d, retryDone=%b",
+                                     clientMachine.getMachineId(), message.getClass().getSimpleName(), retry, true),
                        e);
         }
     }
@@ -1293,8 +1308,8 @@ public class DistributedMessageServer implements Shutdowneable {
         Throwable e = throwable instanceof CompletionException || throwable instanceof ExecutionException ? throwable.getCause() : throwable;
         boolean retryDone = retry >= MAX_RETRIES || SocketTransformer.isClosed(e) || e instanceof RuntimeException || e instanceof Error;
         Level level = retryDone ? Level.WARNING : Level.TRACE;
-        LOGGER.log(level, () -> String.format("Send message failed: clientMachine=%s, retry=%d, retryDone=%b",
-                                              clientMachine.getMachineId(), retry, retryDone),
+        LOGGER.log(level, () -> String.format("Send message failed: clientMachine=%s, messageClass=%s, retry=%d, retryDone=%b",
+                                              clientMachine.getMachineId(), message.getClass().getSimpleName(), retry, retryDone),
                    e);
         if (!retryDone) {
             int nextRetry = retry + 1;
