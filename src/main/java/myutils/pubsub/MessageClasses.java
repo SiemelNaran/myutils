@@ -213,6 +213,106 @@ interface MessageClasses {
     }
 
     
+    /**
+     * Class sent by server to tell client that an action like CreatePublisher or AddSubscriber worked.
+     */
+    class AbstractConfirmAction extends ServerGeneratedMessage {
+        private static final long serialVersionUID = 1L;
+        
+        AbstractConfirmAction() {
+        }
+
+        @Override
+        public String toLoggingString() {
+            return classType(this);
+        }
+    }
+
+    /**
+     * Class sent by server to tell client that CreatePublisher worked.
+     */
+    class PublisherCreated extends AbstractConfirmAction {
+        private static final long serialVersionUID = 1L;
+        
+        private final String topic;
+        private final RelayFields relayFields;
+        
+        PublisherCreated(String topic, RelayFields relayFields) {
+            this.topic = topic;
+            this.relayFields = relayFields;
+        }
+
+        String getTopic() {
+            return topic;
+        }
+        
+        RelayFields getRelayFields() {
+            return relayFields;
+        }
+        
+        @Override
+        public String toLoggingString() {
+            return super.toLoggingString() + ", topic='" + topic + ", " + relayFields.toString();
+        }
+    }
+
+    /**
+     * Class sent by server to tell client that subscribe worked.
+     */
+    class SubscriberAdded extends AbstractConfirmAction {
+        private static final long serialVersionUID = 1L;
+        
+        private final String topic;
+        private final String subscriberName;
+        
+        SubscriberAdded(String topic, String subscriberName) {
+            this.topic = topic;
+            this.subscriberName = subscriberName;
+        }
+        
+        String getTopic() {
+            return topic;
+        }
+        
+        String getSubscriberName() {
+            return subscriberName;
+        }
+
+        @Override
+        public String toLoggingString() {
+            return super.toLoggingString() + ", topic='" + topic + ", subscriberName=" + subscriberName;
+        }
+    }
+
+
+    /**
+     * Class sent by server to tell client that unsubscribe worked.
+     */
+    class SubscriberRemoved extends AbstractConfirmAction {
+        private static final long serialVersionUID = 1L;
+        
+        private final String topic;
+        private final String subscriberName;
+        
+        SubscriberRemoved(String topic, String subscriberName) {
+            this.topic = topic;
+            this.subscriberName = subscriberName;
+        }
+
+        String getTopic() {
+            return topic;
+        }
+        
+        String getSubscriberName() {
+            return subscriberName;
+        }
+
+        @Override
+        public String toLoggingString() {
+            return super.toLoggingString() + ", topic='" + topic + ", subscriberName=" + subscriberName;
+        }
+    }
+
     //////////////////////////////////////////////////////////////////////
     // Client generated messages
     

@@ -12,7 +12,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -263,9 +262,8 @@ public abstract class PubSub implements Shutdowneable {
     /**
      * Get an existing publisher.
      */
-    public final synchronized Optional<Publisher> getPublisher(@Nonnull String topic) {
-        var publisher = topicMap.get(topic);
-        return Optional.ofNullable(publisher);
+    public synchronized Publisher getPublisher(@Nonnull String topic) {
+        return topicMap.get(topic);
     }
 
     /**
