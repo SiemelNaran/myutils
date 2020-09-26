@@ -228,7 +228,7 @@ public class DistributedMessageServer implements Shutdowneable {
      */
     private static class PublishersAndSubscribers {
         private static class TopicInfo {
-            private final String topic;
+            @SuppressWarnings("unused") private final String topic;
             private final ReentrantLock lock = new ReentrantLock();
             private CreatePublisher createPublisher;
             private final List<SubscriberEndpoint> subscriberEndpoints = new ArrayList<>(); // unique by ClientMachine, subscriberName; sorted by ClientMachine, clientTimestamp
