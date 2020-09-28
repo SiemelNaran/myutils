@@ -2,6 +2,7 @@ package myutils.pubsub;
 
 import java.util.function.Consumer;
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 
 /**
@@ -46,5 +47,17 @@ public class InMemoryPubSub extends PubSub {
                                        @Nonnull Class<? extends CloneableObject<?>> subscriberClass,
                                        @Nonnull Consumer<CloneableObject<?>> callback) {
         return new InMemorySubscriber(topic, subscriberName, subscriberClass, callback);
+    }
+
+    @Override
+    protected void registerPublisher(Publisher publisher) {
+        addPublisher(publisher);
+    }
+    
+    @Override
+    protected void registerSubscriber(@Nullable Publisher publisher, Subscriber subscriber, boolean deferred) {
+        if (publisher != null) {
+            publisher.addSubscriber(subscriber);
+        }
     }
 }

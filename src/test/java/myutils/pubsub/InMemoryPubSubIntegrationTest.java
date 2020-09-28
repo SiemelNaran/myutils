@@ -6,6 +6,7 @@ import static myutils.TestUtil.assertExceptionFromCallable;
 import static myutils.TestUtil.sleep;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -187,6 +188,19 @@ public class InMemoryPubSubIntegrationTest {
         publisher.publish(new CloneableString("two"));
         sleep(100); // wait for subscribers to work
         assertThat(words, Matchers.contains("two-s1"));
+    }
+    
+    /**
+     * Test removing a publisher.
+     * The function removePublisher is package private.
+     */
+    @Test
+    void testRemovePublisher() {
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
+        assertSame(publisher, pubSub.getPublisher("hello"));
+        pubSub.removePublisher(publisher);
+        assertException(() -> pubSub.removePublisher(publisher), IllegalArgumentException.class, "Invalid publisher: publisher=hello");
     }
     
     /**
