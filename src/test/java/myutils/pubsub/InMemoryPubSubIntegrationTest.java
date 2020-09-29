@@ -191,19 +191,6 @@ public class InMemoryPubSubIntegrationTest {
     }
     
     /**
-     * Test removing a publisher.
-     * The function removePublisher is package private.
-     */
-    @Test
-    void testRemovePublisher() {
-        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
-        PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
-        assertSame(publisher, pubSub.getPublisher("hello"));
-        pubSub.removePublisher(publisher);
-        assertException(() -> pubSub.removePublisher(publisher), IllegalArgumentException.class, "Invalid publisher: publisher=hello");
-    }
-    
-    /**
      * In this test we create the subscriber before the publisher.
      * This could happen in a multi-threaded environment.
      */

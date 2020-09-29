@@ -298,14 +298,6 @@ public abstract class PubSub implements Shutdowneable {
         topicMap.values().forEach(action);
     }
     
-    synchronized void removePublisher(Publisher publisher) {
-        Publisher verifyPublisher = getPublisher(publisher.getTopic());
-        if (publisher != verifyPublisher) {
-            throw new IllegalArgumentException("Invalid publisher: publisher=" + publisher.getTopic());
-        }
-        topicMap.remove(publisher.getTopic());
-    }
-
     private void addDeferredSubscribers(Publisher publisher) {
         var subscribers = deferredSubscribersMap.remove(publisher.getTopic());
         if (subscribers != null) {
