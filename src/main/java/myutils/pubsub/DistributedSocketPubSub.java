@@ -613,13 +613,7 @@ public class DistributedSocketPubSub extends PubSub {
     @Override
     protected <T> DistributedPublisher newPublisher(String topic, Class<T> publisherClass) {
         var relayFields = Optional.ofNullable(threadLocalRemoteRelayMessage.get()).map(RelayMessageBase::getRelayFields).orElse(null);
-        var publisher = new DistributedPublisher(topic, publisherClass, relayFields);
-        if (relayFields == null) {
-            // this DistributedPubSub is creating a new publisher
-            // so send it to the central server
-            messageWriter.createPublisher(publisher.getCreatedAtTimestamp(), topic, publisherClass, null, /*isResend*/ false);
-        }
-        return publisher;
+        return new DistributedPublisher(topic, publisherClass, relayFields);
     }
 
     /**
@@ -634,6 +628,12 @@ public class DistributedSocketPubSub extends PubSub {
             throw new IllegalStateException("publisher already exists: topic=" + publisher.getTopic());
         }
         info.setDormantPublisher((DistributedPublisher) publisher);
+        var relayFields = Optional.ofNullable(threadLocalRemoteRelayMessage.get()).map(RelayMessageBase::getRelayFields).orElse(null);
+        if (relayFields == null) {
+            // this DistributedPubSub is creating a new publisher
+            // so send it to the central server
+            messageWriter.createPublisher(publisher.getCreatedAtTimestamp(), publisher.getTopic(), publisher.getPublisherClass(), null, /*isResend*/ false);
+        }
         if (threadLocalRemoteRelayMessage.get() != null) {
             info.makeDormantPublisherLive();
         }
@@ -653,10 +653,7 @@ public class DistributedSocketPubSub extends PubSub {
             } else {
                 DistributedSubscriber distributedSubscriber = (DistributedSubscriber) subscriber;
                 var info = dormantInfoMap.computeIfAbsent(subscriber.getTopic(), topic -> new DormantInfo());
-                boolean added = info.addDormantSubscriber(distributedSubscriber);
-                if (!added) {
-                    throw new IllegalStateException("already subscribed: topic=" + subscriber.getTopic() + ", subscriberName=" + subscriber.getSubscriberName());
-                }
+                info.addDormantSubscriber(distributedSubscriber);
             }
             messageWriter.addSubscriber(subscriber.getCreatedAtTimestamp(), subscriber.getTopic(),subscriber.getSubscriberName(), /*isResend*/ false);
         }

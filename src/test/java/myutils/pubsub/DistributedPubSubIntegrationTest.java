@@ -192,7 +192,15 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         // client1 create publisher and subscribe, client2 subscribe
         // publish two messages while 
         Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
+        assertExceptionFromCallable(
+            () -> client1.createPublisher("hello", CloneableString.class),
+            IllegalStateException.class,
+            "publisher already exists: topic=hello");
         client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a")));
+        assertExceptionFromCallable(
+            () -> client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a"))),
+            IllegalStateException.class,
+            "already subscribed: topic=hello, subscriberName=ClientTwoSubscriber_First");
         assertNull(client1.getPublisher("hello"));
         assertNull(client2.getPublisher("hello"));
         publisher1.publish(new CloneableString("one"));
@@ -228,13 +236,27 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         publisher1.publish(new CloneableString("three"));
         publisher1.publish(new CloneableString("four"));
         sleep(250); // time to let messages be published to remote clients
-        System.out.println("after publish: actual=" + words);
+        System.out.println("after publish 'three', 'four': actual=" + words);
         assertThat(words, Matchers.contains("three-s1", "four-s1", "three-s2a", "four-s2a"));
-
         assertEquals("AddSubscriber=1, CreatePublisher=1, Identification=1, PublishMessage=4", client1.getTypesSent());
         assertEquals("ClientAccepted=1, PublisherCreated=1, SubscriberAdded=1", client1.getTypesReceived());
         assertEquals("AddSubscriber=1, Identification=1", client2.getTypesSent());
         assertEquals("ClientAccepted=1, CreatePublisher=1, PublishMessage=4, SubscriberAdded=1", client2.getTypesReceived());
+        
+        // add a new subscriber
+        // this exercises the code path where SubscriberAdded makes the dormant subscriber active
+        words.clear();
+        client2.subscribe("hello", "ClientTwoSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b")));
+        sleep(250); // time to receive the SubscriberAdded confirmation
+        publisher1.publish(new CloneableString("five"));
+        publisher1.publish(new CloneableString("six"));
+        sleep(250); // time to let messages be published to remote clients
+        System.out.println("after publish 'five', 'six': actual=" + words);
+        assertThat(words, Matchers.containsInAnyOrder("five-s1", "six-s1", "five-s2a", "six-s2a", "five-s2b", "six-s2b"));
+        assertEquals("AddSubscriber=1, CreatePublisher=1, Identification=1, PublishMessage=6", client1.getTypesSent());
+        assertEquals("ClientAccepted=1, PublisherCreated=1, SubscriberAdded=1", client1.getTypesReceived());
+        assertEquals("AddSubscriber=2, Identification=1", client2.getTypesSent());
+        assertEquals("ClientAccepted=1, CreatePublisher=1, PublishMessage=6, SubscriberAdded=2", client2.getTypesReceived());
     }
 
     /**
