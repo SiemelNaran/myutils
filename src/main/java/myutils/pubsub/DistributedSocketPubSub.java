@@ -700,7 +700,7 @@ public class DistributedSocketPubSub extends PubSub {
         DormantInfo() {
         }
         
-        void setDormantPublisher(DistributedPublisher publisher) {
+        synchronized void setDormantPublisher(DistributedPublisher publisher) {
             assert this.dormantPublisher == null;
             this.dormantPublisher = publisher;
         }
@@ -714,7 +714,7 @@ public class DistributedSocketPubSub extends PubSub {
          * 
          * @return true if subscriber added, false if one with the same name already exists.
          */
-        boolean addDormantSubscriber(DistributedSubscriber subscriber) {
+        synchronized boolean addDormantSubscriber(DistributedSubscriber subscriber) {
             var existingSubscriber = dormantSubscribers.putIfAbsent(subscriber.getSubscriberName(), subscriber);
             return existingSubscriber == null;
         }
@@ -724,7 +724,7 @@ public class DistributedSocketPubSub extends PubSub {
          * 
          * @return true of subscriber removed, false if subscriber does not exist
          */
-        boolean removeDormantSubscriber(String subscriberName) {
+        synchronized boolean removeDormantSubscriber(String subscriberName) {
             var existingSubscriber = dormantSubscribers.remove(subscriberName);
             return existingSubscriber != null;
         }
@@ -734,13 +734,13 @@ public class DistributedSocketPubSub extends PubSub {
          * This is set upon receiving the PublisherCreated message.
          * Remote publishers are always created as live.
          */
-        void setReadyToGoLive(@Nonnull RelayFields relayFields) {
+        synchronized void setReadyToGoLive(@Nonnull RelayFields relayFields) {
             assert dormantPublisher.getRemoteRelayFields() == null;
             dormantPublisher.setRemoteRelayFields(relayFields);
             readyToGoLive = true;
         }
         
-        void setReadyToGoLive() {
+        synchronized void setReadyToGoLive() {
             assert dormantPublisher.getRemoteRelayFields() != null;
             readyToGoLive = true;
         }
@@ -748,7 +748,7 @@ public class DistributedSocketPubSub extends PubSub {
         /**
          * Make the dormant publisher live if is ready to go live and there are no dormant subscribers.
          */
-        void tryToMakeDormantPublisherLive() {
+        synchronized void tryToMakeDormantPublisherLive() {
             if (dormantPublisher == null) {
                 return;
             }
@@ -786,7 +786,7 @@ public class DistributedSocketPubSub extends PubSub {
          * @param subscriberName the name of the dormant subscriber
          * @return status to be used in logs
          */
-        TryMakeDormantSubscriberLiveResult tryMakeDormantSubscriberLive(@Nullable DistributedPublisher publisher, String subscriberName) {
+        synchronized TryMakeDormantSubscriberLiveResult tryMakeDormantSubscriberLive(@Nullable DistributedPublisher publisher, String subscriberName) {
             DistributedSubscriber subscriber = Objects.requireNonNull(dormantSubscribers.remove(subscriberName));
             if (publisher != null) {
                 // use case: live publisher exists, subscriber added to it and server sends SubscriberAdded
