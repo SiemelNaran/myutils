@@ -223,7 +223,14 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals("ClientAccepted=1, PublisherCreated=1, SubscriberAdded=1", client1.getTypesReceived());
         assertEquals("AddSubscriber=1, Identification=1", client2.getTypesSent());
         assertEquals("ClientAccepted=1, CreatePublisher=1, PublishMessage=2, SubscriberAdded=1", client2.getTypesReceived());
-        assertThat(words, Matchers.contains("one-s2a", "two-s2a")); // "one-s1", "two-s1" not printed as ClientOneSubscriber not present when publish was called
+        if (createPublisherFirst) {
+            // "one-s1", "two-s1" not printed as ClientOneSubscriber not present when publish was called
+            assertThat(words, Matchers.contains("one-s2a", "two-s2a"));
+        } else {
+            assertThat(words, Matchers.contains("one-s1", "two-s1", "one-s2a", "two-s2a"));
+            // "one-s1", "two-s1" is printed as as ClientOneSubscriber is added before the client receives the PublisherCreated message from the server
+            // so the publisher is only made active once PublisherCreated and SubscriberAdded are received from the server
+        }
 
         // publish two messages
         // the subscriber running on client1 will pick it up immediately
@@ -510,7 +517,16 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         
         client2.download(List.of("hello", "world"), ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE);
         sleep(250); // time to let messages be sent to client2
-        System.out.println("after client2 downloads: actual=" + words);
+        System.out.println("after client2 downloads (unsorted): actual=" + words);
+        // because SubscriberAdded commands are received in a random order, subscriber1 may be added after subscriber2
+        // so sort elements 0 and 1, elements 2 and 3, etc
+        // this still proves that ImportantTwo sent first, then ImportantThree, then banana, then carrot, then dragonfruit
+        words.subList(0, 2).sort(Comparator.naturalOrder());
+        words.subList(2, 4).sort(Comparator.naturalOrder());
+        words.subList(4, 6).sort(Comparator.naturalOrder());
+        words.subList(6, 8).sort(Comparator.naturalOrder());
+        words.subList(8, 10).sort(Comparator.naturalOrder());
+        System.out.println("after client2 downloads (sorted  ): actual=" + words);
         assertThat(words,
                    Matchers.contains("ImportantTwo-s2a-hello", "ImportantTwo-s2b-hello", "ImportantThree-s2a-hello", "ImportantThree-s2b-hello",
                                      "banana-s2a-hello", "banana-s2b-hello", "carrot-s2a-hello", "carrot-s2b-hello", "dragonfruit-s2a-hello", "dragonfruit-s2b-hello",
@@ -525,7 +541,13 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         words.clear();
         client2.download(List.of("hello"), ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE);
         sleep(250); // time to let messages be sent to client2
-        System.out.println("after client2 downloads a second time: actual=" + words);
+        System.out.println("after client2 downloads a second time (unsorted): actual=" + words);
+        words.subList(0, 2).sort(Comparator.naturalOrder()); // see above for comment why we sort
+        words.subList(2, 4).sort(Comparator.naturalOrder());
+        words.subList(4, 6).sort(Comparator.naturalOrder());
+        words.subList(6, 8).sort(Comparator.naturalOrder());
+        words.subList(8, 10).sort(Comparator.naturalOrder());
+        System.out.println("after client2 downloads a second time (sorted  ): actual=" + words);
         assertThat(words,
                    Matchers.contains("ImportantTwo-s2a-hello", "ImportantTwo-s2b-hello", "ImportantThree-s2a-hello", "ImportantThree-s2b-hello",
                                      "banana-s2a-hello", "banana-s2b-hello", "carrot-s2a-hello", "carrot-s2b-hello", "dragonfruit-s2a-hello", "dragonfruit-s2b-hello"));
@@ -688,7 +710,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals(3, client1.getCountTypesReceived()); // ClientAccepted, PublisherCreated, SubscriberAdded
         assertEquals(3, client2.getCountTypesSent()); // Identification, AddSubscriber, AddSubscriber
         assertEquals(6, client2.getCountTypesReceived()); // ClientAccepted, CreatePublisher, PublishMessage * 2, SubscriberAdded * 2
-        assertThat(words, Matchers.containsInAnyOrder("one-s1", "two-s1", "one-s2a", "one-s2b", "two-s2a", "two-s2b"));// TODO:testfail
+        assertThat(words, Matchers.containsInAnyOrder("one-s1", "two-s1", "one-s2a", "one-s2b", "two-s2a", "two-s2b"));
     }
 
     /**
@@ -817,6 +839,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         var centralServer2 = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         waitFor(Collections.singletonList(centralServer2.start()));
         sleep(1000); // time to let client1 connect to server as part of exponential backoff
+        sleep(250); // more time to let SubscriberAdded and PublisherCreated be sent to each client
         sleep(250); // more time to let messages be downloaded to client2
         
         // client1 will send the message to centralServer2 which relays it to the other clients
@@ -949,7 +972,6 @@ public class DistributedPubSubIntegrationTest extends TestBase {
             assertEquals("ClientAccepted=1, PublisherCreated=1, SubscriberAdded=1", client1.getTypesReceived());
             assertEquals("AddSubscriber=2, Identification=1", client2.getTypesSent());
             assertEquals("ClientAccepted=1, CreatePublisher=1, PublishMessage=2, SubscriberAdded=2", client2.getTypesReceived()); // differences: PublishMessage +2 because "three" and "four" sent to client
-//TODO:testfail =>
             assertThat(words, Matchers.containsInAnyOrder("three-s2a", "three-s2b", "four-s2a", "four-s2b")); // differences: handle 2 new messages
             
             words.clear();
