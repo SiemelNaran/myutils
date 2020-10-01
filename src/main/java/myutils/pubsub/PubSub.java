@@ -23,6 +23,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import myutils.pubsub.PubSubUtils.CallStackCapturing;
 import myutils.util.MultimapUtils;
 
@@ -154,6 +155,10 @@ public abstract class PubSub implements Shutdowneable {
             return publisherClass;
         }
         
+        protected final void addSubscriber(Subscriber subscriber) {
+            subscribers.add(subscriber);
+        }
+
         /**
          * Return subscribers in the order they were created.
          */
@@ -251,13 +256,32 @@ public abstract class PubSub implements Shutdowneable {
         }
         onBeforeAddPublisher(topic, publisherClass);
         publisher = newPublisher(topic, publisherClass);
-        topicMap.put(topic, publisher);
+        registerPublisher(publisher);
         addDeferredSubscribers(publisher);
         onPublisherAdded(publisher);
         return publisher;
     }
     
     protected abstract <T> Publisher newPublisher(String topic, Class<T> publisherClass);
+    
+    /**
+     * Register a new publisher.
+     * The in-memory pubsub just calls addPublisher, but the distributed pubsub does something more complicated.
+     */
+    protected abstract void registerPublisher(Publisher publisher);
+    
+    /**
+     * Register a new subscriber.
+     * 
+     * @param publisher the publisher this subscriber belongs too, null if the publisher does not yet exist
+     * @param subscriber the subscriber
+     * @param deferred true if subscriber is being added as a deferred subscriber (important as registerSubscriber was called earlier with deferred=false)
+     */
+    protected abstract void registerSubscriber(@Nullable Publisher publisher, Subscriber subscriber, boolean deferred);
+
+    protected final void addPublisher(Publisher publisher) {
+        topicMap.put(publisher.getTopic(), publisher);
+    }
 
     /**
      * Get an existing publisher.
@@ -272,12 +296,12 @@ public abstract class PubSub implements Shutdowneable {
     protected final synchronized void forEachPublisher(Consumer<Publisher> action) {
         topicMap.values().forEach(action);
     }
-
+    
     private void addDeferredSubscribers(Publisher publisher) {
         var subscribers = deferredSubscribersMap.remove(publisher.getTopic());
         if (subscribers != null) {
             for (var subscriber : subscribers) {
-                addSubscriber(publisher, subscriber, /*skipOnAdd*/ true);
+                registerSubscriber(publisher, subscriber, true);
             }
         }
     }
@@ -312,25 +336,17 @@ public abstract class PubSub implements Shutdowneable {
             }
             checkClassType(publisher.publisherClass, subscriberClass);
             subscriber = subscriberCreator.get();
-            addSubscriber(publisher, subscriber, /*skipOnAdd*/ false);
         } else {
             MultimapUtils<String, Subscriber> multimap = new MultimapUtils<>(deferredSubscribersMap, ArrayList::new);
-            var subscribers = multimap.getOrCreate(topic);
-            if (subscribers != null && subscribers.stream().anyMatch(s -> s.getSubscriberName().equals(subscriberName))) {
+            var deferredSubscribers = multimap.getOrCreate(topic);
+            if (deferredSubscribers != null && deferredSubscribers.stream().anyMatch(s -> s.getSubscriberName().equals(subscriberName))) {
                 throw new IllegalStateException("already subscribed: topic=" + topic + ", subscriberName=" + subscriberName);
             }
             subscriber = subscriberCreator.get();
-            subscribers.add(subscriber);
-            onAddSubscriber(subscriber);
+            deferredSubscribers.add(subscriber);
         }
+        registerSubscriber(publisher, subscriber, false);
         return subscriber;
-    }
-    
-    private void addSubscriber(Publisher publisher, Subscriber subscriber, boolean skipOnAdd) {
-        publisher.subscribers.add(subscriber);
-        if (!skipOnAdd) {
-            onAddSubscriber(subscriber);
-        }
     }
     
     protected abstract Subscriber newSubscriber(@Nonnull String topic,
@@ -376,9 +392,6 @@ public abstract class PubSub implements Shutdowneable {
     protected void onPublisherAdded(Publisher publisher) {
     }
     
-    protected void onAddSubscriber(Subscriber subscriber) {
-    }
-
     protected void onRemoveSubscriber(Subscriber subscriber) {
     }
 

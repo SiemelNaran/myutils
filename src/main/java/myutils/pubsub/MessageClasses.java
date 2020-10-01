@@ -252,7 +252,7 @@ interface MessageClasses {
         
         @Override
         public String toLoggingString() {
-            return super.toLoggingString() + ", topic='" + topic + ", " + relayFields.toString();
+            return super.toLoggingString() + ", topic=" + topic + ", " + relayFields.toString();
         }
     }
 
@@ -280,7 +280,7 @@ interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return super.toLoggingString() + ", topic='" + topic + ", subscriberName=" + subscriberName;
+            return super.toLoggingString() + ", topic=" + topic + ", subscriberName=" + subscriberName;
         }
     }
 
@@ -309,7 +309,7 @@ interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return super.toLoggingString() + ", topic='" + topic + ", subscriberName=" + subscriberName;
+            return super.toLoggingString() + ", topic=" + topic + ", subscriberName=" + subscriberName;
         }
     }
 
