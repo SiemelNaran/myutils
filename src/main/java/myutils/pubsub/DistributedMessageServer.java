@@ -391,17 +391,27 @@ public class DistributedMessageServer implements Shutdowneable {
             }
         }
         
+        private static final class SavePublisherCallbacks {
+            private final Consumer<SubscriberParamsForCallback> relayAction;
+            private final Runnable finalizerAction;
+            
+            SavePublisherCallbacks(Consumer<SubscriberParamsForCallback> relayAction, Runnable finalizerAction) {
+                this.relayAction = relayAction;
+                this.finalizerAction = finalizerAction;
+            }
+        }
+        
         /**
          * Add createPublisher command.
          * 
          * @param createPublisher the create publisher command sent from the client
          * @param onPublisherCreatedCallback the function to call once the publisher is created.
          *        Not called if there is an exception.
-         *        Return relayAction if we should relay this createPublisher command to other clients.
-         *        This function is called on on each subscriber.
+         *        Return relayAction if we should relay this createPublisher command to other clients; this function is called on on each client subscriber.
+         *        Return finalizerAction if we should confirm the CreatePublisher command to the client who sent it.
          */
         void savePublisher(CreatePublisher createPublisher,
-                           Function<CreatePublisherResult, Consumer<SubscriberParamsForCallback>> onPublisherCreatedCallback) {
+                           Function<CreatePublisherResult, SavePublisherCallbacks> onPublisherCreatedCallback) {
             var topic = createPublisher.getTopic();
             TopicInfo info = topicMap.computeIfAbsent(topic, unused -> new TopicInfo(topic, mostRecentMessagesToKeep));
             info.lock.lock();
@@ -413,12 +423,15 @@ public class DistributedMessageServer implements Shutdowneable {
                 } else {
                     result = new CreatePublisherResult(info.createPublisher);
                 }
-                Consumer<SubscriberParamsForCallback> relayAction = onPublisherCreatedCallback.apply(result);
-                if (relayAction != null) {
+                SavePublisherCallbacks callbacks = onPublisherCreatedCallback.apply(result);
+                if (callbacks.relayAction != null) {
                     forClientsSubscribedToPublisher(createPublisher.getTopic(),
                                                     createPublisher.getRelayFields().getSourceMachineId() /*excludeMachineId*/,
                                                     true /*fetchClientsWantingNotification*/,
-                                                    relayAction);
+                                                    callbacks.relayAction);
+                }
+                if (callbacks.finalizerAction != null) {
+                    callbacks.finalizerAction.run();
                 }
             } finally {
                 info.lock.unlock();
@@ -1152,12 +1165,9 @@ public class DistributedMessageServer implements Shutdowneable {
     
     private void handleCreatePublisher(ClientMachine clientMachine, CreatePublisher relay) {
         CreatePublisher createPublisherPassedInToThisFunction = (CreatePublisher) relay;
-        Function<PublishersAndSubscribers.CreatePublisherResult, Consumer<SubscriberParamsForCallback>> onPublisherCreatedCallback = createPublisherResult -> {
+        Function<PublishersAndSubscribers.CreatePublisherResult, PublishersAndSubscribers.SavePublisherCallbacks> onPublisherCreatedCallback = createPublisherResult -> {
             boolean skipRelayMessage = false;
             boolean isResendPublisher = false;
-            if (!createPublisherPassedInToThisFunction.isResend()) {
-                send(new PublisherCreated(relay.getTopic(), relay.getRelayFields()), clientMachine, 0);
-            }
             if (createPublisherResult.alreadyExistsCreatePublisher == null) {
                 LOGGER.log(Level.INFO, "Added publisher: topic={0}, topicClass={1}", relay.getTopic(), createPublisherPassedInToThisFunction.getPublisherClass().getSimpleName());
                 if (createPublisherPassedInToThisFunction.isResend()) {
@@ -1174,11 +1184,19 @@ public class DistributedMessageServer implements Shutdowneable {
                                          relay.getRelayFields().getServerIndex()));
                 skipRelayMessage = true;
             }
+            Consumer<SubscriberParamsForCallback> actionForEachOtherClient;
             if (!skipRelayMessage) {
-                return relayCreatePublisherToOtherClientsAction(relay, isResendPublisher);
+                actionForEachOtherClient = relayCreatePublisherToOtherClientsAction(relay, isResendPublisher);
             } else {
-                return null;
+                actionForEachOtherClient = null;
             }
+            Runnable finalizerAction;
+            if (!createPublisherPassedInToThisFunction.isResend()) {
+                finalizerAction = () -> send(new PublisherCreated(relay.getTopic(), relay.getRelayFields()), clientMachine, 0);
+            } else {
+                finalizerAction = null;
+            }
+            return new PublishersAndSubscribers.SavePublisherCallbacks(actionForEachOtherClient, finalizerAction);
         };
         publishersAndSubscribers.savePublisher(createPublisherPassedInToThisFunction, onPublisherCreatedCallback);
     }

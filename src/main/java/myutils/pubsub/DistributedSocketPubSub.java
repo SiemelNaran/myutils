@@ -19,12 +19,16 @@ import java.net.SocketAddress;
 import java.nio.channels.AlreadyConnectedException;
 import java.nio.channels.NetworkChannel;
 import java.nio.channels.SocketChannel;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -63,10 +67,18 @@ import myutils.pubsub.PubSubUtils.CallStackCapturing;
  * 
  * <p>Since this class inherits from PubSub, it also implements the in-memory publish/subscribe system.
  * 
- * <p>When a user calls createSubscriber, the DistributedPubSub sends this command to the server, which relays the command to all clients subscribed to the topic.
+ * <p>When a user calls createPublisher, the new publisher is created as dormant, and it cannot be used to publish messages.
+ * A call to pubsub.getPublisher will not find the publisher.
+ * The server may verify if the client passed in security credentials that allow them to subscribe to a topic, so the server may send back a CreatePublisherInvalid command.
+ * Upon receiving the confirmation message PublisherCreated from the server, the publisher is made live.
+ *
+ * <p>When a user calls subscribe, the DistributedPubSub sends this command to the server,
+ * and the server responds with a SubscriberAdded and a CreatePublisher command, or AddSubscriberInvalid if the security credentials are not valid.
  * When a user calls publisher.publish, the DistributedPubSub sends this command to the server, which relays the command to all clients subscribed to the topic.
  * The DistributedPubSub also listens for messages sent from the server, which are messages relayed to it by other clients.
  * Upon receiving a message, the DistributedPubSub calls createPublisher or publisher.publish.
+ * 
+ * <p>This class does not provide security credentials support out of the box, but implementors of derived classes can add in this functionality via custom properties.
  * 
  * <p>Besides the identification message, each message sent to the server includes the client time and a monotonically increasing index.
  *
@@ -88,6 +100,7 @@ public class DistributedSocketPubSub extends PubSub {
     private static final ThreadLocal<RelayMessageBase> threadLocalRemoteRelayMessage = new ThreadLocal<>();
     private static final int MAX_RETRIES = 3;
     
+    private final Map<String /*topic*/, DormantInfo> dormantInfoMap = new ConcurrentHashMap<>();
     private final SocketTransformer socketTransformer;
     private final String messageServerHost;
     private final int messageServerPort;
@@ -105,8 +118,6 @@ public class DistributedSocketPubSub extends PubSub {
     
     /**
      * This class is about things to happen when the client is started and receives the ClientAccepted message.
-     * @author snaran
-     *
      */
     private static class OnClientAccepted {
         private volatile CompletableFuture<Void> startFuture;
@@ -125,7 +136,7 @@ public class DistributedSocketPubSub extends PubSub {
             return startFuture;
         }
     }
-
+    
     /**
      * Create an in-memory publish/subscribe system and also talk to a central
      * server to send and receive publish commands.
@@ -429,25 +440,23 @@ public class DistributedSocketPubSub extends PubSub {
                                             message.toLoggingString()));
                     DistributedSocketPubSub.this.onMessageReceived(message);
                     if (message instanceof CreatePublisher) {
-                        CreatePublisher createPublisher = (CreatePublisher) message;
-                        threadLocalRemoteRelayMessage.set(createPublisher);
-                        DistributedSocketPubSub.this.createPublisher(createPublisher.getTopic(),
-                                                                     createPublisher.getPublisherClass());
+                        // we are receiving a CreatePublisher from the server in response to a client.subscribe
+                        handleCreatePublisher((CreatePublisher) message);
                     } else if (message instanceof PublisherCreated) {
-                        PublisherCreated publisherCreated = (PublisherCreated) message;
-                        var publisher = DistributedSocketPubSub.this.getPublisher(publisherCreated.getTopic());
-                        publisher.setRemoteRelayFields(publisherCreated.getRelayFields());
+                        // we are receiving a PublisherCreated from the server in response to a client.createPublisher
+                        handlePublisherCreated((PublisherCreated) message);
                     } else if (message instanceof SubscriberAdded) {
-                        SubscriberAdded subscriberAdded = (SubscriberAdded) message;
-                        LOGGER.log(Level.TRACE, "Confirm subscriber added: topic={0}, subscriberName={1}", subscriberAdded.getTopic(), subscriberAdded.getSubscriberName());
-                        var publisher = DistributedSocketPubSub.this.getPublisher(subscriberAdded.getTopic());
+                        handleSubscriberAdded((SubscriberAdded) message);
                     } else if (message instanceof SubscriberRemoved) {
-                        SubscriberRemoved subscriberRemoved = (SubscriberRemoved) message;
-                        LOGGER.log(Level.TRACE, "Confirm subscriber removed: topic={0}, subscriberName={1}", subscriberRemoved.getTopic(), subscriberRemoved.getSubscriberName());
+                        handleSubscriberRemoved((SubscriberRemoved) message);
                     } else if (message instanceof PublishMessage) {
                         PublishMessage publishMessage = (PublishMessage) message;
+                        String topic = publishMessage.getTopic();
                         threadLocalRemoteRelayMessage.set(publishMessage);
-                        Publisher publisher = DistributedSocketPubSub.this.getPublisher(publishMessage.getTopic());
+                        Publisher publisher = DistributedSocketPubSub.this.getPublisher(topic);
+                        if (publisher == null) {
+                            publisher = DistributedSocketPubSub.this.dormantInfoMap.get(topic).getDormantPublisher();
+                        }
                         publisher.publish(publishMessage.getMessage());
                     } else if (message instanceof InvalidRelayMessage) {
                         InvalidRelayMessage invalid = (InvalidRelayMessage) message;
@@ -484,7 +493,7 @@ public class DistributedSocketPubSub extends PubSub {
             } // end while
             
             messageWriter.interrupt();
-            
+
             if (attemptRestart) {
                 DistributedSocketPubSub.this.doRestart();
             }
@@ -508,10 +517,13 @@ public class DistributedSocketPubSub extends PubSub {
      * Publisher that forwards publish commands to the message server.
      */
     public final class DistributedPublisher extends Publisher {
+        private boolean isDormant;
         private RelayFields remoteRelayFields;
+        private List<DeferredMessage> messagesWhileDormant = new ArrayList<>();
 
         private DistributedPublisher(@Nonnull String topic, @Nonnull Class<?> publisherClass, RelayFields remoteRelayFields) {
             super(topic, publisherClass);
+            this.isDormant = true;
             this.remoteRelayFields = remoteRelayFields;
         }
         
@@ -528,14 +540,47 @@ public class DistributedSocketPubSub extends PubSub {
             return remoteRelayFields;
         }
 
+        /**
+         * Publish a message.
+         * If the publisher is dormant then add the message to a queue to be published once the publisher goes live.
+         */
         @Override
-        public <T extends CloneableObject<?>> void publish(@Nonnull T message, RetentionPriority priority) {
-            super.publish(message, priority);
-            if (threadLocalRemoteRelayMessage.get() == null) {
-                // this DistributedPubSub is publishing a new message
-                // so send it to the central server
-                DistributedSocketPubSub.this.messageWriter.publishMessage(getTopic(), message, priority);
+        public final <T extends CloneableObject<?>> void publish(@Nonnull T message, RetentionPriority priority) {
+            boolean isRemoteMessage = threadLocalRemoteRelayMessage.get() != null;
+            doPublish(message, priority, isRemoteMessage);
+        }
+        
+        private void doPublish(@Nonnull CloneableObject<?> message, RetentionPriority priority, boolean isRemoteMessage) {
+            if (isDormant) {
+                messagesWhileDormant.add(new DeferredMessage(message, priority, isRemoteMessage));
+            } else {
+                super.publish(message, priority);
+                if (!isRemoteMessage) {
+                    // this DistributedPubSub is publishing a new message
+                    // so send it to the central server
+                    DistributedSocketPubSub.this.messageWriter.publishMessage(getTopic(), message, priority);
+                }
             }
+        }
+        
+        private void setLive() {
+            isDormant = false;
+            for (var message : messagesWhileDormant) {
+                doPublish(message.message, message.retentionPriority, message.isRemoteMessage);
+            }
+            messagesWhileDormant.clear();
+        }
+    }
+
+    private static class DeferredMessage {
+        private final CloneableObject<?> message;
+        private final RetentionPriority retentionPriority;
+        private final boolean isRemoteMessage;
+        
+        DeferredMessage(CloneableObject<?> message, RetentionPriority retentionPriority, boolean isRemoteMessage) {
+            this.message = message;
+            this.retentionPriority = retentionPriority;
+            this.isRemoteMessage = isRemoteMessage;
         }
     }
 
@@ -557,13 +602,223 @@ public class DistributedSocketPubSub extends PubSub {
     @Override
     protected <T> DistributedPublisher newPublisher(String topic, Class<T> publisherClass) {
         var relayFields = Optional.ofNullable(threadLocalRemoteRelayMessage.get()).map(RelayMessageBase::getRelayFields).orElse(null);
-        var publisher = new DistributedPublisher(topic, publisherClass, relayFields);
-        if (relayFields == null) {
-            // this DistributedPubSub is creating a new publisher
-            // so send it to the central server
-            messageWriter.createPublisher(publisher.getCreatedAtTimestamp(), topic, publisherClass, null, /*isResend*/ false);
+        return new DistributedPublisher(topic, publisherClass, relayFields);
+    }
+
+    /**
+     * Register a new publisher as dormant.
+     * The publisher will be made live upon receiving a PublisherCreated or SubscriberAdded command if there are no more dormant subscribers.
+     */
+    @Override
+    protected void registerPublisher(Publisher publisher) {
+        var info = dormantInfoMap.computeIfAbsent(publisher.getTopic(), topic -> new DormantInfo());
+        if (info != null && info.dormantPublisher != null) {
+            throw new IllegalStateException("publisher already exists: topic=" + publisher.getTopic());
         }
-        return publisher;
+        info.setDormantPublisher((DistributedPublisher) publisher);
+        var relayFields = Optional.ofNullable(threadLocalRemoteRelayMessage.get()).map(RelayMessageBase::getRelayFields).orElse(null);
+        if (relayFields == null) {
+            // this DistributedPubSub is creating a brand new publisher
+            // so send it to the central server
+            messageWriter.createPublisher(publisher.getCreatedAtTimestamp(), publisher.getTopic(), publisher.getPublisherClass(), null, /*isResend*/ false);
+        } else {
+            info.setReadyToGoLive();
+        }
+    }
+    
+    /**
+     * Add the new subscriber as dormant and send a message to the central server about this subscriber.
+     * Later on, the server will send a SubscriberAdded command and the code will make the subscriber live.
+     * 
+     * @param publisher the publisher to add the subscriber too if the publisher is live, or null if the publisher is dormant or does not exist
+     * @param subscriber the subscriber to register
+     * @param deferred false when subscriber is first registered, true when the subscriber is registered after a CreatePublisher command comes down from the server
+     */
+    @Override
+    protected void registerSubscriber(@Nullable Publisher publisher, Subscriber subscriber, boolean deferred) {
+        if (!deferred) {
+            DistributedSubscriber distributedSubscriber = (DistributedSubscriber) subscriber;
+            var info = dormantInfoMap.computeIfAbsent(subscriber.getTopic(), topic -> new DormantInfo());
+            info.addDormantSubscriber(distributedSubscriber);
+            messageWriter.addSubscriber(subscriber.getCreatedAtTimestamp(), subscriber.getTopic(),subscriber.getSubscriberName(), /*isResend*/ false);
+        }
+    }
+    
+    private void handleCreatePublisher(CreatePublisher createPublisher) {
+        threadLocalRemoteRelayMessage.set(createPublisher);
+        String topic = createPublisher.getTopic();
+        DistributedSocketPubSub.this.createPublisher(topic,
+                                                     createPublisher.getPublisherClass());
+        LOGGER.log(Level.TRACE, "Remote publisher created as dormant: clientMachine={0}, topic={1}",
+                   DistributedSocketPubSub.this.machineId, topic);
+        var dormantInfo = DistributedSocketPubSub.this.dormantInfoMap.get(topic);
+        if (dormantInfo != null) {
+            dormantInfo.tryToMakeDormantPublisherLive();
+        }
+    }
+    
+    private void handlePublisherCreated(PublisherCreated publisherCreated) {
+        String topic = publisherCreated.getTopic();
+        LOGGER.log(Level.TRACE, "Confirm publisher created: clientMachine={0}, topic={1}",
+                   DistributedSocketPubSub.this.machineId, topic);
+        var dormantInfo = dormantInfoMap.get(topic);
+        dormantInfo.setReadyToGoLive(publisherCreated.getRelayFields());
+        dormantInfo.tryToMakeDormantPublisherLive();
+    }
+    
+    private void handleSubscriberAdded(SubscriberAdded subscriberAdded) {
+        String topic = subscriberAdded.getTopic();
+        String subscriberName = subscriberAdded.getSubscriberName();
+        var dormantInfo = DistributedSocketPubSub.this.dormantInfoMap.get(topic);
+        var publisher = getPublisher(subscriberAdded.getTopic());
+        var subscriberResult = dormantInfo.tryMakeDormantSubscriberLive(publisher, subscriberName);
+        LOGGER.log(Level.TRACE, "Confirm subscriber added: clientMachine={0}, topic={1}, subscriberName={2}, subscriberResult={3}",
+                   DistributedSocketPubSub.this.machineId, subscriberAdded.getTopic(), subscriberName, subscriberResult);
+        if (subscriberResult.shouldAttemptToMakePublisherLive()) {
+            dormantInfo.tryToMakeDormantPublisherLive();
+        }
+    }
+    
+    private void handleSubscriberRemoved(SubscriberRemoved subscriberRemoved) {
+        String topic = subscriberRemoved.getTopic();
+        String subscriberName = subscriberRemoved.getSubscriberName();
+        LOGGER.log(Level.TRACE, "Confirm subscriber removed: topic={0}, subscriberName={1}",
+                   topic, subscriberName);
+        var dormantInfo = DistributedSocketPubSub.this.dormantInfoMap.get(topic);
+        if (dormantInfo != null) {
+            dormantInfo.removeDormantSubscriber(subscriberName);
+            dormantInfo.tryToMakeDormantPublisherLive();
+        }
+    }
+
+    private class DormantInfo {
+        private DistributedPublisher dormantPublisher;
+        private boolean readyToGoLive;
+        private final Map<String /*subscriberName*/, DistributedSubscriber> dormantSubscribers = new HashMap<>();
+        private final List<DistributedSubscriber> confirmedSubscribers = new ArrayList<>(); // subscribers which are dormant but for which we received SubscriberAdded
+        
+        DormantInfo() {
+        }
+        
+        synchronized void setDormantPublisher(DistributedPublisher publisher) {
+            assert this.dormantPublisher == null;
+            this.dormantPublisher = publisher;
+        }
+        
+        DistributedPublisher getDormantPublisher() {
+            return dormantPublisher;
+        }
+
+        /**
+         * Add subscriber to the dormant subscriber collection.
+         * 
+         * @return true if subscriber added, false if one with the same name already exists.
+         */
+        synchronized boolean addDormantSubscriber(DistributedSubscriber subscriber) {
+            var existingSubscriber = dormantSubscribers.putIfAbsent(subscriber.getSubscriberName(), subscriber);
+            return existingSubscriber == null;
+        }
+        
+        /**
+         * Remove a subscriber from the dormant subscriber collection.
+         * 
+         * @return true of subscriber removed, false if subscriber does not exist
+         */
+        synchronized boolean removeDormantSubscriber(String subscriberName) {
+            var existingSubscriber = dormantSubscribers.remove(subscriberName);
+            return existingSubscriber != null;
+        }
+        
+        /**
+         * Set the publisher as ready to go live.
+         * This is set upon receiving the PublisherCreated message.
+         * Remote publishers are always created as live.
+         */
+        synchronized void setReadyToGoLive(@Nonnull RelayFields relayFields) {
+            assert dormantPublisher.getRemoteRelayFields() == null;
+            dormantPublisher.setRemoteRelayFields(relayFields);
+            readyToGoLive = true;
+        }
+        
+        synchronized void setReadyToGoLive() {
+            assert dormantPublisher.getRemoteRelayFields() != null;
+            readyToGoLive = true;
+        }
+        
+        /**
+         * Make the dormant publisher live if is ready to go live and there are no dormant subscribers.
+         */
+        synchronized void tryToMakeDormantPublisherLive() {
+            if (dormantPublisher == null) {
+                return;
+            }
+            if (readyToGoLive && dormantSubscribers.isEmpty()) {
+                var publisher = dormantPublisher;
+                dormantPublisher = null;
+                int numSubscribersMadeLive = addConfirmedSubscribersInternal(publisher);
+                LOGGER.log(Level.TRACE, "Publisher live: clientMachine={0}, topic={1}, numSubscribersMadeLive={2}",
+                           DistributedSocketPubSub.this.machineId, publisher.getTopic(), numSubscribersMadeLive);
+                publisher.setLive();
+                DistributedSocketPubSub.this.addPublisher(publisher);
+            } else {
+                LOGGER.log(Level.TRACE, "Publisher still dormant: clientMachine={0}, topic={1}, live=false",
+                           DistributedSocketPubSub.this.machineId, dormantPublisher.getTopic());
+            }
+        }
+        
+        /**
+         * Add the confirmed subscribers (those which received a SubscriberAdded response from the server) to the live publisher.
+         */
+        private int addConfirmedSubscribersInternal(DistributedPublisher publisher) {
+            int numConfirmedSubscribers = confirmedSubscribers.size();
+            for (var subscriber : confirmedSubscribers) {
+                publisher.addSubscriber(subscriber);
+            }
+            confirmedSubscribers.clear();
+            return numConfirmedSubscribers;
+        }
+        
+        /**
+         * Called when the client receives a SubscriberAdded command.
+         * Try to make the subscriber live.
+         * 
+         * @param publisher the publisher this subscriber belongs too, null if publisher is dormant
+         * @param subscriberName the name of the dormant subscriber
+         * @return status to be used in logs
+         */
+        synchronized TryMakeDormantSubscriberLiveResult tryMakeDormantSubscriberLive(@Nullable DistributedPublisher publisher, String subscriberName) {
+            DistributedSubscriber subscriber = Objects.requireNonNull(dormantSubscribers.remove(subscriberName));
+            if (publisher != null) {
+                // use case: live publisher exists, subscriber added to it and server sends SubscriberAdded
+                publisher.addSubscriber(subscriber);
+                return TryMakeDormantSubscriberLiveResult.ADDED;
+            } else if (dormantPublisher != null) {
+                // use case: client just created a brand new publisher and not yet confirmed by server,
+                // and client adds a subscriber to this publisher and server sends a SubscriberAdded
+                dormantPublisher.addSubscriber(subscriber);
+                return TryMakeDormantSubscriberLiveResult.ADDED_TO_DORMANT_PUBLISHER;
+            } else {
+                // use case: remote client subscribes and just received SubscriberAdded, but the CreatePublisher has not come down yet 
+                confirmedSubscribers.add(subscriber);
+                return TryMakeDormantSubscriberLiveResult.ACTIVATE_LATER;
+            }
+        } 
+    }
+    
+    private enum TryMakeDormantSubscriberLiveResult {
+        ADDED(false),
+        ADDED_TO_DORMANT_PUBLISHER(true),
+        ACTIVATE_LATER(true);
+        
+        private final boolean attemptToMakePublisherLive;
+        
+        TryMakeDormantSubscriberLiveResult(boolean attemptToMakePublisherLive) {
+            this.attemptToMakePublisherLive = attemptToMakePublisherLive;
+        }
+        
+        boolean shouldAttemptToMakePublisherLive() {
+            return attemptToMakePublisherLive;
+        }
     }
 
     @Override
@@ -623,13 +878,6 @@ public class DistributedSocketPubSub extends PubSub {
         resolveFetchPublisher(publisher);
     }
     
-    /**
-     * Send the subscriber to the central server.
-     */
-    @Override
-    protected void onAddSubscriber(Subscriber subscriber) {
-        messageWriter.addSubscriber(subscriber.getCreatedAtTimestamp(), subscriber.getTopic(),subscriber.getSubscriberName(), /*isResend*/ false);
-    }
 
     /**
      * Remove the subscriber from the central server.
