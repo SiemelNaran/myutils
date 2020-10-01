@@ -158,9 +158,13 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     @ValueSource(strings = {"CreatePublisherFirst", "CreatePublisherAndAddSubscriberAtSameTime"})
     void basicTest(String orderString) throws IOException {
         boolean createPublisherFirst;
-        if ("CreatePublisherFirst".equals(orderString)) createPublisherFirst = true;
-        else if ("CreatePublisherAndAddSubscriberAtSameTime".equals(orderString)) createPublisherFirst = false;
-        else throw new UnsupportedOperationException(orderString);
+        if ("CreatePublisherFirst".equals(orderString)) {
+            createPublisherFirst = true;
+        } else if ("CreatePublisherAndAddSubscriberAtSameTime".equals(orderString)) {
+            createPublisherFirst = false;
+        } else {
+            throw new UnsupportedOperationException(orderString);
+        }
         
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         List<CompletableFuture<Void>> startFutures = new ArrayList<>();

@@ -6,7 +6,6 @@ import static myutils.TestUtil.assertExceptionFromCallable;
 import static myutils.TestUtil.sleep;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.time.Duration;
 import java.time.Instant;
