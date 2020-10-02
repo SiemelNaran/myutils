@@ -47,9 +47,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-
 import javax.annotation.Nullable;
-
 import myutils.LogFailureToConsoleTestWatcher;
 import myutils.TestBase;
 import myutils.TestUtil;
