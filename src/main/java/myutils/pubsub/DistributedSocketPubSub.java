@@ -42,9 +42,11 @@ import java.util.function.Consumer;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import myutils.pubsub.MessageClasses.AddSubscriber;
+import myutils.pubsub.MessageClasses.AddSubscriberFailed;
 import myutils.pubsub.MessageClasses.ClientAccepted;
 import myutils.pubsub.MessageClasses.ClientRejected;
 import myutils.pubsub.MessageClasses.CreatePublisher;
+import myutils.pubsub.MessageClasses.CreatePublisherFailed;
 import myutils.pubsub.MessageClasses.DownloadPublishedMessages;
 import myutils.pubsub.MessageClasses.FetchPublisher;
 import myutils.pubsub.MessageClasses.Identification;
@@ -55,6 +57,7 @@ import myutils.pubsub.MessageClasses.PublisherCreated;
 import myutils.pubsub.MessageClasses.RelayFields;
 import myutils.pubsub.MessageClasses.RelayMessageBase;
 import myutils.pubsub.MessageClasses.RemoveSubscriber;
+import myutils.pubsub.MessageClasses.RemoveSubscriberFailed;
 import myutils.pubsub.MessageClasses.SubscriberAdded;
 import myutils.pubsub.MessageClasses.SubscriberRemoved;
 import myutils.pubsub.PubSubUtils.CallStackCapturing;
@@ -454,13 +457,19 @@ public class DistributedSocketPubSub extends PubSub {
                     if (message instanceof CreatePublisher) {
                         // we are receiving a CreatePublisher from the server in response to a client.subscribe
                         handleCreatePublisher((CreatePublisher) message);
+                    } else if (message instanceof CreatePublisherFailed) {
+                        handleCreatePublisherFailed((CreatePublisherFailed) message);
                     } else if (message instanceof PublisherCreated) {
                         // we are receiving a PublisherCreated from the server in response to a client.createPublisher
                         handlePublisherCreated((PublisherCreated) message);
                     } else if (message instanceof SubscriberAdded) {
                         handleSubscriberAdded((SubscriberAdded) message);
+                    } else if (message instanceof AddSubscriberFailed) {
+                        handleAddSubscriberFailed((AddSubscriberFailed) message);
                     } else if (message instanceof SubscriberRemoved) {
                         handleSubscriberRemoved((SubscriberRemoved) message);
+                    } else if (message instanceof RemoveSubscriberFailed) {
+                        handleRemoveSubscriberFailed((RemoveSubscriberFailed) message);
                     } else if (message instanceof PublishMessage) {
                         PublishMessage publishMessage = (PublishMessage) message;
                         String topic = publishMessage.getTopic();
@@ -529,7 +538,8 @@ public class DistributedSocketPubSub extends PubSub {
      * Publisher that forwards publish commands to the message server.
      */
     public final class DistributedPublisher extends Publisher {
-        private boolean isDormant;
+        private volatile boolean invalid;
+        private volatile boolean isDormant;
         private RelayFields remoteRelayFields;
         private List<DeferredMessage> messagesWhileDormant = new ArrayList<>();
 
@@ -582,6 +592,15 @@ public class DistributedSocketPubSub extends PubSub {
             }
             messagesWhileDormant.clear();
         }
+
+        public boolean isInvalid() {
+            return invalid;
+        }
+
+        void markInvalid() {
+            assert isDormant;
+            invalid = true;
+        }
     }
 
     private static class DeferredMessage {
@@ -600,11 +619,21 @@ public class DistributedSocketPubSub extends PubSub {
      * Subscriber that is no different than the base class.
      */
     public final class DistributedSubscriber extends Subscriber {
+        private volatile boolean invalid;
+        
         private DistributedSubscriber(@Nonnull String topic,
                                       @Nonnull String subscriberName,
                                       @Nonnull Class<? extends CloneableObject<?>> subscriberClass,
                                       @Nonnull Consumer<CloneableObject<?>> callback) {
             super(topic, subscriberName, subscriberClass, callback);
+        }
+
+        public boolean isInvalid() {
+            return invalid;
+        }
+
+        void markInvalid() {
+            invalid = true;
         }
     }
 
@@ -642,7 +671,7 @@ public class DistributedSocketPubSub extends PubSub {
      * Add the new subscriber as dormant and send a message to the central server about this subscriber.
      * Later on, the server will send a SubscriberAdded command and the code will make the subscriber live.
      * 
-     * @param publisher the publisher to add the subscriber too if the publisher is live, or null if the publisher is dormant or does not exist
+     * @param publisher the publisher to add the subscriber to if the publisher is live, or null if the publisher is dormant or does not exist
      * @param subscriber the subscriber to register
      * @param deferred false when subscriber is first registered, true when the subscriber is registered after a CreatePublisher command comes down from the server
      */
@@ -656,6 +685,22 @@ public class DistributedSocketPubSub extends PubSub {
         }
     }
     
+    /**
+     * Send a message to the central server to delete this subscriber.
+     * Later on, the server will send a SubscriberRemoved command and the code will really remove the subscriber.
+     * When all subscribers to the topic from this machine are removed, the central server will no longer send messages published to this topic to this machine. 
+     * 
+     * @param publisher the publisher to remove the subscriber from if the publisher is live, or null if the publisher is dormant or does not exist
+     * @param subscriber the subscriber to unregister
+     * @param isDeferred false when subscriber is first registered, true when the subscriber is registered after a CreatePublisher command comes down from the server
+     */
+    @Override
+    protected void unregisterSubscriber(@Nullable Publisher publisher, Subscriber subscriber, boolean isDeferred) {
+        if (!isDeferred) {
+            messageWriter.removeSubscriber(subscriber.getTopic(),subscriber.getSubscriberName());
+        }
+    }
+    
     private void handleCreatePublisher(CreatePublisher createPublisher) {
         threadLocalRemoteRelayMessage.set(createPublisher);
         String topic = createPublisher.getTopic();
@@ -663,10 +708,17 @@ public class DistributedSocketPubSub extends PubSub {
                                                      createPublisher.getPublisherClass());
         LOGGER.log(Level.TRACE, "Remote publisher created as dormant: clientMachine={0}, topic={1}",
                    DistributedSocketPubSub.this.machineId, topic);
-        var dormantInfo = DistributedSocketPubSub.this.dormantInfoMap.get(topic);
-        if (dormantInfo != null) {
-            dormantInfo.tryToMakeDormantPublisherLive();
-        }
+        var dormantInfo = dormantInfoMap.get(topic);
+        dormantInfo.tryToMakeDormantPublisherLive();
+    }
+    
+    private void handleCreatePublisherFailed(CreatePublisherFailed createPublisherFailed) {
+        String topic = createPublisherFailed.getTopic();
+        LOGGER.log(Level.TRACE, "Create publisher failed: clientMachine={0}, topic={1}, error={2}",
+                   DistributedSocketPubSub.this.machineId, topic, createPublisherFailed.getError());
+        var dormantInfo = dormantInfoMap.get(topic);
+        dormantInfo.markDormantPublisherAsInvalid();
+        dormantInfoMap.remove(topic);
     }
     
     private void handlePublisherCreated(PublisherCreated publisherCreated) {
@@ -682,11 +734,25 @@ public class DistributedSocketPubSub extends PubSub {
         String topic = subscriberAdded.getTopic();
         String subscriberName = subscriberAdded.getSubscriberName();
         var dormantInfo = DistributedSocketPubSub.this.dormantInfoMap.get(topic);
-        var publisher = getPublisher(subscriberAdded.getTopic());
+        var publisher = getPublisher(topic);
         var subscriberResult = dormantInfo.tryMakeDormantSubscriberLive(publisher, subscriberName);
         LOGGER.log(Level.TRACE, "Confirm subscriber added: clientMachine={0}, topic={1}, subscriberName={2}, subscriberResult={3}",
-                   DistributedSocketPubSub.this.machineId, subscriberAdded.getTopic(), subscriberName, subscriberResult);
+                   DistributedSocketPubSub.this.machineId, topic, subscriberName, subscriberResult);
         if (subscriberResult.shouldAttemptToMakePublisherLive()) {
+            dormantInfo.tryToMakeDormantPublisherLive();
+        }
+    }
+    
+    private void handleAddSubscriberFailed(AddSubscriberFailed addSubscriberFailed) {
+        String topic = addSubscriberFailed.getTopic();
+        String subscriberName = addSubscriberFailed.getSubscriberName();
+        LOGGER.log(Level.TRACE, "Add subscriber failed: clientMachine={0}, topic={1}, subscriberName={2}, error='{3}'",
+                   DistributedSocketPubSub.this.machineId, topic, subscriberName, addSubscriberFailed.getError());
+        var dormantInfo = DistributedSocketPubSub.this.dormantInfoMap.get(topic);
+        Subscriber subscriber = dormantInfo.removeDormantSubscriber(subscriberName);
+        unsubscribe(subscriber);
+        var publisher = getPublisher(topic);
+        if (publisher != null) {
             dormantInfo.tryToMakeDormantPublisherLive();
         }
     }
@@ -696,6 +762,7 @@ public class DistributedSocketPubSub extends PubSub {
         String subscriberName = subscriberRemoved.getSubscriberName();
         LOGGER.log(Level.TRACE, "Confirm subscriber removed: topic={0}, subscriberName={1}",
                    topic, subscriberName);
+        super.basicUnsubscibe(topic, subscriberName, true);
         var dormantInfo = DistributedSocketPubSub.this.dormantInfoMap.get(topic);
         if (dormantInfo != null) {
             dormantInfo.removeDormantSubscriber(subscriberName);
@@ -703,6 +770,13 @@ public class DistributedSocketPubSub extends PubSub {
         }
     }
 
+    private void handleRemoveSubscriberFailed(RemoveSubscriberFailed removeSubscriberFailed) {
+        String topic = removeSubscriberFailed.getTopic();
+        String subscriberName = removeSubscriberFailed.getSubscriberName();
+        LOGGER.log(Level.TRACE, "Remove subscriber failed: clientMachine={0}, topic={1}, subscriberName={2}, error='{3}'",
+                   DistributedSocketPubSub.this.machineId, topic, subscriberName, removeSubscriberFailed.getError());
+    }
+    
     private class DormantInfo {
         private DistributedPublisher dormantPublisher;
         private boolean readyToGoLive;
@@ -717,6 +791,11 @@ public class DistributedSocketPubSub extends PubSub {
             this.dormantPublisher = publisher;
         }
         
+        synchronized void markDormantPublisherAsInvalid() {
+            assert this.dormantPublisher != null;
+            dormantPublisher.markInvalid();
+        }
+
         DistributedPublisher getDormantPublisher() {
             return dormantPublisher;
         }
@@ -733,12 +812,16 @@ public class DistributedSocketPubSub extends PubSub {
         
         /**
          * Remove a subscriber from the dormant subscriber collection.
+         * Marks the subscriber as invalid, so that if anyone has a pointer to it they will see it as invalid.
          * 
          * @return true of subscriber removed, false if subscriber does not exist
          */
-        synchronized boolean removeDormantSubscriber(String subscriberName) {
+        synchronized DistributedSubscriber removeDormantSubscriber(String subscriberName) {
             var existingSubscriber = dormantSubscribers.remove(subscriberName);
-            return existingSubscriber != null;
+            if (existingSubscriber != null) {
+                existingSubscriber.markInvalid();
+            }
+            return existingSubscriber;
         }
         
         /**
@@ -909,15 +992,6 @@ public class DistributedSocketPubSub extends PubSub {
      * Derived classes may add a secret key. The implementor should override a corresponding function in the server class to verify the secret key.
      */
     protected void addCustomPropertiesForRemoveSubscriber(Map<String, String> customProperties, String topic, String subscriberName) {
-    }
-
-    /**
-     * Remove the subscriber from the central server.
-     * When all subscribers to the topic from this machine are removed, the central server will no longer send messages published to this topic to this machine. 
-     */
-    @Override
-    protected void onRemoveSubscriber(Subscriber subscriber) {
-        messageWriter.removeSubscriber(subscriber.getTopic(),subscriber.getSubscriberName());
     }
 
     /**

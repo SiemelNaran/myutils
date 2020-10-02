@@ -187,6 +187,48 @@ interface MessageClasses {
             return classType(this) + ", error='" + error + "'";
         }
     }
+    
+    /**
+     * Class to notify the server that we are subscribing to or unsubscribing from a particular topic,
+     * so that it sends or stops sending us messages published to this topic.
+     * Required fields topic and subscriberName.
+     */
+    abstract class AddOrRemoveSubscriberFailed extends InvalidMessage {
+        private static final long serialVersionUID = 1L;
+        
+        private final String topic;
+        private final String subscriberName;
+
+        public AddOrRemoveSubscriberFailed(String error, String topic, String subscriberName) {
+            super(error);
+            this.topic = topic;
+            this.subscriberName = subscriberName;
+        }
+        
+        String getTopic() {
+            return topic;
+        }
+        
+        String getSubscriberName() {
+            return subscriberName;
+        }
+    }
+    
+    class AddSubscriberFailed extends AddOrRemoveSubscriberFailed {
+        private static final long serialVersionUID = 1L;
+        
+        AddSubscriberFailed(@Nonnull String error, String topic, String subscriberName) {
+            super(error, topic, subscriberName);
+        }
+    }
+
+    class RemoveSubscriberFailed extends AddOrRemoveSubscriberFailed {
+        private static final long serialVersionUID = 1L;
+        
+        RemoveSubscriberFailed(@Nonnull String error, String topic, String subscriberName) {
+            super(error, topic, subscriberName);
+        }
+    }
 
 
     /**
@@ -212,7 +254,22 @@ interface MessageClasses {
         public String toLoggingString() {
             return super.toLoggingString() + ", failedClientIndex=" + failedClientIndex;
         }
-}
+    }
+    
+    class CreatePublisherFailed extends InvalidRelayMessage {
+        private static final long serialVersionUID = 1L;
+        
+        private final String topic;
+
+        CreatePublisherFailed(@Nonnull String error, long failedClientIndex, String topic) {
+            super(error, failedClientIndex);
+            this.topic = topic;
+        }
+
+        String getTopic() {
+            return topic;
+        }
+    }
 
     
     /**
