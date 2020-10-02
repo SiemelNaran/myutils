@@ -189,8 +189,7 @@ interface MessageClasses {
     }
     
     /**
-     * Class to notify the server that we are subscribing to or unsubscribing from a particular topic,
-     * so that it sends or stops sending us messages published to this topic.
+     * Class to notify the client that the attempt to subscribe or unsubscribe failed,
      * Required fields topic and subscriberName.
      */
     abstract class AddOrRemoveSubscriberFailed extends InvalidMessage {
@@ -213,7 +212,10 @@ interface MessageClasses {
             return subscriberName;
         }
     }
-    
+
+    /**
+     * Class to notify the client that adding a subscriber failed.
+     */
     class AddSubscriberFailed extends AddOrRemoveSubscriberFailed {
         private static final long serialVersionUID = 1L;
         
@@ -222,6 +224,9 @@ interface MessageClasses {
         }
     }
 
+    /**
+     * Class to notify the client that removing a subscriber failed.
+     */
     class RemoveSubscriberFailed extends AddOrRemoveSubscriberFailed {
         private static final long serialVersionUID = 1L;
         
@@ -256,6 +261,9 @@ interface MessageClasses {
         }
     }
     
+    /**
+     * Class to notify the client that creating a publisher failed.
+     */
     class CreatePublisherFailed extends InvalidRelayMessage {
         private static final long serialVersionUID = 1L;
         
