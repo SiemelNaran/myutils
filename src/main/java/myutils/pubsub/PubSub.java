@@ -371,10 +371,10 @@ public abstract class PubSub implements Shutdowneable {
     }
 
     /**
-     * Unsubscribe a subscriber.
-     * Messages in the subscriber queue will be purged.
+     * Attempt to unsubscribe a subscriber.
+     * Running time O(k) where k is the number of subscribers.
      * 
-     * <p>Running time O(N) where N is the total number of messages in all subscribers.
+     * @see basicUnsubscribe for more notes on running time.
      */
     public synchronized void unsubscribe(Subscriber findSubscriber) {
         String topic = findSubscriber.getTopic();
@@ -389,7 +389,15 @@ public abstract class PubSub implements Shutdowneable {
         }
         unregisterSubscriber(publisher, findSubscriber, foundDeferredSubscriber);
     }
-    
+
+    /**
+     * Really unsubscribe a subscriber from this PubSub.
+     * Running time O(N) where N is the total number of messages in all subscribers.
+     * 
+     * @param topic
+     * @param findSubscriberName
+     * @param isDeferred
+     */
     protected synchronized void basicUnsubscibe(String topic, String findSubscriberName, boolean isDeferred) {
         if (isDeferred) {
             MultimapUtils<String, Subscriber> multimap = new MultimapUtils<>(deferredSubscribersMap, ArrayList::new);
