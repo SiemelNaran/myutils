@@ -555,12 +555,16 @@ public class InMemoryPubSubIntegrationTest {
         */
     }
     
+    /**
+     * This test demonstrates how to extend the client class PubSub to enforce naming conventions on the client side.
+     * It is also possible to extend DistributedMessageServer and override canCreatePublisher to enforce naming conventions on the server side.
+     */
     @Test
     @SuppressWarnings("checkstyle:LineLength")
     void testInvalidTopicName() {
-        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
-        assertExceptionFromCallable(() -> pubSub.createPublisher("hello-world", CloneableString.class), PubSub.TopicRegexException.class, "Topic does not match regex: topic=hello-world, regex=\\w");
-        assertExceptionFromCallable(() -> pubSub.subscribe("hello-world", "InvalidSubscriber", CloneableString.class, unused -> { }), PubSub.TopicRegexException.class, "Topic does not match regex: topic=hello-world, regex=\\w");
+        PubSub pubSub = new TestInMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
+        assertExceptionFromCallable(() -> pubSub.createPublisher("hello-world", CloneableString.class), TopicRegexException.class, "Topic does not match regex: topic=hello-world, regex=\\w");
+        assertExceptionFromCallable(() -> pubSub.subscribe("hello-world", "InvalidSubscriber", CloneableString.class, unused -> { }), TopicRegexException.class, "Topic does not match regex: topic=hello-world, regex=\\w");
     }
 
     public static class TestEvent implements CloneableObject<TestEvent> {
@@ -663,5 +667,43 @@ public class InMemoryPubSubIntegrationTest {
         assertThat(words,
                    Matchers.contains("SubscriberThatThrows-TestEvent : Test Exception",
                                      "message must be or inherit from myutils.pubsub.InMemoryPubSubIntegrationTest$TestEvent"));
+    }
+}
+
+
+class TestInMemoryPubSub extends InMemoryPubSub {
+    public TestInMemoryPubSub(PubSubConstructorArgs baseArgs) {
+        super(baseArgs);
+    }
+    
+    @Override
+    protected <T> void onBeforeAddPublisher(String topic, Class<T> publisherClass) {
+        super.onBeforeAddPublisher(topic, publisherClass);
+        verifyTopicChars(topic);
+    }
+    
+    @Override
+    protected <T> void onBeforeAddSubscriber(String topic, String subscriberName, Class<T> subscriberClass) {
+        super.onBeforeAddSubscriber(topic, subscriberName, subscriberClass);
+        verifyTopicChars(topic);
+    }
+
+    /**
+     * Verify if the topic name matches the naming standards, in our case <code>\w</code>.
+     */
+    private void verifyTopicChars(String topic) {
+        topic.codePoints().forEach(c -> {
+            if (!(Character.isAlphabetic(c) || Character.isDigit(c) || c == '_')) {
+                throw new TopicRegexException(topic, "\\w");
+            }
+        });
+    }
+}
+
+class TopicRegexException extends PubSubException {
+    private static final long serialVersionUID = 1L;
+
+    public TopicRegexException(String topic, String regex) {
+        super("Topic does not match regex: topic=" + topic + ", regex=" + regex);
     }
 }

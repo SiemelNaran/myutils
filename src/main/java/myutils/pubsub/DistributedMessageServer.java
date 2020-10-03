@@ -1400,7 +1400,8 @@ public class DistributedMessageServer implements Shutdowneable {
 
     /**
      * Return null if publisher can be created, and a non-null reason if it cannot.
-     * Derived classes may override this function to check if createPublisher passes in a valid secret key.
+     * Derived classes may override this function to check if createPublisher passes in a valid secret key,
+     * or that the publisher name follows particular naming standards.
      */
     protected @Nullable String canCreatePublisher(CreatePublisher createPublisher) {
         return null;

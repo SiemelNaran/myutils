@@ -411,35 +411,13 @@ public abstract class PubSub implements Shutdowneable {
         }
     }
     
-    private <T> void onBeforeAddPublisher(String topic, Class<T> publisherClass) {
-        verifyTopicChars(topic);
+    protected <T> void onBeforeAddPublisher(String topic, Class<T> publisherClass) {
     }
     
     protected <T> void onBeforeAddSubscriber(String topic, String subscriberName, Class<T> subscriberClass) {
-        verifyTopicChars(topic);
     }
 
     protected void onPublisherAdded(Publisher publisher) {
-    }
-    
-    /**
-     * Verify if the topic name matches the naming standards.
-     * The default implementation is that the name must match <code>\w</code>.
-     */
-    protected void verifyTopicChars(String topic) {
-        topic.codePoints().forEach(c -> {
-            if (!(Character.isAlphabetic(c) || Character.isDigit(c) || c == '_')) {
-                throw new TopicRegexException(topic, "\\w");
-            }
-        });
-    }
-    
-    public static class TopicRegexException extends PubSubException {
-        private static final long serialVersionUID = 1L;
-
-        public TopicRegexException(String topic, String regex) {
-            super("Topic does not match regex: topic=" + topic + ", regex=" + regex);
-        }
     }
     
     private void startThreads() {
