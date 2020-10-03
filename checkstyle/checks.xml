@@ -59,7 +59,7 @@
             <property name="allowNonPrintableEscapes" value="true"/>
         </module>
         <module name="MethodLength">
-            <property name="max" value="75"/>
+            <property name="max" value="80"/>
             <property name="countEmpty" value="true"/>
         </module>
         <module name="UnusedImports"/>

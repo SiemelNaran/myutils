@@ -190,6 +190,29 @@ public class InMemoryPubSubIntegrationTest {
     }
     
     /**
+     * In this test we unsubscribe a deferred subscriber.
+     */
+    @Test
+    void testUnsubscribeDeferredSubscriber() {
+        List<String> words = Collections.synchronizedList(new ArrayList<>());
+        
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
+        Consumer<CloneableString> handleString1 = str -> words.add(str.append("-s1"));
+        Subscriber subscriber1 = pubSub.subscribe("hello", "Subscriber1", CloneableString.class, handleString1);
+        Consumer<CloneableString> handleString2 = str -> words.add(str.append("-s2"));
+        Subscriber subscriber2 = pubSub.subscribe("hello", "Subscriber2", CloneableString.class, handleString2);
+        
+        pubSub.unsubscribe(subscriber1);
+        pubSub.unsubscribe(subscriber2);
+        
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
+
+        publisher.publish(new CloneableString("one"));
+        sleep(100); // wait for subscribers to work
+        assertThat(words, Matchers.empty());
+    }
+    
+    /**
      * In this test we create the subscriber before the publisher.
      * This could happen in a multi-threaded environment.
      */

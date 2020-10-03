@@ -2,6 +2,8 @@ package myutils.pubsub;
 
 import java.io.Serializable;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
 import javax.annotation.Nonnull;
 
 
@@ -185,6 +187,53 @@ interface MessageClasses {
             return classType(this) + ", error='" + error + "'";
         }
     }
+    
+    /**
+     * Class to notify the client that the attempt to subscribe or unsubscribe failed,
+     * Required fields topic and subscriberName.
+     */
+    abstract class AddOrRemoveSubscriberFailed extends InvalidMessage {
+        private static final long serialVersionUID = 1L;
+        
+        private final String topic;
+        private final String subscriberName;
+
+        public AddOrRemoveSubscriberFailed(String error, String topic, String subscriberName) {
+            super(error);
+            this.topic = topic;
+            this.subscriberName = subscriberName;
+        }
+        
+        String getTopic() {
+            return topic;
+        }
+        
+        String getSubscriberName() {
+            return subscriberName;
+        }
+    }
+
+    /**
+     * Class to notify the client that adding a subscriber failed.
+     */
+    class AddSubscriberFailed extends AddOrRemoveSubscriberFailed {
+        private static final long serialVersionUID = 1L;
+        
+        AddSubscriberFailed(@Nonnull String error, String topic, String subscriberName) {
+            super(error, topic, subscriberName);
+        }
+    }
+
+    /**
+     * Class to notify the client that removing a subscriber failed.
+     */
+    class RemoveSubscriberFailed extends AddOrRemoveSubscriberFailed {
+        private static final long serialVersionUID = 1L;
+        
+        RemoveSubscriberFailed(@Nonnull String error, String topic, String subscriberName) {
+            super(error, topic, subscriberName);
+        }
+    }
 
 
     /**
@@ -209,6 +258,24 @@ interface MessageClasses {
         @Override
         public String toLoggingString() {
             return super.toLoggingString() + ", failedClientIndex=" + failedClientIndex;
+        }
+    }
+    
+    /**
+     * Class to notify the client that creating a publisher failed.
+     */
+    class CreatePublisherFailed extends InvalidRelayMessage {
+        private static final long serialVersionUID = 1L;
+        
+        private final String topic;
+
+        CreatePublisherFailed(@Nonnull String error, long failedClientIndex, String topic) {
+            super(error, failedClientIndex);
+            this.topic = topic;
+        }
+
+        String getTopic() {
+            return topic;
         }
     }
 
@@ -324,6 +391,7 @@ interface MessageClasses {
         private static final long serialVersionUID = 1L;
         
         private final long clientTimestamp;
+        private Map<String, String> customProperties;
 
         ClientGeneratedMessage(Long clientTimestamp) {
             this.clientTimestamp = clientTimestamp != null ? clientTimestamp : System.currentTimeMillis();
@@ -331,6 +399,14 @@ interface MessageClasses {
 
         long getClientTimestamp() {
             return clientTimestamp;
+        }
+        
+        void setCustomProperties(Map<String, String> customProperties) {
+            this.customProperties = customProperties;
+        }
+        
+        Map<String, String> getCustomProperties() {
+            return Collections.unmodifiableMap(customProperties);
         }
     }
 

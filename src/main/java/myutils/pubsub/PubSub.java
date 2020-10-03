@@ -279,6 +279,14 @@ public abstract class PubSub implements Shutdowneable {
      */
     protected abstract void registerSubscriber(@Nullable Publisher publisher, Subscriber subscriber, boolean deferred);
 
+    /**
+     * Unregister a subscriber.
+     * 
+     * @param publisher the publisher this subscriber belongs too, null if the publisher does not yet exist
+     * @param subscriber the subscriber
+     */
+    protected abstract void unregisterSubscriber(@Nullable Publisher publisher, Subscriber subscriber, boolean isDeferred);
+
     protected final void addPublisher(Publisher publisher) {
         topicMap.put(publisher.getTopic(), publisher);
     }
@@ -363,21 +371,43 @@ public abstract class PubSub implements Shutdowneable {
     }
 
     /**
-     * Unsubscribe a subscriber.
-     * Messages in the subscriber queue will be purged.
+     * Attempt to unsubscribe a subscriber.
+     * Running time O(k) where k is the number of subscribers.
      * 
-     * <p>Running time O(N) where N is the total number of messages in all subscribers.
+     * @see basicUnsubscribe for more notes on running time.
      */
-    public synchronized void unsubscribe(Subscriber subscriber) {
-        var publisher = topicMap.get(subscriber.topic);
-        if (publisher == null) {
-            return;
+    public synchronized void unsubscribe(Subscriber findSubscriber) {
+        String topic = findSubscriber.getTopic();
+        var publisher = topicMap.get(topic);
+        var deferredSubscriberList = deferredSubscribersMap.get(topic);
+        boolean foundDeferredSubscriber = deferredSubscriberList != null && deferredSubscriberList.stream().anyMatch(subscriber -> subscriber == findSubscriber);
+        if (!foundDeferredSubscriber) {
+            boolean foundSubscriber = publisher != null && publisher.subscribers.stream().anyMatch(subscriber -> subscriber == findSubscriber);
+            if (!foundSubscriber) {
+                throw new IllegalStateException("not subscribed: topic=" + topic + ", subscriberName=" + findSubscriber.getSubscriberName());
+            }
         }
-        masterList.removeIf(iterSubscriber -> iterSubscriber == subscriber);
-        if (publisher.subscribers.remove(subscriber)) {
-            onRemoveSubscriber(subscriber);
+        unregisterSubscriber(publisher, findSubscriber, foundDeferredSubscriber);
+    }
+
+    /**
+     * Really unsubscribe a subscriber from this PubSub.
+     * Running time O(N) where N is the total number of messages in all subscribers.
+     * 
+     * @param topic the topic to unsubscribe
+     * @param findSubscriberName the subscriber name to unsubscribe
+     * @param isDeferred true if this is a deferred subscriber
+     */
+    protected synchronized void basicUnsubscibe(String topic, String findSubscriberName, boolean isDeferred) {
+        if (isDeferred) {
+            MultimapUtils<String, Subscriber> multimap = new MultimapUtils<>(deferredSubscribersMap, ArrayList::new);
+            multimap.removeIf(topic, subscriber -> subscriber.getSubscriberName().equals(findSubscriberName));
         } else {
-            throw new IllegalStateException("not subscribed: topic=" + subscriber.getTopic() + ", subscriberName=" + subscriber.getSubscriberName());
+            var publisher = topicMap.get(topic);
+            if (publisher != null) {
+                masterList.removeIf(subscriber -> subscriber.getSubscriberName().equals(findSubscriberName));
+                publisher.subscribers.removeIf(subscriber -> subscriber.getSubscriberName().equals(findSubscriberName));
+            }
         }
     }
     
@@ -392,9 +422,6 @@ public abstract class PubSub implements Shutdowneable {
     protected void onPublisherAdded(Publisher publisher) {
     }
     
-    protected void onRemoveSubscriber(Subscriber subscriber) {
-    }
-
     /**
      * Verify if the topic name matches the naming standards.
      * The default implementation is that the name must match <code>\w</code>.

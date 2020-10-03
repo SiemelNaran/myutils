@@ -51,11 +51,14 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import myutils.pubsub.MessageClasses.AddOrRemoveSubscriber;
 import myutils.pubsub.MessageClasses.AddSubscriber;
+import myutils.pubsub.MessageClasses.AddSubscriberFailed;
 import myutils.pubsub.MessageClasses.ClientAccepted;
 import myutils.pubsub.MessageClasses.ClientGeneratedMessage;
 import myutils.pubsub.MessageClasses.ClientRejected;
 import myutils.pubsub.MessageClasses.CreatePublisher;
+import myutils.pubsub.MessageClasses.CreatePublisherFailed;
 import myutils.pubsub.MessageClasses.DownloadPublishedMessages;
 import myutils.pubsub.MessageClasses.FetchPublisher;
 import myutils.pubsub.MessageClasses.Identification;
@@ -67,6 +70,7 @@ import myutils.pubsub.MessageClasses.RelayFields;
 import myutils.pubsub.MessageClasses.RelayMessageBase;
 import myutils.pubsub.MessageClasses.RelayTopicMessageBase;
 import myutils.pubsub.MessageClasses.RemoveSubscriber;
+import myutils.pubsub.MessageClasses.RemoveSubscriberFailed;
 import myutils.pubsub.MessageClasses.RequestIdentification;
 import myutils.pubsub.MessageClasses.Resendable;
 import myutils.pubsub.MessageClasses.SubscriberAdded;
@@ -1106,8 +1110,16 @@ public class DistributedMessageServer implements Shutdowneable {
     
     private void handleAddSubscriber(ClientMachine clientMachine, AddSubscriber subscriberInfo) {
         String topic = subscriberInfo.getTopic();
-        String subscriberName = subscriberInfo.getSubscriberName();
+        String subscriberName = subscriberInfo.getSubscriberName();        
         
+        String reason = canSubscribe(subscriberInfo);
+        if (reason != null) {
+            send(new AddSubscriberFailed(ErrorMessageEnum.CANNOT_SUBSCRIBE.format(subscriberInfo.getTopic(), subscriberInfo.getSubscriberName(), reason), topic, subscriberName),
+                 clientMachine,
+                 0);
+            return;
+        }
+
         Consumer<PublishersAndSubscribers.AddSubscriberResult> afterSubscriberAdded = addSubscriberResult -> {
             boolean doDownload = false;
             boolean forceLogging = subscriberInfo.isResend();
@@ -1146,6 +1158,15 @@ public class DistributedMessageServer implements Shutdowneable {
     private void handleRemoveSubscriber(ClientMachine clientMachine, RemoveSubscriber subscriberInfo) {
         String topic = subscriberInfo.getTopic();
         String subscriberName = subscriberInfo.getSubscriberName();
+
+        String reason = canSubscribe(subscriberInfo);
+        if (reason != null) {
+            send(new RemoveSubscriberFailed(ErrorMessageEnum.CANNOT_SUBSCRIBE.format(subscriberInfo.getTopic(), subscriberInfo.getSubscriberName(), reason), topic, subscriberName),
+                 clientMachine,
+                 0);
+            return;
+        }
+
         publishersAndSubscribers.removeSubscriberEndpoint(topic, clientMachine.getMachineId(), subscriberName);
         send(new SubscriberRemoved(topic, subscriberName), clientMachine, 0);
         LOGGER.log(Level.INFO, "Removed subscriber : topic={0} subscriberName={1} clientMachine={2}", topic, subscriberName, clientMachine.getMachineId());
@@ -1163,14 +1184,25 @@ public class DistributedMessageServer implements Shutdowneable {
         }
     }
     
-    private void handleCreatePublisher(ClientMachine clientMachine, CreatePublisher relay) {
-        CreatePublisher createPublisherPassedInToThisFunction = (CreatePublisher) relay;
+    private void handleCreatePublisher(ClientMachine clientMachine, CreatePublisher createPublisher) {
+        String topic = createPublisher.getTopic();
+        
+        String reason = canCreatePublisher(createPublisher);
+        if (reason != null) {
+            send(new CreatePublisherFailed(ErrorMessageEnum.CANNOT_CREATE_PUBLISHER.format(topic, reason),
+                                           createPublisher.getClientIndex(),
+                                           topic),
+                 clientMachine,
+                 0);
+            return;
+        }
+        
         Function<PublishersAndSubscribers.CreatePublisherResult, PublishersAndSubscribers.SavePublisherCallbacks> onPublisherCreatedCallback = createPublisherResult -> {
             boolean skipRelayMessage = false;
             boolean isResendPublisher = false;
             if (createPublisherResult.alreadyExistsCreatePublisher == null) {
-                LOGGER.log(Level.INFO, "Added publisher: topic={0}, topicClass={1}", relay.getTopic(), createPublisherPassedInToThisFunction.getPublisherClass().getSimpleName());
-                if (createPublisherPassedInToThisFunction.isResend()) {
+                LOGGER.log(Level.INFO, "Added publisher: topic={0}, topicClass={1}", topic, createPublisher.getPublisherClass().getSimpleName());
+                if (createPublisher.isResend()) {
                     isResendPublisher = true;
                 }
             } else {
@@ -1181,24 +1213,24 @@ public class DistributedMessageServer implements Shutdowneable {
                                          alreadyExistsCreatePublisher.getPublisherClass().getSimpleName(),
                                          alreadyExistsCreatePublisher.getClientTimestamp(),
                                          alreadyExistsCreatePublisher.getRelayFields().getServerIndex().toString(),
-                                         relay.getRelayFields().getServerIndex()));
+                                         createPublisher.getRelayFields().getServerIndex()));
                 skipRelayMessage = true;
             }
             Consumer<SubscriberParamsForCallback> actionForEachOtherClient;
             if (!skipRelayMessage) {
-                actionForEachOtherClient = relayCreatePublisherToOtherClientsAction(relay, isResendPublisher);
+                actionForEachOtherClient = relayCreatePublisherToOtherClientsAction(createPublisher, isResendPublisher);
             } else {
                 actionForEachOtherClient = null;
             }
             Runnable finalizerAction;
-            if (!createPublisherPassedInToThisFunction.isResend()) {
-                finalizerAction = () -> send(new PublisherCreated(relay.getTopic(), relay.getRelayFields()), clientMachine, 0);
+            if (!createPublisher.isResend()) {
+                finalizerAction = () -> send(new PublisherCreated(createPublisher.getTopic(), createPublisher.getRelayFields()), clientMachine, 0);
             } else {
                 finalizerAction = null;
             }
             return new PublishersAndSubscribers.SavePublisherCallbacks(actionForEachOtherClient, finalizerAction);
         };
-        publishersAndSubscribers.savePublisher(createPublisherPassedInToThisFunction, onPublisherCreatedCallback);
+        publishersAndSubscribers.savePublisher(createPublisher, onPublisherCreatedCallback);
     }
     
     private Consumer<SubscriberParamsForCallback> relayCreatePublisherToOtherClientsAction(CreatePublisher relay, boolean isResendPublisher) {
@@ -1367,6 +1399,22 @@ public class DistributedMessageServer implements Shutdowneable {
     }
 
     /**
+     * Return null if publisher can be created, and a non-null reason if it cannot.
+     * Derived classes may override this function to check if createPublisher passes in a valid secret key.
+     */
+    protected @Nullable String canCreatePublisher(CreatePublisher createPublisher) {
+        return null;
+    }
+
+    /**
+     * Return null if client can subscribe, and a non-null reason if it cannot.
+     * Derived classes may override this function to check if addOrRemoveSubscriber passes in a valid secret key.
+     */
+    protected @Nullable String canSubscribe(AddOrRemoveSubscriber addOrRemoveSubscriber) {
+        return null;
+    }
+
+    /**
      * Override this function to do something before sending a message.
      * For example, the unit tests override this to record the number of messages sent.
      */
@@ -1414,7 +1462,19 @@ public class DistributedMessageServer implements Shutdowneable {
         /**
          * Client is downloading messages for a topic which does not exist or for which it is not subscribed.
          */
-        CLIENT_NOT_SUBSCRIBED_TO_TOPIC("Client is not subscribed to topic: clientMachine=%s, topic=%s");
+        CLIENT_NOT_SUBSCRIBED_TO_TOPIC("Client is not subscribed to topic: clientMachine=%s, topic=%s"),
+        
+        /**
+         * Cannot create publisher. Possible cause is that secret is not correct.
+         */
+        CANNOT_CREATE_PUBLISHER("Cannot create publisher: topic=%s, reason='%s'"),
+        
+        /**
+         * Cannot subscribe or unsubscribe. Possible cause is that secret is not correct.
+         */
+        CANNOT_SUBSCRIBE("Cannot subscribe: topic=%s, subscriberName=%s, reason='%s'");
+        
+        
         
         private final String formatString;
 
