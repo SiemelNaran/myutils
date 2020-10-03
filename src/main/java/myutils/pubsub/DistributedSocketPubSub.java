@@ -281,10 +281,10 @@ public class DistributedSocketPubSub extends PubSub {
             DistributedPublisher publisher = (DistributedPublisher) basePublisher;
             String topic = publisher.getTopic();
             if (!publisher.isRemote()) {
-                messageWriter.createPublisher(publisher.getCreatedAtTimestamp(), topic, publisher.getPublisherClass(), publisher.getRemoteRelayFields(), /*isResend*/ true);
+                messageWriter.sendCreatePublisher(publisher.getCreatedAtTimestamp(), topic, publisher.getPublisherClass(), publisher.getRemoteRelayFields(), /*isResend*/ true);
             }
             for (var subscriber : publisher.getSubscibers()) {
-                messageWriter.addSubscriber(subscriber.getCreatedAtTimestamp(), topic, subscriber.getSubscriberName(), /*isResend*/ true);
+                messageWriter.sendAddSubscriber(subscriber.getCreatedAtTimestamp(), topic, subscriber.getSubscriberName(), /*isResend*/ true);
             }
         });
     }
@@ -308,7 +308,7 @@ public class DistributedSocketPubSub extends PubSub {
      * @see RetentionPriority
      */
     public void download(Collection<String> topics, ServerIndex startIndexInclusive, ServerIndex endIndexInclusive) {
-        messageWriter.download(topics, startIndexInclusive, endIndexInclusive);
+        messageWriter.sendDownload(topics, startIndexInclusive, endIndexInclusive);
     }
 
     /**
@@ -379,7 +379,7 @@ public class DistributedSocketPubSub extends PubSub {
             }
         }
 
-        private void addSubscriber(long createdAtTimestamp, @Nonnull String topic, @Nonnull String subscriberName, boolean isResend) {
+        void sendAddSubscriber(long createdAtTimestamp, @Nonnull String topic, @Nonnull String subscriberName, boolean isResend) {
             var addSubscriber = new AddSubscriber(createdAtTimestamp, topic, subscriberName, true, isResend);
             Map<String, String> customProperties = new LinkedHashMap<>();
             DistributedSocketPubSub.this.addCustomPropertiesForAddSubscriber(customProperties, topic, subscriberName);
@@ -387,7 +387,7 @@ public class DistributedSocketPubSub extends PubSub {
             internalPutMessage(addSubscriber);
         }
 
-        private void removeSubscriber(@Nonnull String topic, @Nonnull String subscriberName) {
+        void sendRemoveSubscriber(@Nonnull String topic, @Nonnull String subscriberName) {
             var removeSubscriber = new RemoveSubscriber(topic, subscriberName);
             Map<String, String> customProperties = new LinkedHashMap<>();
             DistributedSocketPubSub.this.addCustomPropertiesForRemoveSubscriber(customProperties, topic, subscriberName);
@@ -395,7 +395,7 @@ public class DistributedSocketPubSub extends PubSub {
             internalPutMessage(removeSubscriber);
         }
 
-        private void createPublisher(long createdAtTimestamp, @Nonnull String topic, @Nonnull Class<?> publisherClass, RelayFields relayFields, boolean isResend) {
+        void sendCreatePublisher(long createdAtTimestamp, @Nonnull String topic, @Nonnull Class<?> publisherClass, RelayFields relayFields, boolean isResend) {
             var createPublisher = new CreatePublisher(createdAtTimestamp, localMaxMessage.incrementAndGet(), topic, publisherClass, isResend);
             createPublisher.setRelayFields(relayFields);
             Map<String, String> customProperties = new LinkedHashMap<>();
@@ -404,16 +404,16 @@ public class DistributedSocketPubSub extends PubSub {
             internalPutMessage(createPublisher);
         }
 
-        private void publishMessage(@Nonnull String topic, @Nonnull CloneableObject<?> message, RetentionPriority priority) {
+        void sendPublishMessage(@Nonnull String topic, @Nonnull CloneableObject<?> message, RetentionPriority priority) {
             var publishMessage = new PublishMessage(localMaxMessage.incrementAndGet(), topic, message, priority);
             internalPutMessage(publishMessage);
         }
 
-        public void download(Collection<String> topics, ServerIndex startIndexInclusive, ServerIndex endIndexInclusive) {
+        void sendDownload(Collection<String> topics, ServerIndex startIndexInclusive, ServerIndex endIndexInclusive) {
             internalPutMessage(new DownloadPublishedMessages(topics, startIndexInclusive, endIndexInclusive));
         }
 
-        public void addFetchPublisher(String topic) {
+        void sendFetchPublisher(String topic) {
             internalPutMessage(new FetchPublisher(topic));
         }
 
@@ -580,7 +580,7 @@ public class DistributedSocketPubSub extends PubSub {
                 if (!isRemoteMessage) {
                     // this DistributedPubSub is publishing a new message
                     // so send it to the central server
-                    DistributedSocketPubSub.this.messageWriter.publishMessage(getTopic(), message, priority);
+                    DistributedSocketPubSub.this.messageWriter.sendPublishMessage(getTopic(), message, priority);
                 }
             }
         }
@@ -661,7 +661,7 @@ public class DistributedSocketPubSub extends PubSub {
         if (relayFields == null) {
             // this DistributedPubSub is creating a brand new publisher
             // so send it to the central server
-            messageWriter.createPublisher(publisher.getCreatedAtTimestamp(), publisher.getTopic(), publisher.getPublisherClass(), null, /*isResend*/ false);
+            messageWriter.sendCreatePublisher(publisher.getCreatedAtTimestamp(), publisher.getTopic(), publisher.getPublisherClass(), null, /*isResend*/ false);
         } else {
             info.setReadyToGoLive();
         }
@@ -681,7 +681,7 @@ public class DistributedSocketPubSub extends PubSub {
             DistributedSubscriber distributedSubscriber = (DistributedSubscriber) subscriber;
             var info = dormantInfoMap.computeIfAbsent(subscriber.getTopic(), topic -> new DormantInfo());
             info.addDormantSubscriber(distributedSubscriber);
-            messageWriter.addSubscriber(subscriber.getCreatedAtTimestamp(), subscriber.getTopic(),subscriber.getSubscriberName(), /*isResend*/ false);
+            messageWriter.sendAddSubscriber(subscriber.getCreatedAtTimestamp(), subscriber.getTopic(),subscriber.getSubscriberName(), /*isResend*/ false);
         }
     }
     
@@ -697,7 +697,7 @@ public class DistributedSocketPubSub extends PubSub {
     @Override
     protected void unregisterSubscriber(@Nullable Publisher publisher, Subscriber subscriber, boolean isDeferred) {
         if (!isDeferred) {
-            messageWriter.removeSubscriber(subscriber.getTopic(),subscriber.getSubscriberName());
+            messageWriter.sendRemoveSubscriber(subscriber.getTopic(),subscriber.getSubscriberName());
         }
     }
     
@@ -934,7 +934,7 @@ public class DistributedSocketPubSub extends PubSub {
                 return CompletableFuture.completedFuture(publisher);
             } else {
                 return fetchPublisherMap.computeIfAbsent(topic, t -> {
-                    messageWriter.addFetchPublisher(t);
+                    messageWriter.sendFetchPublisher(t);
                     return new CompletableFuture<>();
                 });
             }
