@@ -394,9 +394,9 @@ public abstract class PubSub implements Shutdowneable {
      * Really unsubscribe a subscriber from this PubSub.
      * Running time O(N) where N is the total number of messages in all subscribers.
      * 
-     * @param topic
-     * @param findSubscriberName
-     * @param isDeferred
+     * @param topic the topic to unsubscribe
+     * @param findSubscriberName the subscriber name to unsubscribe
+     * @param isDeferred true if this is a deferred subscriber
      */
     protected synchronized void basicUnsubscibe(String topic, String findSubscriberName, boolean isDeferred) {
         if (isDeferred) {

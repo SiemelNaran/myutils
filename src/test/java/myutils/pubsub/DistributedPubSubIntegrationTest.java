@@ -406,7 +406,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         publisher1.publish(new CloneableString("six"));
         sleep(250); // time to let messages be published to client2
         System.out.println("after unsubscribe2b: actual=" + words);
-        assertThat(words, Matchers.containsInAnyOrder("five-s1", "six-s1", "five-s2a", "six-s2a"));
+        assertThat(words, Matchers.containsInAnyOrder("five-s1", "six-s1", "five-s2a", "six-s2a"));//TODO:testfail
         assertEquals(9, client1.getCountTypesSent()); // +2
         assertEquals(3, client1.getCountTypesReceived());
         assertEquals(4, client2.getCountTypesSent());
@@ -451,6 +451,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         var centralServer = createServer(Collections.emptyMap());
         centralServer.setSecurityKey("hello123");
         startFutures.add(centralServer.start());
+        sleep(250); // time to let the central server start
 
         var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),

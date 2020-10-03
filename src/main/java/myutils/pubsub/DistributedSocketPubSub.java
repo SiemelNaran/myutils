@@ -762,7 +762,7 @@ public class DistributedSocketPubSub extends PubSub {
         String subscriberName = subscriberRemoved.getSubscriberName();
         LOGGER.log(Level.TRACE, "Confirm subscriber removed: topic={0}, subscriberName={1}",
                    topic, subscriberName);
-        super.basicUnsubscibe(topic, subscriberName, true);
+        super.basicUnsubscibe(topic, subscriberName, false);
         var dormantInfo = DistributedSocketPubSub.this.dormantInfoMap.get(topic);
         if (dormantInfo != null) {
             dormantInfo.removeDormantSubscriber(subscriberName);
