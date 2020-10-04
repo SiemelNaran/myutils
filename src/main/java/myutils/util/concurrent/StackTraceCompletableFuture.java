@@ -38,8 +38,6 @@ import javax.annotation.Nonnull;
  * ... more Called from blocks may follow ...
  * </code></pre></blockquote>
  * 
- * @author snaran
- * 
  * @param <T> the type returned by the future
  */
 @SuppressWarnings("checkstyle:LineLength")

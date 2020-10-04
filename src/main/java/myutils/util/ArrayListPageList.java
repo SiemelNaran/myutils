@@ -15,8 +15,6 @@ import javax.annotation.concurrent.NotThreadSafe;
  * <p>Class representing an array as an array of pages, where is page is an ArrayList.
  * 
  * <p>Fetching an element by index via a call to {@code get(int index)} is O(lg(N)).
- * 
- * @author snaran
  */
 @NotThreadSafe
 public class ArrayListPageList<E> extends AbstractPageList<E> implements PageList<E>, RandomAccess, Serializable {

@@ -553,6 +553,7 @@ public class ExpressionParserTest {
             return 3;
         }
         
+        @Override
         protected int doApply(Stream<Integer> values) {
             return values.collect(Collectors.maxBy(Comparator.<Integer>naturalOrder()))
                          .get();
@@ -574,7 +575,8 @@ public class ExpressionParserTest {
         protected int getMaxArgs() {
             return 3;
         }
-        
+
+        @Override
         protected int doApply(Stream<Integer> values) {
             return values.collect(Collectors.minBy(Comparator.<Integer>naturalOrder()))
                          .get();

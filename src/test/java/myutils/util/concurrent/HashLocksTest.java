@@ -11,6 +11,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
@@ -91,6 +92,18 @@ public class HashLocksTest {
         
         assertEquals(Arrays.asList(false, false, false), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::isLocked).collect(Collectors.toList()));
         assertEquals(Arrays.asList(-1, -1, -1), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::getUsage).collect(Collectors.toList()));
+    }
+    
+    @Test
+    void testReentrantLock() {
+        var locks = HashLocks.create(3, () -> new ReentrantLock(false), (reentrantLock, setString) -> reentrantLock.isLocked());
+        Lock lock0 = locks.getLock(0);
+        Lock lock1 = locks.getLock(1);
+        Lock lock2 = locks.getLock(2);
+        assertEquals(ReentrantLock.class, lock0.getClass());
+        assertNotSame(lock0, lock1);
+        assertNotSame(lock0, lock2);
+        assertNotSame(lock0, lock2);
     }
     
     @Test

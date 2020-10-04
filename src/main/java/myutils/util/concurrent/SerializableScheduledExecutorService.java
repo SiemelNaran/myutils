@@ -18,8 +18,6 @@ import java.util.stream.Stream;
  * 
  * <p>A task is serializable if it implements SerializableRunnable/SerializableCallable or
  * if the runnable/callable class has a public default constructor.
- * 
- * @author snaran
  */
 public interface SerializableScheduledExecutorService extends ScheduledExecutorService {
     

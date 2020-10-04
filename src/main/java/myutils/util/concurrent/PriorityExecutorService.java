@@ -7,8 +7,6 @@ import java.util.concurrent.Future;
 
 /**
  * An extension of ExecutorService to submit jobs with a priority so that tasks with highest priority run first.
- * 
- * @author snaran
  */
 public interface PriorityExecutorService extends ExecutorService {
     /**

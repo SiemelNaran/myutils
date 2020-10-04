@@ -15,8 +15,6 @@ import java.util.function.Supplier;
  * To use StackTraceCompletableFuture instead, set the system property
  * "java.util.concurrent.CompletableFutureFactory" to "StackTraceCompletableFuture".
  * 
- * @author snaran
- *
  * @param <T> the type returned by the future
  */
 public class CompletableFutureFactory<T> {
@@ -94,68 +92,84 @@ public class CompletableFutureFactory<T> {
     
     static {
         DEFAULT_REGISTRATION = new Registration() {
+            @Override
             public <T> CompletableFuture<T> supplyAsync(Supplier<T> supplier) {
                 return CompletableFuture.supplyAsync(supplier);
             }
     
+            @Override
             public <T> CompletableFuture<T> supplyAsync(Supplier<T> supplier, Executor executor) {
                 return CompletableFuture.supplyAsync(supplier, executor);
             }
     
+            @Override
             public CompletableFuture<Void> runAsync(Runnable runnable) {
                 return CompletableFuture.runAsync(runnable);
             }
             
+            @Override
             public CompletableFuture<Void> runAsync(Runnable runnable, Executor executor) {
                 return CompletableFuture.runAsync(runnable, executor);
             }
             
+            @Override
             public <U> CompletableFuture<U> completedFuture(U value) {
                 return CompletableFuture.completedFuture(value);
             }
             
+            @Override
             public <U> CompletableFuture<U> failedFuture(Throwable ex) {
                 return CompletableFuture.failedFuture(ex);
             }
             
+            @Override
             public CompletableFuture<Void> allOf(CompletableFuture<?>... cfs) {
                 return CompletableFuture.allOf(cfs);
             }
             
+            @Override
             public CompletableFuture<Object> anyOf(CompletableFuture<?>... cfs) {
                 return CompletableFuture.anyOf(cfs);
             }
         };
         
         register("StackTraceCompletableFuture", new Registration() {
+            @Override
             public <T> StackTraceCompletableFuture<T> supplyAsync(Supplier<T> supplier) {
                 return StackTraceCompletableFuture.supplyAsync(supplier);
             }
     
+            @Override
             public <T> StackTraceCompletableFuture<T> supplyAsync(Supplier<T> supplier, Executor executor) {
                 return StackTraceCompletableFuture.supplyAsync(supplier, executor);
             }
     
+            @Override
             public StackTraceCompletableFuture<Void> runAsync(Runnable runnable) {
                 return StackTraceCompletableFuture.runAsync(runnable);
             }
             
+            @Override
             public StackTraceCompletableFuture<Void> runAsync(Runnable runnable, Executor executor) {
                 return StackTraceCompletableFuture.runAsync(runnable, executor);
             }
             
+            @Override
             public <U> StackTraceCompletableFuture<U> completedFuture(U value) {
                 return StackTraceCompletableFuture.completedFuture(value);
             }
             
+            @Override
             public <U> CompletableFuture<U> failedFuture(Throwable ex) {
                 return StackTraceCompletableFuture.failedFuture(ex);
             }
             
+            @Override
             public StackTraceCompletableFuture<Void> allOf(CompletableFuture<?>... cfs) {
                 return StackTraceCompletableFuture.allOf(cfs);
             }
             
+            @Override
             public StackTraceCompletableFuture<Object> anyOf(CompletableFuture<?>... cfs) {
                 return StackTraceCompletableFuture.anyOf(cfs);
             }
