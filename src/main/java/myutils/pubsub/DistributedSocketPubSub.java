@@ -70,6 +70,10 @@ import myutils.pubsub.PubSubUtils.CallStackCapturing;
  * If the DistributedMessageServer is not available, this class attempts to connect to the DistributedMessageServer again which capped exponential backoff.
  * 
  * <p>Since this class inherits from PubSub, it also implements the in-memory publish/subscribe system.
+ * When a client becomes a publisher, it sends its publisher to the central server.
+ * When another client subscribes, the central server sends the publisher over to this other client.
+ * So it's as if each client has a replica of the in-memory publish-subscribe.
+ * When the first client publishes a message, it gets relayed to the other client, and it's as if someone called pubsub.publish on the other client.
  * 
  * <p>When a user calls createPublisher, the new publisher is created as dormant, and it cannot be used to publish messages.
  * A call to pubsub.getPublisher will not find the publisher.
