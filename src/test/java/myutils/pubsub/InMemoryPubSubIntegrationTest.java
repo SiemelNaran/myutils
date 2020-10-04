@@ -1,6 +1,8 @@
 package myutils.pubsub;
 
+
 import static myutils.TestUtil.assertException;
+import static myutils.TestUtil.assertExceptionFromCallable;
 import static myutils.TestUtil.sleep;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -22,6 +24,8 @@ import java.util.function.Supplier;
 import java.util.stream.IntStream;
 import myutils.LogFailureToConsoleTestWatcher;
 import myutils.TestUtil;
+import myutils.pubsub.PubSub.PubSubConstructorArgs;
+import myutils.pubsub.PubSub.Subscriber;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -35,8 +39,15 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 
 
+/**
+ * Integration test that covers.
+ * - PubSub.java
+ * - CloneableObject.java
+ * - InMemoryPubSub.java
+ * - PubSubUtils.java
+ */
 @ExtendWith(LogFailureToConsoleTestWatcher.class)
-public class InMemoryPubSubTest {
+public class InMemoryPubSubIntegrationTest {
     long startOfTime;
     
     @BeforeAll
@@ -67,6 +78,8 @@ public class InMemoryPubSubTest {
     ///////////////////////////////////////////////////////////////////////////////////////
 
     public static class CloneableString implements CloneableObject<CloneableString> {
+        private static final long serialVersionUID = 1L;
+        
         private String str;
 
         public CloneableString(String str) {
@@ -86,20 +99,41 @@ public class InMemoryPubSubTest {
                 throw new RuntimeException(e);
             }
         }
+        
+        @Override
+        public String toString() {
+            return "CloneableString:" + str;
+        }
     }
 
     @Test
     void testPublishAndSubscribeAndUnsubscribe() {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultQueueCreator(), InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
+        PubSub pubSub = new InMemoryPubSub(new PubSub.PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
         Consumer<CloneableString> handleString1 = str -> words.add(str.append("-s1"));
-        InMemoryPubSub.Subscriber subscriber1 = pubSub.subscribe("hello", "Subscriber1", CloneableString.class, handleString1);
+        PubSub.Subscriber subscriber1 = pubSub.subscribe("hello", "Subscriber1", CloneableString.class, handleString1);
         Consumer<CloneableString> handleString2 = str -> words.add(str.append("-s2"));
         pubSub.subscribe("hello", "Subscriber2", CloneableString.class, handleString2);
 
+        PubSub.Publisher secondPublisher = pubSub.createPublisher("world", CloneableString.class);
+
         assertEquals("hello", publisher.getTopic());
+        assertEquals("CloneableString", publisher.getPublisherClass().getSimpleName());
+        assertEquals((double) System.currentTimeMillis(), (double) publisher.getCreatedAtTimestamp(), 20.0);
+        assertEquals(2, publisher.getSubscibers().size());
+        
+        assertEquals("world", secondPublisher.getTopic());
+        assertEquals("CloneableString", secondPublisher.getPublisherClass().getSimpleName());
+        assertEquals((double) System.currentTimeMillis(), (double) secondPublisher.getCreatedAtTimestamp(), 20.0);
+        assertEquals(0, secondPublisher.getSubscibers().size());
+        
+        List<String> allTopics = Collections.synchronizedList(new ArrayList<>());
+        pubSub.forEachPublisher(p -> allTopics.add(p.getTopic())); // protected function forEachPublisher
+        assertThat(allTopics, Matchers.containsInAnyOrder("hello", "world"));
+        
         assertEquals("hello", subscriber1.getTopic());
+        assertEquals((double) System.currentTimeMillis(), (double) subscriber1.getCreatedAtTimestamp(), 20.0);
 
         // test publish
         // since the handlers modify the messages, this also verifies that each subscriber handler gets a copy of the message
@@ -125,7 +159,7 @@ public class InMemoryPubSubTest {
         Consumer<CloneableString> handleString3 = str -> words.add(str.append("-s3"));
         pubSub.subscribe("hello", "Subscriber3", CloneableString.class, handleString3);
         words.clear();
-        pubSub.getPublisher("hello").ifPresent(samePublisher -> samePublisher.publish(new CloneableString("four")));
+        pubSub.getPublisher("hello").publish(new CloneableString("four"));
         sleep(100); // wait for subscribers to work
         assertThat(words, Matchers.contains("four-s2", "four-s3"));
     }
@@ -135,18 +169,70 @@ public class InMemoryPubSubTest {
      * This could happen in a multi-threaded environment.
      */
     @Test
-    void testSubscribeAndPublish() {
+    void testSubscribeAndPublishAndUnsubcribe() {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultQueueCreator(), InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
         Consumer<CloneableString> handleString1 = str -> words.add(str.append("-s1"));
         pubSub.subscribe("hello", "Subscriber1", CloneableString.class, handleString1);
         Consumer<CloneableString> handleString2 = str -> words.add(str.append("-s2"));
-        pubSub.subscribe("hello", "Subscriber2", CloneableString.class, handleString2);
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
+        Subscriber subscriber2 = pubSub.subscribe("hello", "Subscriber2", CloneableString.class, handleString2);
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
 
         publisher.publish(new CloneableString("one"));
         sleep(100); // wait for subscribers to work
         assertThat(words, Matchers.contains("one-s1", "one-s2"));
+        
+        pubSub.unsubscribe(subscriber2);
+        words.clear();
+        publisher.publish(new CloneableString("two"));
+        sleep(100); // wait for subscribers to work
+        assertThat(words, Matchers.contains("two-s1"));
+    }
+    
+    /**
+     * In this test we unsubscribe a deferred subscriber.
+     */
+    @Test
+    void testUnsubscribeDeferredSubscriber() {
+        List<String> words = Collections.synchronizedList(new ArrayList<>());
+        
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
+        Consumer<CloneableString> handleString1 = str -> words.add(str.append("-s1"));
+        Subscriber subscriber1 = pubSub.subscribe("hello", "Subscriber1", CloneableString.class, handleString1);
+        Consumer<CloneableString> handleString2 = str -> words.add(str.append("-s2"));
+        Subscriber subscriber2 = pubSub.subscribe("hello", "Subscriber2", CloneableString.class, handleString2);
+        
+        pubSub.unsubscribe(subscriber1);
+        pubSub.unsubscribe(subscriber2);
+        
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
+
+        publisher.publish(new CloneableString("one"));
+        sleep(100); // wait for subscribers to work
+        assertThat(words, Matchers.empty());
+    }
+    
+    /**
+     * In this test we create the subscriber before the publisher.
+     * This could happen in a multi-threaded environment.
+     */
+    @Test
+    void testShutdown() {
+        List<String> words = Collections.synchronizedList(new ArrayList<>());
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
+        Consumer<CloneableString> handleString = str -> words.add(str.append(""));
+        pubSub.subscribe("hello", "Subscriber1", CloneableString.class, handleString);
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
+
+        publisher.publish(new CloneableString("one"));
+        sleep(100); // wait for subscribers to work
+        assertThat(words, Matchers.contains("one"));
+        
+        pubSub.shutdown();
+        
+        publisher.publish(new CloneableString("two"));
+        sleep(100); // wait for subscribers to work
+        assertThat(words, Matchers.contains("one")); // no change as pubSub is shutdown
     }
     
     /**
@@ -156,13 +242,13 @@ public class InMemoryPubSubTest {
     @Test
     void testUnsubscribeWhileMessageInQueue() throws InterruptedException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultQueueCreator(), InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
         Consumer<CloneableString> handleString1 = str -> {
             sleep(300);
             words.add(str.append(""));
         };
-        InMemoryPubSub.Subscriber subscriber = pubSub.subscribe("hello", "Subscriber", CloneableString.class, handleString1);
+        PubSub.Subscriber subscriber = pubSub.subscribe("hello", "Subscriber", CloneableString.class, handleString1);
 
         ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
         executor.schedule(() -> {
@@ -188,8 +274,8 @@ public class InMemoryPubSubTest {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         Instant startTime = Instant.now();
         AtomicReference<Instant> endTime = new AtomicReference<>();
-        InMemoryPubSub pubSub = new InMemoryPubSub(3, InMemoryPubSub.defaultQueueCreator(), InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(3, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
         IntStream.rangeClosed(1, 5).forEach(i -> {
             pubSub.subscribe("hello", "Subscriber" + i,
                 CloneableString.class,
@@ -212,18 +298,18 @@ public class InMemoryPubSubTest {
         // etc, so all 5 subscribers take 20 + 40 + 60 + 80 + 100 = 300ms
         // as we publish 3 events, this should take about 900ms if there were 1 thread
         // but as we have 3 threads, it will take closer to 300ms
-        sleep(340); // wait for subscribers to work
+        sleep(500); // wait for subscribers to work
         System.out.println("timeTaken=" + Duration.between(startTime, endTime.get())); // typical output: timeTaken=PT0.314515S
         
         System.out.println(words);
         assertThat(words,
-                Matchers.not(Matchers.contains("one-s1", "one-s2", "one-s3", "one-s4", "one-s5",
-                                              "two-s1", "two-s2", "two-s3", "two-s4", "two-s5",
-                                              "three-s1", "three-s2", "three-s3", "three-s4", "three-s5")));
+                   Matchers.not(Matchers.contains("one-s1", "one-s2", "one-s3", "one-s4", "one-s5",
+                                                 "two-s1", "two-s2", "two-s3", "two-s4", "two-s5",
+                                                 "three-s1", "three-s2", "three-s3", "three-s4", "three-s5")));
         assertThat(words,
-                Matchers.containsInAnyOrder("one-s1", "one-s2", "one-s3", "one-s4", "one-s5",
-                                            "two-s1", "two-s2", "two-s3", "two-s4", "two-s5",
-                                            "three-s1", "three-s2", "three-s3", "three-s4", "three-s5"));
+                   Matchers.containsInAnyOrder("one-s1", "one-s2", "one-s3", "one-s4", "one-s5",
+                                               "two-s1", "two-s2", "two-s3", "two-s4", "two-s5",
+                                               "three-s1", "three-s2", "three-s3", "three-s4", "three-s5"));
     }
     
     /**
@@ -232,15 +318,15 @@ public class InMemoryPubSubTest {
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(strings = {"default", "priority"})
     void testPrioritySubscribers(String queueType) {
-        Supplier<Queue<InMemoryPubSub.Subscriber>> queueCreator;
+        Supplier<Queue<PubSub.Subscriber>> queueCreator;
         switch (queueType) {
-            case "default": queueCreator = InMemoryPubSub.defaultQueueCreator(); break;
-            case "priority": queueCreator = () -> new PriorityQueue<>(Comparator.comparing(InMemoryPubSub.Subscriber::getSubscriberName)); break;
+            case "default": queueCreator = PubSub.defaultQueueCreator(); break;
+            case "priority": queueCreator = () -> new PriorityQueue<>(Comparator.comparing(PubSub.Subscriber::getSubscriberName)); break;
             default: throw new UnsupportedOperationException();
         }
         List<String> words = Collections.synchronizedList(new ArrayList<>());
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, queueCreator, InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, queueCreator, PubSub.defaultSubscriptionMessageExceptionHandler()));
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
         Consumer<CloneableString> handleString1 = str -> {
             sleep(50);
             words.add(str.append("-s1"));
@@ -282,6 +368,8 @@ public class InMemoryPubSubTest {
     }
 
     public static final class Cat implements Animal, CloneableObject<Cat> {
+        private static final long serialVersionUID = 1L;
+
         private final int lengthOfTailInInches;
 
         public Cat(int lengthOfTailInInches) {
@@ -303,6 +391,8 @@ public class InMemoryPubSubTest {
     }
 
     public static final class Frog implements Animal, CloneableObject<Frog> {
+        private static final long serialVersionUID = 1L;
+
         private final int loudnessOfCroak;
 
         public Frog(int loudnessOfCroak) {
@@ -326,8 +416,8 @@ public class InMemoryPubSubTest {
     @Test
     void testPublishAndSubscribeWithInheritance1() {
         List<Integer> words = Collections.synchronizedList(new ArrayList<>());
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultQueueCreator(), InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", Animal.class);
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", Animal.class);
         Consumer<Cat> handleCat = cat -> words.add(cat.getLengthOfTailInInches());
         pubSub.subscribe("hello", "CatSubscriber", Cat.class, handleCat);
         Consumer<Frog> handleFrog = frog -> words.add(frog.getLoudnessOfCroak());
@@ -345,6 +435,8 @@ public class InMemoryPubSubTest {
     // In these classes the base class implements CloneableObject
 
     public abstract static class Base implements CloneableObject<Base> {
+        private static final long serialVersionUID = 1L;
+
         @Override
         public final Base clone() {
             try {
@@ -356,6 +448,8 @@ public class InMemoryPubSubTest {
     }
 
     public static final class Derived1 extends Base {
+        private static final long serialVersionUID = 1L;
+
         private final String string;
 
         public Derived1(String string) {
@@ -369,6 +463,8 @@ public class InMemoryPubSubTest {
     }
 
     public static final class Derived2 extends Base {
+        private static final long serialVersionUID = 1L;
+
         private final int integer;
 
         public Derived2(int integer) {
@@ -384,8 +480,8 @@ public class InMemoryPubSubTest {
     @Test
     void testPublishAndSubscribeWithInheritance2() {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultQueueCreator(), InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", Base.class);
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", Base.class);
         Consumer<Base> handleBase = base -> words.add(base.toString());
         pubSub.subscribe("hello", "BaseSubscriber", Base.class, handleBase);
 
@@ -400,25 +496,50 @@ public class InMemoryPubSubTest {
 
     @Test
     void testErrorOnCreatePublisherTwice() {
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultQueueCreator(), InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
         pubSub.createPublisher("hello", CloneableString.class);
-        assertException(() -> pubSub.createPublisher("hello", CloneableString.class), IllegalArgumentException.class, "publisher already exists: hello");
+        assertException(() -> pubSub.createPublisher("hello", CloneableString.class), IllegalStateException.class, "publisher already exists: topic=hello");
+    }
+
+
+    @Test
+    void testErrorOnSubscribeTwice1() {
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
+        pubSub.createPublisher("hello", CloneableString.class);
+        pubSub.subscribe("hello", "Subscriber", CloneableString.class, str -> { });
+        assertException(() -> pubSub.subscribe("hello", "Subscriber", CloneableString.class, str -> { }), IllegalStateException.class, "already subscribed: topic=hello, subscriberName=Subscriber");
     }
 
     @Test
+    void testErrorOnSubscribeTwice2() {
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
+        pubSub.subscribe("hello", "Subscriber", CloneableString.class, str -> { });
+        assertException(() -> pubSub.subscribe("hello", "Subscriber", CloneableString.class, str -> { }), IllegalStateException.class, "already subscribed: topic=hello, subscriberName=Subscriber");
+    }
+
+    @Test
+    void testErrorOnUnsubscribeTwice() {
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
+        pubSub.createPublisher("hello", CloneableString.class);
+        Subscriber subscriber = pubSub.subscribe("hello", "Subscriber", CloneableString.class, str -> { });
+        pubSub.unsubscribe(subscriber);
+        assertException(() -> pubSub.unsubscribe(subscriber), IllegalStateException.class, "not subscribed: topic=hello, subscriberName=Subscriber");
+    }
+    
+    @Test
     @SuppressWarnings("checkstyle:LineLength")
     void testErrorOnSubscriberWrongClassType() {
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultQueueCreator(), InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
         pubSub.createPublisher("hello", CloneableString.class);
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         Consumer<Base> handleBase = base -> words.add(base.toString());
-        assertException(() -> pubSub.subscribe("hello", "Subscriber", Base.class, handleBase), IllegalArgumentException.class, "subscriber class must be the same as or inherit from the publisher class: publisherClass=myutils.pubsub.InMemoryPubSubTest$CloneableString subscriberClass=myutils.pubsub.InMemoryPubSubTest$Base");
+        assertException(() -> pubSub.subscribe("hello", "Subscriber", Base.class, handleBase), IllegalArgumentException.class, "subscriber class must be the same as or inherit from the publisher class: publisherClass=myutils.pubsub.InMemoryPubSubIntegrationTest$CloneableString subscriberClass=myutils.pubsub.InMemoryPubSubIntegrationTest$Base");
     }
 
     @Test
     void testExceptionOnSubscriberCallback1() {
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultQueueCreator(), InMemoryPubSub.defaultSubscriptionMessageExceptionHandler());
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
         Consumer<CloneableString> handleString = str -> {
             throw new RuntimeException("Test Exception");
         };
@@ -430,11 +551,25 @@ public class InMemoryPubSubTest {
         /*
         WARNING: Exception invoking subscriber
         java.lang.RuntimeException: Test Exception
-        at myutils.util.concurrent.InMemoryPubSubTest.lambda$testExceptionOnSubscriberCallback$12(InMemoryPubSubTest.java:243)
+        at myutils.util.concurrent.InMemoryPubSubIntegrationTest.lambda$testExceptionOnSubscriberCallback$12(InMemoryPubSubIntegrationTest.java:243)
         */
+    }
+    
+    /**
+     * This test demonstrates how to extend the client class PubSub to enforce naming conventions on the client side.
+     * It is also possible to extend DistributedMessageServer and override canCreatePublisher to enforce naming conventions on the server side.
+     */
+    @Test
+    @SuppressWarnings("checkstyle:LineLength")
+    void testInvalidTopicName() {
+        PubSub pubSub = new TestInMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
+        assertExceptionFromCallable(() -> pubSub.createPublisher("hello-world", CloneableString.class), TopicRegexException.class, "Topic does not match regex: topic=hello-world, regex=\\w");
+        assertExceptionFromCallable(() -> pubSub.subscribe("hello-world", "InvalidSubscriber", CloneableString.class, unused -> { }), TopicRegexException.class, "Topic does not match regex: topic=hello-world, regex=\\w");
     }
 
     public static class TestEvent implements CloneableObject<TestEvent> {
+        private static final long serialVersionUID = 1L;
+
         private int retryCount;
 
         public TestEvent() {
@@ -466,7 +601,7 @@ public class InMemoryPubSubTest {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         var mySubscriptionMessageExceptionHandler = new InMemoryPubSub.SubscriptionMessageExceptionHandler() {
             @Override
-            public void handleException(InMemoryPubSub.Subscriber subscriber, CloneableObject<?> message, Throwable e) {
+            public void handleException(PubSub.Subscriber subscriber, CloneableObject<?> message, Throwable e) {
                 if (message instanceof TestEvent) {
                     TestEvent event = (TestEvent) message;
                     event.incrementRetryCount();
@@ -475,8 +610,8 @@ public class InMemoryPubSubTest {
                 subscriber.addMessage(message);
             }
         };
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultQueueCreator(), mySubscriptionMessageExceptionHandler);
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", TestEvent.class);
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), mySubscriptionMessageExceptionHandler));
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", TestEvent.class);
         Consumer<TestEvent> handleEvent = event -> {
             if (event.getRetryCount() == 0) {
                 throw new RuntimeException("Test Exception");
@@ -502,7 +637,7 @@ public class InMemoryPubSubTest {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         var mySubscriptionMessageExceptionHandler = new InMemoryPubSub.SubscriptionMessageExceptionHandler() {
             @Override
-            public void handleException(InMemoryPubSub.Subscriber subscriber, CloneableObject<?> message, Throwable e) {
+            public void handleException(PubSub.Subscriber subscriber, CloneableObject<?> message, Throwable e) {
                 if (message instanceof TestEvent) {
                     TestEvent event = (TestEvent) message;
                     event.incrementRetryCount();
@@ -515,8 +650,8 @@ public class InMemoryPubSubTest {
                 }
             }
         };
-        InMemoryPubSub pubSub = new InMemoryPubSub(1, InMemoryPubSub.defaultQueueCreator(), mySubscriptionMessageExceptionHandler);
-        InMemoryPubSub.Publisher publisher = pubSub.createPublisher("hello", TestEvent.class);
+        PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), mySubscriptionMessageExceptionHandler));
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", TestEvent.class);
         Consumer<TestEvent> handleEvent = event -> {
             if (event.getRetryCount() == 0) {
                 throw new RuntimeException("Test Exception");
@@ -531,6 +666,44 @@ public class InMemoryPubSubTest {
         sleep(100); // wait for message handler to work
         assertThat(words,
                    Matchers.contains("SubscriberThatThrows-TestEvent : Test Exception",
-                                     "message must be or inherit from myutils.pubsub.InMemoryPubSubTest$TestEvent"));
+                                     "message must be or inherit from myutils.pubsub.InMemoryPubSubIntegrationTest$TestEvent"));
+    }
+}
+
+
+class TestInMemoryPubSub extends InMemoryPubSub {
+    public TestInMemoryPubSub(PubSubConstructorArgs baseArgs) {
+        super(baseArgs);
+    }
+    
+    @Override
+    protected <T> void onBeforeAddPublisher(String topic, Class<T> publisherClass) {
+        super.onBeforeAddPublisher(topic, publisherClass);
+        verifyTopicChars(topic);
+    }
+    
+    @Override
+    protected <T> void onBeforeAddSubscriber(String topic, String subscriberName, Class<T> subscriberClass) {
+        super.onBeforeAddSubscriber(topic, subscriberName, subscriberClass);
+        verifyTopicChars(topic);
+    }
+
+    /**
+     * Verify if the topic name matches the naming standards, in our case <code>\w</code>.
+     */
+    private void verifyTopicChars(String topic) {
+        topic.codePoints().forEach(c -> {
+            if (!(Character.isAlphabetic(c) || Character.isDigit(c) || c == '_')) {
+                throw new TopicRegexException(topic, "\\w");
+            }
+        });
+    }
+}
+
+class TopicRegexException extends PubSubException {
+    private static final long serialVersionUID = 1L;
+
+    public TopicRegexException(String topic, String regex) {
+        super("Topic does not match regex: topic=" + topic + ", regex=" + regex);
     }
 }

@@ -5,6 +5,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 
 public class MoreExecutors {
@@ -108,5 +109,23 @@ public class MoreExecutors {
         } else {
             return System.currentTimeMillis();
         }
+    }
+    
+    
+    /**
+     * Create a thread factory.
+     * 
+     * @param basename the thread names will be basename-1, basename-2, etc
+     * @param daemon true if the new threads should be daemon threads
+     * @return
+     */
+    public static ThreadFactory createThreadFactory(String basename, boolean daemon) {
+        ThreadGroup threadGroup = new ThreadGroup(basename);
+        final AtomicInteger count = new AtomicInteger();
+        return runnable -> {
+            var thread = new Thread(threadGroup, runnable, basename + "-" + count.incrementAndGet());
+            thread.setDaemon(daemon);
+            return thread;
+        };
     }
 }
