@@ -60,16 +60,19 @@ Steps:
 Java Classes
 ------------
 
-The main part of this project is the Java classes.  To use ensure your module-info.java looks something like this:
+The main part of this project is the Java classes.
 
+### Utility Classes 
+
+There are a bunch of utility classes that extend the JVM.
+To use ensure your module-info.java looks something like this:
 
 ```
 module temp {
-    requires org.sn.myutils;
+    requires org.sn.myutils.core;
 }
 ```
 
-### Utility Classes 
 
 - *AdaptingIterator*: Class to map the value returned by an iterator into another value. Use only if stream() with map() is not possible.
 
