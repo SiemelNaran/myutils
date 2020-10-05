@@ -23,7 +23,7 @@ The main part of this project is the Java classes.  To use ensure your module-in
 
 ```
 module temp {
-    requires myutils;
+    requires org.sn.myutils;
 }
 ```
 
@@ -94,10 +94,11 @@ public interface PriorityExecutorService extends ExecutorService {
     - Related class StackTraces for controlling the look of the output stack trace. For example you can ignore lines originating from "org.eclipse", "org.junit", "sun.reflect".
 
 ```
-myutils.util.concurrent.StackTraces$StackTracesCompletionException: java.lang.IllegalStateException: failed
-	at myutils/myutils.util.concurrent.StackTraces.generateException(StackTraces.java:114)
-	at myutils/myutils.util.concurrent.StackTraceCompletableFuture.lambda$0(StackTraceCompletableFuture.java:53)
+org.sn.myutils.util.concurrent.StackTraces$StackTracesCompletionException: java.lang.IllegalStateException: failed
+	at org.sn.myutils.util.concurrent.StackTraces.generateException(StackTraces.java:114)
+	at org.sn.myutils.util.concurrent.StackTraceCompletableFuture.lambda$0(StackTraceCompletableFuture.java:53)
 	at java.base/java.util.concurrent.CompletableFuture.uniWhenComplete(CompletableFuture.java:859)
+	at java.base/java.util.concurrent.CompletableFuture$UniWhenComplete.tryFire(CompletableFuture.java:837)
 	at java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)
 	at java.base/java.util.concurrent.CompletableFuture$AsyncSupply.run(CompletableFuture.java:1776)
 	at java.base/java.util.concurrent.CompletableFuture$AsyncSupply.exec(CompletableFuture.java:1763)
@@ -107,23 +108,23 @@ myutils.util.concurrent.StackTraces$StackTracesCompletionException: java.lang.Il
 	at java.base/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1598)
 	at java.base/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:177)
 Caused by: java.lang.IllegalStateException: failed
-	at myutils/myutils.util.concurrent.StackTraceCompletableFutureTest.lambda$3(StackTraceCompletableFutureTest.java:69)
+	at org.sn.myutils.util.concurrent.StackTraceCompletableFutureTest.lambda$common$3(StackTraceCompletableFutureTest.java:69)
 	at java.base/java.util.concurrent.CompletableFuture$UniApply.tryFire(CompletableFuture.java:642)
 	... 8 more
 Called from
-	myutils/myutils.util.concurrent.StackTraceCompletableFutureTest.common(StackTraceCompletableFutureTest.java:65)
-	myutils/myutils.util.concurrent.StackTraceCompletableFutureTest.testExceptionalExecutionJoin(StackTraceCompletableFutureTest.java:161)
+	org.sn.myutils.util.concurrent.StackTraceCompletableFutureTest.common(StackTraceCompletableFutureTest.java:65)
+	org.sn.myutils.util.concurrent.StackTraceCompletableFutureTest.testExceptionalExecutionJoin(StackTraceCompletableFutureTest.java:161)
 Called from
-	myutils/myutils.util.concurrent.StackTraceCompletableFutureTest.doEvenMore(StackTraceCompletableFutureTest.java:38)
-	myutils/myutils.util.concurrent.StackTraceCompletableFutureTest.doMore(StackTraceCompletableFutureTest.java:46)
-	myutils/myutils.util.concurrent.StackTraceCompletableFutureTest.common(StackTraceCompletableFutureTest.java:63)
-	myutils/myutils.util.concurrent.StackTraceCompletableFutureTest.testExceptionalExecutionJoin(StackTraceCompletableFutureTest.java:161)
+	org.sn.myutils.util.concurrent.StackTraceCompletableFutureTest.doEvenMore(StackTraceCompletableFutureTest.java:38)
+	org.sn.myutils.util.concurrent.StackTraceCompletableFutureTest.doMore(StackTraceCompletableFutureTest.java:46)
+	org.sn.myutils.util.concurrent.StackTraceCompletableFutureTest.common(StackTraceCompletableFutureTest.java:63)
+	org.sn.myutils.util.concurrent.StackTraceCompletableFutureTest.testExceptionalExecutionJoin(StackTraceCompletableFutureTest.java:161)
 Called from
-	myutils/myutils.util.concurrent.StackTraceCompletableFutureTest.common(StackTraceCompletableFutureTest.java:57)
-	myutils/myutils.util.concurrent.StackTraceCompletableFutureTest.testExceptionalExecutionJoin(StackTraceCompletableFutureTest.java:161)
+	org.sn.myutils.util.concurrent.StackTraceCompletableFutureTest.common(StackTraceCompletableFutureTest.java:57)
+	org.sn.myutils.util.concurrent.StackTraceCompletableFutureTest.testExceptionalExecutionJoin(StackTraceCompletableFutureTest.java:161)
 Called from
-	myutils/myutils.util.concurrent.StackTraceCompletableFutureTest.common(StackTraceCompletableFutureTest.java:51)
-	myutils/myutils.util.concurrent.StackTraceCompletableFutureTest.testExceptionalExecutionJoin(StackTraceCompletableFutureTest.java:161)
+	org.sn.myutils.util.concurrent.StackTraceCompletableFutureTest.common(StackTraceCompletableFutureTest.java:51)
+	org.sn.myutils.util.concurrent.StackTraceCompletableFutureTest.testExceptionalExecutionJoin(StackTraceCompletableFutureTest.java:161)
 	java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
 	java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
 	java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
