@@ -1,4 +1,4 @@
-package org.sn.myutils.util.parsetree;
+package org.sn.myutils.parsetree;
 
 public class ExpressionParserException extends Exception {
     private static final long serialVersionUID = 1L;

@@ -1,4 +1,4 @@
-package org.sn.myutils.util.parsetree;
+package org.sn.myutils.parsetree;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.sn.myutils.TestUtil.assertException;
@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
-import org.sn.myutils.util.parsetree.UnitNumberFactory.UnitPosition;
+import org.sn.myutils.parsetree.UnitNumberFactory.UnitPosition;
 
 
 public class UnitNumberFactoryTest {

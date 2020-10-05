@@ -1,4 +1,4 @@
-package org.sn.myutils.util.parsetree;
+package org.sn.myutils.parsetree;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;

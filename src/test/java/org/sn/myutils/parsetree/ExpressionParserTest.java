@@ -1,4 +1,4 @@
-package org.sn.myutils.util.parsetree;
+package org.sn.myutils.parsetree;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -14,8 +14,8 @@ import java.util.Stack;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
-import org.sn.myutils.util.parsetree.ParseNode.Listener;
-import org.sn.myutils.util.parsetree.UnitNumberFactory.UnitPosition;
+import org.sn.myutils.parsetree.ParseNode.Listener;
+import org.sn.myutils.parsetree.UnitNumberFactory.UnitPosition;
 
 
 public class ExpressionParserTest {

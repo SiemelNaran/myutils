@@ -1,4 +1,4 @@
-package org.sn.myutils.util.parsetree;
+package org.sn.myutils.parsetree;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.sn.myutils.TestUtil.assertException;

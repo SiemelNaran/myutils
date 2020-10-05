@@ -1,4 +1,4 @@
-package org.sn.myutils.util.parsetree;
+package org.sn.myutils.parsetree;
 
 import java.util.Map;
 
@@ -19,7 +19,7 @@ public interface ParseNode {
      * @return the type of the return value
      * @throws myutils.util.parsetree.TypeException if there is an error. This is a runtime exception.
      */
-    Class<?> checkEval(Map<String, Class<?>> scopeTypes) throws org.sn.myutils.util.parsetree.TypeException;
+    Class<?> checkEval(Map<String, Class<?>> scopeTypes) throws org.sn.myutils.parsetree.TypeException;
     
     /**
      * Evaluate this parse node.
@@ -30,7 +30,7 @@ public interface ParseNode {
      * @return the return value
      * @throws myutils.util.parsetree.EvalException if there is an error. This is a runtime exception.
      */
-    Object eval(Map<String, Object> scope) throws org.sn.myutils.util.parsetree.EvalException;
+    Object eval(Map<String, Object> scope) throws org.sn.myutils.parsetree.EvalException;
 
     /**
      * Visit each node of this parse tree in a depth first manner.
