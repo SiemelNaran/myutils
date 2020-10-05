@@ -6,7 +6,7 @@
 
     <groupId>myutils</groupId>
     <artifactId>myutils</artifactId>
-    <version>1</version>
+    <version>1.0.0</version>
     <packaging>jar</packaging>
 
     <properties>
@@ -99,6 +99,11 @@
                     <configuration>
                         <argLine>-Djava.util.logging.config.file=${project.build.testOutputDirectory}/logging.properties</argLine>
                     </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.2.0</version>
                 </plugin>
             </plugins>
     </build>
