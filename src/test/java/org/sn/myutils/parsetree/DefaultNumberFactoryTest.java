@@ -1,7 +1,7 @@
 package org.sn.myutils.parsetree;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.sn.myutils.TestUtil.assertException;
+import static org.sn.myutils.testutils.TestUtil.assertException;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;

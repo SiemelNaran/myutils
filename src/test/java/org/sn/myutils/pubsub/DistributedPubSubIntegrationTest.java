@@ -9,10 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.sn.myutils.TestUtil.assertExceptionFromCallable;
-import static org.sn.myutils.TestUtil.assertIncreasing;
-import static org.sn.myutils.TestUtil.countElementsInListByType;
-import static org.sn.myutils.TestUtil.sleep;
+import static org.sn.myutils.testutils.TestUtil.assertExceptionFromCallable;
+import static org.sn.myutils.testutils.TestUtil.assertIncreasing;
+import static org.sn.myutils.testutils.TestUtil.countElementsInListByType;
+import static org.sn.myutils.testutils.TestUtil.sleep;
 
 import java.io.IOException;
 import java.lang.System.Logger.Level;
@@ -55,9 +55,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.sn.myutils.LogFailureToConsoleTestWatcher;
-import org.sn.myutils.TestBase;
-import org.sn.myutils.TestUtil;
 import org.sn.myutils.pubsub.DistributedMessageServer.ClientMachine;
 import org.sn.myutils.pubsub.DistributedSocketPubSub.DistributedPublisher;
 import org.sn.myutils.pubsub.DistributedSocketPubSub.DistributedSubscriber;
@@ -71,6 +68,9 @@ import org.sn.myutils.pubsub.MessageClasses.RelayMessageBase;
 import org.sn.myutils.pubsub.PubSub.Publisher;
 import org.sn.myutils.pubsub.PubSub.Subscriber;
 import org.sn.myutils.pubsub.PubSub.SubscriptionMessageExceptionHandler;
+import org.sn.myutils.testutils.LogFailureToConsoleTestWatcher;
+import org.sn.myutils.testutils.TestBase;
+import org.sn.myutils.testutils.TestUtil;
 
 
 /**

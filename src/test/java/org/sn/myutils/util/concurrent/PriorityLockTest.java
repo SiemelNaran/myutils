@@ -36,8 +36,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.sn.myutils.LogFailureToConsoleTestWatcher;
-import org.sn.myutils.TestUtil;
+import org.sn.myutils.testutils.LogFailureToConsoleTestWatcher;
+import org.sn.myutils.testutils.TestUtil;
 import org.sn.myutils.util.concurrent.PriorityLock.PriorityLockCondition;
 import org.sn.myutils.util.concurrent.PriorityLock.PriorityLockNamedParams;
 

@@ -1,4 +1,4 @@
-package org.sn.myutils;
+package org.sn.myutils.testutils;
 
 import java.time.Instant;
 import org.junit.jupiter.api.AfterAll;

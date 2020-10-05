@@ -1,7 +1,7 @@
 package org.sn.myutils.pubsub;
 
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.sn.myutils.TestUtil.sleep;
+import static org.sn.myutils.testutils.TestUtil.sleep;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -11,7 +11,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
-import org.sn.myutils.TestBase;
+import org.sn.myutils.testutils.TestBase;
 
 
 public class JavaTest extends TestBase {

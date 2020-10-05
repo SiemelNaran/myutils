@@ -2,7 +2,7 @@ package org.sn.myutils.parsetree;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.sn.myutils.TestUtil.assertExceptionFromCallable;
+import static org.sn.myutils.testutils.TestUtil.assertExceptionFromCallable;
 
 import java.text.ParseException;
 import java.util.Collections;

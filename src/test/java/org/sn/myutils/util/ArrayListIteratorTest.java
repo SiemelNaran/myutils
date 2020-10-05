@@ -3,7 +3,7 @@ package org.sn.myutils.util;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.sn.myutils.TestUtil.assertException;
+import static org.sn.myutils.testutils.TestUtil.assertException;
 
 import java.util.ArrayList;
 import java.util.List;

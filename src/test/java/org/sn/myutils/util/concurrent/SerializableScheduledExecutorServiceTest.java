@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
-import org.sn.myutils.TestUtil;
+import org.sn.myutils.testutils.TestUtil;
 import org.sn.myutils.util.concurrent.SerializableScheduledExecutorService.RecreateRunnableFailedException;
 import org.sn.myutils.util.concurrent.SerializableScheduledExecutorService.UnfinishedTasks;
 

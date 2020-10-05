@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import java.math.BigInteger;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
-import org.sn.myutils.TestBase;
+import org.sn.myutils.testutils.TestBase;
 
 
 public class ServerIndexTest extends TestBase {

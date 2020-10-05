@@ -2,10 +2,10 @@ package org.sn.myutils.pubsub;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
-import static org.sn.myutils.TestUtil.between;
+import static org.sn.myutils.testutils.TestUtil.between;
 
 import org.junit.jupiter.api.Test;
-import org.sn.myutils.TestBase;
+import org.sn.myutils.testutils.TestBase;
 
 
 public class PubSubUtilsTest extends TestBase {

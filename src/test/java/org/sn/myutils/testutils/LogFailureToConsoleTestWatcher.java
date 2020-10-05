@@ -1,4 +1,4 @@
-package org.sn.myutils;
+package org.sn.myutils.testutils;
 
 import java.util.Arrays;
 import java.util.Optional;

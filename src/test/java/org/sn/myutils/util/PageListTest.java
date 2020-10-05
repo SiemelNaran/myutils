@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.sn.myutils.TestUtil.assertException;
+import static org.sn.myutils.testutils.TestUtil.assertException;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;

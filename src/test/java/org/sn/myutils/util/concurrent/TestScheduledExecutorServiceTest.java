@@ -30,8 +30,8 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.sn.myutils.LogFailureToConsoleTestWatcher;
-import org.sn.myutils.TestUtil;
+import org.sn.myutils.testutils.LogFailureToConsoleTestWatcher;
+import org.sn.myutils.testutils.TestUtil;
 
 
 @ExtendWith(LogFailureToConsoleTestWatcher.class)
