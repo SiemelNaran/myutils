@@ -15,6 +15,18 @@ License
 This code is under the [Apache Licence v2](https://www.apache.org/licenses/LICENSE-2.0).
 
 
+Building
+--------
+
+I'm using the following:
+- Maven 3.6.3
+- Java 13
+
+To build all projects `mvn clean install`
+To build all projects and skipping tests `mvn clean install -DskipTests`
+
+
+
 Java Classes
 ------------
 

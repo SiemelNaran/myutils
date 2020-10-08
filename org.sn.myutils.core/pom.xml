@@ -8,7 +8,6 @@
         <groupId>org.sn.myutils</groupId>
         <artifactId>root-node</artifactId>
         <version>1.0.0</version>
-        <relativePath>..</relativePath>
     </parent>
 
     <artifactId>myutils-core</artifactId>
