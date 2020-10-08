@@ -8,12 +8,11 @@
         <groupId>org.sn.myutils</groupId>
         <artifactId>root-node</artifactId>
         <version>1.0.0</version>
-        <relativePath>..</relativePath>
     </parent>
 
-    <artifactId>myutils-core</artifactId>
+    <artifactId>myutils-pubsub</artifactId>
     <packaging>jar</packaging>
-    <name>org.sn.myutils: myutils-core</name>
+    <name>org.sn.myutils: myutils-pubsub</name>
 
     <dependencies>
         <dependency>
@@ -27,6 +26,11 @@
         </dependency>
         
         <!-- new dependencies -->
+        <dependency>
+            <groupId>org.sn.myutils</groupId>
+            <artifactId>myutils-core</artifactId>
+    		<version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.sn.myutils</groupId>
             <artifactId>myutils-testutils</artifactId>

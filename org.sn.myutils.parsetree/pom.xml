@@ -8,25 +8,24 @@
         <groupId>org.sn.myutils</groupId>
         <artifactId>root-node</artifactId>
         <version>1.0.0</version>
-        <relativePath>..</relativePath>
     </parent>
 
-    <artifactId>myutils-core</artifactId>
+    <artifactId>myutils-parsetree</artifactId>
     <packaging>jar</packaging>
-    <name>org.sn.myutils: myutils-core</name>
+    <name>org.sn.myutils: myutils-parsetree</name>
 
     <dependencies>
         <dependency>
             <groupId>com.google.code.findbugs</groupId>
             <artifactId>jsr305</artifactId>
         </dependency>
-        <dependency>
-            <groupId>org.junit.platform</groupId>
-            <artifactId>junit-platform-launcher</artifactId>
-            <scope>test</scope>
-        </dependency>
         
         <!-- new dependencies -->
+        <dependency>
+            <groupId>org.sn.myutils</groupId>
+            <artifactId>myutils-core</artifactId>
+    		<version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.sn.myutils</groupId>
             <artifactId>myutils-testutils</artifactId>
