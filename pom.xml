@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.sn.myutils</groupId>
-    <artifactId>root-node</artifactId>
+    <artifactId>myutils-root</artifactId>
     <version>1.0.0</version>
     <packaging>pom</packaging>
     <name>org.sn.myutils: root-node</name>

@@ -18,14 +18,44 @@ This code is under the [Apache Licence v2](https://www.apache.org/licenses/LICEN
 Building
 --------
 
-I'm using the following:
+Install the following:
 - Maven 3.6.3
 - Java 13
 
 To build all projects `mvn clean install`
-To build all projects and skipping tests `mvn clean install -DskipTests`
+To build all projects skipping tests `mvn clean install -DskipTests`
 
 
+Maven
+-----
+
+To delete the files in the local repository
+```
+rm -rfv ~/.m2/repository/org/sn/myutils/
+```
+
+
+Eclipse IDE
+-----------
+
+Eclipse 2020-03.
+
+Steps:
+- Ensure that .project and .classpath do not exist in the root folder
+- File -> Import -> Maven -> Existing Maven Projects
+- Pick the myutils folder
+- Ensure all checkboxes are checked and click Finish
+
+
+IntelliJ IDE
+------------
+
+IntelliJ
+
+Steps:
+-
+-
+-
 
 Java Classes
 ------------

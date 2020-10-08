@@ -6,7 +6,7 @@
 
     <parent>
         <groupId>org.sn.myutils</groupId>
-        <artifactId>root-node</artifactId>
+        <artifactId>myutils-root</artifactId>
         <version>1.0.0</version>
     </parent>
 
