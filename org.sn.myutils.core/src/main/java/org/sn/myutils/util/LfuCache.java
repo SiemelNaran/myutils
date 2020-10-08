@@ -1,4 +1,4 @@
-package myutils.util;
+package org.sn.myutils.util;
 
 import java.util.ArrayList;
 import java.util.HashMap;

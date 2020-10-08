@@ -1,4 +1,4 @@
-package myutils.util;
+package org.sn.myutils.util;
 
 import java.util.*;
 import java.util.stream.Collectors;
