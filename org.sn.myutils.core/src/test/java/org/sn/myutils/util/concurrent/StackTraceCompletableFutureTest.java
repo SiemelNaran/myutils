@@ -26,7 +26,7 @@ public class StackTraceCompletableFutureTest {
 
     @BeforeAll
     public static void setupIgnoreStackTrace() {
-        StackTraces.addIgnoreClassOrPackageName(Arrays.asList("org.eclipse", "org.junit", "sun.reflect"));
+        StackTraces.addIgnoreClassOrPackageOrModuleName(Arrays.asList("org.eclipse", "org.junit", "java/"));
     }
     
     @AfterEach
@@ -35,7 +35,7 @@ public class StackTraceCompletableFutureTest {
     }
     
     private CompletionStage<Integer> doEvenMore(CompletionStage<Integer> stage) {
-        return stage.thenApply(val -> { // line 39
+        return stage.thenApply(val -> { // line 38
             sleep(SLEEP_TIME);
             System.out.println("phase 3");
             return val + 3;
@@ -43,26 +43,26 @@ public class StackTraceCompletableFutureTest {
     }
     
     private CompletionStage<Integer> doMore(CompletionStage<Integer> stage) {
-        return doEvenMore(stage); // line 47
+        return doEvenMore(stage); // line 46
     }
     
     @SuppressWarnings("checkstyle:LineLength")
     private CompletionStage<Integer> common(boolean shouldThrow) {
-        CompletionStage<Integer> stage = StackTraceCompletableFuture.supplyAsync(() -> { // line 52
+        CompletionStage<Integer> stage = StackTraceCompletableFuture.supplyAsync(() -> { // line 51
             sleep(SLEEP_TIME);
             System.out.println("phase 1");
             return 3;
         });
         
-        stage = stage.thenApply(val -> { // line 58
+        stage = stage.thenApply(val -> { // line 57
             sleep(SLEEP_TIME);
             System.out.println("phase 2");
             return val + 3;
         });
         
-        stage = doMore(stage); // line 64
+        stage = doMore(stage); // line 63
         
-        stage = stage.toCompletableFuture().thenApply(val -> { // line 66
+        stage = stage.toCompletableFuture().thenApply(val -> { // line 65
             sleep(SLEEP_TIME);
             System.out.println("phase 4");
             if (shouldThrow) {
@@ -131,7 +131,7 @@ public class StackTraceCompletableFutureTest {
     void testExceptionalExecutionAllOf() throws InterruptedException, ExecutionException, TimeoutException {
         System.out.println("testExceptionalExecutionAllOf");
         CompletionStage<Integer> stage = common(true);
-        CompletionStage<Void> waitForAll = StackTraceCompletableFuture.allOf(stage.toCompletableFuture()); // line 135
+        CompletionStage<Void> waitForAll = StackTraceCompletableFuture.allOf(stage.toCompletableFuture()); // line 134
         
         try {
             waitForAll.toCompletableFuture().join();

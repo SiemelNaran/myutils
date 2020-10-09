@@ -9,33 +9,58 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletionException;
+import java.util.stream.Collectors;
+
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 
-class StackTraces {
+public class StackTraces {
 
     private static volatile List<String> _ignoreClassOrPackageNameList = new ArrayList<>();
+    private static volatile List<String> _ignoreModuleNameList = new ArrayList<>();
     
     static {
-        _ignoreClassOrPackageNameList.add("myutils.util.concurrent.StackTraceCompletableFuture");
+        _ignoreClassOrPackageNameList.add("org.sn.myutils.util.concurrent.StackTraceCompletableFuture");
     }
     
     /**
-     * Add ignore class or package names.  Call stack lines whose class starts with one of these will be removed from the call stack.
-     * An example list would be : ["org.eclipse", "org.junit", "sun.reflect"]
+     * Add ignore class or package or module names.
+     * Call stack lines whose class starts with one of these will be removed from the call stack.
+     * An example list would be : ["org.eclipse", "org.junit", "java/"]
      * 
-     * @param ignores the list of package names to ignore
+     * @param ignores the list of package or class or module names to ignore. If an element ends with / it is a module name.
      */
-    public static synchronized void addIgnoreClassOrPackageName(List<String> ignores) {
+    public static synchronized void addIgnoreClassOrPackageOrModuleName(List<String> ignores) {
         List<String> newList = new ArrayList<>(_ignoreClassOrPackageNameList);
-        newList.addAll(ignores);
+        newList.addAll(ignores.stream()
+                              .filter(elem -> !elem.endsWith("/")) // filter only class and package names
+                              .collect(Collectors.toList()));
         newList.sort(Comparator.naturalOrder());
         _ignoreClassOrPackageNameList = newList;
+        
+        newList = new ArrayList<>(_ignoreModuleNameList);
+        newList.addAll(ignores.stream()
+                              .filter(elem -> elem.endsWith("/")) // filter only module names
+                              .map(elem -> elem.substring(0, elem.length()- 1)) // remove the trailing /
+                              .collect(Collectors.toList()));
+        newList.sort(Comparator.naturalOrder());
+        _ignoreModuleNameList = newList;
     }
     
-    private static boolean shouldIgnore(List<String> ignoreList, String text) {
-        int index = Collections.binarySearch(ignoreList, text);
+    private static boolean shouldIgnore(@Nullable String moduleName, @Nonnull String className) {
+        if (shouldIgnoreClassOrPackage(className)) {
+            return true;
+        }
+        if (shouldIgnoreModule(moduleName)) {
+            return true;
+        }
+        return false;
+    }
+    
+    private static boolean shouldIgnoreClassOrPackage(@Nonnull String className) {
+        List<String> ignoreList = _ignoreClassOrPackageNameList;
+        int index = Collections.binarySearch(ignoreList, className);
         if (index >= 0) {
             return true;
         }
@@ -44,9 +69,33 @@ class StackTraces {
             return false;
         }
         String token = ignoreList.get(index);
-        if (text.startsWith(token)) {
-            char c = text.charAt(token.length());
+        if (className.startsWith(token)) {
+            // if we are ignoring java.util then also ignore java.util.concurrent
+            // if we are ignoring a.b.ClassName then also ignore nested classes a.b.ClassName$NestedClass
+            char c = className.charAt(token.length());
             return c == '.' || c == '$';
+        }
+        return false;
+    }
+
+    private static boolean shouldIgnoreModule(@Nullable String moduleName) {
+        if (moduleName == null) {
+            return false;
+        }
+        List<String> ignoreList = _ignoreModuleNameList;
+        int index = Collections.binarySearch(ignoreList, moduleName);
+        if (index >= 0) {
+            return true;
+        }
+        index = -index - 2;
+        if (index < 0) {
+            return false;
+        }
+        String token = ignoreList.get(index);
+        if (moduleName.startsWith(token)) {
+            // if we are ignoring java/ then also ignore java.base/
+            char c = moduleName.charAt(token.length());
+            return c == '.';
         }
         return false;
     }
@@ -64,12 +113,11 @@ class StackTraces {
         
         List<StackTraceElement> parentStackTrace = parent != null ? parent.stackTrace : Collections.emptyList();
         StackTraceElement[] currentStackTrace = new Exception().getStackTrace();
-        List<String> ignoreList = _ignoreClassOrPackageNameList;
         
         boolean done = false;
         for (int i = 4; i < currentStackTrace.length; i++) {
             StackTraceElement currentElem = currentStackTrace[i];
-            if (currentElem.getLineNumber() == 1 || shouldIgnore(ignoreList, currentElem.getClassName())) {
+            if (currentElem.getLineNumber() == 1 || shouldIgnore(currentElem.getModuleName(), currentElem.getClassName())) {
                 continue;
             }
             for (StackTraceElement parentElem: parentStackTrace) {

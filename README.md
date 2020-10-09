@@ -139,19 +139,8 @@ public interface PriorityExecutorService extends ExecutorService {
 org.sn.myutils.util.concurrent.StackTraces$StackTracesCompletionException: java.lang.IllegalStateException: failed
 	at org.sn.myutils.util.concurrent.StackTraces.generateException(StackTraces.java:114)
 	at org.sn.myutils.util.concurrent.StackTraceCompletableFuture.lambda$0(StackTraceCompletableFuture.java:53)
-	at java.base/java.util.concurrent.CompletableFuture.uniWhenComplete(CompletableFuture.java:859)
-	at java.base/java.util.concurrent.CompletableFuture$UniWhenComplete.tryFire(CompletableFuture.java:837)
-	at java.base/java.util.concurrent.CompletableFuture.postComplete(CompletableFuture.java:506)
-	at java.base/java.util.concurrent.CompletableFuture$AsyncSupply.run(CompletableFuture.java:1776)
-	at java.base/java.util.concurrent.CompletableFuture$AsyncSupply.exec(CompletableFuture.java:1763)
-	at java.base/java.util.concurrent.ForkJoinTask.doExec(ForkJoinTask.java:290)
-	at java.base/java.util.concurrent.ForkJoinPool$WorkQueue.topLevelExec(ForkJoinPool.java:1016)
-	at java.base/java.util.concurrent.ForkJoinPool.scan(ForkJoinPool.java:1665)
-	at java.base/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1598)
-	at java.base/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:177)
 Caused by: java.lang.IllegalStateException: failed
 	at org.sn.myutils.util.concurrent.StackTraceCompletableFutureTest.lambda$common$3(StackTraceCompletableFutureTest.java:69)
-	at java.base/java.util.concurrent.CompletableFuture$UniApply.tryFire(CompletableFuture.java:642)
 	... 8 more
 Called from
 	org.sn.myutils.util.concurrent.StackTraceCompletableFutureTest.common(StackTraceCompletableFutureTest.java:65)
@@ -167,12 +156,6 @@ Called from
 Called from
 	org.sn.myutils.util.concurrent.StackTraceCompletableFutureTest.common(StackTraceCompletableFutureTest.java:51)
 	org.sn.myutils.util.concurrent.StackTraceCompletableFutureTest.testExceptionalExecutionJoin(StackTraceCompletableFutureTest.java:161)
-	java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
-	java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)
-	java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
-	java.base/java.lang.reflect.Method.invoke(Method.java:567)
-	java.base/java.util.ArrayList.forEach(ArrayList.java:1507)
-	java.base/java.util.ArrayList.forEach(ArrayList.java:1507)
 ```
 
 - *TestScheduledThreadPoolExecutor*: A scheduled thread pool executor to be used for testing. You can schedule a task to run in the future, say in 10 minutes from now, and then call a function advanceTime to advance time by 10 minutes and verify that the task was called.
