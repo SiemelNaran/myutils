@@ -21,6 +21,7 @@ import java.nio.channels.NetworkChannel;
 import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -39,6 +40,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Function;
+
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import org.sn.myutils.pubsub.MessageClasses.AddSubscriber;
@@ -65,6 +68,8 @@ import org.sn.myutils.pubsub.PubSubUtils.CallStackCapturing;
 /**
  * Client class that acts as an in-memory publish/subscribe system, as well as talks to a server to send and receive publish commands.
  * 
+ * <p>This client class supports sharding. Users provide a topicToMessageServer that maps a topic to a message server.
+ * 
  * <p>When a DistributedPubSub is started it connects to the DistributedMessageServer, and identifies itself to the server.
  * The identification includes the client's name, and must be unique across all machines in the system.
  * If the DistributedMessageServer is not available, this class attempts to connect to the DistributedMessageServer again which capped exponential backoff.
@@ -90,8 +95,9 @@ import org.sn.myutils.pubsub.PubSubUtils.CallStackCapturing;
  * 
  * <p>Besides the identification message, each message sent to the server includes the client time and a monotonically increasing index.
  *
- * <p>In implementation there is one thread that listens for messages from the server,
- * one thread that sends messages to the server,
+ * <p>In implementation,
+ * there is one thread that listens for messages from the server for each distributed message server,
+ * and one thread that sends messages to the server,
  * and another that handles retires with exponential backoff.
  * 
  * <p>If the DistributedMessageServer dies, this DistributedPubSub detects it and stops the reader and writer threads
@@ -110,12 +116,11 @@ public class DistributedSocketPubSub extends PubSub {
     
     private final Map<String /*topic*/, DormantInfo> dormantInfoMap = new ConcurrentHashMap<>();
     private final SocketTransformer socketTransformer;
-    private final String messageServerHost;
-    private final int messageServerPort;
+    private final KeyToHostAndPortMapper topicToMessageServer;
     private final ClientMachineId machineId;
     private final SocketAddress localAddress;
-    private final AtomicReference<SocketChannel> channelHolder;
-    private final ExecutorService channelExecutor = Executors.newFixedThreadPool(2, createThreadFactory("DistributedSocketPubSub", true)); // read thread and write thread
+    private final Map<HostAndPort, SocketChannel> messageServers = new ConcurrentHashMap<>();
+    private final ExecutorService channelExecutor = Executors.newCachedThreadPool(createThreadFactory("DistributedSocketPubSub", true)); // read threads and one write thread
     private final ScheduledExecutorService retryExecutor = Executors.newScheduledThreadPool(1, createThreadFactory("DistributedSocketPubSub.Retry", true));
     private final MessageWriter messageWriter;
     private final AtomicLong localMaxMessage = new AtomicLong();
@@ -153,38 +158,42 @@ public class DistributedSocketPubSub extends PubSub {
      * @param machineId the name of this machine, and if null the code will set it to this machine's hostname
      * @param localServer the local server
      * @param localPort the local port
-     * @param messageServerHost the server to connect to in order to send and receive publish commands
-     * @param messageServerPort the server to connect to in order to send and receive publish commands
+     * @param messageServerLookup a function that maps the topic to a message server (used for sharding)
      * @throws IOException if there is an error opening the socket channel
      * @see PubSubConstructorArgs for the arguments to the super class
      */
     public DistributedSocketPubSub(PubSubConstructorArgs baseArgs,
-            @Nullable String machineId,
-            String localServer,
-            int localPort,
-            String messageServerHost,
-            int messageServerPort) throws IOException {
-        this(new SocketTransformer(), baseArgs, machineId, localServer, localPort, messageServerHost, messageServerPort);
+                                   @Nullable String machineId,
+                                   HostAndPort localServer,
+                                   KeyToHostAndPortMapper topicToMessageServer) throws IOException {
+        this(new SocketTransformer(), baseArgs, machineId, localServer, topicToMessageServer);
     }
     
     DistributedSocketPubSub(SocketTransformer socketTransformer,
                             PubSubConstructorArgs baseArgs,
                             @Nullable String machineId,
-                            String localServer,
-                            int localPort,
-                            String messageServerHost,
-                            int messageServerPort) throws IOException {
+                            HostAndPort localServer,
+                            KeyToHostAndPortMapper topicToMessageServer) throws IOException {
         super(baseArgs);
         this.socketTransformer = socketTransformer;
-        this.messageServerHost = messageServerHost;
-        this.messageServerPort = messageServerPort;
+        this.topicToMessageServer = topicToMessageServer;
         this.machineId = new ClientMachineId(machineId != null ? machineId : InetAddress.getLocalHost().getHostName());
-        this.localAddress = new InetSocketAddress(localServer, localPort);
-        this.channelHolder = new AtomicReference<>(createNewSocket());
+        this.localAddress = new InetSocketAddress(localServer.getHost(), localServer.getPort());
+        this.messageServers = createNewSockets(topicToMessageServer);
         this.messageWriter = createMessageWriter();
         this.cleanable = addShutdownHook(this,
                                          new Cleanup(this.machineId, channelHolder, channelExecutor, retryExecutor),
                                          DistributedSocketPubSub.class);
+    }
+    
+    private Map<HostAndPort, SocketChannel> createNewSockets(KeyToHostAndPortMapper topicToMessageServer) {
+        Map<HostAndPort, SocketChannel> messageServers = new ConcurrentHashMap<>();
+        for (HostAndPort messageServer : topicToMessageServer.getUniverse()) {
+            SocketChannel socketChannel = createNewSocket();
+            messageServers.put(messageServer, null);
+        }
+        assert messageServers.size() == topicToMessageServer.getUniverse().size();
+        return Collections.unmodifiableMap(messageServers);
     }
     
     private SocketChannel createNewSocket() throws IOException {

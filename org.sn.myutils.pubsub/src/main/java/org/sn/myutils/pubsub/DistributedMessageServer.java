@@ -129,8 +129,7 @@ public class DistributedMessageServer implements Shutdowneable {
     private static final int MAX_RETRIES = 3;
 
     private final SocketTransformer socketTransformer;
-    private final String host;
-    private final int port;
+    private final HostAndPort messageServer;
     private final AsynchronousServerSocketChannel asyncServerSocketChannel;
     private final ExecutorService acceptExecutor;
     private final ExecutorService channelExecutor;
@@ -836,17 +835,15 @@ public class DistributedMessageServer implements Shutdowneable {
      * @param mostRecentMessagesToKeep the number of most recent messages of the given priority to keep (and zero if message not in this list)
      * @throws IOException if there is an error opening a socket (but no error if the host:port is already in use)
      */
-    public DistributedMessageServer(@Nonnull String host, int port, Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
-        this(new SocketTransformer(), host, port, mostRecentMessagesToKeep);
+    public DistributedMessageServer(@Nonnull HostAndPort messageServer, Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
+        this(new SocketTransformer(), messageServer, mostRecentMessagesToKeep);
     }
     
     DistributedMessageServer(SocketTransformer socketTransformer,
-                             @Nonnull String host,
-                             int port,
+                             @Nonnull HostAndPort messageServer,
                              Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
         this.socketTransformer = socketTransformer;
-        this.host = host;
-        this.port = port;
+        this.messageServer = messageServer;
         this.asyncServerSocketChannel = AsynchronousServerSocketChannel.open();
         this.acceptExecutor = Executors.newSingleThreadExecutor(createThreadFactory("DistributedMessageServer.accept", true));
         this.channelExecutor = Executors.newFixedThreadPool(NUM_CHANNEL_THREADS, createThreadFactory("DistributedMessageServer.socket", true));
@@ -875,9 +872,7 @@ public class DistributedMessageServer implements Shutdowneable {
     }
     
     private void doStart(CompletableFuture<Void> future) {
-        String snippet = String.format("DistributedMessageServer centralServer=%s:%d",
-                                       host,
-                                       port);
+        String snippet = String.format("DistributedMessageServer centralServer=%s", messageServer.toString());
         try {
             openServerSocket();
             acceptExecutor.submit(new AcceptThread());
@@ -890,8 +885,8 @@ public class DistributedMessageServer implements Shutdowneable {
 
     private void openServerSocket() throws IOException {
         onBeforeSocketBound(asyncServerSocketChannel);
-        asyncServerSocketChannel.bind(new InetSocketAddress(host, port));
-        LOGGER.log(Level.INFO, String.format("Started DistributedMessageServer: localHostAndPort=%s:%d, localServer=%s", host, port, getLocalAddress(asyncServerSocketChannel)));
+        asyncServerSocketChannel.bind(new InetSocketAddress(messageServer.getHost(), messageServer.getPort()));
+        LOGGER.log(Level.INFO, String.format("Started DistributedMessageServer: localHostAndPort=%s, localServer=%s", messageServer.toString(), getLocalAddress(asyncServerSocketChannel)));
     }
     
     /**
