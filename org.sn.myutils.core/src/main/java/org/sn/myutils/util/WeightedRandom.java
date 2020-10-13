@@ -24,7 +24,7 @@ public class WeightedRandom implements Supplier<Integer> {
      * 
      * @param weights the weights of each integer. Can be zero.
      */
-    public WeightedRandom(List<Integer> weights) {
+    public WeightedRandom(List<? extends Number> weights) {
         this(weights, new Random());
     }
     
@@ -40,12 +40,13 @@ public class WeightedRandom implements Supplier<Integer> {
      * @throws IllegalArgumentException if any weight is negative
      * @throws IllegalArgumentException if all weights are zero
      */
-    public WeightedRandom(List<Integer> weights, Random internalRandom) {
+    public WeightedRandom(List<? extends Number> weights, Random internalRandom) {
         this.internalRandom = internalRandom;
         
         // compute sumOfWeights
-        int sumOfWeights = 0;
-        for (int weight : weights) {
+        double sumOfWeights = 0;
+        for (Number weightAsNumber : weights) {
+            double weight = weightAsNumber.doubleValue();
             if (weight < 0) {
                 throw new IllegalArgumentException("weight cannot be negative: weight=" + weight);
             }
@@ -73,9 +74,9 @@ public class WeightedRandom implements Supplier<Integer> {
         int numWeights = weights.size();
         List<Integer> positions = new ArrayList<Integer>(numWeights);
         positions.add(Integer.MIN_VALUE);
-        int currentSum = 0;
+        double currentSum = 0;
         for (int i = 0; i < numWeights - 1; i++) {
-            int weight = weights.get(i);
+            double weight = weights.get(i).doubleValue();
             currentSum += weight;
             positions.add((int)(INT_RANGE / sumOfWeights * currentSum + Integer.MIN_VALUE));
         }
