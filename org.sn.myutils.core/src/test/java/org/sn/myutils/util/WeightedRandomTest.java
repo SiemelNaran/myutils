@@ -1,8 +1,10 @@
 package org.sn.myutils.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.sn.myutils.testutils.TestUtil.assertException;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -71,5 +73,18 @@ public class WeightedRandomTest extends TestBase {
         assertEquals(0.0, ratios.get(12));
         assertEquals(0.0, ratios.get(13));
         assertEquals(0.0, ratios.get(14));
+    }
+
+    @Test
+    void testNegativeWeight() {
+        List<Integer> weights = Arrays.asList(7, 2, -5);
+        assertException(() -> new WeightedRandom(weights), IllegalArgumentException.class, "weight cannot be negative: weight=-5");
+    }
+    
+
+    @Test
+    void testNoWeights() {
+        List<Integer> weights = Collections.emptyList();
+        assertException(() -> new WeightedRandom(weights), IllegalArgumentException.class, "there must be at least one weight");
     }
 }
