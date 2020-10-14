@@ -84,6 +84,12 @@ import org.sn.myutils.testutils.TestUtil;
  * - PubSubUtils.java
  * - ServerIndex.java
  * - RetentionPriority.java
+ * 
+ * <p>In Eclipse and IntelliJ run with the following VM arguments
+ * <code>
+-ea
+-Djava.util.logging.config.file=../org.sn.myutils.testutils/target/classes/logging.properties
+ * </code>
  */
 @ExtendWith(LogFailureToConsoleTestWatcher.class)
 public class DistributedPubSubIntegrationTest extends TestBase {
@@ -1734,12 +1740,13 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      */
     @Test
     void testShutdownHook() throws IOException, InterruptedException {
+        System.out.println(new java.io.File(".").getCanonicalPath());
         var processBuilder = new ProcessBuilder(
                 "java",
                 "-cp",
-                "target/classes:target/test-classes",
+                "target/classes:../org.sn.myutils.core/target/classes:../org.sn.myutils.testutils/target/classes:target/test-classes",
                 "-ea",
-                "-Djava.util.logging.config.file=target/test-classes/logging.properties",
+                "-Djava.util.logging.config.file=../org.sn.myutils.testutils/target/classes/logging.properties",
                 "org.sn.myutils.pubsub.DistributedPubSubIntegrationTest")
                 .inheritIO();
         var process = processBuilder.start();
