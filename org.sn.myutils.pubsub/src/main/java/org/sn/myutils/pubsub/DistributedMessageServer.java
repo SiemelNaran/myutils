@@ -239,6 +239,23 @@ public class DistributedMessageServer implements Shutdowneable {
             private Set<ClientMachineId> notifyClients; // clients to notify when a publisher is created
             private final Collection<SubscriberEndpoint> inactiveSubscriberEndpoints = new HashSet<>();
             private final MostRecentMessages mostRecentMessages;
+            private final Queue<DeferredPublishMessage> deferredPublishMessages = new LinkedList<>();
+            
+            /**
+             * This code may be hit if server is restarted.
+             * Clients send their CreatePublisher and PublishMessage commands to the server.
+             * It is possible that a PublishMessage is received before the publisher/topic is created on the server,
+             * so we add the Publish to a deferred list, and publish these messages upon the publisher getting created.
+             */
+            private static class DeferredPublishMessage {
+                private final PublishMessage publishMessage;
+                private final Consumer<SubscriberParamsForCallback> relayAction;
+
+                public DeferredPublishMessage(PublishMessage publishMessage, Consumer<SubscriberParamsForCallback> relayAction) {
+                    this.publishMessage = publishMessage;
+                    this.relayAction = relayAction;
+                }
+            }
             
             TopicInfo(String topic, Map<RetentionPriority, Integer> mostRecentMessagesToKeep) {
                 this.topic = topic;
@@ -249,6 +266,10 @@ public class DistributedMessageServer implements Shutdowneable {
                 if (notifyClients != null && notifyClients.isEmpty()) {
                     notifyClients = null;
                 }
+            }
+
+            void addDeferredPublishMessage(PublishMessage publishMessage, Consumer<SubscriberParamsForCallback> relayAction) {
+                deferredPublishMessages.add(new DeferredPublishMessage(publishMessage, relayAction));
             }
         }
         
@@ -406,7 +427,9 @@ public class DistributedMessageServer implements Shutdowneable {
         }
         
         /**
-         * Add createPublisher command.
+         * Add a publisher.
+         * Followup actions are to notify clients who subscribed to this topic of the new publisher.
+         * Also publish deferred messages.
          * 
          * @param createPublisher the create publisher command sent from the client
          * @param onPublisherCreatedCallback the function to call once the publisher is created.
@@ -437,8 +460,19 @@ public class DistributedMessageServer implements Shutdowneable {
                 if (callbacks.finalizerAction != null) {
                     callbacks.finalizerAction.run();
                 }
+                sendDeferredPublishMessages(info);
             } finally {
                 info.lock.unlock();
+            }
+        }
+        
+        private void sendDeferredPublishMessages(TopicInfo info) {
+            while (true) {
+                var deferred = info.deferredPublishMessages.poll();
+                if (deferred == null) {
+                    break;
+                }
+                saveMessage(deferred.publishMessage, deferred.relayAction);
             }
         }
         
@@ -544,16 +578,20 @@ public class DistributedMessageServer implements Shutdowneable {
 
         public void saveMessage(PublishMessage publishMessage, Consumer<SubscriberParamsForCallback> relayAction) {
             String topic = publishMessage.getTopic();
-            TopicInfo info = Objects.requireNonNull(topicMap.get(topic));
-            relayAction = relayAction.andThen(
-                subscriberParamsForCallack -> info.mostRecentMessages.onMessageRelayed(subscriberParamsForCallack.getClientMachineId(), publishMessage));
+            TopicInfo info = topicMap.computeIfAbsent(topic, unused -> new TopicInfo(topic, mostRecentMessagesToKeep));
             info.lock.lock();
             try {
-                info.mostRecentMessages.save(publishMessage);
-                forClientsSubscribedToPublisher(topic,
-                                                publishMessage.getRelayFields().getSourceMachineId(),
-                                                false,
-                                                relayAction);
+                if (info.createPublisher != null) {
+                    info.mostRecentMessages.save(publishMessage);
+                    relayAction = relayAction.andThen(
+                            subscriberParamsForCallack -> info.mostRecentMessages.onMessageRelayed(subscriberParamsForCallack.getClientMachineId(), publishMessage));
+                    forClientsSubscribedToPublisher(topic,
+                                                    publishMessage.getRelayFields().getSourceMachineId(),
+                                                    false,
+                                                    relayAction);
+                } else {
+                    info.addDeferredPublishMessage(publishMessage, relayAction);
+                }
             }  finally {
                 info.lock.unlock();
             }
