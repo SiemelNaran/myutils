@@ -1,12 +1,12 @@
 package org.sn.myutils.util;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import java.util.function.Function;
 import java.util.function.Supplier;
-
 import javax.annotation.Nonnull;
+import org.sn.myutils.util.MoreCollections.FindWhich;
 
 
 /**
@@ -37,8 +37,8 @@ public class WeightedRandom implements Supplier<Integer> {
      * 
      * @param weights the weights of each integer. Can be zero.
      * @param internalRandom the random number generator used to find a random number
+     * @throws IllegalArgumentException there are no weights
      * @throws IllegalArgumentException if any weight is negative
-     * @throws IllegalArgumentException if all weights are zero
      */
     public WeightedRandom(List<? extends Number> weights, Random internalRandom) {
         this.internalRandom = internalRandom;
@@ -48,11 +48,17 @@ public class WeightedRandom implements Supplier<Integer> {
         if (numWeights == 0) {
             throw new IllegalArgumentException("there must be at least one weight");
         }
+        int numTrailingZeroes = 0;
         double sumOfWeights = 0;
         for (Number weightAsNumber : weights) {
             double weight = weightAsNumber.doubleValue();
             if (weight < 0) {
                 throw new IllegalArgumentException("weight cannot be negative: weight=" + weightAsNumber);
+            }
+            if (weight == 0) {
+                numTrailingZeroes += 1;
+            } else {
+                numTrailingZeroes = 0;
             }
             sumOfWeights += weight;
         }
@@ -64,7 +70,7 @@ public class WeightedRandom implements Supplier<Integer> {
         // This allows us to find a random integer in the range [0, 10) by calling Random.nextInt(int)
         // then use binary search to find the index the number maps to.
         
-        // Because we weights could be doubles random.nextInt(int) is not possible in general.
+        // Because weights could be doubles random.nextInt(int) is not possible in general.
         // So let's map positions in the range [INT_MAX, INT_MIN] so that we can use Random.nextInt() instead.
         // Each integer occupies (INT_MAX - INT_MIN) / 10 of space.
         // For weights 7, 2, 1 positions will [INT_RANGE/10*0 + INT_MIN, // = INT_MIN
@@ -75,7 +81,7 @@ public class WeightedRandom implements Supplier<Integer> {
         List<Integer> positions = new ArrayList<Integer>(numWeights);
         positions.add(Integer.MIN_VALUE);
         double currentSum = 0;
-        for (int i = 0; i < numWeights - 1; i++) {
+        for (int i = 0; i < numWeights - 1 - numTrailingZeroes; i++) {
             double weight = weights.get(i).doubleValue();
             currentSum += weight;
             positions.add((int)(INT_RANGE / sumOfWeights * currentSum + Integer.MIN_VALUE));
@@ -93,7 +99,7 @@ public class WeightedRandom implements Supplier<Integer> {
     @Override
     public @Nonnull Integer get() {
         int random = internalRandom.nextInt();
-        int index = Collections.binarySearch(positions, random);
+        int index = MoreCollections.binarySearch(positions, 0, positions.size(), Function.identity(), random, FindWhich.FIND_LAST);
         if (index < 0) {
             index = -index - 2;
         }

@@ -6,11 +6,15 @@ import static org.sn.myutils.testutils.TestUtil.assertException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.sn.myutils.testutils.LogFailureToConsoleTestWatcher;
 import org.sn.myutils.testutils.TestBase;
 
 
+@ExtendWith(LogFailureToConsoleTestWatcher.class)
 public class WeightedRandomTest extends TestBase {
     @Test
     void testIntegers() {
@@ -75,6 +79,77 @@ public class WeightedRandomTest extends TestBase {
         assertEquals(0.0, ratios.get(14));
     }
 
+    /**
+     * In the previous tests we use the normal random number generator that returns nextInt() as any int in the full range.
+     * It is unlikely that the random integer will exactly equal the position, here [iNT_MIN, 0].
+     * So use a new random number generator that is guaranteed to return one of those values.
+     * This gets full code coverage on the line
+     *            if (index < 0) {
+     * as usually the condition is true, but in this test the condition is false.
+     */
+    @Test
+    void testIntegers2() {
+        List<Integer> weights = Arrays.asList(1, 1);
+        WeightedRandom random = new WeightedRandom(weights, new SpecialRandom());
+        int N = 100_000;
+        int[] hits = new int[weights.size()];
+        for (int i = 0; i < N; i++) {
+            int value = random.get();
+            hits[value] = hits[value] + 1;
+        }
+        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)N).collect(Collectors.toList());
+        System.out.println("ratios=" + ratios);
+        assertEquals(0.5, ratios.get(0), 0.01);
+        assertEquals(0.5, ratios.get(1), 0.01);
+    }
+
+    /**
+     * The basic algorithm is to pick a random number then find this random number in the position array.
+     * As there are many entries in the position array with the same value INT_MIN, and many with the value 0,
+     * the algorithm would normally find the a random position.
+     * But we need to find the right most position with this value.
+     */
+    @Test
+    void testZeroWeight2() {
+        List<Integer> weights = Arrays.asList(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0);
+        WeightedRandom random = new WeightedRandom(weights, new SpecialRandom());
+        int N = 100_000;
+        int[] hits = new int[weights.size()];
+        for (int i = 0; i < N; i++) {
+            int value = random.get();
+            hits[value] = hits[value] + 1;
+        }
+        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)N).collect(Collectors.toList());
+        System.out.println("ratios=" + ratios);
+        assertEquals(0.5, ratios.get(9), 0.01);
+        assertEquals(0.5, ratios.get(10), 0.01);
+        for (int i = 0; i < weights.size(); i++) {
+            if (i == 9 || i == 10) {
+                continue;
+            }
+            assertEquals(0, ratios.get(i), "i=" + i);
+        }
+    }
+    
+    /**
+     * When there are two weights [1, 1] the positions are [INT_MIN, 0, INT_MAX].
+     * Modify nextInt() to return not an integer, but exactly INT_MIN or 0 with equal probability.
+     */
+    private static class SpecialRandom extends Random {
+        private static final long serialVersionUID = 1L;
+        
+        private Random internalRandom = new Random();
+        
+        @Override
+        public int nextInt() {
+            if (internalRandom.nextInt() <= 0) {
+                return Integer.MIN_VALUE;
+            } else {
+                return 0;
+            }
+        }
+    }
+    
     @Test
     void testNegativeWeight() {
         List<Integer> weights = Arrays.asList(7, 2, -5);
