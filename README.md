@@ -97,6 +97,8 @@ It does not let you rewind any number of times, as that would basically be a lis
 
 - *SimpleTrie*: A basic trie data structure.
 
+- *WeightedRandom*: Given a list of weights, find a random number respecting those weights.
+
 - *ZipMinIterator*: An iterator that takes a list of iterators over sorted ranges and returns the next highest element.
 
 ### Concurrent classes
