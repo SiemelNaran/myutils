@@ -214,10 +214,11 @@ public class MoreCollections {
     public static <U extends Comparable<? super U>>
     int binarySearch(List<U> list,
                      U key) {
-        if (list instanceof AbstractPageList)
+        if (list instanceof AbstractPageList) {
             return pageListBinarySearch((AbstractPageList<U>) list, key);
-        else
+        } else {
             return Collections.binarySearch(list, key);
+        }
     }
 
     /**
@@ -242,10 +243,11 @@ public class MoreCollections {
                 index = -index - 2;
                 Page<U> page = pages.get(index);
                 int subIndex = Collections.binarySearch(page.getList(), key);
-                if (subIndex >= 0)
+                if (subIndex >= 0) {
                     return page.getStartIndex() + subIndex;
-                else
+                } else {
                     return -(page.getStartIndex() + (-subIndex - 1)) - 1;
+                }
             }
         }
     }

@@ -20,13 +20,13 @@ public class WeightedRandomTest extends TestBase {
     void testIntegers() {
         List<Integer> weights = Arrays.asList(7, 2, 1);
         WeightedRandom random = new WeightedRandom(weights);
-        int N = 100_000;
+        int numRandoms = 100_000;
         int[] hits = new int[weights.size()];
-        for (int i = 0; i < N; i++) {
+        for (int i = 0; i < numRandoms; i++) {
             int value = random.get();
             hits[value] = hits[value] + 1;
         }
-        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)N).collect(Collectors.toList());
+        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)numRandoms).collect(Collectors.toList());
         System.out.println("ratios=" + ratios);
         assertEquals(0.7, ratios.get(0), 0.01);
         assertEquals(0.2, ratios.get(1), 0.01);
@@ -37,13 +37,13 @@ public class WeightedRandomTest extends TestBase {
     void testDoubles() {
         List<Double> weights = Arrays.asList(7.0, 2.5, 0.5);
         WeightedRandom random = new WeightedRandom(weights);
-        int N = 100_000;
+        int numRandoms = 100_000;
         int[] hits = new int[weights.size()];
-        for (int i = 0; i < N; i++) {
+        for (int i = 0; i < numRandoms; i++) {
             int value = random.get();
             hits[value] = hits[value] + 1;
         }
-        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)N).collect(Collectors.toList());
+        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)numRandoms).collect(Collectors.toList());
         System.out.println("ratios=" + ratios);
         assertEquals(0.7, ratios.get(0), 0.01);
         assertEquals(0.25, ratios.get(1), 0.01);
@@ -54,13 +54,13 @@ public class WeightedRandomTest extends TestBase {
     void testZeroWeight() {
         List<Integer> weights = Arrays.asList(0, 0, 0, 7, 0, 0, 0, 0, 0, 2, 1, 0, 0, 0, 0);
         WeightedRandom random = new WeightedRandom(weights);
-        int N = 100_000;
+        int numRandoms = 100_000;
         int[] hits = new int[weights.size()];
-        for (int i = 0; i < N; i++) {
+        for (int i = 0; i < numRandoms; i++) {
             int value = random.get();
             hits[value] = hits[value] + 1;
         }
-        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)N).collect(Collectors.toList());
+        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)numRandoms).collect(Collectors.toList());
         System.out.println("ratios=" + ratios);
         assertEquals(0.7, ratios.get(3), 0.01);
         assertEquals(0.2, ratios.get(9), 0.01);
@@ -91,13 +91,13 @@ public class WeightedRandomTest extends TestBase {
     void testIntegers2() {
         List<Integer> weights = Arrays.asList(1, 1);
         WeightedRandom random = new WeightedRandom(weights, new SpecialRandom());
-        int N = 100_000;
+        int numRandoms = 100_000;
         int[] hits = new int[weights.size()];
-        for (int i = 0; i < N; i++) {
+        for (int i = 0; i < numRandoms; i++) {
             int value = random.get();
             hits[value] = hits[value] + 1;
         }
-        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)N).collect(Collectors.toList());
+        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)numRandoms).collect(Collectors.toList());
         System.out.println("ratios=" + ratios);
         assertEquals(0.5, ratios.get(0), 0.01);
         assertEquals(0.5, ratios.get(1), 0.01);
@@ -113,13 +113,13 @@ public class WeightedRandomTest extends TestBase {
     void testZeroWeight2() {
         List<Integer> weights = Arrays.asList(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0);
         WeightedRandom random = new WeightedRandom(weights, new SpecialRandom());
-        int N = 100_000;
+        int numRandoms = 100_000;
         int[] hits = new int[weights.size()];
-        for (int i = 0; i < N; i++) {
+        for (int i = 0; i < numRandoms; i++) {
             int value = random.get();
             hits[value] = hits[value] + 1;
         }
-        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)N).collect(Collectors.toList());
+        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)numRandoms).collect(Collectors.toList());
         System.out.println("ratios=" + ratios);
         assertEquals(0.5, ratios.get(9), 0.01);
         assertEquals(0.5, ratios.get(10), 0.01);
