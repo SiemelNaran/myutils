@@ -90,7 +90,7 @@ public class WeightedRandomTest extends TestBase {
     @Test
     void testIntegers2() {
         List<Integer> weights = Arrays.asList(1, 1);
-        WeightedRandom random = new WeightedRandom(weights, new SpecialRandom());
+        WeightedRandom random = new WeightedRandom(weights, new TestRandom());
         int numRandoms = 100_000;
         int[] hits = new int[weights.size()];
         for (int i = 0; i < numRandoms; i++) {
@@ -112,7 +112,7 @@ public class WeightedRandomTest extends TestBase {
     @Test
     void testZeroWeight2() {
         List<Integer> weights = Arrays.asList(0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0);
-        WeightedRandom random = new WeightedRandom(weights, new SpecialRandom());
+        WeightedRandom random = new WeightedRandom(weights, new TestRandom());
         int numRandoms = 100_000;
         int[] hits = new int[weights.size()];
         for (int i = 0; i < numRandoms; i++) {
@@ -133,19 +133,24 @@ public class WeightedRandomTest extends TestBase {
     
     /**
      * When there are two weights [1, 1] the positions are [INT_MIN, 0, INT_MAX].
-     * Modify nextInt() to return not an integer, but exactly INT_MIN or 0 with equal probability.
+     * Modify nextInt() to return not an integer, but exactly INT_MIN or 0/INT_MAX with equal probability.
+     * The reason to return 0 or INT_MAX is because both result in weight B peing picked,
+     * but it tests that we remove the weights with trailing zeroes at the end (see testZeroWeight2).
      */
-    private static class SpecialRandom extends Random {
+    private static class TestRandom extends Random {
         private static final long serialVersionUID = 1L;
         
         private Random internalRandom = new Random();
-        
+        private boolean returnZero = true;
+
         @Override
         public int nextInt() {
             if (internalRandom.nextInt() <= 0) {
                 return Integer.MIN_VALUE;
             } else {
-                return 0;
+                boolean rz = returnZero;
+                returnZero = !returnZero;
+                return rz ? 0 : Integer.MAX_VALUE;
             }
         }
     }
