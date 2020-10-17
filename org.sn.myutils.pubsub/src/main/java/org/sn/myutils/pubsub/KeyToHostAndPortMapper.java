@@ -62,6 +62,7 @@ public abstract class KeyToHostAndPortMapper {
 
             @Override
             protected @Nonnull SocketAddress generateLocalAddress() {
+                // the purpose of the Objects.requireNonNull and getAndSet is to ensure that the 2nd call to this function throws an exception
                 return Objects.requireNonNull(localAddress.getAndSet(null));
             }
         };

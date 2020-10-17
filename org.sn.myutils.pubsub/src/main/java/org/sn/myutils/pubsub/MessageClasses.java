@@ -26,6 +26,10 @@ interface MessageClasses {
     interface MessageBase extends Serializable, LoggingString {
     }
     
+    interface TopicMessageBase extends MessageBase {
+        String getTopic();
+    }
+
     /**
      * If a message can be sent to the server after it was already send and received, it should inherit from this class.
      */
@@ -434,34 +438,54 @@ interface MessageClasses {
             return classType(this) + ", machineId=" + machineId;
         }
     }
+    
+    /**
+     * Class sent by class if it has a topic.
+     * This is most messages.
+     */
+    abstract class ClientGeneratedTopicMessage extends ClientGeneratedMessage implements TopicMessageBase {
+        private static final long serialVersionUID = 1L;
+        
+        private final String topic;
+
+        public ClientGeneratedTopicMessage(Long clientTimestamp, String topic) {
+            super(clientTimestamp);
+            this.topic = topic;
+        }
+        
+        @Override
+        public String getTopic() {
+            return topic;
+        }
+        
+        @Override
+        public String toLoggingString() {
+            return classType(this) + ", clientTimestamp=" + getClientTimestamp() + ", topic=" + topic;
+        }
+    }
 
     /**
      * Class to notify the server that we are subscribing to or unsubscribing from a particular topic,
      * so that it sends or stops sending us messages published to this topic.
      * Required fields topic and subscriberName.
      */
-    abstract class AddOrRemoveSubscriber extends ClientGeneratedMessage {
+    abstract class AddOrRemoveSubscriber extends ClientGeneratedTopicMessage {
         private static final long serialVersionUID = 1L;
         
-        private final String topic;
         private final String subscriberName;
 
         public AddOrRemoveSubscriber(Long clientTimestamp, String topic, String subscriberName) {
-            super(clientTimestamp);
-            this.topic = topic;
+            super(clientTimestamp, topic);
             this.subscriberName = subscriberName;
-        }
-        
-        String getTopic() {
-            return topic;
         }
         
         String getSubscriberName() {
             return subscriberName;
         }
 
-        private String basicLoggingString() {
-            return classType(this) + ", clientTimestamp=" + getClientTimestamp() + ", topic=" + topic + ", subscriberName=" + subscriberName;
+        @Override
+        public String toLoggingString() {
+            return super.toLoggingString() + ", subscriberName=" + subscriberName;
         }
     }
     
@@ -493,7 +517,7 @@ interface MessageClasses {
         
         @Override
         public String toLoggingString() {
-            return super.basicLoggingString() + ", tryDownload=" + tryDownload + ", isResend=" + isResend;
+            return super.toLoggingString() + ", tryDownload=" + tryDownload + ", isResend=" + isResend;
         }
     }
     
@@ -507,11 +531,6 @@ interface MessageClasses {
         public RemoveSubscriber(String topic, String subscriberName) {
             super(null, topic, subscriberName);
         }
-
-        @Override
-        public String toLoggingString() {
-            return super.basicLoggingString();
-        }
     }
     
     /**
@@ -519,23 +538,11 @@ interface MessageClasses {
      * Required field topic.
      * The response is a CreatePublisher command.
      */
-    class FetchPublisher extends ClientGeneratedMessage {
+    class FetchPublisher extends ClientGeneratedTopicMessage {
         private static final long serialVersionUID = 1L;
         
-        private final String topic;
-        
         public FetchPublisher(String topic) {
-            super(null);
-            this.topic = topic;
-        }
-        
-        String getTopic() {
-            return topic;
-        }
-
-        @Override
-        public String toLoggingString() {
-            return classType(this) + ", topic=" + topic;
+            super(null, topic);
         }
     }
     
@@ -572,6 +579,10 @@ interface MessageClasses {
         @Override
         public String toLoggingString() {
             return classType(this) + ", startServerIndexInclusive=" + startServerIndexInclusive + ", endServerIndexInclusive=" + endServerIndexInclusive;
+        }
+        
+        DownloadPublishedMessages cloneTo(Collection<String> topicsSublist) {
+            return new DownloadPublishedMessages(topicsSublist, startServerIndexInclusive, endServerIndexInclusive);
         }
     }
 
@@ -644,7 +655,8 @@ interface MessageClasses {
             return relayFields;
         }
 
-        String basicLoggingString() {
+        @Override
+        public String toLoggingString() {
             return classType(this)
                     + ", clientTimestamp=" + getClientTimestamp()
                     + ", clientIndex=" + clientIndex
@@ -655,7 +667,7 @@ interface MessageClasses {
     /**
      * Relay messages with a topic.
      */
-    abstract class RelayTopicMessageBase extends RelayMessageBase {
+    abstract class RelayTopicMessageBase extends RelayMessageBase implements TopicMessageBase {
         private static final long serialVersionUID = 1L;
 
         private final @Nonnull String topic;
@@ -665,20 +677,21 @@ interface MessageClasses {
             this.topic = topic;
         }
         
-        @Nonnull String getTopic() {
+        @Override
+        public String getTopic() {
             return topic;
         }
         
         @Override
-        String basicLoggingString() {
-            return super.basicLoggingString() + ", topic=" + topic;
+        public String toLoggingString() {
+            return super.toLoggingString() + ", topic=" + topic;
         }
     }
     
     /**
      * Action representing the createPublisher command.
      * Sent to a client when they subscribe to a topic,
-     * or when they issue the FetchPublisher commnand.
+     * or when they issue the FetchPublisher command.
      */
     class CreatePublisher extends RelayTopicMessageBase implements Resendable {
         private static final long serialVersionUID = 1L;
@@ -703,7 +716,7 @@ interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return super.basicLoggingString() + ", publisherClass=" + publisherClass.getSimpleName() + ", isResend=" + isResend;
+            return super.toLoggingString() + ", publisherClass=" + publisherClass.getSimpleName() + ", isResend=" + isResend;
         }
     }
     
@@ -733,7 +746,7 @@ interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return super.basicLoggingString() + ", message.estimateBytes=" + message.getNumBytes() + ", retentionPriority=" + priority;
+            return super.toLoggingString() + ", message.estimateBytes=" + message.getNumBytes() + ", retentionPriority=" + priority;
         }
     } 
 }

@@ -12,7 +12,7 @@ import static org.sn.myutils.util.concurrent.MoreExecutors.createThreadFactory;
 import java.io.IOException;
 import java.lang.System.Logger.Level;
 import java.lang.ref.Cleaner.Cleanable;
-import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.net.StandardSocketOptions;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
@@ -129,7 +129,7 @@ public class DistributedMessageServer implements Shutdowneable {
     private static final int MAX_RETRIES = 3;
 
     private final SocketTransformer socketTransformer;
-    private final HostAndPort messageServer;
+    private final SocketAddress messageServer;
     private final AsynchronousServerSocketChannel asyncServerSocketChannel;
     private final ExecutorService acceptExecutor;
     private final ExecutorService channelExecutor;
@@ -830,17 +830,16 @@ public class DistributedMessageServer implements Shutdowneable {
     /**
      * Create a message server.
      * 
-     * @param host (the host of this server, may be "localhost")
-     * @param port (a unique port)
+     * @param messageServer the host/port of this server. Can be unresolved.
      * @param mostRecentMessagesToKeep the number of most recent messages of the given priority to keep (and zero if message not in this list)
      * @throws IOException if there is an error opening a socket (but no error if the host:port is already in use)
      */
-    public DistributedMessageServer(@Nonnull HostAndPort messageServer, Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
+    public DistributedMessageServer(@Nonnull SocketAddress messageServer, Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
         this(new SocketTransformer(), messageServer, mostRecentMessagesToKeep);
     }
     
     DistributedMessageServer(SocketTransformer socketTransformer,
-                             @Nonnull HostAndPort messageServer,
+                             @Nonnull SocketAddress messageServer,
                              Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
         this.socketTransformer = socketTransformer;
         this.messageServer = messageServer;
@@ -885,8 +884,9 @@ public class DistributedMessageServer implements Shutdowneable {
 
     private void openServerSocket() throws IOException {
         onBeforeSocketBound(asyncServerSocketChannel);
-        asyncServerSocketChannel.bind(new InetSocketAddress(messageServer.getHost(), messageServer.getPort()));
-        LOGGER.log(Level.INFO, String.format("Started DistributedMessageServer: localHostAndPort=%s, localServer=%s", messageServer.toString(), getLocalAddress(asyncServerSocketChannel)));
+        asyncServerSocketChannel.bind(messageServer);
+        LOGGER.log(Level.INFO, String.format("Started DistributedMessageServer: messageServer=%s, messageServerAddress=%s",
+                                             messageServer.toString(), getLocalAddress(asyncServerSocketChannel)));
     }
     
     /**
