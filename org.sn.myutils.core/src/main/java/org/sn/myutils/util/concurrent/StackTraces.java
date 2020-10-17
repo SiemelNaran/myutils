@@ -10,7 +10,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
-
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
@@ -42,7 +41,7 @@ public class StackTraces {
         newList = new ArrayList<>(_ignoreModuleNameList);
         newList.addAll(ignores.stream()
                               .filter(elem -> elem.endsWith("/")) // filter only module names
-                              .map(elem -> elem.substring(0, elem.length()- 1)) // remove the trailing /
+                              .map(elem -> elem.substring(0, elem.length() - 1)) // remove the trailing /
                               .collect(Collectors.toList()));
         newList.sort(Comparator.naturalOrder());
         _ignoreModuleNameList = newList;

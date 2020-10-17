@@ -19,6 +19,7 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 import javax.annotation.concurrent.NotThreadSafe;
+import org.sn.myutils.util.MoreCollections.FindWhich;
 
 /**
  * {@inheritDoc}
@@ -523,7 +524,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
     }
 
     private int findPage(int index) {
-        int pageIndex = MoreCollections.binarySearchInt(pages, 0, pages.size(), Page::getStartIndex, index);
+        int pageIndex = MoreCollections.binarySearchInt(pages, 0, pages.size(), Page::getStartIndex, index, FindWhich.FIND_ANY);
         if (pageIndex < 0) {
             pageIndex = -pageIndex - 2;
         }
