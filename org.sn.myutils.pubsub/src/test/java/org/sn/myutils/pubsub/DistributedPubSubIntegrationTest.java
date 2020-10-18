@@ -29,6 +29,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedList;
@@ -120,6 +121,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
 
     private static final String CENTRAL_SERVER_HOST = "localhost";
     private static final int CENTRAL_SERVER_PORT = 2101;
+    private static final int SECOND_CENTRAL_SERVER_PORT = 2102;
 
     /**
      * Test duplicate clients.
@@ -1767,6 +1769,138 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     }
     
     /**
+     * Basic test for sharding.
+     * There are two central servers (the first handling topics A-M and the second handling topics N-Z) and 3 clients.
+     * Client 1 creates two publishers, client 2 subscribes, client3 subscribes, then client 1 publishes messages to each topic.
+     */
+    @Test
+    void testSharding() throws IOException {
+        List<String> words = Collections.synchronizedList(new ArrayList<>());
+        List<CompletableFuture<Void>> startFutures = new ArrayList<>();
+
+        var centralServer1 = createServer(Collections.emptyMap(), CENTRAL_SERVER_PORT);
+        startFutures.add(centralServer1.start());
+        var centralServer2 = createServer(Collections.emptyMap(), SECOND_CENTRAL_SERVER_PORT);
+        startFutures.add(centralServer2.start());
+        sleep(250); // time to let the central servers start
+        
+        class ImmutableShardingMapper extends KeyToSocketAddressMapper {
+            private final int firstPort;
+            private int currentPort;
+            
+            ImmutableShardingMapper(int firstPort) {
+                this.firstPort = firstPort;
+                this.currentPort = firstPort;
+            }
+            
+            @Override
+            public Collection<SocketAddress> getRemoteUniverse() {
+                return Set.of(centralServer1.getMessageServerAddress(), centralServer2.getMessageServerAddress());
+            }
+
+            @Override
+            protected SocketAddress doMapKeyToRemoteAddress(String key) {
+                if (Character.toUpperCase(key.charAt(0)) <= 'M') {
+                    return centralServer1.getMessageServerAddress();
+                } else {
+                    return centralServer2.getMessageServerAddress();
+                }
+            }
+
+            @Override
+            protected SocketAddress generateLocalAddress() {
+                if (currentPort == firstPort + 2) {
+                    throw new IllegalStateException("too many ports");
+                }
+                return new InetSocketAddress("localhost", currentPort++);
+            }
+        }
+        
+        var client1 = createClient(PubSub.defaultQueueCreator(),
+                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                   "client1",
+                                   new ImmutableShardingMapper(30001)
+        );
+        startFutures.add(client1.start());
+
+        var client2 = createClient(PubSub.defaultQueueCreator(),
+                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                   "client2",
+                                   new ImmutableShardingMapper(30003)
+        );
+        startFutures.add(client2.start());
+
+        var client3 = createClient(PubSub.defaultQueueCreator(),
+                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                   "client3",
+                                   new ImmutableShardingMapper(30005)
+        );
+        startFutures.add(client3.start());
+
+        waitFor(startFutures);
+        assertEquals("Identification=2", client1.getTypesSent());
+        assertEquals("ClientAccepted=2", client1.getTypesReceived());
+        assertEquals("Identification=2", client2.getTypesSent());
+        assertEquals("ClientAccepted=2", client2.getTypesReceived());
+        assertEquals("Identification=2", client3.getTypesSent());
+        assertEquals("ClientAccepted=2", client3.getTypesReceived());
+        
+        assertEquals("Identification=3", centralServer1.getValidTypesReceived());
+        assertEquals("ClientAccepted=3", centralServer1.getTypesSent());
+        assertEquals("Identification=3", centralServer2.getValidTypesReceived());
+        assertEquals("ClientAccepted=3", centralServer2.getTypesSent());
+
+        // client1 create two publisher2, client2 subscribes to both topics, client3 subscribes to one topic
+        Publisher helloPublisher1 = client1.createPublisher("hello", CloneableString.class);
+        Publisher worldPublisher1 = client1.createPublisher("world", CloneableString.class);
+        client2.subscribe("hello", "ClientTwoHelloSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a(hello)")));
+        client2.subscribe("hello", "ClientTwoHelloSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b(hello)")));
+        client2.subscribe("world", "ClientTwoWorldSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a(world)")));
+        client2.subscribe("world", "ClientTwoWorldSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b(world)")));
+        client3.subscribe("hello", "ClientThreeHelloSubscriber", CloneableString.class, str -> words.add(str.append("-s3(hello)")));
+        sleep(250);
+        
+        assertEquals("CreatePublisher=2, Identification=2", client1.getTypesSent());
+        assertEquals("ClientAccepted=2, PublisherCreated=2", client1.getTypesReceived());
+        assertEquals("AddSubscriber=4, Identification=2", client2.getTypesSent());
+        assertEquals("ClientAccepted=2, CreatePublisher=2, SubscriberAdded=4", client2.getTypesReceived());
+        assertEquals("AddSubscriber=1, Identification=2", client3.getTypesSent());
+        assertEquals("ClientAccepted=2, CreatePublisher=1, SubscriberAdded=1", client3.getTypesReceived());
+        assertThat(words, Matchers.empty());
+
+        assertEquals("AddSubscriber=3, CreatePublisher=1, Identification=3", centralServer1.getValidTypesReceived());
+        assertEquals("ClientAccepted=3, CreatePublisher=2, PublisherCreated=1, SubscriberAdded=3", centralServer1.getTypesSent());
+        assertEquals("AddSubscriber=2, CreatePublisher=1, Identification=3", centralServer2.getValidTypesReceived());
+        assertEquals("ClientAccepted=3, CreatePublisher=1, PublisherCreated=1, SubscriberAdded=2", centralServer2.getTypesSent());
+
+        // publish two messages to one topic, and three messages to the other topic
+        helloPublisher1.publish(new CloneableString("one"));
+        helloPublisher1.publish(new CloneableString("two"));
+        worldPublisher1.publish(new CloneableString("three"));
+        worldPublisher1.publish(new CloneableString("four"));
+        worldPublisher1.publish(new CloneableString("five"));
+        sleep(250);
+
+        System.out.println("after publish 5 words: actual=" + words);
+        assertEquals("CreatePublisher=2, Identification=2, PublishMessage=5", client1.getTypesSent());
+        assertEquals("ClientAccepted=2, PublisherCreated=2", client1.getTypesReceived());
+        assertEquals("AddSubscriber=4, Identification=2", client2.getTypesSent());
+        assertEquals("ClientAccepted=2, CreatePublisher=2, PublishMessage=5, SubscriberAdded=4", client2.getTypesReceived());
+        assertEquals("AddSubscriber=1, Identification=2", client3.getTypesSent());
+        assertEquals("ClientAccepted=2, CreatePublisher=1, PublishMessage=2, SubscriberAdded=1", client3.getTypesReceived());
+        assertThat(words, Matchers.containsInAnyOrder("one-s2a(hello)", "one-s2b(hello)", "one-s3(hello)",
+                                                      "two-s2a(hello)", "two-s2b(hello)", "two-s3(hello)",
+                                                      "three-s2a(world)", "three-s2b(world)",
+                                                      "four-s2a(world)", "four-s2b(world)",
+                                                      "five-s2a(world)", "five-s2b(world)"));
+        
+        assertEquals("AddSubscriber=3, CreatePublisher=1, Identification=3, PublishMessage=2", centralServer1.getValidTypesReceived());
+        assertEquals("ClientAccepted=3, CreatePublisher=2, PublishMessage=4, PublisherCreated=1, SubscriberAdded=3", centralServer1.getTypesSent());
+        assertEquals("AddSubscriber=2, CreatePublisher=1, Identification=3, PublishMessage=3", centralServer2.getValidTypesReceived());
+        assertEquals("ClientAccepted=3, CreatePublisher=1, PublishMessage=3, PublisherCreated=1, SubscriberAdded=2", centralServer2.getTypesSent());
+    }
+
+    /**
      * Call the main function in a new process.
      * The main function starts a server and client, but does not shut them down.
      * The shutdown hook called when the process ends will shut down the client and server.
@@ -1848,9 +1982,17 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     
     /**
      * Create a server and add it to list of objects to be shutdown at the end of the test function.
+     * Use the default port CENTRAL_SERVER_PORT.
      */
     private TestDistributedMessageServer createServer(Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
-        var server = new TestDistributedMessageServer(new InetSocketAddress(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT),
+        return createServer(mostRecentMessagesToKeep, CENTRAL_SERVER_PORT);
+    }
+    
+    /**
+     * Create a server and add it to list of objects to be shutdown at the end of the test function.
+     */
+    private TestDistributedMessageServer createServer(Map<RetentionPriority, Integer> mostRecentMessagesToKeep, int port) throws IOException {
+        var server = new TestDistributedMessageServer(new InetSocketAddress(CENTRAL_SERVER_HOST, port),
                                                       mostRecentMessagesToKeep);
         addShutdown(server);
         return server;
@@ -1858,6 +2000,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     
     /**
      * Create a server and add it to list of objects to be shutdown at the end of the test function.
+     * Use the default port CENTRAL_SERVER_PORT.
      */
     private TestDistributedMessageServer createServer(SocketTransformer socketTransformer,
                                                       Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
@@ -1870,25 +2013,42 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     
     /**
      * Create a client and add it to list of objects to be shutdown at the end of the test function.
+     * Use the KeyToSocketAddressMapper for a single host and port.
      */
     private TestDistributedSocketPubSub createClient(Supplier<Queue<Subscriber>> queueCreator,
                                                      SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler,
                                                      String machineId,
                                                      int localPort) throws IOException {
-        var client = new TestDistributedSocketPubSub(1,
-                                                     queueCreator,
-                                                     subscriptionMessageExceptionHandler,
-                                                     machineId,
-                                                     KeyToSocketAddressMapper.forSingleHostAndPort("localhost",
-                                                                                                   localPort,
-                                                                                                   DistributedPubSubIntegrationTest.CENTRAL_SERVER_HOST,
-                                                                                                   DistributedPubSubIntegrationTest.CENTRAL_SERVER_PORT));
+        var client = createClient(queueCreator,
+                                  subscriptionMessageExceptionHandler,
+                                  machineId,
+                                  KeyToSocketAddressMapper.forSingleHostAndPort("localhost",
+                                                                                localPort,
+                                                                                DistributedPubSubIntegrationTest.CENTRAL_SERVER_HOST,
+                                                                                DistributedPubSubIntegrationTest.CENTRAL_SERVER_PORT));
         addShutdown(client);
         return client;
     }
     
     /**
      * Create a client and add it to list of objects to be shutdown at the end of the test function.
+     */
+    private TestDistributedSocketPubSub createClient(Supplier<Queue<Subscriber>> queueCreator,
+                                                     SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler,
+                                                     String machineId,
+                                                     KeyToSocketAddressMapper mapper) throws IOException {
+        var client = new TestDistributedSocketPubSub(1,
+                                                     queueCreator,
+                                                     subscriptionMessageExceptionHandler,
+                                                     machineId,
+                                                     mapper);
+        addShutdown(client);
+        return client;
+    }
+    
+    /**
+     * Create a client and add it to list of objects to be shutdown at the end of the test function.
+     * Use the KeyToSocketAddressMapper for a single host and port.
      */
     private TestDistributedSocketPubSub createClient(SocketTransformer socketTransformer,
                                                      Supplier<Queue<Subscriber>> queueCreator,

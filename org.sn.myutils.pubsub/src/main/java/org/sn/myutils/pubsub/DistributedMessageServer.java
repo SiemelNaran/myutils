@@ -857,6 +857,10 @@ public class DistributedMessageServer implements Shutdowneable {
                                          DistributedMessageServer.class);
     }
     
+    public SocketAddress getMessageServerAddress() {
+        return messageServer;
+    }
+    
     /**
      * Start the message server asynchronously.
      * Returns a future that is resolved when everything starts, or rejected if starting fails.

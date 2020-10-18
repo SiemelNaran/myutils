@@ -73,7 +73,7 @@ public abstract class KeyToSocketAddressMapper {
     
     /**
      * Create a new local address.
-     * Should throw if user is requesting a SocketAddress for the same key a second time.
+     * Should throw if user is requesting more socket local ports than are in the universe.
      */
     protected abstract @Nonnull SocketAddress generateLocalAddress();
 
