@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.sn.myutils.testutils.TestUtil.assertExceptionFromCallable;
 import static org.sn.myutils.testutils.TestUtil.assertIncreasing;
 import static org.sn.myutils.testutils.TestUtil.countElementsInListByType;
@@ -18,6 +19,8 @@ import java.io.IOException;
 import java.lang.System.Logger.Level;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.net.StandardSocketOptions;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.NetworkChannel;
@@ -58,6 +61,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.sn.myutils.pubsub.DistributedMessageServer.ClientMachine;
 import org.sn.myutils.pubsub.DistributedSocketPubSub.DistributedPublisher;
 import org.sn.myutils.pubsub.DistributedSocketPubSub.DistributedSubscriber;
+import org.sn.myutils.pubsub.DistributedSocketPubSub.StartException;
 import org.sn.myutils.pubsub.InMemoryPubSubIntegrationTest.CloneableString;
 import org.sn.myutils.pubsub.MessageClasses.AddOrRemoveSubscriber;
 import org.sn.myutils.pubsub.MessageClasses.CreatePublisher;
@@ -65,6 +69,7 @@ import org.sn.myutils.pubsub.MessageClasses.MessageBase;
 import org.sn.myutils.pubsub.MessageClasses.PublishMessage;
 import org.sn.myutils.pubsub.MessageClasses.RelayFields;
 import org.sn.myutils.pubsub.MessageClasses.RelayMessageBase;
+import org.sn.myutils.pubsub.MessageClasses.TopicMessageBase;
 import org.sn.myutils.pubsub.PubSub.Publisher;
 import org.sn.myutils.pubsub.PubSub.Subscriber;
 import org.sn.myutils.pubsub.PubSub.SubscriptionMessageExceptionHandler;
@@ -84,6 +89,7 @@ import org.sn.myutils.testutils.TestUtil;
  * - PubSubUtils.java
  * - ServerIndex.java
  * - RetentionPriority.java
+ * - KeyToSocketAddressMapper
  * 
  * <p>In Eclipse and IntelliJ run with the following VM arguments
  * <code>
@@ -121,7 +127,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      * Verify that the second one is ignored.
      */
     @Test
-    void testDuplicateClient() throws IOException {
+    void testDuplicateClient() throws IOException, InterruptedException {
         List<CompletableFuture<Void>> startFutures = new ArrayList<>();
 
         var centralServer = createServer(Collections.emptyMap());
@@ -149,8 +155,15 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         var startClient1bFuture = client1b.start();
         sleep(250); // wait for server to receive message
 
-        assertExceptionFromCallable(startClient1bFuture::get, ExecutionException.class,
-                                    "org.sn.myutils.pubsub.PubSubException: Duplicate channel: clientMachine=client1, otherClientChannel=/127.0.0.1:30001");
+        try {
+            startClient1bFuture.get();
+            fail();
+        } catch (ExecutionException e) {
+            var cause = e.getCause();
+            StartException startException = (StartException) cause;
+            assertEquals("[org.sn.myutils.pubsub.PubSubException: Duplicate channel: clientMachine=client1, otherClientChannel=/127.0.0.1:30001]",
+                         startException.getExceptions().values().toString());
+        }
 
         assertEquals("Identification=2", centralServer.getValidTypesReceived());
         assertEquals("ClientAccepted=1, ClientRejected=1", centralServer.getTypesSent());
@@ -412,7 +425,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         publisher1.publish(new CloneableString("six"));
         sleep(250); // time to let messages be published to client2
         System.out.println("after unsubscribe2b: actual=" + words);
-        assertThat(words, Matchers.containsInAnyOrder("five-s1", "six-s1", "five-s2a", "six-s2a"));//TODO:testfail
+        assertThat(words, Matchers.containsInAnyOrder("five-s1", "six-s1", "five-s2a", "six-s2a"));
         assertEquals(9, client1.getCountTypesSent()); // +2
         assertEquals(3, client1.getCountTypesReceived());
         assertEquals(4, client2.getCountTypesSent());
@@ -734,7 +747,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     void testRestartFails() throws IOException, InterruptedException, ExecutionException {
         var centralServer = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
         Future<Void> startCentralServerFuture = centralServer.start();
-        assertFalse(startCentralServerFuture.isDone());
+        //assertFalse(startCentralServerFuture.isDone()); // may be true
         startCentralServerFuture.get(); // assert no exception
         assertTrue(startCentralServerFuture.isDone());
 
@@ -744,18 +757,18 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    31001
         );
         Future<Void> startClient1Future = client1.start();
-        assertFalse(startClient1Future.isDone());
+        //assertFalse(startClient1Future.isDone());// may be true
         startClient1Future.get(); // assert no exception
         assertTrue(startClient1Future.isDone());
         assertEquals(1, client1.getCountTypesSent()); // Identification
         assertEquals(1, client1.getCountTypesReceived()); // ClientAccepted
         
-        // start server again
-        Future<Void> startCentralServerFutureAgain = client1.start();
+        // start client again
+        Future<Void> startCentralServerFutureAgain = centralServer.start();
         assertFalse(startCentralServerFutureAgain.isDone());
         sleep(250); // time to let server start        
         assertTrue(startCentralServerFutureAgain.isDone());
-        assertExceptionFromCallable(startCentralServerFutureAgain::get, ExecutionException.class, "java.nio.channels.AlreadyConnectedException");
+        assertExceptionFromCallable(startCentralServerFutureAgain::get, ExecutionException.class, "java.nio.channels.AlreadyBoundException");
 
         // start another server on same host:port
         var centralServerDuplicateAddress = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3));
@@ -768,7 +781,15 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         Future<Void> startClient1FutureAgain = client1.start();
         sleep(250); // time to let client start        
         assertTrue(startClient1FutureAgain.isDone());
-        assertExceptionFromCallable(startClient1FutureAgain::get, ExecutionException.class, "java.nio.channels.AlreadyConnectedException");
+        try {
+            startClient1FutureAgain.get();
+            fail();
+        } catch (ExecutionException e) {
+            var cause = e.getCause();
+            StartException startException = (StartException) cause;
+            assertEquals("[java.nio.channels.AlreadyConnectedException]",
+                         startException.getExceptions().values().toString());
+        }
 
         // connect another client on same host:port
         var clientDuplicateAddress = createClient(PubSub.defaultQueueCreator(),
@@ -779,7 +800,15 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         Future<Void> startClientDuplicateAddressFuture = clientDuplicateAddress.start();
         sleep(250); // time to let client start        
         assertTrue(startClientDuplicateAddressFuture.isDone());
-        assertExceptionFromCallable(startClientDuplicateAddressFuture::get, ExecutionException.class, "java.net.BindException: Cannot assign requested address");
+        try {
+            startClientDuplicateAddressFuture.get();
+            fail();
+        } catch (ExecutionException e) {
+            var cause = e.getCause();
+            StartException startException = (StartException) cause;
+            assertEquals("[java.net.BindException: Cannot assign requested address]",
+                         startException.getExceptions().values().toString());
+        }
         
         client1.shutdown();
         sleep(250); // time to let client shutdown
@@ -1316,7 +1345,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      * With N as 1000 the test takes about 1.0sec at INFO level, and 2.9sec at TRACE level<br/>
      *
      * <p>On my MacOS 2.3GHz Intel Core i9,<br/>
-     * With N as 1000 the test takes about 2.1sec.<br/>
+     * With N as 1000 the test takes about 1.4sec.<br/>
      * 
      * <p>This test also tests that the server does not encounter WritePendingException
      * (where we one thread sends a message to a client while another is also sending a message to it).
@@ -1563,7 +1592,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         var messageWriterField = DistributedSocketPubSub.class.getDeclaredField("messageWriter");
         messageWriterField.setAccessible(true);
         var messageWriter = messageWriterField.get(client1);
-        var sendMethod = messageWriter.getClass().getDeclaredMethod("internalPutMessage", MessageBase.class);
+        var sendMethod = messageWriter.getClass().getDeclaredMethod("internalPutMessage", TopicMessageBase.class);
         sendMethod.setAccessible(true);
         
         BogusClientGeneratedMessage bogus1 = new BogusClientGeneratedMessage();
@@ -1587,11 +1616,11 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         // WARNING: Unsupported  message from client: clientMachine=/127.0.0.1:30001, BogusMessage
     }
     
-    private static class BogusClientGeneratedMessage extends MessageClasses.ClientGeneratedMessage {
+    private static class BogusClientGeneratedMessage extends MessageClasses.ClientGeneratedTopicMessage {
         private static final long serialVersionUID = 1L;
 
         BogusClientGeneratedMessage() {
-            super(System.currentTimeMillis());
+            super(System.currentTimeMillis(), "mytopic");
         }
 
         @Override
@@ -1600,12 +1629,17 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         }
     }
     
-    private static class BogusMessage implements MessageClasses.MessageBase {
+    private static class BogusMessage implements MessageClasses.TopicMessageBase {
         private static final long serialVersionUID = 1L;
 
         @Override
         public String toLoggingString() {
             return "BogusMessage";
+        }
+        
+        @Override
+        public String getTopic() {
+            return "mytopic";
         }
     }
     
@@ -1758,7 +1792,8 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     }
 
     public static void main(String[] args) throws IOException {
-        DistributedMessageServer centralServer = new TestDistributedMessageServer(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, Collections.emptyMap());
+        DistributedMessageServer centralServer = new TestDistributedMessageServer(new InetSocketAddress(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT),
+                                                                                  Collections.emptyMap());
         centralServer.start();
         sleep(250); // time to let the central server start
         
@@ -1766,20 +1801,20 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                                       PubSub.defaultQueueCreator(),
                                                       PubSub.defaultSubscriptionMessageExceptionHandler(),
                                                       "client1",
-                                                      "localhost",
-                                                       30001,
-                                                       CENTRAL_SERVER_HOST,
-                                                       CENTRAL_SERVER_PORT);
+                                                      KeyToSocketAddressMapper.forSingleHostAndPort("localhost",
+                                                                                                    30001,
+                                                                                                    CENTRAL_SERVER_HOST,
+                                                                                                    CENTRAL_SERVER_PORT));
         client1.start();
         
         var client2 = new TestDistributedSocketPubSub(1,
                                                       PubSub.defaultQueueCreator(),
                                                       PubSub.defaultSubscriptionMessageExceptionHandler(),
                                                       "client2",
-                                                      "localhost",
-                                                      30002,
-                                                      CENTRAL_SERVER_HOST,
-                                                      CENTRAL_SERVER_PORT);
+                                                      KeyToSocketAddressMapper.forSingleHostAndPort("localhost",
+                                                                                                    30002,
+                                                                                                    CENTRAL_SERVER_HOST,
+                                                                                                    CENTRAL_SERVER_PORT));
         client2.start();
 
         sleep(250); // time to let clients start, connect to the central server, and send identification
@@ -1815,7 +1850,8 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      * Create a server and add it to list of objects to be shutdown at the end of the test function.
      */
     private TestDistributedMessageServer createServer(Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
-        var server = new TestDistributedMessageServer(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, mostRecentMessagesToKeep);
+        var server = new TestDistributedMessageServer(new InetSocketAddress(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT),
+                                                      mostRecentMessagesToKeep);
         addShutdown(server);
         return server;
     }
@@ -1825,7 +1861,9 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      */
     private TestDistributedMessageServer createServer(SocketTransformer socketTransformer,
                                                       Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
-        var server = new TestDistributedMessageServer(socketTransformer, CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT, mostRecentMessagesToKeep);
+        var server = new TestDistributedMessageServer(socketTransformer,
+                                                      new InetSocketAddress(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT),
+                                                      mostRecentMessagesToKeep);
         addShutdown(server);
         return server;
     }
@@ -1841,10 +1879,10 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                                      queueCreator,
                                                      subscriptionMessageExceptionHandler,
                                                      machineId,
-                                                     "localhost",
-                                                     localPort,
-                                                     DistributedPubSubIntegrationTest.CENTRAL_SERVER_HOST,
-                                                     DistributedPubSubIntegrationTest.CENTRAL_SERVER_PORT);
+                                                     KeyToSocketAddressMapper.forSingleHostAndPort("localhost",
+                                                                                                   localPort,
+                                                                                                   DistributedPubSubIntegrationTest.CENTRAL_SERVER_HOST,
+                                                                                                   DistributedPubSubIntegrationTest.CENTRAL_SERVER_PORT));
         addShutdown(client);
         return client;
     }
@@ -1862,10 +1900,10 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                                      queueCreator,
                                                      subscriptionMessageExceptionHandler,
                                                      machineId,
-                                                     "localhost",
-                                                     port,
-                                                     DistributedPubSubIntegrationTest.CENTRAL_SERVER_HOST,
-                                                     DistributedPubSubIntegrationTest.CENTRAL_SERVER_PORT);
+                                                     KeyToSocketAddressMapper.forSingleHostAndPort("localhost",
+                                                                                                   port,
+                                                                                                   DistributedPubSubIntegrationTest.CENTRAL_SERVER_HOST,
+                                                                                                   DistributedPubSubIntegrationTest.CENTRAL_SERVER_PORT));
         addShutdown(client);
         return client;
     }
@@ -1890,17 +1928,15 @@ class TestDistributedMessageServer extends DistributedMessageServer {
     private final List<String> sendFailures = Collections.synchronizedList(new ArrayList<>());
     private String securityKey;
 
-    public TestDistributedMessageServer(String host,
-                                        int port,
+    public TestDistributedMessageServer(SocketAddress messageServer,
                                         Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
-        super(host, port, mostRecentMessagesToKeep);
+        super(messageServer, mostRecentMessagesToKeep);
     }
 
     public TestDistributedMessageServer(SocketTransformer socketTransformer,
-                                        String host,
-                                        int port,
+                                        SocketAddress messageServer,
                                         Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
-        super(socketTransformer, host, port, mostRecentMessagesToKeep);
+        super(socketTransformer, messageServer, mostRecentMessagesToKeep);
     }
 
     public void setSecurityKey(String key) {
@@ -1996,16 +2032,10 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
                                        Supplier<Queue<Subscriber>> queueCreator,
                                        SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler,
                                        String machineId,
-                                       String localServer,
-                                       int localPort,
-                                       String messageServerHost,
-                                       int messageServerPort) throws IOException {
+                                       KeyToSocketAddressMapper messageServerLookup) throws IOException {
         super(new PubSubConstructorArgs(numInMemoryHandlers, queueCreator, subscriptionMessageExceptionHandler),
               machineId,
-              localServer,
-              localPort,
-              messageServerHost,
-              messageServerPort);
+              messageServerLookup);
     }
 
     public TestDistributedSocketPubSub(SocketTransformer socketTransformer,
@@ -2013,17 +2043,11 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
                                        Supplier<Queue<Subscriber>> queueCreator,
                                        SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler,
                                        String machineId,
-                                       String localServer,
-                                       int localPort,
-                                       String messageServerHost,
-                                       int messageServerPort) throws IOException {
+                                       KeyToSocketAddressMapper messageServerLookup) throws IOException {
         super(socketTransformer,
               new PubSubConstructorArgs(numInMemoryHandlers, queueCreator, subscriptionMessageExceptionHandler),
               machineId,
-              localServer,
-              localPort,
-              messageServerHost,
-              messageServerPort);
+              messageServerLookup);
     }
 
     void enableSecurityKey(String key) {

@@ -31,7 +31,6 @@ import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
@@ -77,6 +76,7 @@ import org.sn.myutils.pubsub.MessageClasses.SubscriberAdded;
 import org.sn.myutils.pubsub.MessageClasses.SubscriberRemoved;
 import org.sn.myutils.pubsub.MessageClasses.UnsupportedMessage;
 import org.sn.myutils.pubsub.PubSubUtils.CallStackCapturing;
+import org.sn.myutils.util.ExceptionUtils;
 import org.sn.myutils.util.MoreCollections;
 import org.sn.myutils.util.ZipMinIterator;
 
@@ -830,7 +830,7 @@ public class DistributedMessageServer implements Shutdowneable {
     /**
      * Create a message server.
      * 
-     * @param messageServer the host/port of this server. Can be unresolved.
+     * @param messageServer the host/port of this server
      * @param mostRecentMessagesToKeep the number of most recent messages of the given priority to keep (and zero if message not in this list)
      * @throws IOException if there is an error opening a socket (but no error if the host:port is already in use)
      */
@@ -1388,7 +1388,7 @@ public class DistributedMessageServer implements Shutdowneable {
     }
     
     private Void retrySend(MessageBase message, ClientMachine clientMachine, int retry, Throwable throwable) {
-        Throwable e = throwable instanceof CompletionException || throwable instanceof ExecutionException ? throwable.getCause() : throwable;
+        Throwable e = ExceptionUtils.unwrapCompletionException(throwable);
         boolean retryDone = retry >= MAX_RETRIES || SocketTransformer.isClosed(e) || e instanceof RuntimeException || e instanceof Error;
         Level level = retryDone ? Level.WARNING : Level.TRACE;
         LOGGER.log(level, () -> String.format("Send message failed: clientMachine=%s, messageClass=%s, retry=%d, retryDone=%b",

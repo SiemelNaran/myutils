@@ -1,6 +1,7 @@
 package org.sn.myutils.pubsub;
 
 import static org.sn.myutils.pubsub.PubSubUtils.closeQuietly;
+import static org.sn.myutils.util.ExceptionUtils.unwrapCompletionException;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -17,9 +18,7 @@ import java.nio.channels.ClosedChannelException;
 import java.nio.channels.CompletionHandler;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ExecutionException;
 import org.sn.myutils.pubsub.MessageClasses.MessageBase;
 
 
@@ -221,7 +220,7 @@ public class SocketTransformer {
      * The list includes EOFException and all of the channel exceptions that have the word Closed in them.
      */
     static boolean isClosed(Throwable throwable) {
-        Throwable e = throwable instanceof CompletionException || throwable instanceof ExecutionException ? throwable.getCause() : throwable;
+        Throwable e = unwrapCompletionException(throwable);
         return e instanceof EOFException || e instanceof ClosedChannelException;
     }
 }

@@ -25,7 +25,15 @@ interface MessageClasses {
      */
     interface MessageBase extends Serializable, LoggingString {
     }
-    
+
+    /**
+     * The base class of all messages that pertain to one topic.
+     * 
+     * <p>As of 11/1/2020 only client generated messages implement this class, and most implement this class.
+     * These classes do not implement TopicMessageBase:
+     * - Identification as there is no topic
+     * - DownloadPublishedMessages as there are many topics
+     */
     interface TopicMessageBase extends MessageBase {
         String getTopic();
     }
@@ -61,6 +69,11 @@ interface MessageClasses {
         long getServerTimestamp() {
             return serverTimestamp; // COVERAGE: missed
         }
+
+        @Override
+        public String toLoggingString() {
+            return classType(this) + ", serverTimestamp=" + serverTimestamp;
+        }
     }
     
     /**
@@ -88,7 +101,7 @@ interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return classType(this) + ", classOfMessage=" + classOfMessage.getSimpleName() + ", failedClientIndex=" + failedClientIndex;
+            return super.toLoggingString() + ", classOfMessage=" + classOfMessage.getSimpleName() + ", failedClientIndex=" + failedClientIndex;
         }
     }
 
@@ -133,7 +146,7 @@ interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return classType(this) + ", centralServerId=" + centralServerId;
+            return super.toLoggingString() + ", centralServerId=" + centralServerId;
         }
     }
 
@@ -161,7 +174,7 @@ interface MessageClasses {
  
         @Override
         public String toLoggingString() {
-            return classType(this) + ", centralServerId=" + centralServerId + ", error=" + error;
+            return super.toLoggingString() + ", centralServerId=" + centralServerId + ", error='" + error + "'";
         }
         
         PubSubException toException() {
@@ -188,7 +201,7 @@ interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return classType(this) + ", error='" + error + "'";
+            return super.toLoggingString() + ", error='" + error + "'";
         }
     }
     
@@ -291,11 +304,6 @@ interface MessageClasses {
         private static final long serialVersionUID = 1L;
         
         AbstractConfirmAction() {
-        }
-
-        @Override
-        public String toLoggingString() {
-            return classType(this);
         }
     }
 
@@ -412,6 +420,11 @@ interface MessageClasses {
         Map<String, String> getCustomProperties() {
             return Collections.unmodifiableMap(customProperties);
         }
+
+        @Override
+        public String toLoggingString() {
+            return classType(this) + ", clientTimestamp=" + clientTimestamp + ", customProperties.size=" + (customProperties != null ? customProperties.size() : 0);
+        }
     }
 
     /**
@@ -435,7 +448,7 @@ interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return classType(this) + ", machineId=" + machineId;
+            return super.toLoggingString() + ", machineId=" + machineId;
         }
     }
     
@@ -460,7 +473,7 @@ interface MessageClasses {
         
         @Override
         public String toLoggingString() {
-            return classType(this) + ", clientTimestamp=" + getClientTimestamp() + ", topic=" + topic;
+            return super.toLoggingString() + ", topic=" + topic;
         }
     }
 
@@ -578,10 +591,16 @@ interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return classType(this) + ", startServerIndexInclusive=" + startServerIndexInclusive + ", endServerIndexInclusive=" + endServerIndexInclusive;
+            return super.toLoggingString() + ", startServerIndexInclusive=" + startServerIndexInclusive + ", endServerIndexInclusive=" + endServerIndexInclusive;
         }
         
+        /**
+         * Split a message to download topics A, B, C according to the topics on each message server.
+         * If message server one hosts topics A and C, and message server two hosts topics B and D.
+         * call this function to create two download commands.
+         */
         DownloadPublishedMessages cloneTo(Collection<String> topicsSublist) {
+            assert topics.containsAll(topicsSublist);
             return new DownloadPublishedMessages(topicsSublist, startServerIndexInclusive, endServerIndexInclusive);
         }
     }
@@ -657,8 +676,7 @@ interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return classType(this)
-                    + ", clientTimestamp=" + getClientTimestamp()
+            return super.toLoggingString()
                     + ", clientIndex=" + clientIndex
                     + ", " + relayFields;
         }
