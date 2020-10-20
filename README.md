@@ -82,6 +82,11 @@ PageList is just an interface.  There are two types of page lists: ArrayPageList
     - There is a specialization of binary search for PageList's.
     - There is a function to add a probably larger element to an already sorted list, resulting in O(1) performance in theory.
 
+- *MoreCollectors*: Various enhancements to java.util.stream.Collectors.
+    - There is a function minAndMaxBy to find min and max in one pass.
+    - There is a function maxBy to find the N largest elements.
+    - There is a function minBy to find the N smallest elements.
+
 - *MultimapUtils*: A way to deal with multimap, as an alternative to classes like com.google.common.collect.ListMultimap. Example usage:
 ```
     Map<Key, List<Value>> multimap = new HashMap<>();
