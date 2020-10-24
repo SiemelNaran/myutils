@@ -34,8 +34,8 @@ import javax.annotation.concurrent.NotThreadSafe;
  * <p>If the dictionary contains <code>*</code> and <code>***</code>, but not <code>**</code>,
  * and if string is "2 ** 3" and you've read the token "2",
  * the <code>**</code> is treated as one token even though it is not in the dictionary.
- * For this reason, the constructor throws an exception if each sub-word in the dictionary is not also in the dictionary. 
- * 
+ * For this reason, the constructor throws an exception if each sub-word in the dictionary is not also in the dictionary.
+ *
  * <p>You can also specify the list of predicates describing the skip characters.
  * If a character is not the start of a symbol, then we determine what character class describes it.
  * All characters in this character class will be considered to be part of the token.
@@ -323,7 +323,7 @@ public class SimpleStringTokenizerFactory {
         private CharSequence readRegularToken(int tokenStart, int first) {
             SimpleTrie<Integer, Boolean> trie = symbols.findChar(first);
             if (trie != null) {
-                trie = readSymbol(trie);
+                readSymbol(trie);
             } else {
                 IntPredicate characterClass = determineCharacterClass(first);
                 readCharacterClass(characterClass);
@@ -331,7 +331,7 @@ public class SimpleStringTokenizerFactory {
             return str.subSequence(tokenStart, iterCodePoints.getNextIndex());
         }
         
-        private @Nonnull SimpleTrie<Integer, Boolean> readSymbol(@Nonnull SimpleTrie<Integer, Boolean> trie) {
+        private void readSymbol(@Nonnull SimpleTrie<Integer, Boolean> trie) {
             while (iterCodePoints.hasNext()) {
                 int c = iterCodePoints.next();
                 SimpleTrie<Integer, Boolean> newTrie = trie.findChar(c);
@@ -341,7 +341,6 @@ public class SimpleStringTokenizerFactory {
                 }
                 trie = newTrie;
             }
-            return trie;
         }
         
         private @Nonnull IntPredicate determineCharacterClass(int c) {

@@ -1,9 +1,11 @@
 package org.sn.myutils.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -59,5 +61,33 @@ public class TrieTest {
         assertEquals(7, trie.size());
         assertTrue(trie.remove(Iterables.charsIteratorAsChar("poor")));
         assertEquals(6, trie.size());
+    }
+
+    @Test
+    void testFindChar() {
+        SimpleTrie<Character, Boolean> trie = SimpleTrie.create();
+
+        assertNull(trie.add(Iterables.charsIteratorAsChar("bottle"), true));
+        assertNull(trie.add(Iterables.charsIteratorAsChar("bottom"), true));
+        assertNull(trie.add(Iterables.charsIteratorAsChar("bottleneck"), true));
+        assertNull(trie.add(Iterables.charsIteratorAsChar("bottlenecks"), true));
+        assertNull(trie.add(Iterables.charsIteratorAsChar("orange"), true));
+        assertNull(trie.add(Iterables.charsIteratorAsChar("operation"), true));
+        assertNull(trie.add(Iterables.charsIteratorAsChar("pan"), true));
+        assertNull(trie.add(Iterables.charsIteratorAsChar("poor"), true));
+        assertEquals(8, trie.size());
+
+        assertFalse(trie.isWord());
+        assertNull(trie.findChar('x'));
+        SimpleTrie<Character, Boolean> b = trie.findChar('b');
+        assertEquals(4, b.size());
+        assertFalse(b.isWord());
+        SimpleTrie<Character, Boolean> bottle = trie.findChar('b')
+                                                    .findChar('o')
+                                                    .findChar('t')
+                                                    .findChar('t')
+                                                    .findChar('l')
+                                                    .findChar('e');
+        assertTrue(bottle.isWord());
     }
 }

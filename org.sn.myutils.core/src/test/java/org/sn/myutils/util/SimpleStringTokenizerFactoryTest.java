@@ -224,8 +224,7 @@ public class SimpleStringTokenizerFactoryTest {
                         "expected to find ** in dictionary");
     }
     
-    private static final IntPredicate SKIP_CHARACTERS
-        = codePoint -> Character.isWhitespace(codePoint);
+    private static final IntPredicate SKIP_CHARACTERS = Character::isWhitespace;
     
     private static final List<String> SYMBOLS
         = Arrays.asList("(", ")", "**", "+", "*");
