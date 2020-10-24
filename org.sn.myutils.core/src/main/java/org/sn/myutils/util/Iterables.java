@@ -1,6 +1,5 @@
 package org.sn.myutils.util;
 
-import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
@@ -9,6 +8,8 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
+import javax.annotation.Nonnull;
+
 
 public class Iterables {
     /**
@@ -67,6 +68,7 @@ public class Iterables {
      * @param end one past the last index
      * @param <T> the type of character
      * @return an ArrayList of the substring as a List
+     * @throws IndexOutOfBoundsException if start/end are invalid
      */
     public static <T> List<T> substring(Iterable<T> word, int start, int end) {
         if (end < start) {
@@ -129,7 +131,7 @@ public class Iterables {
                 }
                 return iter;
             } catch (NoSuchElementException ignored) {
-                throw new IndexOutOfBoundsException(offset);
+                throw new IndexOutOfBoundsException("index of bounds: offset=" + offset);
             }
         }
     }

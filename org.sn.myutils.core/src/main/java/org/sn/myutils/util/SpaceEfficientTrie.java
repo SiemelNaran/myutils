@@ -4,14 +4,15 @@ import static org.sn.myutils.util.Iterables.compareIterable;
 import static org.sn.myutils.util.Iterables.lengthOfCommonPrefix;
 import static org.sn.myutils.util.Iterables.substring;
 
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import javax.annotation.concurrent.NotThreadSafe;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.TreeMap;
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.NotThreadSafe;
+
 
 /**
  * Trie class that merges all chars into one string for a node if there are no child nodes.
