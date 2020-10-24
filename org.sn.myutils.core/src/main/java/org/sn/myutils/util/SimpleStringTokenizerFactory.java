@@ -129,7 +129,7 @@ public class SimpleStringTokenizerFactory {
     
     private final IntPredicate skipChars;
     private final QuoteStrategy quoteStrategy;
-    private final SimpleTrie<Integer> symbols;
+    private final SimpleTrie<Integer, Boolean> symbols;
     private final List<IntPredicate> characterClasses;
     private final IntPredicate otherChars;
     
@@ -158,24 +158,21 @@ public class SimpleStringTokenizerFactory {
                     return false;
                 }
             }
-            if (skipChars.test(c)) {
-                return false;
-            }
-            return true;
+            return !skipChars.test(c);
         };
     }
     
-    private static SimpleTrie<Integer> buildTrie(List<String> symbols) {
-        SimpleTrie<Integer> trie = new SimpleTrie<>();
+    private static SimpleTrie<Integer, Boolean> buildTrie(List<String> symbols) {
+        SimpleTrie<Integer, Boolean> trie = SimpleTrie.create();
         for (String symbol : symbols) {
-            trie.add(symbol.codePoints().boxed());
+            trie.add(Iterables.codePointsIterator(symbol), true);
         }
         checkTrie(trie);
         return trie;
     }
     
-    private static void checkTrie(SimpleTrie<Integer> trie) throws IllegalArgumentException {
-        trie.visit((List<Integer> word, SimpleTrie<Integer> subTrie) -> {
+    private static void checkTrie(SimpleTrie<Integer, Boolean> trie) throws IllegalArgumentException {
+        trie.visit((List<Integer> word, SimpleTrie<Integer, Boolean> subTrie) -> {
             if (!subTrie.isWord()) {
                 int[] wordArray = word.stream().mapToInt(Integer::intValue).toArray();
                 String str = new String(wordArray, 0, word.size());
@@ -324,7 +321,7 @@ public class SimpleStringTokenizerFactory {
         }
 
         private CharSequence readRegularToken(int tokenStart, int first) {
-            SimpleTrie<Integer> trie = symbols.find(first);
+            SimpleTrie<Integer, Boolean> trie = symbols.findChar(first);
             if (trie != null) {
                 trie = readSymbol(trie);
             } else {
@@ -334,10 +331,10 @@ public class SimpleStringTokenizerFactory {
             return str.subSequence(tokenStart, iterCodePoints.getNextIndex());
         }
         
-        private @Nonnull SimpleTrie<Integer> readSymbol(@Nonnull SimpleTrie<Integer> trie) {
+        private @Nonnull SimpleTrie<Integer, Boolean> readSymbol(@Nonnull SimpleTrie<Integer, Boolean> trie) {
             while (iterCodePoints.hasNext()) {
                 int c = iterCodePoints.next();
-                SimpleTrie<Integer> newTrie = trie.find(c);
+                SimpleTrie<Integer, Boolean> newTrie = trie.findChar(c);
                 if (newTrie == null) {
                     iterCodePoints.rewind();
                     break;
