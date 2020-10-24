@@ -93,36 +93,21 @@ public class SimpleTrie<T extends Comparable<T>, U> implements Trie<T, U> {
 
     // New functions:
 
+    /**
+     * Find the trie child node.
+     * This function is useful for parsing.
+     *
+     * @param val the character to search for
+     * @return the child node or null if not found
+     */
     public @Nullable SimpleTrie<T, U> findChar(T val) {
         return children.get(val);
     }
 
+    /**
+     * Tell if the trie represents a full word.
+     */
     public boolean isWord() {
         return data != null;
-    }
-
-    /**
-     * Visit all strings in this trie from root to child.
-     * This function is used to perform checks on the dictionary.
-     *
-     * <p>Running time O(N^N).
-     *
-     * @param consumer a consumer of two args,
-     *                 where the first arg is a list of all the values from root to the child node
-     *                 and the second arg is the child node.
-     */
-    public void visit(BiConsumer<List<T>, SimpleTrie<T, U>> consumer) {
-        doVisit(new LinkedList<T>(), consumer);
-    }
-    
-    private void doVisit(LinkedList<T> list, BiConsumer<List<T>, SimpleTrie<T, U>> consumer) {
-        for (Map.Entry<T, SimpleTrie<T, U>> entry : children.entrySet()) {
-            T val = entry.getKey();
-            SimpleTrie<T, U> subTrie = entry.getValue();
-            list.add(val);
-            consumer.accept(list, subTrie);
-            subTrie.doVisit(list, consumer);
-            list.removeLast();
-        }
     }
 }

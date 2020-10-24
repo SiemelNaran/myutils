@@ -214,16 +214,6 @@ public class SimpleStringTokenizerFactoryTest {
         assertFalse(tokenizer.hasNext());
     }
     
-    @Test
-    void testInvalidStringTokenizer() {
-        assertException(() -> new SimpleStringTokenizerFactory(SKIP_CHARACTERS,
-                                                               QuoteStrategy.builder().build(),
-                                                               Arrays.asList("+++", "***", "+", "*"),
-                                                               Collections.singletonList(LITERAL_CLASS)),
-                        IllegalArgumentException.class,
-                        "expected to find ** in dictionary");
-    }
-    
     private static final IntPredicate SKIP_CHARACTERS = Character::isWhitespace;
     
     private static final List<String> SYMBOLS

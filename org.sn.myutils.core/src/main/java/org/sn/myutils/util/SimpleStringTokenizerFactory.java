@@ -31,11 +31,6 @@ import javax.annotation.concurrent.NotThreadSafe;
  * But if the dictionary contains only <code>*</code>, then the first <code>*</code> will be treated as one token,
  * and the second <code>*</code> will be treated as the next token.
  * 
- * <p>If the dictionary contains <code>*</code> and <code>***</code>, but not <code>**</code>,
- * and if string is "2 ** 3" and you've read the token "2",
- * the <code>**</code> is treated as one token even though it is not in the dictionary.
- * For this reason, the constructor throws an exception if each sub-word in the dictionary is not also in the dictionary.
- *
  * <p>You can also specify the list of predicates describing the skip characters.
  * If a character is not the start of a symbol, then we determine what character class describes it.
  * All characters in this character class will be considered to be part of the token.
@@ -167,18 +162,7 @@ public class SimpleStringTokenizerFactory {
         for (String symbol : symbols) {
             trie.add(Iterables.codePointsIterator(symbol), true);
         }
-        checkTrie(trie);
         return trie;
-    }
-    
-    private static void checkTrie(SimpleTrie<Integer, Boolean> trie) throws IllegalArgumentException {
-        trie.visit((List<Integer> word, SimpleTrie<Integer, Boolean> subTrie) -> {
-            if (!subTrie.isWord()) {
-                int[] wordArray = word.stream().mapToInt(Integer::intValue).toArray();
-                String str = new String(wordArray, 0, word.size());
-                throw new IllegalArgumentException("expected to find " + str + " in dictionary");
-            }
-        });
     }
     
     public Iterator<Token> tokenizer(CharSequence str) {
