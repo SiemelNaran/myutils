@@ -30,7 +30,6 @@ public interface Trie<T extends Comparable<T>, U> {
 
     /**
      * Find word in trie.
-     * As data is not null when you insert a word, a return value of null means the word was not found.
      *
      * @param codePoints the word to find
      * @return the data associated with the word if found, or null if not found

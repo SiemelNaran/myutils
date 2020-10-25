@@ -16,9 +16,9 @@ public class TrieTest {
     void testBasic(String clazz) {
         Trie<Character, Boolean> trie;
         if (clazz.equals("SimpleTrie")) {
-            trie = SimpleTrie.create();
+            trie = new SimpleTrie();
         } else if (clazz.equals("SpaceEfficientTrie")) {
-            trie = SpaceEfficientTrie.create();
+            trie = new SpaceEfficientTrie();
         } else {
             throw new UnsupportedOperationException();
         }
@@ -64,8 +64,8 @@ public class TrieTest {
     }
 
     @Test
-    void testFindChar() {
-        SimpleTrie<Character, Boolean> trie = SimpleTrie.create();
+    void testLongest() {
+        SimpleTrie<Character, Boolean> trie = new SimpleTrie<>();
 
         assertNull(trie.add(Iterables.charsIteratorAsChar("bottle"), true));
         assertNull(trie.add(Iterables.charsIteratorAsChar("bottom"), true));
@@ -77,17 +77,21 @@ public class TrieTest {
         assertNull(trie.add(Iterables.charsIteratorAsChar("poor"), true));
         assertEquals(8, trie.size());
 
-        assertFalse(trie.isWord());
-        assertNull(trie.findChar('x'));
-        SimpleTrie<Character, Boolean> b = trie.findChar('b');
-        assertEquals(4, b.size());
-        assertFalse(b.isWord());
-        SimpleTrie<Character, Boolean> bottle = trie.findChar('b')
-                                                    .findChar('o')
-                                                    .findChar('t')
-                                                    .findChar('t')
-                                                    .findChar('l')
-                                                    .findChar('e');
-        assertTrue(bottle.isWord());
+        RewindableIterator<Character> iter = RewindableIterator.from(Iterables.charsIteratorAsChar("bottomless").iterator());
+        assertTrue(trie.findLongest(iter));
+        assertEquals('l', iter.next());
+        assertEquals('e', iter.next());
+        assertEquals('s', iter.next());
+        assertEquals('s', iter.next());
+        assertFalse(iter.hasNext());
+
+        iter = RewindableIterator.from(Iterables.charsIteratorAsChar("bottom").iterator());
+        assertTrue(trie.findLongest(iter));
+        assertFalse(iter.hasNext());
+
+        iter = RewindableIterator.from(Iterables.charsIteratorAsChar("bottoms").iterator());
+        assertTrue(trie.findLongest(iter));
+        assertEquals('s', iter.next());
+        assertFalse(iter.hasNext());
     }
 }

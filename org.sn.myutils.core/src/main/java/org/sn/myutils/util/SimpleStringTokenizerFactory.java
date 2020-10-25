@@ -158,7 +158,7 @@ public class SimpleStringTokenizerFactory {
     }
     
     private static SimpleTrie<Integer, Boolean> buildTrie(List<String> symbols) {
-        SimpleTrie<Integer, Boolean> trie = SimpleTrie.create();
+        SimpleTrie<Integer, Boolean> trie = new SimpleTrie();
         for (String symbol : symbols) {
             trie.add(Iterables.codePointsIterator(symbol), true);
         }
@@ -305,26 +305,13 @@ public class SimpleStringTokenizerFactory {
         }
 
         private CharSequence readRegularToken(int tokenStart, int first) {
-            SimpleTrie<Integer, Boolean> trie = symbols.findChar(first);
-            if (trie != null) {
-                readSymbol(trie);
-            } else {
+            iterCodePoints.rewind();
+            var foundSymbol = symbols.findLongest(iterCodePoints) != null;
+            if (!foundSymbol) {
                 IntPredicate characterClass = determineCharacterClass(first);
                 readCharacterClass(characterClass);
             }
             return str.subSequence(tokenStart, iterCodePoints.getNextIndex());
-        }
-        
-        private void readSymbol(@Nonnull SimpleTrie<Integer, Boolean> trie) {
-            while (iterCodePoints.hasNext()) {
-                int c = iterCodePoints.next();
-                SimpleTrie<Integer, Boolean> newTrie = trie.findChar(c);
-                if (newTrie == null) {
-                    iterCodePoints.rewind();
-                    break;
-                }
-                trie = newTrie;
-            }
         }
         
         private @Nonnull IntPredicate determineCharacterClass(int c) {
