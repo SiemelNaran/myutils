@@ -78,8 +78,8 @@ public class IterablesTest {
 
         Iterable<Character> first = creator.apply(new Character[] { 'a', 'b', 'c' });
         Iterable<Character> second = creator.apply(new Character[] { 'd', 'e', 'f', 'g' });
-        Iterable<Character> both = Iterables.concatenate(first, second);
-        assertEquals(7, ((List<Character>)both).size());
+        List<Character> both = Iterables.concatenate(first, second);
+        assertEquals(7, both.size());
         assertThat(both, Matchers.equalTo(Arrays.asList('a', 'b', 'c', 'd', 'e', 'f', 'g')));
     }
 

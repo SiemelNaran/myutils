@@ -74,7 +74,7 @@ public class Iterables {
         if (end < start) {
             throw new IndexOutOfBoundsException("start is greater than end: start=" + start + ", end=" + end);
         }
-        List<T> result = new ArrayList<T>(end - start);
+        List<T> result = new ArrayList<>(end - start);
         try {
             for (Iterator<T> iter = getIterator(word, start); start < end; start++) {
                 result.add(iter.next());
@@ -102,7 +102,7 @@ public class Iterables {
         } else {
             capacity = 10;
         }
-        List<T> result = new ArrayList<T>(capacity);
+        List<T> result = new ArrayList<>(capacity);
         for (Iterator<T> iter = getIterator(word, start); iter.hasNext(); ) {
             result.add(iter.next());
         }
@@ -118,7 +118,7 @@ public class Iterables {
         } else {
             capacity = 10;
         }
-        List<T> result = new ArrayList<T>(capacity);
+        List<T> result = new ArrayList<>(capacity);
         for (T val : first) {
             result.add(val);
         }
@@ -129,8 +129,8 @@ public class Iterables {
     }
 
     /**
-     * Given an iterable, return an iterator pointing to the N'th element.
-     * If word is a List then use return a list iterator pointing to the N'th element, an O(1) operatoin.
+     * Given an iterable, return an iterator pointing to the Nth element.
+     * If word is a List then use return a list iterator pointing to the Nth element, an O(1) operation.
      * Otherwise get a regular iterator and advance it N times, an O(N) operation.
      *
      * @throws IndexOutOfBoundsException if offset is out of bounds
@@ -164,7 +164,7 @@ public class Iterables {
     }
 
     /**
-     * Return a String as an iterable of cgars, where each char is an int.
+     * Return a String as an iterable of chars, where each char is an int.
      */
     public static Iterable<Integer> charsIteratorAsInt(String str) {
         return new SizedIntStreamIterable(str::chars, str.length());

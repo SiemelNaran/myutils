@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,7 +37,7 @@ public class TrieTest {
         assertNull(trie.add(Iterables.charsIteratorAsChar("poor"), true));
         assertEquals(8, trie.size());
 
-        assertTrue(trie.add(Iterables.charsIteratorAsChar("bottleneck"), true));
+        assertNotNull(trie.add(Iterables.charsIteratorAsChar("bottleneck"), true));
         assertEquals(8, trie.size());
 
         assertNull(trie.add(Iterables.charsIteratorAsChar("p"), true));
@@ -51,14 +50,14 @@ public class TrieTest {
             assertThat(words, Matchers.contains("bottle", "bottleneck", "bottlenecks", "bottom", "operation", "orange", "p", "pan", "poor"));
         }
 
-        assertTrue(trie.find(Iterables.charsIteratorAsChar("bottle")));
-        assertTrue(trie.find(Iterables.charsIteratorAsChar("bottom")));
-        assertTrue(trie.find(Iterables.charsIteratorAsChar("bottleneck")));
-        assertTrue(trie.find(Iterables.charsIteratorAsChar("bottlenecks")));
-        assertTrue(trie.find(Iterables.charsIteratorAsChar("orange")));
-        assertTrue(trie.find(Iterables.charsIteratorAsChar("operation")));
-        assertTrue(trie.find(Iterables.charsIteratorAsChar("pan")));
-        assertTrue(trie.find(Iterables.charsIteratorAsChar("poor")));
+        assertNotNull(trie.find(Iterables.charsIteratorAsChar("bottle")));
+        assertNotNull(trie.find(Iterables.charsIteratorAsChar("bottom")));
+        assertNotNull(trie.find(Iterables.charsIteratorAsChar("bottleneck")));
+        assertNotNull(trie.find(Iterables.charsIteratorAsChar("bottlenecks")));
+        assertNotNull(trie.find(Iterables.charsIteratorAsChar("orange")));
+        assertNotNull(trie.find(Iterables.charsIteratorAsChar("operation")));
+        assertNotNull(trie.find(Iterables.charsIteratorAsChar("pan")));
+        assertNotNull(trie.find(Iterables.charsIteratorAsChar("poor")));
 
         assertNull(trie.find(Iterables.charsIteratorAsChar("big")));
         assertNull(trie.find(Iterables.charsIteratorAsChar("bottomless")));
@@ -66,12 +65,12 @@ public class TrieTest {
         assertNull(trie.remove(Iterables.charsIteratorAsChar("bottomless")));
         assertEquals(9, trie.size());
 
-        assertTrue(trie.remove(Iterables.charsIteratorAsChar("bottleneck")));
+        assertNotNull(trie.remove(Iterables.charsIteratorAsChar("bottleneck")));
         assertEquals(8, trie.size());
 
-        assertTrue(trie.remove(Iterables.charsIteratorAsChar("p")));
+        assertNotNull(trie.remove(Iterables.charsIteratorAsChar("p")));
         assertEquals(7, trie.size());
-        assertTrue(trie.remove(Iterables.charsIteratorAsChar("poor")));
+        assertNotNull(trie.remove(Iterables.charsIteratorAsChar("poor")));
         assertEquals(6, trie.size());
 
         words = getAllWords(trie);
@@ -107,7 +106,7 @@ public class TrieTest {
         assertEquals(8, trie.size());
 
         RewindableIterator<Character> iter = RewindableIterator.from(Iterables.charsIteratorAsChar("bottomless").iterator());
-        assertTrue(trie.findLongest(iter));
+        assertNotNull(trie.findLongest(iter));
         assertEquals('l', iter.next());
         assertEquals('e', iter.next());
         assertEquals('s', iter.next());
@@ -115,11 +114,11 @@ public class TrieTest {
         assertFalse(iter.hasNext());
 
         iter = RewindableIterator.from(Iterables.charsIteratorAsChar("bottom").iterator());
-        assertTrue(trie.findLongest(iter));
+        assertNotNull(trie.findLongest(iter));
         assertFalse(iter.hasNext());
 
         iter = RewindableIterator.from(Iterables.charsIteratorAsChar("bottoms").iterator());
-        assertTrue(trie.findLongest(iter));
+        assertNotNull(trie.findLongest(iter));
         assertEquals('s', iter.next());
         assertFalse(iter.hasNext());
     }
