@@ -1,8 +1,12 @@
 package org.sn.myutils.util;
 
+import java.util.AbstractMap;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Stream;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
@@ -13,21 +17,26 @@ import javax.annotation.concurrent.NotThreadSafe;
  */
 @NotThreadSafe
 public class SimpleTrie<T extends Comparable<T>, U> implements Trie<T, U> {
-    private final TrieNode<T, U> root;
+    private final SimpleTrieNode<T, U> root;
+    private int modCount;
 
     public SimpleTrie() {
-        this.root = new TrieNode<>(null);
+        this.root = new SimpleTrieNode<>(null);
     }
 
     @Override
     public @Nullable U add(Iterable<T> codePoints, @Nonnull U data) {
         U oldData = root.add(codePoints, data);
+        modCount++;
         return oldData;
     }
 
     @Override
     public @Nullable U remove(Iterable<T> codePoints) {
         U oldData = root.remove(codePoints);
+        if (oldData != null) {
+            modCount++;
+        }
         return oldData;
     }
 
@@ -40,6 +49,12 @@ public class SimpleTrie<T extends Comparable<T>, U> implements Trie<T, U> {
     public int size() {
         return root.size();
     }
+
+    @Override
+    public Iterator<TrieEntry<T, U>> iterator() {
+        return new SimpleTrieEntryIterator(root);
+    }
+
 
     /**
      * Find a string using the rewindable iterator.
@@ -55,25 +70,41 @@ public class SimpleTrie<T extends Comparable<T>, U> implements Trie<T, U> {
     }
 
 
-
-    private static class TrieNode<T extends Comparable<T>, U> {
-        private final TrieNode<T, U> parent;
-        private final Map<T, TrieNode<T, U>> children = new HashMap<>();
+    /**
+     * The class reflecting each node in the trie.
+     * It is a nested class so that SimpleTrie can have additional member variables for the entire trie.
+     */
+    private static class SimpleTrieNode<T extends Comparable<T>, U> implements TrieIterationHelper.TrieNode<T, U> {
+        private final SimpleTrieNode<T, U> parent;
+        private final Map<T, SimpleTrieNode<T, U>> children = new HashMap<>();
         private U data;
         private int size;
 
-        private TrieNode(TrieNode<T, U> parent) {
+        private SimpleTrieNode(SimpleTrieNode<T, U> parent) {
             this.parent = parent;
+        }
+
+        @Override
+        public U getData() {
+            return data;
+        }
+
+        @Override
+        public Stream<Map.Entry<Iterable<T>, ? extends TrieIterationHelper.TrieNode<T, U>>> childrenIterator() {
+            return children.entrySet()
+                           .stream()
+                           .map(entry -> new AbstractMap.SimpleImmutableEntry<Iterable<T>, TrieIterationHelper.TrieNode<T, U>>(List.of(entry.getKey()),
+                                                                                                                               entry.getValue()));
         }
 
         U add(Iterable<T> codePoints, @Nonnull U data) {
             return doAdd(this, codePoints, Objects.requireNonNull(data));
         }
 
-        private static @Nullable <T extends Comparable<T>, U> U doAdd(@Nonnull TrieNode<T, U> trie, Iterable<T> codePoints, U data) {
+        private static @Nullable <T extends Comparable<T>, U> U doAdd(@Nonnull SimpleTrieNode<T, U> trie, Iterable<T> codePoints, U data) {
             for (T codePoint : codePoints) {
                 var parentTrie = trie;
-                trie = parentTrie.children.computeIfAbsent(codePoint, ignored -> new TrieNode<>(parentTrie));
+                trie = parentTrie.children.computeIfAbsent(codePoint, ignored -> new SimpleTrieNode<>(parentTrie));
             }
             U oldData = trie.data;
             trie.data = data;
@@ -107,7 +138,7 @@ public class SimpleTrie<T extends Comparable<T>, U> implements Trie<T, U> {
         }
 
         private static @Nullable
-        <T extends Comparable<T>, U> TrieNode<T, U> doFind(@Nonnull TrieNode<T, U> trie, Iterable<T> codePoints) {
+        <T extends Comparable<T>, U> SimpleTrieNode<T, U> doFind(@Nonnull SimpleTrieNode<T, U> trie, Iterable<T> codePoints) {
             for (T codePoint : codePoints) {
                 trie = trie.children.get(codePoint);
                 if (trie == null) {
@@ -118,8 +149,8 @@ public class SimpleTrie<T extends Comparable<T>, U> implements Trie<T, U> {
         }
 
         private static @Nullable
-        <T extends Comparable<T>, U> TrieNode<T, U> doFindLongest(@Nonnull TrieNode<T, U> trie, RewindableIterator<T> codePointsIter) {
-            TrieNode<T, U> partialTrie = null;
+        <T extends Comparable<T>, U> SimpleTrieNode<T, U> doFindLongest(@Nonnull SimpleTrieNode<T, U> trie, RewindableIterator<T> codePointsIter) {
+            SimpleTrieNode<T, U> partialTrie = null;
             while (codePointsIter.hasNext()) {
                 T codePoint = codePointsIter.next();
                 var subTrie = trie.children.get(codePoint);
@@ -133,7 +164,7 @@ public class SimpleTrie<T extends Comparable<T>, U> implements Trie<T, U> {
             return trie;
         }
 
-        private static <T extends Comparable<T>, U> void rollupSize(TrieNode<T, U> trie, int delta) {
+        private static <T extends Comparable<T>, U> void rollupSize(SimpleTrieNode<T, U> trie, int delta) {
             while (trie != null) {
                 trie.size += delta;
                 trie = trie.parent;
@@ -142,6 +173,17 @@ public class SimpleTrie<T extends Comparable<T>, U> implements Trie<T, U> {
 
         int size() {
             return size;
+        }
+    }
+
+    private class SimpleTrieEntryIterator extends TrieIterationHelper.TrieEntryIterator<T, U> {
+        SimpleTrieEntryIterator(TrieIterationHelper.TrieNode<T, U> root) {
+            super(root);
+        }
+
+        @Override
+        int getTrieModificationCount() {
+            return SimpleTrie.this.modCount;
         }
     }
 }

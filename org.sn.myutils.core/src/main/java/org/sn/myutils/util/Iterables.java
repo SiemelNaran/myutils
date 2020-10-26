@@ -109,6 +109,25 @@ public class Iterables {
         return result;
     }
 
+    public static <T> List<T> concatenate(Iterable<T> first, Iterable<T> second) {
+        int capacity;
+        if (first instanceof List && second instanceof List) {
+            List<T> firstList = (List<T>) first;
+            List<T> secondList = (List<T>) second;
+            capacity = firstList.size() + secondList.size();
+        } else {
+            capacity = 10;
+        }
+        List<T> result = new ArrayList<T>(capacity);
+        for (T val : first) {
+            result.add(val);
+        }
+        for (T val : second) {
+            result.add(val);
+        }
+        return result;
+    }
+
     /**
      * Given an iterable, return an iterator pointing to the N'th element.
      * If word is a List then use return a list iterator pointing to the N'th element, an O(1) operatoin.

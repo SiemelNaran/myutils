@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Function;
@@ -61,6 +62,25 @@ public class IterablesTest {
 
         assertThat(Iterables.substring(creator.apply(new Character[] { 'a', 'b', 'c', 'd' }), 0), Matchers.equalTo(Arrays.asList('a', 'b', 'c', 'd')));
         assertThat(Iterables.substring(creator.apply(new Character[] { 'a', 'b', 'c', 'd' }), 1), Matchers.equalTo(Arrays.asList('b', 'c', 'd')));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "list", "set" })
+    void testConcatenate(String collection) {
+        Function<Character[], Collection<Character>> creator;
+        if (collection.equals("list")) {
+            creator = CREATE_LIST;
+        } else if (collection.equals("set")) {
+            creator = CREATE_SET;
+        } else {
+            throw new UnsupportedOperationException();
+        }
+
+        Iterable<Character> first = creator.apply(new Character[] { 'a', 'b', 'c' });
+        Iterable<Character> second = creator.apply(new Character[] { 'd', 'e', 'f', 'g' });
+        Iterable<Character> both = Iterables.concatenate(first, second);
+        assertEquals(7, ((List<Character>)both).size());
+        assertThat(both, Matchers.equalTo(Arrays.asList('a', 'b', 'c', 'd', 'e', 'f', 'g')));
     }
 
     private static final Function<Character[], Collection<Character>> CREATE_LIST = Arrays::asList;
