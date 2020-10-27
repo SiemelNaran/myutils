@@ -123,7 +123,7 @@ public class DistributedSocketPubSub extends PubSub {
     private final KeyToSocketAddressMapper messageServerLookup;
     private final ClientMachineId machineId;
     private final Map<SocketAddress /*messageServer*/, SocketChannel> messageServers;
-    private final ExecutorService channelExecutor = Executors.newCachedThreadPool(createThreadFactory("DistributedSocketPubSub", true)); // read threads and one write thread
+    private final ExecutorService channelExecutor = Executors.newCachedThreadPool(createThreadFactory("DistributedSocketPubSub", true)); // one write thread, multiple read threads
     private final ScheduledExecutorService retryExecutor = Executors.newScheduledThreadPool(1, createThreadFactory("DistributedSocketPubSub.Retry", true));
     private final MessageWriter messageWriter;
     private final AtomicLong localMaxMessage = new AtomicLong();
@@ -194,11 +194,13 @@ public class DistributedSocketPubSub extends PubSub {
      * If the server is not available, retries connecting to the server with exponential backoff starting at 1 second, 2 seconds, 4 seconds, 8 seconds, 8 seconds.
      * If there was another IOException in starting the future is rejected with a StartException.
      * 
+     * <p>This function is @NotThreadSafe.
+     * 
      * @throws java.util.concurrent.RejectedExecutionException if client was shutdown
      */
-    public CompletableFuture<Void> start() {
+    public CompletableFuture<Void> startAsync() {
         startWriterThreadIfNotStarted();
-        return doStartAll(false);
+        return doStartAllAsync(false);
     }
     
     public static class StartException extends PubSubException {
@@ -220,20 +222,20 @@ public class DistributedSocketPubSub extends PubSub {
         if (messageWriter.isStarted()) {
             return;
         }
-        channelExecutor.submit(messageWriter);
         messageWriter.setStarted();
+        channelExecutor.submit(messageWriter);
         LOGGER.log(Level.INFO, "Start DistributedSocketPubSub writer");
     }
     
-    private CompletableFuture<Void> doStartAll(boolean sendAllPublishersAndSubscribers) {
+    private CompletableFuture<Void> doStartAllAsync(boolean sendAllPublishersAndSubscribers) {
         var future = messageServerConnectionListener.setAll(sendAllPublishersAndSubscribers);
         for (SocketAddress messageServer : messageServers.keySet()) {
-            doStartOne(messageServer);
+            doStartOneAsync(messageServer);
         }
         return future;
     }
     
-    private void doStartOne(SocketAddress messageServer) {
+    private void doStartOneAsync(SocketAddress messageServer) {
         String snippet = String.format("DistributedSocketPubSub: clientMachine=%s, centralServer=%s",
                                        machineId,
                                        messageServer.toString());
@@ -241,6 +243,7 @@ public class DistributedSocketPubSub extends PubSub {
         try {
             retryExecutor.submit(() -> doStartOne(messageServer, snippet, 0));
         } catch (RejectedExecutionException e) {
+            messageServerConnectionListener.completeFutureExceptionally(messageServer, unwrapCompletionException(e));
             throw e;
         } catch (RuntimeException | Error e) {
             LOGGER.log(Level.ERROR, String.format("Failed to start %s", snippet), e);
@@ -298,15 +301,15 @@ public class DistributedSocketPubSub extends PubSub {
         }
 
         synchronized void completeFuture(SocketAddress messageServer) {
-            complete(messageServer);
+            internalComplete(messageServer);
         }
         
         synchronized void completeFutureExceptionally(SocketAddress messageServer, Throwable exception) {
             exceptions.put(messageServer, exception);
-            complete(messageServer);
+            internalComplete(messageServer);
         }
         
-        private void complete(SocketAddress messageServer) {
+        private void internalComplete(SocketAddress messageServer) {
             pendingFutures.remove(messageServer);
             if (pendingFutures.isEmpty()) {
                 if (exceptions.isEmpty()) {
@@ -367,14 +370,14 @@ public class DistributedSocketPubSub extends PubSub {
     }
     
     /**
-     * Return the socket channel.
+     * Return the socket channel that points to the given message server.
      */
     private SocketChannel getInternalSocketChannel(SocketAddress messageServer) {
         return messageServers.get(messageServer);
     }
 
     /**
-     * Return the socket channel.
+     * Replace the socket channel that points to the given message server.
      */
     private void replaceInternalSocketChannel(SocketAddress messageServer, SocketChannel channel) {
         messageServers.replace(messageServer, channel);
@@ -429,8 +432,8 @@ public class DistributedSocketPubSub extends PubSub {
     /**
      * Thread that writes messages to a message server.
      * 
-     * @implNote This class is thread safe as there is only one MessageWriter thread accessing member variable deferredQueues,
-     *           and member variable queue is inherently thread safe.
+     * <p>This class is thread safe as there is only one MessageWriter thread accessing member variable deferredQueues,
+     * and member variable queue is inherently thread safe.
      */
     private class MessageWriter implements Runnable {
         private final BlockingQueue<MessageWriterMessage> queue = new LinkedBlockingQueue<>();
@@ -709,7 +712,7 @@ public class DistributedSocketPubSub extends PubSub {
         try {
             var localAddress = messageServerLookup.getLocalAddress(messageServer);
             replaceInternalSocketChannel(messageServer, createNewSocket(localAddress));
-            doStartAll(true).exceptionally(e -> {
+            doStartAllAsync(true).exceptionally(e -> {
                 LOGGER.log(Level.ERROR, "Unable to restart DistributedSocketPubSub", e);
                 return null;
             });

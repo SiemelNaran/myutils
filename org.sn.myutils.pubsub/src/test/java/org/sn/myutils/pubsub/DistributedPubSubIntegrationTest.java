@@ -29,7 +29,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedList;
@@ -140,7 +139,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    "client1",
                                    30001);
 
-        startFutures.add(client1.start());
+        startFutures.add(client1.startAsync());
         waitFor(startFutures);
         sleep(250);
 
@@ -154,7 +153,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                     PubSub.defaultSubscriptionMessageExceptionHandler(),
                                     "client1", // same name as above
                                     30002);
-        var startClient1bFuture = client1b.start();
+        var startClient1bFuture = client1b.startAsync();
         sleep(250); // wait for server to receive message
 
         try {
@@ -204,14 +203,14 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    "client1",
                                    30001
         );
-        startFutures.add(client1.start());
+        startFutures.add(client1.startAsync());
 
         var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
                                    30002
         );
-        startFutures.add(client2.start());
+        startFutures.add(client2.startAsync());
 
         waitFor(startFutures);
         assertEquals("Identification=1", client1.getTypesSent());
@@ -316,21 +315,21 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    "client1",
                                    30001
         );
-        startFutures.add(client1.start());
+        startFutures.add(client1.startAsync());
 
         var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
                                    30002
         );
-        startFutures.add(client2.start());
+        startFutures.add(client2.startAsync());
 
         var client3 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client3",
                                    30003
         );
-        startFutures.add(client3.start());
+        startFutures.add(client3.startAsync());
 
         waitFor(startFutures);
         assertEquals(1, client1.getCountTypesSent()); // message sent = identification
@@ -478,13 +477,13 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
                                    30001);
-        startFutures.add(client1.start());
+        startFutures.add(client1.startAsync());
 
         var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
                                    30002);
-        startFutures.add(client2.start());
+        startFutures.add(client2.startAsync());
 
         waitFor(startFutures);
         assertEquals("Identification=1", client1.getTypesSent());
@@ -607,7 +606,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    "client1",
                                    31001
         );
-        waitFor(Collections.singletonList(client1.start()));
+        waitFor(Collections.singletonList(client1.startAsync()));
         assertEquals(1, client1.getCountTypesSent());
         assertEquals(1, client1.getCountTypesReceived());
         
@@ -656,7 +655,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    31002
         );
         assertNull(client2.getPublisher("hello"));
-        waitFor(Collections.singletonList(client2.start()));
+        waitFor(Collections.singletonList(client2.startAsync()));
         sleep(250); // time to let client2 start
         assertEquals(19, client1.getCountTypesSent());
         assertEquals(5, client1.getCountTypesReceived());
@@ -758,7 +757,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    "client1",
                                    31001
         );
-        Future<Void> startClient1Future = client1.start();
+        Future<Void> startClient1Future = client1.startAsync();
         //assertFalse(startClient1Future.isDone());// may be true
         startClient1Future.get(); // assert no exception
         assertTrue(startClient1Future.isDone());
@@ -780,7 +779,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertExceptionFromCallable(startServerDuplicateAddressFuture::get, ExecutionException.class, "java.net.BindException: Address already in use");
         
         // start client again
-        Future<Void> startClient1FutureAgain = client1.start();
+        Future<Void> startClient1FutureAgain = client1.startAsync();
         sleep(250); // time to let client start        
         assertTrue(startClient1FutureAgain.isDone());
         try {
@@ -799,7 +798,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                                   "client2",
                                                   31001
         );
-        Future<Void> startClientDuplicateAddressFuture = clientDuplicateAddress.start();
+        Future<Void> startClientDuplicateAddressFuture = clientDuplicateAddress.startAsync();
         sleep(250); // time to let client start        
         assertTrue(startClientDuplicateAddressFuture.isDone());
         try {
@@ -814,7 +813,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         
         client1.shutdown();
         sleep(250); // time to let client shutdown
-        assertExceptionFromCallable(client1::start, RejectedExecutionException.class);
+        assertExceptionFromCallable(client1::startAsync, RejectedExecutionException.class);
 
         centralServer.shutdown();
         sleep(250); // time to let server shutdown
@@ -835,7 +834,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    "client1",
                                    31001
         );
-        CompletableFuture<Void> client1Started = client1.start();
+        CompletableFuture<Void> client1Started = client1.startAsync();
         Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
         client1.subscribe("hello", "ClientOneSubscriber", CloneableString.class, str -> words.add(str.append("-s1")));
         sleep(250); // time to let client start
@@ -848,7 +847,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    "client2",
                                    31002
         );
-        client2.start();
+        client2.startAsync();
         client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a")));
         client2.subscribe("hello", "ClientTwoSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b")));
         sleep(250); // time to let client2 start
@@ -907,7 +906,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    "client1",
                                    31001
         );
-        waitFor(Collections.singletonList(client1.start()));
+        waitFor(Collections.singletonList(client1.startAsync()));
         assertEquals(1, client1.getCountTypesSent()); // Identification
         assertEquals(1, client1.getCountTypesReceived()); // ClientAccepted
         
@@ -916,7 +915,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    "client2",
                                    31002
         );
-        waitFor(Collections.singletonList(client2.start()));
+        waitFor(Collections.singletonList(client2.startAsync()));
         assertEquals(1, client1.getCountTypesSent());
         assertEquals(1, client1.getCountTypesReceived());
         assertEquals(1, client2.getCountTypesSent()); // Identification
@@ -971,7 +970,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    "client1",
                                    31001
         );
-        waitFor(Collections.singletonList(client1.start()));
+        waitFor(Collections.singletonList(client1.startAsync()));
         Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
         client1.subscribe("hello", "ClientOneSubscriber", CloneableString.class, str -> words.add(str.append("-s1")));
         sleep(250); // wait for CreatePublisher and AddSubscriber commands to be sent
@@ -983,7 +982,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    "client2",
                                    31002
         );
-        waitFor(Collections.singletonList(client2.start()));
+        waitFor(Collections.singletonList(client2.startAsync()));
         client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a")));
         client2.subscribe("hello", "ClientTwoSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b")));
         sleep(250); // wait for CreatePublisher and AddSubscriber commands to be sent
@@ -1050,14 +1049,14 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                        "client1",
                                        31001
             );
-            startFutures.add(client1.start());
+            startFutures.add(client1.startAsync());
             
             var client2 = createClient(PubSub.defaultQueueCreator(),
                                        PubSub.defaultSubscriptionMessageExceptionHandler(),
                                        "client2",
                                        31002
             );
-            startFutures.add(client2.start());
+            startFutures.add(client2.startAsync());
 
             waitFor(startFutures);
 
@@ -1127,14 +1126,14 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                        "client1",
                                        31001
             );
-            startFutures.add(client1.start());
+            startFutures.add(client1.startAsync());
             
             var client2 = createClient(PubSub.defaultQueueCreator(),
                                        PubSub.defaultSubscriptionMessageExceptionHandler(),
                                        "client2",
                                        31002
             );
-            startFutures.add(client2.start());
+            startFutures.add(client2.startAsync());
 
             waitFor(startFutures);
 
@@ -1207,7 +1206,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    "client1",
                                    31001
         );
-        startFutures.add(client1.start());
+        startFutures.add(client1.startAsync());
         Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
         client1.subscribe("hello", "ClientOneSubscriber", CloneableString.class, str -> words.add(str.append("-s1")));
         
@@ -1223,7 +1222,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                 serverIndexesOfPublishMessageReceivedInClient2.add(serverIndex);
             }
         });
-        startFutures.add(client2.start());
+        startFutures.add(client2.startAsync());
         client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a")));
         client2.subscribe("hello", "ClientTwoSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b")));
 
@@ -1291,7 +1290,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    "client1",
                                    31001
         );
-        startFutures.add(client1.start());
+        startFutures.add(client1.startAsync());
         Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
         client1.subscribe("hello", "ClientOneSubscriber", CloneableString.class, str -> words.add(str.append("-s1")));
         waitFor(startFutures);
@@ -1305,7 +1304,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    "client2",
                                    31002
         );
-        waitFor(Collections.singletonList(client2.start()));
+        waitFor(Collections.singletonList(client2.startAsync()));
         client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a")));
         client2.subscribe("hello", "ClientTwoSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b")));
         sleep(250); // wait for CreatePublisher and AddSubscriber commands to be sent
@@ -1365,28 +1364,28 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    "client1",
                                    30001
         );
-        startFutures.add(client1.start());
+        startFutures.add(client1.startAsync());
         
         var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
                                    30002
         );
-        startFutures.add(client2.start());
+        startFutures.add(client2.startAsync());
         
         var client3 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client3",
                                    30003
         );
-        startFutures.add(client3.start());
+        startFutures.add(client3.startAsync());
 
         var client4 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client4",
                                    30004
         );
-        startFutures.add(client4.start());
+        startFutures.add(client4.startAsync());
 
         waitFor(startFutures);
         
@@ -1456,42 +1455,42 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    "client1",
                                    30001
         );
-        startFutures.add(client1.start());
+        startFutures.add(client1.startAsync());
         
         var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
                                    30002
         );
-        startFutures.add(client2.start());
+        startFutures.add(client2.startAsync());
         
         var client3 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client3",
                                    30003
         );
-        startFutures.add(client3.start());
+        startFutures.add(client3.startAsync());
 
         var client4 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client4",
                                    30004
         );
-        startFutures.add(client4.start());
+        startFutures.add(client4.startAsync());
         
         var client5 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client5",
                                    30005
         );
-        startFutures.add(client5.start());
+        startFutures.add(client5.startAsync());
         
         var client6 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client6",
                                    30006
         );
-        startFutures.add(client6.start());
+        startFutures.add(client6.startAsync());
 
         waitFor(startFutures);
 
@@ -1558,7 +1557,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                     "client6",
                                     30006
         );
-        waitFor(Collections.singletonList(client6b.start()));
+        waitFor(Collections.singletonList(client6b.startAsync()));
         sleep(250); // wait for central server to send any CreatePublisher commands
         assertEquals("AddSubscriber=4, CreatePublisher=1, FetchPublisher=5, Identification=7", centralServer.getValidTypesReceived()); // unchanged: i.e. FetchPublisher for client6 not sent
         assertEquals("ClientAccepted=7, CreatePublisher=4, PublisherCreated=1, SubscriberAdded=4", centralServer.getTypesSent()); // CreatePublisher not sent to client6b
@@ -1581,7 +1580,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    "client1",
                                    30001
         );
-        startFutures.add(client1.start());
+        startFutures.add(client1.startAsync());
         
         waitFor(startFutures);
         sleep(250);
@@ -1660,7 +1659,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    "client1",
                                    30001
         );
-        startFutures.add(client1.start());
+        startFutures.add(client1.startAsync());
         
         waitFor(startFutures);
         sleep(250);
@@ -1711,8 +1710,8 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
                                    30002);
-        startFutures.add(client1.start());
-        startFutures.add(client2.start());
+        startFutures.add(client1.startAsync());
+        startFutures.add(client2.startAsync());
         
         waitFor(startFutures);
         sleep(250);
@@ -1794,7 +1793,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
             }
             
             @Override
-            public Collection<SocketAddress> getRemoteUniverse() {
+            public Set<SocketAddress> getRemoteUniverse() {
                 return Set.of(centralServer1.getMessageServerAddress(), centralServer2.getMessageServerAddress());
             }
 
@@ -1821,21 +1820,21 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    "client1",
                                    new ImmutableShardingMapper(30001)
         );
-        startFutures.add(client1.start());
+        startFutures.add(client1.startAsync());
 
         var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
                                    new ImmutableShardingMapper(30003)
         );
-        startFutures.add(client2.start());
+        startFutures.add(client2.startAsync());
 
         var client3 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client3",
                                    new ImmutableShardingMapper(30005)
         );
-        startFutures.add(client3.start());
+        startFutures.add(client3.startAsync());
 
         waitFor(startFutures);
         assertEquals("Identification=2", client1.getTypesSent());
@@ -1939,7 +1938,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                                                                                     30001,
                                                                                                     CENTRAL_SERVER_HOST,
                                                                                                     CENTRAL_SERVER_PORT));
-        client1.start();
+        client1.startAsync();
         
         var client2 = new TestDistributedSocketPubSub(1,
                                                       PubSub.defaultQueueCreator(),
@@ -1949,7 +1948,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                                                                                     30002,
                                                                                                     CENTRAL_SERVER_HOST,
                                                                                                     CENTRAL_SERVER_PORT));
-        client2.start();
+        client2.startAsync();
 
         sleep(250); // time to let clients start, connect to the central server, and send identification
 

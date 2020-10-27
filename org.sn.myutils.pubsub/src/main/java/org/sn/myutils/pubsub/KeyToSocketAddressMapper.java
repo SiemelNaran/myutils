@@ -2,11 +2,10 @@ package org.sn.myutils.pubsub;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.Nonnull;
 
@@ -22,7 +21,7 @@ import javax.annotation.Nonnull;
  */
 public abstract class KeyToSocketAddressMapper {
     
-    private final Map<SocketAddress, SocketAddress> remoteToLocalMap = new HashMap<>();
+    private final Map<SocketAddress, SocketAddress> remoteToLocalMap = new ConcurrentHashMap<>();
     
     /**
      * Map a key to remote machine.
@@ -48,23 +47,13 @@ public abstract class KeyToSocketAddressMapper {
      * @return the local address. This will usually be localhost and a unique port.
      */
     public final @Nonnull SocketAddress getLocalAddress(SocketAddress remoteAddress) {
-        var localAddress = remoteToLocalMap.get(remoteAddress);
-        if (localAddress == null) {
-            synchronized (remoteToLocalMap) {
-                localAddress = remoteToLocalMap.get(remoteAddress);
-                if (localAddress == null) {
-                    localAddress = generateLocalAddress();
-                    remoteToLocalMap.put(remoteAddress, localAddress);
-                }
-            }
-        }
-        return localAddress;
+        return remoteToLocalMap.computeIfAbsent(remoteAddress, unused -> generateLocalAddress());
     }
     
     /**
      * Return a collection of all possible remote machines.
      */
-    public abstract Collection<SocketAddress> getRemoteUniverse();
+    public abstract Set<SocketAddress> getRemoteUniverse();
     
     /**
      * Map a key to a remote machine in the universe.
@@ -86,8 +75,8 @@ public abstract class KeyToSocketAddressMapper {
         
         return new KeyToSocketAddressMapper() {
             @Override
-            public Collection<SocketAddress> getRemoteUniverse() {
-                return Collections.singletonList(remoteAddress);
+            public Set<SocketAddress> getRemoteUniverse() {
+                return Set.of(remoteAddress);
             }
 
             @Override
