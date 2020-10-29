@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 public class DefaultNumberFactoryTest {
     @Test
-    public void testDefaultNumberFactory() {
+    void testDefaultNumberFactory() {
         NumberFactory factory = DefaultNumberFactory.DEFAULT_NUMBER_FACTORY;
         
         assertEquals(Integer.valueOf(33), factory.fromString("33"));
@@ -26,7 +26,7 @@ public class DefaultNumberFactoryTest {
     }
     
     @Test
-    public void testDefaultNumberFactoryLong() {
+    void testDefaultNumberFactoryLong() {
         NumberFactory factory = DefaultNumberFactory.builder()
                                                     .setIntegerPolicy(DefaultNumberFactory.IntegerPolicy.PREFER_LONG)
                                                     .build();
@@ -42,7 +42,7 @@ public class DefaultNumberFactoryTest {
     }
     
     @Test
-    public void testDefaultNumberFactoryTwoDecimalPlaces() {
+    void testDefaultNumberFactoryTwoDecimalPlaces() {
         NumberFactory factory = DefaultNumberFactory.builder()
                                                     .setIntegerPolicy(null)
                                                     .setFloatPolicy(DefaultNumberFactory.FloatPolicy.PREFER_BIG_DECIMAL)

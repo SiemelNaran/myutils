@@ -12,7 +12,7 @@ import org.sn.myutils.parsetree.UnitNumberFactory.UnitPosition;
 
 public class UnitNumberFactoryTest {
     @Test
-    public void testDefaultNumberFactoryAfter() {
+    void testDefaultNumberFactoryAfter() {
         NumberFactory factory = UnitNumberFactory.builder()
                                                  .setUnitCase(StringCase.IGNORE_CASE)
                                                  .addUnit("m", val -> val)
@@ -31,7 +31,7 @@ public class UnitNumberFactoryTest {
     }
 
     @Test
-    public void testDefaultNumberFactoryBefore() {
+    void testDefaultNumberFactoryBefore() {
         NumberFactory factory = UnitNumberFactory.builder()
                                                  .setNumberFactory(DefaultNumberFactory.builder()
                                                                                        .setIntegerPolicy(null)

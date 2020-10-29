@@ -52,6 +52,12 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>
+                        ${maven-surefire-plugin.argLine}
+                        --add-opens org.sn.myutils.pubsub/org.sn.myutils.pubsub=ALL-UNNAMED
+                    </argLine>
+                </configuration> 
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
