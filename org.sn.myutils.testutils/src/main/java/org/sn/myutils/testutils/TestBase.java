@@ -1,5 +1,6 @@
 package org.sn.myutils.testutils;
 
+import java.time.Duration;
 import java.time.Instant;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -41,7 +42,8 @@ public abstract class TestBase {
     
     @AfterEach
     void printTestFinished(TestInfo testInfo) {
-        System.out.println("test finished: " + testInfo.getDisplayName());
+        System.out.println("test finished: " + testInfo.getDisplayName()
+                                   + "(" + Duration.between(startOfTime, Instant.now()).toMillis() + "ms)");
     }
     
     protected final Instant getStartOfTime() {
