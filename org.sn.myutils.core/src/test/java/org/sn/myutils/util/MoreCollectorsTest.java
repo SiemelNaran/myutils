@@ -123,12 +123,12 @@ public class MoreCollectorsTest extends TestBase {
         now = Instant.now();
         PriorityQueue<Person> topParallel;
         if (method.equals("maxBy")) {
-            top = listPerson.parallelStream().collect(MoreCollectors.maxBy(Comparator.comparing(Person::getAgeInSeconds), numElements));
+            topParallel = listPerson.parallelStream().collect(MoreCollectors.maxBy(Comparator.comparing(Person::getAgeInSeconds), numElements));
         } else {
-            top = listPerson.parallelStream().collect(MoreCollectors.minBy(Comparator.comparing(Person::getAgeInSeconds), numElements));
+            topParallel = listPerson.parallelStream().collect(MoreCollectors.minBy(Comparator.comparing(Person::getAgeInSeconds), numElements));
         }
         System.out.printf("smartTimeParallel=%dms%n", Duration.between(now, Instant.now()).toMillis());
-        assertEquals(numElements, top.size());
+        assertEquals(numElements, topParallel.size());
 
         // Use the dumb method, which is to sort the array and keep the last 1000 elements
         now = Instant.now();
