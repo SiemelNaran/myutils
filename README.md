@@ -106,6 +106,7 @@ It does not let you rewind any number of times, as that would basically be a lis
     - Trie is just an interface.  There are two types of tries: SimpleTrie and SpaceEfficientTrie.
     - In SimpleTrie, each node is one character.
     - In SpaceEfficientTrie each node can be many characters if there are no child nodes with other prefixes.
+    - Trie implements the Map interface.
 
 Suppose trie contains "bottom","bottle", and "bottles".
 

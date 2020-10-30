@@ -21,16 +21,21 @@ import javax.annotation.concurrent.NotThreadSafe;
  * Trie class that merges all chars into one string for a node if there are no child nodes.
  */
 @NotThreadSafe
-public class SpaceEfficientTrie<T extends Comparable<T>, U> implements Trie<T, U> {
-    private final SpaceEfficientTrieNode<T, U> root;
+public class SpaceEfficientTrie<T extends Comparable<T>, U> extends TrieIterationHelper.TrieMap<T, U> {
+    private SpaceEfficientTrieNode<T, U> root;
     private int modCount;
 
     public SpaceEfficientTrie() {
+        clear();
+    }
+
+    @Override
+    public void clear() {
         this.root = new SpaceEfficientTrieNode<>(null);
     }
 
     @Override
-    public @Nullable U add(Iterable<T> codePoints, @Nonnull U data) {
+    public @Nullable U put(Iterable<T> codePoints, @Nonnull U data) {
         U oldData = root.add(codePoints, data);
         modCount++;
         return oldData;
@@ -46,7 +51,7 @@ public class SpaceEfficientTrie<T extends Comparable<T>, U> implements Trie<T, U
     }
 
     @Override
-    public @Nullable U find(Iterable<T> codePoints) {
+    public @Nullable U get(Iterable<T> codePoints) {
         return root.find(codePoints);
     }
 
@@ -250,6 +255,11 @@ public class SpaceEfficientTrie<T extends Comparable<T>, U> implements Trie<T, U
         @Override
         int getTrieModificationCount() {
             return SpaceEfficientTrie.this.modCount;
+        }
+
+        @Override
+        void doRemove(Iterable<T> word) {
+            SpaceEfficientTrie.this.remove(word);
         }
     }
 }

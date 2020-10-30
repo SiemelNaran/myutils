@@ -16,16 +16,21 @@ import javax.annotation.concurrent.NotThreadSafe;
  * Trie class that has one node for each character.
  */
 @NotThreadSafe
-public class SimpleTrie<T extends Comparable<T>, U> implements Trie<T, U> {
-    private final SimpleTrieNode<T, U> root;
+public class SimpleTrie<T extends Comparable<T>, U> extends TrieIterationHelper.TrieMap<T, U> {
+    private SimpleTrieNode<T, U> root;
     private int modCount;
 
     public SimpleTrie() {
+        clear();
+    }
+
+    @Override
+    public void clear() {
         this.root = new SimpleTrieNode<>(null);
     }
 
     @Override
-    public @Nullable U add(Iterable<T> codePoints, @Nonnull U data) {
+    public @Nullable U put(Iterable<T> codePoints, @Nonnull U data) {
         U oldData = root.add(codePoints, data);
         modCount++;
         return oldData;
@@ -41,7 +46,7 @@ public class SimpleTrie<T extends Comparable<T>, U> implements Trie<T, U> {
     }
 
     @Override
-    public @Nullable U find(Iterable<T> codePoints) {
+    public @Nullable U get(Iterable<T> codePoints) {
         return root.find(codePoints);
     }
 
@@ -65,7 +70,7 @@ public class SimpleTrie<T extends Comparable<T>, U> implements Trie<T, U> {
      * If yes and we are not at end of stream, it then proceeds to the next character.
      * If no, then the trie node found thus far is returned, and we rewind the iterator by one char to put the non-matching char back into the stream.
      */
-    public @Nullable U findLongest(RewindableIterator<T> codePointsIter) {
+    public @Nullable U getLongest(RewindableIterator<T> codePointsIter) {
         return root.findLongest(codePointsIter);
     }
 
@@ -184,6 +189,11 @@ public class SimpleTrie<T extends Comparable<T>, U> implements Trie<T, U> {
         @Override
         int getTrieModificationCount() {
             return SimpleTrie.this.modCount;
+        }
+
+        @Override
+        void doRemove(Iterable<T> word) {
+            SimpleTrie.this.remove(word);
         }
     }
 }

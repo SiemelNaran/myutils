@@ -2,14 +2,19 @@ package org.sn.myutils.util;
 
 import static org.sn.myutils.util.Iterables.concatenate;
 
+import java.util.AbstractMap;
+import java.util.AbstractSet;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.Stack;
 import java.util.stream.Stream;
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 
 class TrieIterationHelper {
@@ -35,8 +40,9 @@ class TrieIterationHelper {
     }
 
     abstract static class TrieEntryIterator<T extends Comparable<T>, U> implements Iterator<Trie.TrieEntry<T, U>> {
-        private final int expectedModCount;
+        private int expectedModCount;
         private final Stack<TrieNodePosition<T, U>> stack = new Stack<>();
+        private List<T> pathToHere;
 
         TrieEntryIterator(TrieNode<T, U> root) {
             expectedModCount = getTrieModificationCount();
@@ -73,19 +79,35 @@ class TrieIterationHelper {
                 throw new NoSuchElementException();
             }
             TrieNodePosition<T, U> top = stack.peek();
+            pathToHere = top.pathToHere;
+            U data = top.trieNode.getData();
             Trie.TrieEntry<T, U> entry = new Trie.TrieEntry<>() {
                 @Override
                 public List<T> getWord() {
-                    return top.pathToHere;
+                    return pathToHere;
                 }
 
                 @Override
                 public U getData() {
-                    return top.trieNode.getData();
+                    return data;
                 }
             };
             gotoNext();
             return entry;
+        }
+
+        @Override
+        public void remove() {
+            checkForConcurrentModification();
+            if (stack.isEmpty()) {
+                throw new NoSuchElementException();
+            }
+            if (pathToHere == null) {
+                throw new IllegalStateException();
+            }
+            doRemove(pathToHere);
+            expectedModCount = getTrieModificationCount();
+            pathToHere = null;
         }
 
         private void checkForConcurrentModification() {
@@ -95,5 +117,61 @@ class TrieIterationHelper {
         }
 
         abstract int getTrieModificationCount();
+
+        abstract void doRemove(Iterable<T> word);
+    }
+
+    abstract static class TrieMap<T extends Comparable<T>, U> extends AbstractMap<Iterable<T>, U> implements Trie<T, U> {
+        @Override
+        @SuppressWarnings("unchecked")
+        public final U get(Object key) {
+            if (key instanceof Iterable) {
+                return get((Iterable<T>)key); // may throw is key an Iterable<SomethingElse>
+            }
+            return null;
+        }
+
+        @Override
+        public abstract @Nullable U get(Iterable<T> codePoints);
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public final U remove(Object key) {
+            if (key instanceof Iterable) {
+                return remove((Iterable<T>)key); // may throw is key an Iterable<SomethingElse>
+            }
+            return null;
+        }
+
+        @Override
+        public abstract @Nullable U remove(Iterable<T> codePoints);
+
+        @Override
+        public final boolean containsKey(Object key) {
+            return get(key) != null;
+        }
+
+        @Override
+        public final @Nonnull Set<Entry<Iterable<T>, U>> entrySet() {
+            return new TrieSet<T, U>(this);
+        }
+    }
+
+    static class TrieSet<T extends Comparable<T>, U> extends AbstractSet<Map.Entry<Iterable<T>, U>> implements Iterables.Sized {
+        private final Trie<T,U> trie;
+
+        TrieSet(Trie<T, U> trie) {
+            this.trie = trie;
+        }
+
+        @Override
+        public int size() {
+            return trie.size();
+        }
+
+        @Override
+        public @Nonnull Iterator<Map.Entry<Iterable<T>, U>> iterator() {
+            return new AdaptIterator<>(trie.iterator(), entry -> new AbstractMap.SimpleEntry<>(entry.getWord(), entry.getData()));
+        }
     }
 }
