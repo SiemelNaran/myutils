@@ -1,56 +1,206 @@
 package org.sn.myutils.util;
 
+import java.util.AbstractMap;
+import java.util.HashMap;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
-import java.util.function.BiConsumer;
+import java.util.Objects;
 import java.util.stream.Stream;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import javax.annotation.concurrent.NotThreadSafe;
 
 
-public class SimpleTrie<T> {
-    private boolean word;
-    private Map<T, SimpleTrie<T>> children = new TreeMap<>();
+/**
+ * Trie class that has one node for each character.
+ */
+@NotThreadSafe
+public class SimpleTrie<T extends Comparable<T>, U> extends TrieIterationHelper.TrieMap<T, U> {
+    private SimpleTrieNode<T, U> root;
+    private int modCount;
 
-    public void add(Stream<T> codePoints) {
-        doAdd(this, codePoints);
+    public SimpleTrie() {
+        clear();
     }
-    
-    private static <T> void doAdd(@Nonnull SimpleTrie<T> trie, Stream<T> codePoints) {
-        for (Iterator<T> iter = codePoints.iterator(); iter.hasNext(); ) {
-            T codePoint = iter.next();
-            trie = trie.children.computeIfAbsent(codePoint, ignored -> new SimpleTrie<T>());
+
+    @Override
+    public void clear() {
+        this.root = new SimpleTrieNode<>(null);
+    }
+
+    @Override
+    public @Nullable U put(Iterable<T> codePoints, @Nonnull U data) {
+        U oldData = root.add(codePoints, data);
+        modCount++;
+        return oldData;
+    }
+
+    @Override
+    public @Nullable U remove(Iterable<T> codePoints) {
+        U oldData = root.remove(codePoints);
+        if (oldData != null) {
+            modCount++;
         }
-        trie.setWord(true);
-    }
-    
-    private void setWord(boolean word) {
-        this.word = word;
-    }
-    
-    public @Nullable SimpleTrie<T> find(T val) {
-        return children.get(val);
+        return oldData;
     }
 
-    public boolean isWord() {
-        return word;
+    @Override
+    public @Nullable U get(Iterable<T> codePoints) {
+        return root.find(codePoints);
     }
-    
-    public void visit(BiConsumer<List<T>, SimpleTrie<T>> consumer) {
-        doVisit(new LinkedList<T>(), consumer);
+
+    @Override
+    public int size() {
+        return root.size();
     }
-    
-    private void doVisit(LinkedList<T> list, BiConsumer<List<T>, SimpleTrie<T>> consumer) {
-        for (Map.Entry<T, SimpleTrie<T>> entry : children.entrySet()) {
-            T val = entry.getKey();
-            SimpleTrie<T> subTrie = entry.getValue();
-            list.add(val);
-            consumer.accept(list, subTrie);
-            subTrie.doVisit(list, consumer);
-            list.removeLast();
+
+    @Override
+    public Iterator<TrieEntry<T, U>> trieIterator() {
+        return new SimpleTrieEntryIterator(root);
+    }
+
+
+    /**
+     * Find a string using the rewindable iterator.
+     * This function is useful during parsing, when you are in the process of reading a string and don't have the full string or Iterable.
+     *
+     * <p>This function finds the longest word matching the input.
+     * The function reads the first character and checks if it matches the first character of any word in the trie.
+     * If yes and we are not at end of stream, it then proceeds to the next character.
+     * If no, then the trie node found thus far is returned, and we rewind the iterator by one char to put the non-matching char back into the stream.
+     */
+    public @Nullable U getLongest(RewindableIterator<T> codePointsIter) {
+        return root.findLongest(codePointsIter);
+    }
+
+
+    /**
+     * The class reflecting each node in the trie.
+     * It is a nested class so that SimpleTrie can have additional member variables for the entire trie.
+     */
+    private static class SimpleTrieNode<T extends Comparable<T>, U> implements TrieIterationHelper.TrieNode<T, U> {
+        private final SimpleTrieNode<T, U> parent;
+        private final Map<T, SimpleTrieNode<T, U>> children = new HashMap<>();
+        private U data;
+        private int size;
+
+        private SimpleTrieNode(SimpleTrieNode<T, U> parent) {
+            this.parent = parent;
+        }
+
+        @Override
+        public U getData() {
+            return data;
+        }
+
+        @Override
+        public U setData(@Nonnull U newData) {
+            U old = data;
+            data = Objects.requireNonNull(newData);
+            return old;
+        }
+
+        @Override
+        public Stream<Map.Entry<Iterable<T>, ? extends TrieIterationHelper.TrieNode<T, U>>> childrenIterator() {
+            return children.entrySet()
+                           .stream()
+                           .map(entry -> new AbstractMap.SimpleImmutableEntry<Iterable<T>, TrieIterationHelper.TrieNode<T, U>>(List.of(entry.getKey()),
+                                                                                                                               entry.getValue()));
+        }
+
+        U add(Iterable<T> codePoints, @Nonnull U data) {
+            return doAdd(this, codePoints, Objects.requireNonNull(data));
+        }
+
+        private static @Nullable <T extends Comparable<T>, U> U doAdd(@Nonnull SimpleTrieNode<T, U> trie, Iterable<T> codePoints, U data) {
+            for (T codePoint : codePoints) {
+                var parentTrie = trie;
+                trie = parentTrie.children.computeIfAbsent(codePoint, ignored -> new SimpleTrieNode<>(parentTrie));
+            }
+            U oldData = trie.data;
+            trie.data = data;
+            if (oldData == null) {
+                rollupSize(trie, 1);
+            }
+            return oldData;
+        }
+
+        @Nullable U remove(Iterable<T> codePoints) {
+            var trie = doFind(this, codePoints);
+            if (trie == null) {
+                return null;
+            }
+            var oldData = trie.data;
+            trie.data = null;
+            if (oldData != null) {
+                rollupSize(trie, -1);
+            }
+            return oldData;
+        }
+
+        @Nullable U find(Iterable<T> codePoints) {
+            var trie = doFind(this, codePoints);
+            return trie != null ? trie.data : null;
+        }
+
+        @Nullable U findLongest(RewindableIterator<T> codePointsIter) {
+            var trie = doFindLongest(this, codePointsIter);
+            return trie != null ? trie.data : null;
+        }
+
+        private static @Nullable
+        <T extends Comparable<T>, U> SimpleTrieNode<T, U> doFind(@Nonnull SimpleTrieNode<T, U> trie, Iterable<T> codePoints) {
+            for (T codePoint : codePoints) {
+                trie = trie.children.get(codePoint);
+                if (trie == null) {
+                    return null;
+                }
+            }
+            return trie;
+        }
+
+        private static @Nullable
+        <T extends Comparable<T>, U> SimpleTrieNode<T, U> doFindLongest(@Nonnull SimpleTrieNode<T, U> trie, RewindableIterator<T> codePointsIter) {
+            SimpleTrieNode<T, U> partialTrie = null;
+            while (codePointsIter.hasNext()) {
+                T codePoint = codePointsIter.next();
+                var subTrie = trie.children.get(codePoint);
+                if (subTrie == null) {
+                    codePointsIter.rewind();
+                    return partialTrie; // returns null if first char does not match
+                }
+                trie = subTrie;
+                partialTrie = subTrie;
+            }
+            return trie;
+        }
+
+        private static <T extends Comparable<T>, U> void rollupSize(SimpleTrieNode<T, U> trie, int delta) {
+            while (trie != null) {
+                trie.size += delta;
+                trie = trie.parent;
+            }
+        }
+
+        int size() {
+            return size;
+        }
+    }
+
+    private class SimpleTrieEntryIterator extends TrieIterationHelper.TrieEntryIterator<T, U> {
+        SimpleTrieEntryIterator(TrieIterationHelper.TrieNode<T, U> root) {
+            super(root);
+        }
+
+        @Override
+        int getTrieModificationCount() {
+            return SimpleTrie.this.modCount;
+        }
+
+        @Override
+        void doRemove(Iterable<T> word) {
+            SimpleTrie.this.remove(word);
         }
     }
 }

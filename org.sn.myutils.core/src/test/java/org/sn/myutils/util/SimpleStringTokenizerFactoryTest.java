@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.sn.myutils.testutils.TestUtil.assertException;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -214,18 +213,7 @@ public class SimpleStringTokenizerFactoryTest {
         assertFalse(tokenizer.hasNext());
     }
     
-    @Test
-    void testInvalidStringTokenizer() {
-        assertException(() -> new SimpleStringTokenizerFactory(SKIP_CHARACTERS,
-                                                               QuoteStrategy.builder().build(),
-                                                               Arrays.asList("+++", "***", "+", "*"),
-                                                               Collections.singletonList(LITERAL_CLASS)),
-                        IllegalArgumentException.class,
-                        "expected to find ** in dictionary");
-    }
-    
-    private static final IntPredicate SKIP_CHARACTERS
-        = codePoint -> Character.isWhitespace(codePoint);
+    private static final IntPredicate SKIP_CHARACTERS = Character::isWhitespace;
     
     private static final List<String> SYMBOLS
         = Arrays.asList("(", ")", "**", "+", "*");

@@ -31,11 +31,6 @@ import javax.annotation.concurrent.NotThreadSafe;
  * But if the dictionary contains only <code>*</code>, then the first <code>*</code> will be treated as one token,
  * and the second <code>*</code> will be treated as the next token.
  * 
- * <p>If the dictionary contains <code>*</code> and <code>***</code>, but not <code>**</code>,
- * and if string is "2 ** 3" and you've read the token "2",
- * the <code>**</code> is treated as one token even though it is not in the dictionary.
- * For this reason, the constructor throws an exception if each sub-word in the dictionary is not also in the dictionary. 
- * 
  * <p>You can also specify the list of predicates describing the skip characters.
  * If a character is not the start of a symbol, then we determine what character class describes it.
  * All characters in this character class will be considered to be part of the token.
@@ -129,7 +124,7 @@ public class SimpleStringTokenizerFactory {
     
     private final IntPredicate skipChars;
     private final QuoteStrategy quoteStrategy;
-    private final SimpleTrie<Integer> symbols;
+    private final SimpleTrie<Integer, Boolean> symbols;
     private final List<IntPredicate> characterClasses;
     private final IntPredicate otherChars;
     
@@ -158,30 +153,16 @@ public class SimpleStringTokenizerFactory {
                     return false;
                 }
             }
-            if (skipChars.test(c)) {
-                return false;
-            }
-            return true;
+            return !skipChars.test(c);
         };
     }
     
-    private static SimpleTrie<Integer> buildTrie(List<String> symbols) {
-        SimpleTrie<Integer> trie = new SimpleTrie<>();
+    private static SimpleTrie<Integer, Boolean> buildTrie(List<String> symbols) {
+        SimpleTrie<Integer, Boolean> trie = new SimpleTrie<>();
         for (String symbol : symbols) {
-            trie.add(symbol.codePoints().boxed());
+            trie.put(Iterables.codePointsIterator(symbol), true);
         }
-        checkTrie(trie);
         return trie;
-    }
-    
-    private static void checkTrie(SimpleTrie<Integer> trie) throws IllegalArgumentException {
-        trie.visit((List<Integer> word, SimpleTrie<Integer> subTrie) -> {
-            if (!subTrie.isWord()) {
-                int[] wordArray = word.stream().mapToInt(Integer::intValue).toArray();
-                String str = new String(wordArray, 0, word.size());
-                throw new IllegalArgumentException("expected to find " + str + " in dictionary");
-            }
-        });
     }
     
     public Iterator<Token> tokenizer(CharSequence str) {
@@ -324,27 +305,13 @@ public class SimpleStringTokenizerFactory {
         }
 
         private CharSequence readRegularToken(int tokenStart, int first) {
-            SimpleTrie<Integer> trie = symbols.find(first);
-            if (trie != null) {
-                trie = readSymbol(trie);
-            } else {
+            iterCodePoints.rewind();
+            var foundSymbol = symbols.getLongest(iterCodePoints) != null;
+            if (!foundSymbol) {
                 IntPredicate characterClass = determineCharacterClass(first);
                 readCharacterClass(characterClass);
             }
             return str.subSequence(tokenStart, iterCodePoints.getNextIndex());
-        }
-        
-        private @Nonnull SimpleTrie<Integer> readSymbol(@Nonnull SimpleTrie<Integer> trie) {
-            while (iterCodePoints.hasNext()) {
-                int c = iterCodePoints.next();
-                SimpleTrie<Integer> newTrie = trie.find(c);
-                if (newTrie == null) {
-                    iterCodePoints.rewind();
-                    break;
-                }
-                trie = newTrie;
-            }
-            return trie;
         }
         
         private @Nonnull IntPredicate determineCharacterClass(int c) {

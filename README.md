@@ -74,9 +74,9 @@ module temp {
 - *AdaptingIterator*: Class to map the value returned by an iterator into another value. Use only if stream() with map() is not possible.
 
 - *PageList*: Class representing an array as an array of pages.
-Inserting an element in the middle of the array is fast as we only have to insert an element in one page.
-There is also a specialization of binary search in MoreCollections.
-PageList is just an interface.  There are two types of page lists: ArrayPageList and LinkedListPageList, meaning that each page is either an ArrayList or a LinkedList.
+    - Inserting an element in the middle of the array is fast as we only have to insert an element in one page.
+    - There is also a specialization of binary search in MoreCollections.
+    - PageList is just an interface.  There are two types of page lists: ArrayPageList and LinkedListPageList, meaning that each page is either an ArrayList or a LinkedList.
 
 - *MoreCollections*: Various enhancements to java.util.Collections.
     - There is a binary search function to search a list, but applying a function to each element.
@@ -102,7 +102,45 @@ It does not let you rewind any number of times, as that would basically be a lis
 
 - *SimpleStringTokenizerFactory*: A string tokenizer more powerful than the basic StringTokenizer as it can read all of the characters within quotes as one token, and much more.
 
-- *SimpleTrie*: A basic trie data structure.
+- *Trie*: A basic trie data structure.
+    - Trie is just an interface.  There are two types of tries: SimpleTrie and SpaceEfficientTrie.
+    - In SimpleTrie, each node is one character.
+    - In SpaceEfficientTrie each node can be many characters if there are no child nodes with other prefixes.
+    - Trie implements the Map interface.
+
+Suppose trie contains "bottom","bottle", and "bottles".
+
+```
+SimpleTrie:
+     ROOT
+      |
+      b
+      |
+      o
+      |
+      t
+      |
+      t
+     / \
+    o   l
+    |   |
+    m*  e*
+        |
+        s*
+
+```
+
+```
+SpaceEfficientTrie:
+     ROOT
+      |
+     bott
+     / \
+   om*  le*
+         |
+         s*
+
+```
 
 - *WeightedRandom*: Given a list of weights, find a random number respecting those weights.
 

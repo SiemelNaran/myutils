@@ -584,7 +584,7 @@ public class DistributedMessageServer implements Shutdowneable {
                 if (info.createPublisher != null) {
                     info.mostRecentMessages.save(publishMessage);
                     relayAction = relayAction.andThen(
-                            subscriberParamsForCallack -> info.mostRecentMessages.onMessageRelayed(subscriberParamsForCallack.getClientMachineId(), publishMessage));
+                        subscriberParamsForCallack -> info.mostRecentMessages.onMessageRelayed(subscriberParamsForCallack.getClientMachineId(), publishMessage));
                     forClientsSubscribedToPublisher(topic,
                                                     publishMessage.getRelayFields().getSourceMachineId(),
                                                     false,
