@@ -71,6 +71,8 @@ module temp {
 
 ### Utility Classes 
 
+- *AdaptingIterator*: Class to map the value returned by an iterator into another value. Use only if stream() with map() is not possible.
+
 - *PageList*: Class representing an array as an array of pages.
 Inserting an element in the middle of the array is fast as we only have to insert an element in one page.
 There is also a specialization of binary search in MoreCollections.
