@@ -41,7 +41,11 @@ Eclipse IDE
 Eclipse 2020-03.
 
 Steps:
-- Ensure that .project and .classpath do not exist in the root folder
+- Optional: Ensure that .project and .classpath files are deleleted
+```
+find ../myutils/ -name "*.classpath" -exec rm -rfv {} \;
+find ../myutils/ -name "*.project" -exec rm -rfv {} \;
+```
 - File -> Import -> Maven -> Existing Maven Projects
 - Pick the myutils folder
 - Ensure all checkboxes are checked and click Finish
@@ -50,12 +54,16 @@ Steps:
 IntelliJ IDE
 ------------
 
-IntelliJ
+IntelliJ 2020.2.
 
 Steps:
--
--
--
+- Optional: Ensure that all .iml and the .idea folder are deleted
+```
+find ../myutils/ -name "*.iml" -exec rm -rfv {} \;
+rm -rfv ../myutils/.idea/
+```
+- Open or Import
+- Pick the myutils folder and click OK
 
 Java Classes
 ------------

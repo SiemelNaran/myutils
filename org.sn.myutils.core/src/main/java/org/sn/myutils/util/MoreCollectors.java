@@ -1,6 +1,5 @@
 package org.sn.myutils.util;
 
-import javax.annotation.Nonnull;
 import java.util.Comparator;
 import java.util.Optional;
 import java.util.PriorityQueue;
@@ -10,6 +9,7 @@ import java.util.function.BinaryOperator;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collector;
+import javax.annotation.Nonnull;
 
 
 public class MoreCollectors {
@@ -76,6 +76,7 @@ public class MoreCollectors {
         public T getMinValue() {
             return min;
         }
+
         public T getMaxValue() {
             return max;
         }

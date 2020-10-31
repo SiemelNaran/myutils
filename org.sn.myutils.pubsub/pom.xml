@@ -53,6 +53,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
+                    <!-- because the unit tests are package private, call add-opens in order to allow the unit test franework to read the tests -->
                     <argLine>
                         ${maven-surefire-plugin.argLine}
                         --add-opens org.sn.myutils.pubsub/org.sn.myutils.pubsub=ALL-UNNAMED
