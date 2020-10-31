@@ -22,8 +22,8 @@ Install the following:
 - Maven 3.6.3
 - Java 13
 
-To build all projects `mvn clean install`
-To build all projects skipping tests `mvn clean install -DskipTests`
+To build all projects `mvn clean install`.
+To build all projects skipping tests `mvn clean install -DskipTests`.
 
 
 Maven
@@ -57,7 +57,8 @@ IntelliJ IDE
 IntelliJ 2020.2.
 
 Steps:
-- Optional: Ensure that all .iml and the .idea folder are deleted
+- Optional: Ensure that all .iml and the .idea folder are deleted.
+  If you get incomprehensible compile errors about java.util classes not being found, invalidate cache and restart.
 ```
 find ../myutils/ -name "*.iml" -exec rm -rfv {} \;
 rm -rfv ../myutils/.idea/
