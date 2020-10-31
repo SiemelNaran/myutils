@@ -146,6 +146,7 @@ SpaceEfficientTrie:
 
 - *ZipMinIterator*: An iterator that takes a list of iterators over sorted ranges and returns the next highest element.
 
+
 ### Concurrent classes
 
 - *CompletionStageUtils*: Utilities for completion stages.
@@ -257,7 +258,11 @@ Please consider alternatives such as javacc and antlr for greater flexibility.
 
 There are two publish-subscribe implementations. The first is an in-memory publish-subscribe, where the publisher and subscribers all reside in one JVM. The second is a distributed publish-subscribe, where the publisher and subscribers reside in different JVM's (and most likely on different machines). The distributed publish-subscribe provides a central server, which all clients communicate with.
 
+Here is an example of the in-memory pubsub:
+
 ```
+    @Test
+    void testPublishAndSubscribeAndUnsubscribe() {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
 
         PubSub pubSub = new InMemoryPubSub(new PubSub.PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
@@ -267,6 +272,10 @@ There are two publish-subscribe implementations. The first is an in-memory publi
 
         publisher.publish(new CloneableString("one"));
         assertThat(words, Matchers.contains("one-s1", "one-s2"));
+        ...
+        ...
+        ...
+    }
 ```
 
 The distributed publish-subscribe is built on top of the in-memory publish-subscribe, and its architecture is as follows:
@@ -276,6 +285,63 @@ The distributed publish-subscribe is built on top of the in-memory publish-subsc
 
 Communication between client and server happens via sockets. The client class is DistributedSocketPubSub and the central server is DistributedMessageServer.
 The server class does not have the word 'Socket' in its name as in the future the server may also handle HTTP requests.
+
+Here is an example of the distributed pubsub:
+
+```
+    @Test
+    void testSubscribeAndPublishAndUnsubscribe() throws IOException {
+        List<String> words = Collections.synchronizedList(new ArrayList<>());
+        List<CompletableFuture<Void>> startFutures = new ArrayList<>();
+
+        var centralServer = createServer(Collections.emptyMap());
+        startFutures.add(centralServer.start());
+
+        var client1 = createClient(PubSub.defaultQueueCreator(),
+                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                   "client1",
+                                   30001
+        );
+        startFutures.add(client1.startAsync());
+
+        var client2 = createClient(PubSub.defaultQueueCreator(),
+                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                   "client2",
+                                   30002
+        );
+        startFutures.add(client2.startAsync());
+
+        var client3 = createClient(PubSub.defaultQueueCreator(),
+                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                   "client3",
+                                   30003
+        );
+        startFutures.add(client3.startAsync());
+
+        waitFor(startFutures);
+
+        client1.subscribe("hello", "ClientOneSubscriber", CloneableString.class, str -> words.add(str.append("-s1")));
+        Subscriber subscriber2a = client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a")));
+        Subscriber subscriber2b = client2.subscribe("hello", "ClientTwoSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b")));
+        client3.subscribe("hello", "ClientThreeSubscriber", CloneableString.class, str -> words.add(str.append("-s3")));
+        sleep(250); // time to let subscribers be sent to server
+
+        // create publisher on client1
+        // this will get replicated to client2 and client3
+        Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
+
+        // publish two messages
+        // the subscriber running on client1 will pick it up immediately
+        // the message will get replicated to all other subscribers, and in client2 the system will call publisher2.publish(), and similarly for client3
+        publisher1.publish(new CloneableString("one"));
+        publisher1.publish(new CloneableString("two"));
+        sleep(250); // time to let messages be published to remote clients
+        assertThat(words, Matchers.containsInAnyOrder("one-s1", "two-s1", "one-s2a", "one-s2b", "two-s2a", "two-s2b", "one-s3", "two-s3"));
+        ...
+        ...
+        ...
+    }
+```
 
 
 Shell scripts
