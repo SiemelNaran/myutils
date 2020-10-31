@@ -456,7 +456,7 @@ public class PriorityLock implements Lock {
         this.levelManager = new LevelManager(internalLock);
     }
     
-    protected static class PriorityLockNamedParams {
+    public static class PriorityLockNamedParams {
         private static final Supplier<Lock> NONFAIR_REENTRANT_LOCK_CREATOR = () -> new ReentrantLock(false);
         private static final Supplier<Lock> FAIR_REENTRANT_LOCK_CREATOR = () -> new ReentrantLock(true);
 
@@ -659,6 +659,7 @@ public class PriorityLock implements Lock {
     }
 
     @Override
+    @SuppressWarnings("exports")
     public @Nonnull PriorityLockCondition newCondition() {
         return new PriorityLockCondition(allowEarlyInterruptFromAwait);
     }

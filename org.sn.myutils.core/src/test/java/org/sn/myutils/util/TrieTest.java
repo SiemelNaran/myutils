@@ -35,6 +35,7 @@ import org.sn.myutils.testutils.TestBase;
 public class TrieTest extends TestBase {
     @ParameterizedTest
     @ValueSource(strings = { "SimpleTrie", "SpaceEfficientTrie" })
+    @SuppressWarnings("unlikely-arg-type")
     void testBasic(String clazz) {
         Trie<Character, Boolean> trie;
         if (clazz.equals("SimpleTrie")) {
@@ -92,13 +93,13 @@ public class TrieTest extends TestBase {
         Object cBig = Iterables.charsIteratorAsChar("big");
         assertFalse(trie.containsKey(cBig));
         assertNull(trie.get(cBig));
-        assertNull(trie.get(55));
+        assertNull(trie.get(55)); // unlikely-arg-type
 
         assertNotNull(trie.remove(Iterables.charsIteratorAsChar("bottleneck")));
         assertEquals(8, trie.size());
         assertNull(trie.remove(Iterables.charsIteratorAsChar("bottleneck")));
         assertEquals(8, trie.size());
-        assertNull(trie.remove(55));
+        assertNull(trie.remove(55)); // unlikely-arg-type
         assertEquals(8, trie.size());
 
         assertNotNull(trie.remove(Iterables.charsIteratorAsChar("p")));

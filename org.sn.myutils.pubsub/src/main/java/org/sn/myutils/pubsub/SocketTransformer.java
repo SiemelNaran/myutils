@@ -22,7 +22,7 @@ import java.util.concurrent.CompletionStage;
 import org.sn.myutils.pubsub.MessageClasses.MessageBase;
 
 
-public class SocketTransformer {
+class SocketTransformer {
     private static final Void NULL = null;
     
     private static class MessageAsByteBuffers {

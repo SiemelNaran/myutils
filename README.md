@@ -22,8 +22,8 @@ Install the following:
 - Maven 3.6.3
 - Java 13
 
-To build all projects `mvn clean install`
-To build all projects skipping tests `mvn clean install -DskipTests`
+To build all projects `mvn clean install`.
+To build all projects skipping tests `mvn clean install -DskipTests`.
 
 
 Maven
@@ -41,7 +41,11 @@ Eclipse IDE
 Eclipse 2020-03.
 
 Steps:
-- Ensure that .project and .classpath do not exist in the root folder
+- Optional: Ensure that .project and .classpath files are deleleted
+```
+find ../myutils/ -name "*.classpath" -exec rm -rfv {} \;
+find ../myutils/ -name "*.project" -exec rm -rfv {} \;
+```
 - File -> Import -> Maven -> Existing Maven Projects
 - Pick the myutils folder
 - Ensure all checkboxes are checked and click Finish
@@ -50,26 +54,34 @@ Steps:
 IntelliJ IDE
 ------------
 
-IntelliJ
+IntelliJ 2020.2.
 
 Steps:
--
--
--
+- Optional: Ensure that all .iml and the .idea folder are deleted.
+  If you get incomprehensible compile errors about java.util classes not being found, invalidate cache and restart.
+```
+find ../myutils/ -name "*.iml" -exec rm -rfv {} \;
+rm -rfv ../myutils/.idea/
+```
+- Open or Import
+- Pick the myutils folder and click OK
 
 Java Classes
 ------------
 
-The main part of this project is the Java classes.  To use ensure your module-info.java looks something like this:
+The main part of this project is the Java classes.
 
+### Utility Classes 
+
+There are a bunch of utility classes that extend the JVM.
+To use ensure your module-info.java looks something like this:
 
 ```
 module temp {
-    requires org.sn.myutils;
+    requires org.sn.myutils.core;
 }
 ```
 
-### Utility Classes 
 
 - *AdaptingIterator*: Class to map the value returned by an iterator into another value. Use only if stream() with map() is not possible.
 
