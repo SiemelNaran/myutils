@@ -56,7 +56,7 @@ public class SimpleTrie<T extends Comparable<T>, U> extends TrieIterationHelper.
     }
 
     @Override
-    public Iterator<TrieEntry<T, U>> iterator() {
+    public Iterator<TrieEntry<T, U>> trieIterator() {
         return new SimpleTrieEntryIterator(root);
     }
 
@@ -92,6 +92,13 @@ public class SimpleTrie<T extends Comparable<T>, U> extends TrieIterationHelper.
         @Override
         public U getData() {
             return data;
+        }
+
+        @Override
+        public U setData(@Nonnull U newData) {
+            U old = data;
+            data = Objects.requireNonNull(newData);
+            return old;
         }
 
         @Override

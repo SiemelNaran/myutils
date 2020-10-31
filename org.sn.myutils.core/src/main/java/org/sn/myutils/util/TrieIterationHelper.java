@@ -21,6 +21,8 @@ class TrieIterationHelper {
     interface TrieNode<T extends Comparable<T>, U> {
         U getData();
 
+        U setData(@Nonnull U newData);
+
         Stream<Map.Entry<Iterable<T>, ? extends TrieNode<T, U>>> childrenIterator();
     }
 
@@ -80,20 +82,39 @@ class TrieIterationHelper {
             }
             TrieNodePosition<T, U> top = stack.peek();
             pathToHere = top.pathToHere;
-            U data = top.trieNode.getData();
-            Trie.TrieEntry<T, U> entry = new Trie.TrieEntry<>() {
-                @Override
-                public List<T> getWord() {
-                    return pathToHere;
-                }
-
-                @Override
-                public U getData() {
-                    return data;
-                }
-            };
+            Trie.TrieEntry<T, U> entry = new TrieEntryImpl<>(pathToHere, top.trieNode);
             gotoNext();
             return entry;
+        }
+
+        private static class TrieEntryImpl<T extends Comparable<T>, U> implements Trie.TrieEntry<T, U> {
+            private final List<T> pathToHere;
+            private final TrieNode<T,U> node;
+
+            public TrieEntryImpl(List<T> pathToHere, TrieNode<T, U> node) {
+                this.pathToHere = pathToHere;
+                this.node = node;
+            }
+
+            @Override
+            public List<T> getWord() {
+                return pathToHere;
+            }
+
+            @Override
+            public Iterable<T> getKey() {
+                return pathToHere;
+            }
+
+            @Override
+            public U getValue() {
+                return node.getData();
+            }
+
+            @Override
+            public U setValue(U value) {
+                return node.setData(value);
+            }
         }
 
         @Override
@@ -153,7 +174,7 @@ class TrieIterationHelper {
 
         @Override
         public final @Nonnull Set<Entry<Iterable<T>, U>> entrySet() {
-            return new TrieSet<T, U>(this);
+            return new TrieSet<>(this);
         }
     }
 
@@ -171,7 +192,7 @@ class TrieIterationHelper {
 
         @Override
         public @Nonnull Iterator<Map.Entry<Iterable<T>, U>> iterator() {
-            return new AdaptIterator<>(trie.iterator(), entry -> new AbstractMap.SimpleEntry<>(entry.getWord(), entry.getData()));
+            return new AdaptingIterator<>(trie.trieIterator(), trieEntry -> trieEntry, true); // 2nd arg as Function.identity() gives compile error
         }
     }
 }

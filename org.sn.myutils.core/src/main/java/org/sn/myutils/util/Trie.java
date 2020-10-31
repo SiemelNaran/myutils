@@ -49,18 +49,14 @@ public interface Trie<T extends Comparable<T>, U> extends Map<Iterable<T>, U> {
 
     /**
      * Return an iterator going over all the words in the map.
+     * This function is similar to entrySet().iterator() except that entry.getKey() is an Iterable whereas entry.getWord() is a List.
      */
-    Iterator<TrieEntry<T, U>> iterator();
+    Iterator<TrieEntry<T, U>> trieIterator();
 
-    interface TrieEntry<T extends Comparable<T>, U> {
+    interface TrieEntry<T extends Comparable<T>, U> extends Map.Entry<Iterable<T>, U> {
         /**
          * Get the full word of this trie node.
          */
         List<T> getWord();
-
-        /**
-         * Get the data of this trie node.
-         */
-        U getData();
     }
 }

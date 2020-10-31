@@ -23,7 +23,15 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.sn.myutils.testutils.TestBase;
 
-
+/**
+ * Test the trie classes.
+ *
+ * <p>Achieves code coverage in the following classes:
+ * - Trie.java
+ * - TrieIterationHelper.java
+ * - SimpleTrie.java
+ * - SpaceEfficientTrie.java
+ */
 public class TrieTest extends TestBase {
     @ParameterizedTest
     @ValueSource(strings = { "SimpleTrie", "SpaceEfficientTrie" })
@@ -36,6 +44,8 @@ public class TrieTest extends TestBase {
         } else {
             throw new UnsupportedOperationException();
         }
+
+        assertExceptionFromCallable(() -> trie.put(Iterables.charsIteratorAsChar("NullNotAllowed"), null), NullPointerException.class);
 
         assertNull(trie.put(Iterables.charsIteratorAsChar("pan"), true));
         assertNull(trie.put(Iterables.charsIteratorAsChar("bottle"), true));
@@ -127,7 +137,7 @@ public class TrieTest extends TestBase {
         assertNull(trie.put(Iterables.charsIteratorAsChar("poor"), true));
         assertEquals(8, trie.size());
 
-        Iterator<Trie.TrieEntry<Character, Boolean>> iterator = trie.iterator();
+        Iterator<Trie.TrieEntry<Character, Boolean>> iterator = trie.trieIterator();
         assertException(iterator::remove, IllegalStateException.class);
         assertNotNull(iterator.next()); // bottle for SpaceEfficientTrie
         iterator.remove();
@@ -178,13 +188,6 @@ public class TrieTest extends TestBase {
         assertNull(trie.put(Iterables.charsIteratorAsChar("poor"), true));
         assertEquals(8, trie.size());
 
-        // test entrySet
-        List<String> words = getAllWords(trie);
-        List<String> wordsViaEntrySet = new ArrayList<>();
-        trie.forEach((key, value) -> wordsViaEntrySet.add(toString(key)));
-        assertEquals(8, trie.entrySet().size());
-        assertEquals(words, wordsViaEntrySet);
-
         // test keySet
         Set<Iterable<Character>> keySet = trie.keySet();
         assertEquals(8, keySet.size());
@@ -201,14 +204,25 @@ public class TrieTest extends TestBase {
                    Matchers.equalTo("true")); // assert that all elements are true
         assertTrue(trie.containsValue(Boolean.TRUE));
         assertFalse(trie.containsValue(Boolean.FALSE));
+
+        // test entrySet
+        List<String> words = getAllWords(trie);
+        List<String> wordsViaEntrySet = new ArrayList<>();
+        trie.forEach((key, value) -> wordsViaEntrySet.add(toString(key)));
+        assertEquals(8, trie.entrySet().size());
+        assertEquals(words, wordsViaEntrySet);
+        trie.entrySet().forEach(entry -> entry.setValue(false));
+        assertThat(values.stream().distinct().map(Object::toString).collect(Collectors.joining()),
+                   Matchers.equalTo("false")); // assert that all elements are false
+        assertExceptionFromCallable(() -> trie.entrySet().iterator().next().setValue(null), NullPointerException.class);
     }
 
     private List<String> getAllWords(Trie<Character, ?> trie) {
         List<String> words = new ArrayList<>(trie.size());
-        var iter = trie.iterator();
+        var iter = trie.trieIterator();
         while (iter.hasNext()) {
             var entry = iter.next();
-            assertNotNull(entry.getData());
+            assertNotNull(entry.getValue());
             words.add(toString(entry.getWord()));
         }
         assertExceptionFromCallable(iter::next, NoSuchElementException.class);

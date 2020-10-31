@@ -8,6 +8,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.function.Function;
@@ -61,7 +62,7 @@ public class SpaceEfficientTrie<T extends Comparable<T>, U> extends TrieIteratio
     }
 
     @Override
-    public Iterator<TrieEntry<T, U>> iterator() {
+    public Iterator<TrieEntry<T, U>> trieIterator() {
         return new SpaceEfficientTrieEntryIterator(root);
     }
 
@@ -86,6 +87,13 @@ public class SpaceEfficientTrie<T extends Comparable<T>, U> extends TrieIteratio
         @Override
         public U getData() {
             return data;
+        }
+
+        @Override
+        public U setData(@Nonnull U newData) {
+            U old = data;
+            data = Objects.requireNonNull(newData);
+            return old;
         }
 
         @Override
