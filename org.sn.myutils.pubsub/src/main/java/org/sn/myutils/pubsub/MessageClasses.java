@@ -25,7 +25,19 @@ interface MessageClasses {
      */
     interface MessageBase extends Serializable, LoggingString {
     }
-    
+
+    /**
+     * The base class of all messages that pertain to one topic.
+     * 
+     * <p>As of 11/1/2020 only client generated messages implement this class, and most implement this class.
+     * These classes do not implement TopicMessageBase:
+     * - Identification as there is no topic
+     * - DownloadPublishedMessages as there are many topics
+     */
+    interface TopicMessageBase extends MessageBase {
+        String getTopic();
+    }
+
     /**
      * If a message can be sent to the server after it was already send and received, it should inherit from this class.
      */
@@ -57,6 +69,11 @@ interface MessageClasses {
         long getServerTimestamp() {
             return serverTimestamp; // COVERAGE: missed
         }
+
+        @Override
+        public String toLoggingString() {
+            return classType(this) + ", serverTimestamp=" + serverTimestamp;
+        }
     }
     
     /**
@@ -84,7 +101,7 @@ interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return classType(this) + ", classOfMessage=" + classOfMessage.getSimpleName() + ", failedClientIndex=" + failedClientIndex;
+            return super.toLoggingString() + ", classOfMessage=" + classOfMessage.getSimpleName() + ", failedClientIndex=" + failedClientIndex;
         }
     }
 
@@ -129,7 +146,7 @@ interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return classType(this) + ", centralServerId=" + centralServerId;
+            return super.toLoggingString() + ", centralServerId=" + centralServerId;
         }
     }
 
@@ -157,7 +174,7 @@ interface MessageClasses {
  
         @Override
         public String toLoggingString() {
-            return classType(this) + ", centralServerId=" + centralServerId + ", error=" + error;
+            return super.toLoggingString() + ", centralServerId=" + centralServerId + ", error='" + error + "'";
         }
         
         PubSubException toException() {
@@ -184,7 +201,7 @@ interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return classType(this) + ", error='" + error + "'";
+            return super.toLoggingString() + ", error='" + error + "'";
         }
     }
     
@@ -287,11 +304,6 @@ interface MessageClasses {
         private static final long serialVersionUID = 1L;
         
         AbstractConfirmAction() {
-        }
-
-        @Override
-        public String toLoggingString() {
-            return classType(this);
         }
     }
 
@@ -408,6 +420,11 @@ interface MessageClasses {
         Map<String, String> getCustomProperties() {
             return Collections.unmodifiableMap(customProperties);
         }
+
+        @Override
+        public String toLoggingString() {
+            return classType(this) + ", clientTimestamp=" + clientTimestamp + ", customProperties.size=" + (customProperties != null ? customProperties.size() : 0);
+        }
     }
 
     /**
@@ -431,7 +448,32 @@ interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return classType(this) + ", machineId=" + machineId;
+            return super.toLoggingString() + ", machineId=" + machineId;
+        }
+    }
+    
+    /**
+     * Class sent by class if it has a topic.
+     * This is most messages.
+     */
+    abstract class ClientGeneratedTopicMessage extends ClientGeneratedMessage implements TopicMessageBase {
+        private static final long serialVersionUID = 1L;
+        
+        private final String topic;
+
+        public ClientGeneratedTopicMessage(Long clientTimestamp, String topic) {
+            super(clientTimestamp);
+            this.topic = topic;
+        }
+        
+        @Override
+        public String getTopic() {
+            return topic;
+        }
+        
+        @Override
+        public String toLoggingString() {
+            return super.toLoggingString() + ", topic=" + topic;
         }
     }
 
@@ -440,28 +482,23 @@ interface MessageClasses {
      * so that it sends or stops sending us messages published to this topic.
      * Required fields topic and subscriberName.
      */
-    abstract class AddOrRemoveSubscriber extends ClientGeneratedMessage {
+    abstract class AddOrRemoveSubscriber extends ClientGeneratedTopicMessage {
         private static final long serialVersionUID = 1L;
         
-        private final String topic;
         private final String subscriberName;
 
         public AddOrRemoveSubscriber(Long clientTimestamp, String topic, String subscriberName) {
-            super(clientTimestamp);
-            this.topic = topic;
+            super(clientTimestamp, topic);
             this.subscriberName = subscriberName;
-        }
-        
-        String getTopic() {
-            return topic;
         }
         
         String getSubscriberName() {
             return subscriberName;
         }
 
-        private String basicLoggingString() {
-            return classType(this) + ", clientTimestamp=" + getClientTimestamp() + ", topic=" + topic + ", subscriberName=" + subscriberName;
+        @Override
+        public String toLoggingString() {
+            return super.toLoggingString() + ", subscriberName=" + subscriberName;
         }
     }
     
@@ -493,7 +530,7 @@ interface MessageClasses {
         
         @Override
         public String toLoggingString() {
-            return super.basicLoggingString() + ", tryDownload=" + tryDownload + ", isResend=" + isResend;
+            return super.toLoggingString() + ", tryDownload=" + tryDownload + ", isResend=" + isResend;
         }
     }
     
@@ -507,11 +544,6 @@ interface MessageClasses {
         public RemoveSubscriber(String topic, String subscriberName) {
             super(null, topic, subscriberName);
         }
-
-        @Override
-        public String toLoggingString() {
-            return super.basicLoggingString();
-        }
     }
     
     /**
@@ -519,23 +551,11 @@ interface MessageClasses {
      * Required field topic.
      * The response is a CreatePublisher command.
      */
-    class FetchPublisher extends ClientGeneratedMessage {
+    class FetchPublisher extends ClientGeneratedTopicMessage {
         private static final long serialVersionUID = 1L;
         
-        private final String topic;
-        
         public FetchPublisher(String topic) {
-            super(null);
-            this.topic = topic;
-        }
-        
-        String getTopic() {
-            return topic;
-        }
-
-        @Override
-        public String toLoggingString() {
-            return classType(this) + ", topic=" + topic;
+            super(null, topic);
         }
     }
     
@@ -571,7 +591,17 @@ interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return classType(this) + ", startServerIndexInclusive=" + startServerIndexInclusive + ", endServerIndexInclusive=" + endServerIndexInclusive;
+            return super.toLoggingString() + ", startServerIndexInclusive=" + startServerIndexInclusive + ", endServerIndexInclusive=" + endServerIndexInclusive;
+        }
+        
+        /**
+         * Split a message to download topics A, B, C according to the topics on each message server.
+         * If message server one hosts topics A and C, and message server two hosts topics B and D.
+         * call this function to create two download commands.
+         */
+        DownloadPublishedMessages cloneTo(Collection<String> topicsSublist) {
+            assert topics.containsAll(topicsSublist);
+            return new DownloadPublishedMessages(topicsSublist, startServerIndexInclusive, endServerIndexInclusive);
         }
     }
 
@@ -644,9 +674,9 @@ interface MessageClasses {
             return relayFields;
         }
 
-        String basicLoggingString() {
-            return classType(this)
-                    + ", clientTimestamp=" + getClientTimestamp()
+        @Override
+        public String toLoggingString() {
+            return super.toLoggingString()
                     + ", clientIndex=" + clientIndex
                     + ", " + relayFields;
         }
@@ -655,7 +685,7 @@ interface MessageClasses {
     /**
      * Relay messages with a topic.
      */
-    abstract class RelayTopicMessageBase extends RelayMessageBase {
+    abstract class RelayTopicMessageBase extends RelayMessageBase implements TopicMessageBase {
         private static final long serialVersionUID = 1L;
 
         private final @Nonnull String topic;
@@ -665,20 +695,21 @@ interface MessageClasses {
             this.topic = topic;
         }
         
-        @Nonnull String getTopic() {
+        @Override
+        public String getTopic() {
             return topic;
         }
         
         @Override
-        String basicLoggingString() {
-            return super.basicLoggingString() + ", topic=" + topic;
+        public String toLoggingString() {
+            return super.toLoggingString() + ", topic=" + topic;
         }
     }
     
     /**
      * Action representing the createPublisher command.
      * Sent to a client when they subscribe to a topic,
-     * or when they issue the FetchPublisher commnand.
+     * or when they issue the FetchPublisher command.
      */
     class CreatePublisher extends RelayTopicMessageBase implements Resendable {
         private static final long serialVersionUID = 1L;
@@ -703,7 +734,7 @@ interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return super.basicLoggingString() + ", publisherClass=" + publisherClass.getSimpleName() + ", isResend=" + isResend;
+            return super.toLoggingString() + ", publisherClass=" + publisherClass.getSimpleName() + ", isResend=" + isResend;
         }
     }
     
@@ -733,7 +764,7 @@ interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return super.basicLoggingString() + ", message.estimateBytes=" + message.getNumBytes() + ", retentionPriority=" + priority;
+            return super.toLoggingString() + ", message.estimateBytes=" + message.getNumBytes() + ", retentionPriority=" + priority;
         }
     } 
 }

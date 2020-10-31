@@ -12,7 +12,7 @@ import static org.sn.myutils.util.concurrent.MoreExecutors.createThreadFactory;
 import java.io.IOException;
 import java.lang.System.Logger.Level;
 import java.lang.ref.Cleaner.Cleanable;
-import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.net.StandardSocketOptions;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
@@ -31,7 +31,6 @@ import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
@@ -77,6 +76,7 @@ import org.sn.myutils.pubsub.MessageClasses.SubscriberAdded;
 import org.sn.myutils.pubsub.MessageClasses.SubscriberRemoved;
 import org.sn.myutils.pubsub.MessageClasses.UnsupportedMessage;
 import org.sn.myutils.pubsub.PubSubUtils.CallStackCapturing;
+import org.sn.myutils.util.ExceptionUtils;
 import org.sn.myutils.util.MoreCollections;
 import org.sn.myutils.util.ZipMinIterator;
 
@@ -129,8 +129,7 @@ public class DistributedMessageServer implements Shutdowneable {
     private static final int MAX_RETRIES = 3;
 
     private final SocketTransformer socketTransformer;
-    private final String host;
-    private final int port;
+    private final SocketAddress messageServer;
     private final AsynchronousServerSocketChannel asyncServerSocketChannel;
     private final ExecutorService acceptExecutor;
     private final ExecutorService channelExecutor;
@@ -831,22 +830,19 @@ public class DistributedMessageServer implements Shutdowneable {
     /**
      * Create a message server.
      * 
-     * @param host (the host of this server, may be "localhost")
-     * @param port (a unique port)
+     * @param messageServer the host/port of this server
      * @param mostRecentMessagesToKeep the number of most recent messages of the given priority to keep (and zero if message not in this list)
      * @throws IOException if there is an error opening a socket (but no error if the host:port is already in use)
      */
-    public DistributedMessageServer(@Nonnull String host, int port, Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
-        this(new SocketTransformer(), host, port, mostRecentMessagesToKeep);
+    public DistributedMessageServer(@Nonnull SocketAddress messageServer, Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
+        this(new SocketTransformer(), messageServer, mostRecentMessagesToKeep);
     }
     
     DistributedMessageServer(SocketTransformer socketTransformer,
-                             @Nonnull String host,
-                             int port,
+                             @Nonnull SocketAddress messageServer,
                              Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
         this.socketTransformer = socketTransformer;
-        this.host = host;
-        this.port = port;
+        this.messageServer = messageServer;
         this.asyncServerSocketChannel = AsynchronousServerSocketChannel.open();
         this.acceptExecutor = Executors.newSingleThreadExecutor(createThreadFactory("DistributedMessageServer.accept", true));
         this.channelExecutor = Executors.newFixedThreadPool(NUM_CHANNEL_THREADS, createThreadFactory("DistributedMessageServer.socket", true));
@@ -859,6 +855,10 @@ public class DistributedMessageServer implements Shutdowneable {
                                                      retryExecutor,
                                                      clientMachines),
                                          DistributedMessageServer.class);
+    }
+    
+    public SocketAddress getMessageServerAddress() {
+        return messageServer;
     }
     
     /**
@@ -875,9 +875,7 @@ public class DistributedMessageServer implements Shutdowneable {
     }
     
     private void doStart(CompletableFuture<Void> future) {
-        String snippet = String.format("DistributedMessageServer centralServer=%s:%d",
-                                       host,
-                                       port);
+        String snippet = String.format("DistributedMessageServer centralServer=%s", messageServer.toString());
         try {
             openServerSocket();
             acceptExecutor.submit(new AcceptThread());
@@ -890,8 +888,9 @@ public class DistributedMessageServer implements Shutdowneable {
 
     private void openServerSocket() throws IOException {
         onBeforeSocketBound(asyncServerSocketChannel);
-        asyncServerSocketChannel.bind(new InetSocketAddress(host, port));
-        LOGGER.log(Level.INFO, String.format("Started DistributedMessageServer: localHostAndPort=%s:%d, localServer=%s", host, port, getLocalAddress(asyncServerSocketChannel)));
+        asyncServerSocketChannel.bind(messageServer);
+        LOGGER.log(Level.INFO, String.format("Started DistributedMessageServer: messageServer=%s, messageServerAddress=%s",
+                                             messageServer.toString(), getLocalAddress(asyncServerSocketChannel)));
     }
     
     /**
@@ -1393,7 +1392,7 @@ public class DistributedMessageServer implements Shutdowneable {
     }
     
     private Void retrySend(MessageBase message, ClientMachine clientMachine, int retry, Throwable throwable) {
-        Throwable e = throwable instanceof CompletionException || throwable instanceof ExecutionException ? throwable.getCause() : throwable;
+        Throwable e = ExceptionUtils.unwrapCompletionException(throwable);
         boolean retryDone = retry >= MAX_RETRIES || SocketTransformer.isClosed(e) || e instanceof RuntimeException || e instanceof Error;
         Level level = retryDone ? Level.WARNING : Level.TRACE;
         LOGGER.log(level, () -> String.format("Send message failed: clientMachine=%s, messageClass=%s, retry=%d, retryDone=%b",
