@@ -42,7 +42,7 @@ public final class LogFailureToConsoleTestWatcher implements TestWatcher {
         int lastElem = stackTraceElements.length - 1;
         for ( ; lastElem >= 0; lastElem--) {
             StackTraceElement elem = stackTraceElements[lastElem];
-            if (elem.getClassName().startsWith("myutils.") && !elem.getMethodName().equals("main")) {
+            if (elem.getClassName().startsWith("org.sn.myutils.") && !elem.getMethodName().equals("main")) {
                 break;
             }
         }
