@@ -1,18 +1,17 @@
 package org.sn.myutils.parsetree;
 
+import java.lang.System.Logger.Level;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 
 public abstract class FunctionNode implements ParseNode {
-    private static final Logger LOGGER = Logger.getLogger(FunctionNode.class.getName());
+    private static final System.Logger LOGGER = System.getLogger(FunctionNode.class.getName());
 
     static FunctionNode tryConstruct(String token, Map<String, Constructor<? extends FunctionNode>> map)
             throws ConstructException {
@@ -21,7 +20,7 @@ public abstract class FunctionNode implements ParseNode {
             try {
                 return constructor.newInstance();
             } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
-                LOGGER.log(Level.SEVERE, "Unable to construct instance of FunctionNode", e);
+                LOGGER.log(Level.ERROR, "Unable to construct instance of FunctionNode", e);
             }
         }
         throw new ConstructException();

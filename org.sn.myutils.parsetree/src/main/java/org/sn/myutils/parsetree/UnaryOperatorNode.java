@@ -1,14 +1,13 @@
 package org.sn.myutils.parsetree;
 
+import java.lang.System.Logger.Level;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 
 public abstract class UnaryOperatorNode implements OperatorNode {
-    private static final Logger LOGGER = Logger.getLogger(UnaryOperatorNode.class.getName());
+    private static final System.Logger LOGGER = System.getLogger(UnaryOperatorNode.class.getName());
 
     static UnaryOperatorNode tryConstruct(String token,
                                           Map<String, Constructor<? extends UnaryOperatorNode>> map)
@@ -18,7 +17,7 @@ public abstract class UnaryOperatorNode implements OperatorNode {
             try {
                 return constructor.newInstance();
             } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
-                LOGGER.log(Level.SEVERE, "Unable to construct instance of UnaryOperatorNode", e);
+                LOGGER.log(Level.ERROR, "Unable to construct instance of UnaryOperatorNode", e);
             }
         }
         throw new ConstructException();

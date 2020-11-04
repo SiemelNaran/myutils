@@ -1,13 +1,13 @@
 package org.sn.myutils.parsetree;
 
+import java.lang.System.Logger.Level;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Map;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+
 
 public abstract class BinaryOperatorNode implements OperatorNode {
-    private static final Logger LOGGER = Logger.getLogger(BinaryOperatorNode.class.getName());
+    private static final System.Logger LOGGER = System.getLogger(BinaryOperatorNode.class.getName());
 
     static BinaryOperatorNode tryConstruct(String token,
                                            Map<String, Constructor<? extends BinaryOperatorNode>> binaryOperators) throws ConstructException {
@@ -16,7 +16,7 @@ public abstract class BinaryOperatorNode implements OperatorNode {
             try {
                 return constructor.newInstance();
             } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
-                LOGGER.log(Level.SEVERE, "Unable to construct instance of BinaryOperatorNode", e);
+                LOGGER.log(Level.ERROR, "Unable to construct instance of BinaryOperatorNode", e);
             }
         }
         throw new ConstructException();

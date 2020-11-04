@@ -1,5 +1,6 @@
 package org.sn.myutils.util.concurrent;
 
+import java.lang.System.Logger.Level;
 import java.util.Date;
 import java.util.Objects;
 import java.util.concurrent.Executors;
@@ -12,7 +13,6 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import java.util.logging.Logger;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
@@ -277,7 +277,7 @@ public class PriorityLock implements Lock {
      * Reason for using an executor is because we retry acquiring the lock in the background several times.
      */
     static class SignalWaitingThread {
-        private static final Logger LOGGER = Logger.getLogger(SignalWaitingThread.class.getName());
+        private static final System.Logger LOGGER = System.getLogger(SignalWaitingThread.class.getName());
 
         // public functions =>
 
@@ -369,7 +369,7 @@ public class PriorityLock implements Lock {
                         int nextNextDelay = nextDelay < MAX_DELAY_MILLIS ? delay + nextDelay : nextDelay;
                         doAddSignalWaitingThread(priorityLock, priority, nextRetryCount, nextDelay, nextNextDelay);
                     } else {
-                        LOGGER.warning("Failed to signal after waiting thread after " + MAX_RETRIES + " attempts: " + e.toString());
+                        LOGGER.log(Level.WARNING, "Failed to signal after waiting thread after " + MAX_RETRIES + " attempts: " + e.toString());
                         ON_FAIL_TO_SIGNAL_WAITING_THREAD.accept(e);
                     }
                 }
