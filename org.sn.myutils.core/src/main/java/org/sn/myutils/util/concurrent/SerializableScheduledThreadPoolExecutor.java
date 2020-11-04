@@ -1,6 +1,7 @@
 package org.sn.myutils.util.concurrent;
 
 import java.io.Serializable;
+import java.lang.System.Logger.Level;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -20,17 +21,15 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 
 public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPoolExecutor implements SerializableScheduledExecutorService {
 
-    private static final Logger LOGGER = Logger.getLogger(SerializableScheduledThreadPoolExecutor.class.getName());
+    private static final System.Logger LOGGER = System.getLogger(SerializableScheduledThreadPoolExecutor.class.getName());
     
     private final ThreadLocal<RunnableInfo> threadLocalRunnableInfo = new ThreadLocal<>();
-    private volatile Level logIfCannotSerialize = Level.FINEST;
+    private volatile Level logIfCannotSerialize = Level.TRACE;
     private ArrayList<RunnableInfo> exceptionalRunnableInfos = new ArrayList<>();
     private UnfinishedTasksImpl unfinishedTasks;
     
