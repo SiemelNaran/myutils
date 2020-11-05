@@ -25,7 +25,6 @@ import java.util.stream.Stream;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import org.hamcrest.Matchers;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -47,7 +46,6 @@ public class PriorityLockTest extends TestBase {
      */
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(booleans = {false, true})
-    @Disabled
     void testReentrantLock(boolean fair) throws InterruptedException {
         ReentrantLock reentrantLock = new ReentrantLock(fair);
 
@@ -85,7 +83,6 @@ public class PriorityLockTest extends TestBase {
      * whence we the PriorityLock would have too many Condition objects.
      */
     @Test
-    @Disabled
     void testMinAndMaxPriority() {
         assertEquals(1, Thread.MIN_PRIORITY);
         assertEquals(10, Thread.MAX_PRIORITY);
@@ -96,7 +93,6 @@ public class PriorityLockTest extends TestBase {
      * Test that toString prints out the value of internal lock toString followed by the counts of each level.
      */
     @Test
-    @Disabled
     void testToString() {
         PriorityLock priorityLock = new PriorityLock();
         Thread.currentThread().setPriority(10);
@@ -117,7 +113,6 @@ public class PriorityLockTest extends TestBase {
      */
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(ints = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
-    @Disabled
     void testAllLevels(int level) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock(true);
 
@@ -151,7 +146,6 @@ public class PriorityLockTest extends TestBase {
             DoThreadLockInterruptibly.class,
             DoThreadTryLock.class,
             DoThreadTryLockWithTimeoutMillis.class})
-    @Disabled
     void testLock(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock(true);
 
@@ -220,7 +214,6 @@ public class PriorityLockTest extends TestBase {
      * Here internalLock.lockInterruptibly throws an exception.
      */
     @Test
-    @Disabled
     void testLockInterruptedThread1() throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock();
 
@@ -256,7 +249,6 @@ public class PriorityLockTest extends TestBase {
      * Here internalLock.lockInterruptibly locks the thread but then interrupts itself.
      */
     @Test
-    @Disabled
     void testLockInterruptedThread2() throws InterruptedException {
         class WeirdReentrantLock extends ReentrantLock {
             private static final long serialVersionUID = 1L;
@@ -304,7 +296,6 @@ public class PriorityLockTest extends TestBase {
             DoThreadLockInterruptibly.class,
             DoThreadTryLock.class,
             DoThreadTryLockWithTimeoutMillis.class})
-    @Disabled
     void testLockWithCancellation1(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock();
 
@@ -391,7 +382,6 @@ public class PriorityLockTest extends TestBase {
             DoThreadLockInterruptibly.class,
             DoThreadTryLock.class,
             DoThreadTryLockWithTimeoutMillis.class})
-    @Disabled
     void testLockWithCancellation2(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock();
 
@@ -475,7 +465,6 @@ public class PriorityLockTest extends TestBase {
             DoThreadLockInterruptibly.class,
             DoThreadTryLock.class,
             DoThreadTryLockWithTimeoutMillis.class})
-    @Disabled
     void testLockWithCancellation3(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock(true);
 
@@ -569,7 +558,6 @@ public class PriorityLockTest extends TestBase {
             DoThreadLockInterruptibly.class,
             DoThreadTryLock.class,
             DoThreadTryLockWithTimeoutMillis.class})
-    @Disabled
     void testLockThreadThatIsAlreadyLocked1(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock();
 
@@ -647,7 +635,6 @@ public class PriorityLockTest extends TestBase {
             DoThreadLockInterruptibly.class,
             DoThreadTryLock.class,
             DoThreadTryLockWithTimeoutMillis.class})
-    @Disabled
     void testLockThreadThatIsAlreadyLocked2(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock();
 
@@ -726,7 +713,6 @@ public class PriorityLockTest extends TestBase {
      * @see PriorityThreadPoolExecutorTest#testNotEnoughThreads1()
      */
     @Test
-    @Disabled
     void testNotEnoughThreads() throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock();
 
@@ -775,7 +761,6 @@ public class PriorityLockTest extends TestBase {
      * Long after there is a 6th thread that runs, but it's the only thread running at the time so it goes ahead. 
      */
     @Test
-    @Disabled
     void testTryLock1() throws InterruptedException {
         System.out.println("availableProcessors=" + Runtime.getRuntime().availableProcessors());
 
@@ -815,7 +800,6 @@ public class PriorityLockTest extends TestBase {
      * Same as the previous test, except the 4 threads run while the 1st is running, so all of them fail.
      */
     @Test
-    @Disabled
     void testTryLock2() throws InterruptedException {
         System.out.println("availableProcessors=" + Runtime.getRuntime().availableProcessors());
 
@@ -868,7 +852,6 @@ public class PriorityLockTest extends TestBase {
      */
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @MethodSource("provideArgsFor_testLockExceptionOnLock")
-    @Disabled
     void testLockExceptionOnLock(Class<?> clazz, boolean throwAfter) throws InterruptedException {
         PriorityLock priorityLock
             = new PriorityLock(PriorityLockNamedParams.create()
@@ -918,7 +901,6 @@ public class PriorityLockTest extends TestBase {
      * Trying to signal the failing thread fails after 5 retries, so the thread with lower priority is never signaled, and never runs.
      */
     @Test
-    @Disabled
     void testLockExceptionOnLockTimeout() throws InterruptedException {
         assertEquals(0, PriorityLock.SignalWaitingThread.getNumberOfThreadsToSignal());
         
@@ -986,7 +968,6 @@ public class PriorityLockTest extends TestBase {
             DoThreadLockInterruptibly.class,
             DoThreadTryLock.class,
             DoThreadTryLockWithTimeoutMillis.class})
-    @Disabled
     void testLockExceptionOnAwait(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock
             = new PriorityLock(PriorityLockNamedParams.create()
@@ -1041,7 +1022,6 @@ public class PriorityLockTest extends TestBase {
 
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @EnumSource(Signal.class)
-    @Disabled
     void testSignalAndSignalAll(Signal signal) throws InterruptedException {
         WaitArg nanos = new WaitArgMillis(TimeUnit.SECONDS.toMillis(4));
         PriorityLock priorityLock = new PriorityLock();
@@ -1127,7 +1107,6 @@ public class PriorityLockTest extends TestBase {
      */
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @MethodSource("provideArgsFor_testSignalAllAndAddWaiters")
-    @Disabled
     void testSignalAllAndAddWaiters(Class<?> clazz, long timeAtWhichToAddThread7) throws InterruptedException {
         WaitArg unused = new WaitArgMillis(TimeUnit.SECONDS.toMillis(4));
         PriorityLock priorityLock = new PriorityLock();
@@ -1178,7 +1157,6 @@ public class PriorityLockTest extends TestBase {
     @ValueSource(classes = {
             DoThreadLock.class,
             DoThreadLockInterruptibly.class})
-    @Disabled
     void testSignalOnly(Class<?> clazz) throws InterruptedException {
         WaitArg unused = new WaitArgMillis(TimeUnit.SECONDS.toMillis(4));
         PriorityLock priorityLock = new PriorityLock();
@@ -1262,7 +1240,6 @@ public class PriorityLockTest extends TestBase {
 
     
     @Test
-    @Disabled
     void testSignalWithNoAwait() throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock();
                 
@@ -1287,7 +1264,6 @@ public class PriorityLockTest extends TestBase {
 
     
     @Test
-    @Disabled
     void testSignalTwiceWithOneAwait() throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock();
                 
@@ -1334,7 +1310,6 @@ public class PriorityLockTest extends TestBase {
             DoThreadTryLock.class,
             DoThreadTryLockWithTimeoutMillis.class,
             DoThreadTryLockWithTimeoutNanos.class})
-    @Disabled
     void testAwait(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock(true);
 
@@ -1405,7 +1380,6 @@ public class PriorityLockTest extends TestBase {
     @ValueSource(classes = {
             DoThreadTryLockWithTimeoutMillis.class,
             DoThreadTryLockWithTimeoutNanos.class})
-    @Disabled
     void testAwaitReturnFalse(Class<?> clazz) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock();
                 
@@ -1547,7 +1521,6 @@ public class PriorityLockTest extends TestBase {
      * Same as the above except that some threads are cancelled and the cancelled threads throw InterruptedException as soon as possible.
      */
     @Test
-    @Disabled
     void testAwaitWithEarlyInterrupt() throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock(PriorityLockNamedParams.create()
                                                          .setInternalReentrantLockCreator(true)
@@ -1603,7 +1576,6 @@ public class PriorityLockTest extends TestBase {
      */
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(booleans = {false, true})
-    @Disabled
     void testAwaitWithSpuriousWakeup(boolean allowEarlyInterruptFromAwait) throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock(PriorityLockNamedParams.create()
                                                          .setInternalReentrantLockCreator(true)
@@ -1661,7 +1633,6 @@ public class PriorityLockTest extends TestBase {
      * Same as the above except that the thread that encountered spurious wakeup is interrupted.
      */
     @Test
-    @Disabled
     void testAwaitWithSpuriousWakeupAndInterrupt() throws InterruptedException {
         PriorityLock priorityLock = new PriorityLock(PriorityLockNamedParams.create()
                                                          .setInternalReentrantLockCreator(true)
@@ -1773,7 +1744,6 @@ public class PriorityLockTest extends TestBase {
 
     
     @Test
-    @Disabled
     void testAwaitUntil() throws InterruptedException {
         WaitArg deadline = new WaitArgDeadline(new Date(System.currentTimeMillis() + 4000));
         PriorityLock priorityLock = new PriorityLock();
@@ -1831,7 +1801,6 @@ public class PriorityLockTest extends TestBase {
     @ValueSource(classes = {
             DoThreadLock.class,
             DoThreadLockInterruptibly.class})
-    @Disabled
     void testAwaitException1(Class<?> clazz) throws InterruptedException {
         WaitArg millis = new WaitArgMillis(5000);
         PriorityLock priorityLock
@@ -1873,7 +1842,6 @@ public class PriorityLockTest extends TestBase {
     @ValueSource(classes = {
             DoThreadLock.class,
             DoThreadLockInterruptibly.class})
-    @Disabled
     void testAwaitException2(Class<?> clazz) throws InterruptedException {
         WaitArg millis = new WaitArgMillis(5000);
         PriorityLock priorityLock
@@ -1921,7 +1889,6 @@ public class PriorityLockTest extends TestBase {
      */
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @MethodSource("provideArgsFor_testAwaitException3")
-    @Disabled
     void testAwaitException3(Class<?> clazz, boolean allowEarlyInterruptFromAwait) throws InterruptedException {
         WaitArg millis = new WaitArgMillis(5000);
         ThrowAtPrioritySevenAwait internalLock = new ThrowAtPrioritySevenAwait(/*fair*/ true, /*shouldThrow*/ false, /*throwAfter*/ false);
