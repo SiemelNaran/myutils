@@ -1,6 +1,7 @@
 package org.sn.myutils.util.concurrent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.Executors;
@@ -17,6 +18,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 
 /**
@@ -24,7 +27,7 @@ import org.junit.jupiter.api.TestInfo;
  * as the behavior of PriorityLock is based on ReentrantLock.
  */
 public class ReentrantLockTest {
-    long startOfTime;
+    private long startOfTime;
     
     @BeforeEach
     void setStartOfTime(TestInfo testInfo) {
@@ -48,13 +51,13 @@ public class ReentrantLockTest {
      * This test interrupts the current thread then calls lockInterruptibly,
      * verifying that an InterruptedException is thrown.
      */
-    @Test
-    void testLockInterruptedThread() throws InterruptedException {
+    @ParameterizedTest
+    @ValueSource(strings = { "lockInterruptibly", "lock" })
+    void testLockInterruptedThread(String lockFunction) throws InterruptedException {
         ReentrantLock reentrantLock = new ReentrantLock();
-
         ScheduledExecutorService executor = Executors.newScheduledThreadPool(1, myThreadFactory());
-        
         AtomicBoolean interruptedExceptionThrown = new AtomicBoolean();
+        AtomicBoolean threadStillInterrupted = new AtomicBoolean();
 
         executor.schedule(() -> {
             logStringPlus(reentrantLock, "start thread");
@@ -62,18 +65,44 @@ public class ReentrantLockTest {
             Thread.currentThread().interrupt();
             try {
                 logStringPlus(reentrantLock, "about to lock");
-                reentrantLock.lockInterruptibly();
+                assertTrue(Thread.currentThread().isInterrupted());
+                switch (lockFunction) {
+                    case "lockInterruptibly":
+                        reentrantLock.lockInterruptibly();
+                        break;
+                    case "lock":
+                        reentrantLock.lock();
+                        break;
+
+                    default:
+                        throw new UnsupportedOperationException();
+                }
+                if ("lock".equals(lockFunction)) {
+                    threadStillInterrupted.set(Thread.currentThread().isInterrupted());
+                }
             } catch (InterruptedException ignored) {
+                assertFalse(Thread.currentThread().isInterrupted());
                 logStringPlus(reentrantLock, "caught InterruptedException");
                 interruptedExceptionThrown.set(true);
+                threadStillInterrupted.set(Thread.currentThread().isInterrupted());
             }
             logStringPlus(reentrantLock, "end thread");
         }, 100, TimeUnit.MILLISECONDS);
 
         executor.shutdown();
         executor.awaitTermination(10, TimeUnit.SECONDS);
-        
-        assertTrue(interruptedExceptionThrown.get());
+
+        switch (lockFunction) {
+            case "lockInterruptibly":
+                assertTrue(interruptedExceptionThrown.get());
+                assertFalse(threadStillInterrupted.get());
+                break;
+            case "lock":
+                assertTrue(threadStillInterrupted.get());
+                break;
+            default:
+                throw new UnsupportedOperationException();
+        }
     }
 
     /**
@@ -167,7 +196,7 @@ public class ReentrantLockTest {
                 logStringPlus(reentrantLock, "running assertions in thread 1");
                 assertTrue(reentrantLock.isLocked());
                 assertTrue(reentrantLock.isHeldByCurrentThread());
-                assertEquals(false, Thread.currentThread().isInterrupted()); 
+                assertFalse(Thread.currentThread().isInterrupted());
                 assertionsRun.set(true);
                 reentrantLock.unlock();
                 logStringPlus(reentrantLock, "unlock in thread 1");
@@ -228,7 +257,7 @@ public class ReentrantLockTest {
                 logStringPlus(reentrantLock, "running assertions in thread 1");
                 assertTrue(reentrantLock.isLocked());
                 assertTrue(reentrantLock.isHeldByCurrentThread());
-                assertEquals(false, Thread.currentThread().isInterrupted()); 
+                assertFalse(Thread.currentThread().isInterrupted());
                 assertionsRun.set(true);
                 reentrantLock.unlock();
                 logStringPlus(reentrantLock, "unlock in thread 1");
@@ -284,16 +313,25 @@ public class ReentrantLockTest {
 
     private void logStringPlus(ReentrantLock reentrantLock, String message) {
         message += " :";
-        message += " isLocked=" + reentrantLock.isLocked() + " isHeldByCurrentThread=" + reentrantLock.isHeldByCurrentThread();
+        message += " isLocked=" + reentrantLock.isLocked();
+        message += " isHeldByCurrentThread=" + reentrantLock.isHeldByCurrentThread();
         logString(message);
     }
     
     private void logString(String message) {
         Thread currentThread = Thread.currentThread();
+        boolean isInterrupted = Thread.currentThread().isInterrupted();
         System.out.println(
                 String.format("%4d", System.currentTimeMillis() - startOfTime)
                 + " : " + currentThread.getName() + " at priority " + currentThread.getPriority()
+                + " : currentThread.isInterrupted=" + currentThread.isInterrupted()
                 + " : " + message);
+        boolean isInterruptedAfter = Thread.currentThread().isInterrupted();
+        if (isInterrupted && !isInterruptedAfter) {
+            // this code block hit when running mvn test
+            System.out.println("[WARNING] System.out.println cleared interrupted flag ... re-interrupting thread");
+            Thread.currentThread().interrupt();
+        }
     }
     
 }

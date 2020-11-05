@@ -19,10 +19,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
  */
 @ExtendWith(LogFailureToConsoleTestWatcher.class)
 public abstract class TestBase {
-    private Instant startOfTime;
+    private static Instant startOfClass;
+    private Instant startOfTest;
 
     @BeforeAll
     static void onStartAllTests() {
+        startOfClass = Instant.now();
         System.out.println("start all tests");
         System.out.println("--------------------------------------------------------------------------------");
     }
@@ -30,12 +32,13 @@ public abstract class TestBase {
     @AfterAll
     static void printAllTestsFinished() {
         System.out.println("--------------------------------------------------------------------------------");
-        System.out.println("all tests finished");
+        System.out.println("all tests finished"
+                                   + "(" + Duration.between(startOfClass, Instant.now()).toMillis() + "ms)");;
     }
     
     @BeforeEach
     void setStartOfTime(TestInfo testInfo) {
-        startOfTime = Instant.now();
+        startOfTest = Instant.now();
         System.out.println("--------------------------------------------------------------------------------");
         System.out.println("test started: " + testInfo.getDisplayName());
     }
@@ -43,10 +46,10 @@ public abstract class TestBase {
     @AfterEach
     void printTestFinished(TestInfo testInfo) {
         System.out.println("test finished: " + testInfo.getDisplayName()
-                                   + "(" + Duration.between(startOfTime, Instant.now()).toMillis() + "ms)");
+                                   + "(" + Duration.between(startOfTest, Instant.now()).toMillis() + "ms)");
     }
     
-    protected final Instant getStartOfTime() {
-        return startOfTime;
+    protected final Instant getStartOfTest() {
+        return startOfTest;
     }
 }

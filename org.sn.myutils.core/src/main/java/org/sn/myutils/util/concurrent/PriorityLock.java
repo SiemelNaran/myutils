@@ -37,7 +37,7 @@ import javax.annotation.Nullable;
  * @see Thread#MIN_PRIORITY
  * @see Thread#NORM_PRIORITY
  * @see Thread#MAX_PRIORITY
- * @see myutils.util.concurrent.MoreExecutors#newFixedPriorityThreadPool
+ * @see org.sn.myutils.util.concurrent.MoreExecutors#newFixedPriorityThreadPool
  */
 public class PriorityLock implements Lock {
     
@@ -504,7 +504,7 @@ public class PriorityLock implements Lock {
 
     /**
      * Locks this thread after a call to await.
-     * After the call to internalCondition.await, internaLock is locked by this thread, so we cannot call internalLock.lock.
+     * After the call to internalCondition.await, internalLock is locked by this thread, so we cannot call internalLock.lock.
      *
      * @param wasSignaled true if the current thread was explicitly signaled by a call to condition.signal, false if signaled by finally block of await.
      */
