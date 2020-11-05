@@ -23,10 +23,26 @@ Building
 
 Install the following:
 - Maven 3.6.3
-- Java 13
+- Java 17
 
 To build all projects `mvn clean install`.
 To build all projects skipping tests `mvn clean install -DskipTests`.
+
+
+Java
+----
+Optional: Use jenv to manage java versions. Please see [https://github.com/jenv/jenv](https://github.com/jenv/jenv)
+
+To install Java on Linux here is one way
+```
+sudo apt install openjdk-17-jdk
+sudo apt install openjdk-17-source
+sudo update-alternatives --config java
+```
+
+To install Java on MAC here is one way
+```
+```
 
 
 Maven
@@ -41,6 +57,7 @@ rm -rfv ~/.m2/repository/org/sn/myutils/
 Eclipse IDE
 -----------
 
+??? change for Java 17
 Eclipse 2020-03.
 
 Steps:
@@ -57,6 +74,7 @@ find ../myutils/ -name "*.project" -exec rm -rfv {} \;
 IntelliJ IDE
 ------------
 
+??? change for Java 17
 IntelliJ 2020.2.
 
 Steps:
