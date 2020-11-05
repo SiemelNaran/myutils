@@ -295,7 +295,10 @@ public class ExpressionParser {
         private StringCase functionCase = null;
         private final Map<String, Constructor<? extends FunctionNode>> functions = new HashMap<>();
         private NumberFactory numberFactory = DefaultNumberFactory.DEFAULT_NUMBER_FACTORY;
-        
+
+        private Builder() {
+        }
+
         /**
          * Add binary operator.
          * 

@@ -26,7 +26,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 
 
 public class TestUtil {
-    
+    private TestUtil() {
+    }
+
     public static final String PARAMETRIZED_TEST_DISPLAY_NAME = ParameterizedTest.DISPLAY_NAME_PLACEHOLDER + " [" + ParameterizedTest.INDEX_PLACEHOLDER + "]";
 
 
@@ -237,6 +239,7 @@ public class TestUtil {
      *        for example <code>exception -> assertEquals(expectedMessage, exception.getMessage())</code>
      * @throws AssertionError if assertion fails
      */
+    @SuppressWarnings("unchecked")
     public static <U extends Throwable> void assertException(Runnable runnable, Class<U> expectedExceptionClass, Consumer<U> exceptionChecker) {
         try {
             runnable.run();

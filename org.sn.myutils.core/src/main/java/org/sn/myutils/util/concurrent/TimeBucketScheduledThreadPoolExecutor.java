@@ -589,7 +589,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                     writer.println();
                     writer.println("[buckets]");
                     timeBuckets.forEach(timeBucket -> writer.println(timeBucket.getStartInclusiveMillis() + " " + timeBucket.getEndExclusiveMillis()));
-                    writer.close();
+                    writer.flush();
                     if (writer.checkError()) {
                         throw new IOException();
                     }

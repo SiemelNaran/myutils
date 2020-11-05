@@ -50,6 +50,9 @@ public interface MessageClasses {
         @Serial
         private static final long serialVersionUID = 1L;
 
+        MessageBaseLoggingString() {
+        }
+
         @Override
         public String toLoggingString() {
             return classType(this);
@@ -518,6 +521,9 @@ public interface MessageClasses {
     }
 
     abstract class ClientGeneratedTopicMessageCommand extends ClientGeneratedTopicMessage implements ClientCommand {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
         private final int commandIndex;
 
         public ClientGeneratedTopicMessageCommand(Long clientTimestamp, String topic, int commandIndex) {

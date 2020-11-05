@@ -13,6 +13,8 @@ import org.sn.myutils.util.AbstractPageList.Page;
 
 
 public class MoreCollections {
+    private MoreCollections() {
+    }
     
     public enum FindWhich {
         FIND_FIRST,

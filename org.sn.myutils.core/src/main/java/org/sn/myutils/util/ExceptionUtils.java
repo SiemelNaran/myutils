@@ -5,6 +5,8 @@ import java.util.concurrent.ExecutionException;
 
 
 public class ExceptionUtils {
+    private ExceptionUtils() {
+    }
     
     /**
      * Unwrap a CompletionException or ExecutionException.

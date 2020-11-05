@@ -76,6 +76,9 @@ public class SimpleStringTokenizerFactory {
             private boolean doubleQuotes;
             private boolean escape = true;
             
+            private Builder() {
+            }
+            
             /**
              * Add a supported quote character.
              *

@@ -13,6 +13,9 @@ import org.sn.myutils.annotations.NotNull;
 
 
 public class MoreCollectors {
+    private MoreCollectors() {
+    }
+
     /**
      * Given a stream, return both the minimum and maximum
      * If the stream is empty return an empty Optional.

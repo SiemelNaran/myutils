@@ -22,7 +22,10 @@ import org.sn.myutils.annotations.NotNull;
 public abstract class KeyToSocketAddressMapper {
     
     private final Map<SocketAddress, SocketAddress> remoteToLocalMap = new ConcurrentHashMap<>();
-    
+
+    protected KeyToSocketAddressMapper() {
+    }
+
     /**
      * Map a key to remote machine.
      *

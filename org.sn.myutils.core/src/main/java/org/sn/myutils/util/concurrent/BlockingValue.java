@@ -9,6 +9,9 @@ public class BlockingValue<T> {
     private final CountDownLatch latch = new CountDownLatch(1);
     private T value;
 
+    public BlockingValue() {
+    }
+
     public T get() throws InterruptedException {
         latch.await();
         return value;

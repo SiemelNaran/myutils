@@ -12,6 +12,9 @@ import org.sn.myutils.annotations.NotNull;
 
 
 public class Iterables {
+    private Iterables() {
+    }
+
     /**
      * An interface indicating that an iterable has a size function.
      */

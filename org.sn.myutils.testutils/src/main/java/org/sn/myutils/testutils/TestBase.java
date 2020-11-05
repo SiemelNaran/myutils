@@ -22,6 +22,9 @@ public abstract class TestBase {
     private static Instant startOfClass;
     private Instant startOfTest;
 
+    protected TestBase() {
+    }
+
     @BeforeAll
     static void onStartAllTests() {
         startOfClass = Instant.now();

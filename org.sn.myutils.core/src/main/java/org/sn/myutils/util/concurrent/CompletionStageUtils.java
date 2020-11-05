@@ -10,6 +10,9 @@ import java.util.function.BiFunction;
 
 
 public class CompletionStageUtils {
+    private CompletionStageUtils() {
+    }
+
     /**
      * Convert a list of completion stages to a completion stage of list.
      * If any completion stage failed, we invoke an error handler,
