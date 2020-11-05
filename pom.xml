@@ -90,7 +90,7 @@
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>3.8.0</version>
                     <configuration>
-                        <release>13</release>
+                        <release>15</release>
                         <compilerArgs>
                             <arg>-Xlint:preview</arg>
                         </compilerArgs>
