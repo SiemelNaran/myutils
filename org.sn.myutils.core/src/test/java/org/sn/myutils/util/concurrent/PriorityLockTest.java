@@ -2508,10 +2508,17 @@ public class PriorityLockTest extends TestBase {
     
     private void logString(String message) {
         Thread currentThread = Thread.currentThread();
+        boolean isInterrupted = Thread.currentThread().isInterrupted();
         System.out.println(
                 String.format("%4d", System.currentTimeMillis() - getStartOfTest().toEpochMilli())
-                + " : " + currentThread.getName() + " at priority " + currentThread.getPriority()
+                + " : " + currentThread.getName() + " at priority " + currentThread.getPriority() + " isInterrupted=" + currentThread.isInterrupted()
                 + " : " + message);
+        boolean isInterruptedAfter = Thread.currentThread().isInterrupted();
+        if (isInterrupted && !isInterruptedAfter) {
+            // this code block hit when running mvn test
+            System.out.println("[WARNING] System.out.println cleared interrupted flag ... re-interrupting thread");
+            Thread.currentThread().interrupt();
+        }
     }
     
     private static void prettyPrintList(String title, List<String> list) {
