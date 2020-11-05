@@ -23,7 +23,7 @@ Building
 
 Install the following:
 - Maven 3.6.3
-- Java 13
+- Java 16
 
 To build all projects `mvn clean install`.
 To build all projects skipping tests `mvn clean install -DskipTests`.
