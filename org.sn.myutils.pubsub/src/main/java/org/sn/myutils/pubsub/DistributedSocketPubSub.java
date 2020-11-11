@@ -46,6 +46,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.sn.myutils.annotations.NotNull;
+import org.sn.myutils.annotations.NotThreadSafe;
 import org.sn.myutils.annotations.Nullable;
 import org.sn.myutils.pubsub.MessageClasses.AddSubscriber;
 import org.sn.myutils.pubsub.MessageClasses.AddSubscriberFailed;
@@ -198,6 +199,7 @@ public class DistributedSocketPubSub extends PubSub {
      * 
      * @throws java.util.concurrent.RejectedExecutionException if client was shutdown
      */
+    @NotThreadSafe
     public CompletableFuture<Void> startAsync() {
         startWriterThreadIfNotStarted();
         return doStartAllAsync(false);

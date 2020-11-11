@@ -13,7 +13,7 @@ import java.lang.annotation.Target;
  * So use org.sn.myutils.annotations until jsr305 is fully modularized.
  */
 @Documented
-@Target(ElementType.TYPE)
+@Target({ ElementType.TYPE, ElementType.METHOD })
 @Retention(RetentionPolicy.CLASS)
 public @interface NotThreadSafe {
 }
