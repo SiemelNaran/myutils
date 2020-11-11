@@ -22,11 +22,7 @@
     <dependencyManagement>
         <dependencies>
             <!-- main dependencies -->
-            <dependency>
-                <groupId>com.google.code.findbugs</groupId>
-                <artifactId>jsr305</artifactId>
-                <version>3.0.2</version>
-            </dependency>
+            <!-- add dependency on jsr305 or org.jetbrains.annotations once either is fully modularized -->
 
             <!-- test dependencies -->
             <dependency>
@@ -114,6 +110,7 @@
     </build>
 
     <modules>
+        <module>org.sn.myutils.annotations</module>
         <module>org.sn.myutils.testutils</module>
         <module>org.sn.myutils.core</module>
         <module>org.sn.myutils.parsetree</module>

@@ -10,7 +10,7 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.stream.Stream;
-import javax.annotation.Nonnull;
+import org.sn.myutils.annotations.NotNull;
 
 
 /**
@@ -53,7 +53,7 @@ public interface SerializableScheduledExecutorService extends ScheduledExecutorS
      * @return list of tasks
      */
     @Override
-    @Nonnull List<Runnable> shutdownNow();
+    @NotNull List<Runnable> shutdownNow();
     
     
     default void importUnfinishedTasks(UnfinishedTasks unfinishedTasks) throws RecreateRunnableFailedException {
@@ -96,7 +96,7 @@ public interface SerializableScheduledExecutorService extends ScheduledExecutorS
         SerializableCallable<?> getSerializableCallable();
 
         @SuppressWarnings("unchecked")
-        default @Nonnull Runnable getActionAsRunnable() {
+        default @NotNull Runnable getActionAsRunnable() {
             Runnable runnable = getSerializableRunnable();
             if (runnable == null) {
                 runnable = new FutureTask<>((Callable<Object>) getSerializableCallable());
@@ -138,7 +138,7 @@ public interface SerializableScheduledExecutorService extends ScheduledExecutorS
             this.listClass = Collections.singletonList(clazz);
         }
 
-        RecreateRunnableFailedException(@Nonnull List<Class<?>> clazzList) {
+        RecreateRunnableFailedException(@NotNull List<Class<?>> clazzList) {
             this.listClass = Collections.unmodifiableList(clazzList);
         }
 
@@ -150,7 +150,7 @@ public interface SerializableScheduledExecutorService extends ScheduledExecutorS
         /**
          * Return a list of class of runnable or callable.
          */
-        public @Nonnull List<Class<?>> getFailedClasses() {
+        public @NotNull List<Class<?>> getFailedClasses() {
             return listClass;
         }
     }

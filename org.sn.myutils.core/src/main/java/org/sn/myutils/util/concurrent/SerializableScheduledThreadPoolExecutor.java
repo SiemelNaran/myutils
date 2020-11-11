@@ -19,7 +19,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
-import javax.annotation.Nonnull;
+import org.sn.myutils.annotations.NotNull;
 import org.sn.myutils.util.concurrent.SerializableLambdaUtils.RunnableInfo;
 import org.sn.myutils.util.concurrent.SerializableLambdaUtils.TimeInfo;
 
@@ -69,7 +69,7 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
      * Running time O(N^2).
      */
     @Override
-    public @Nonnull List<Runnable> shutdownNow() {
+    public @NotNull List<Runnable> shutdownNow() {
         List<Runnable> runnables = super.shutdownNow();
         ArrayList<RunnableInfo> tasks = new ArrayList<>();
         for (Iterator<Runnable> iter = runnables.iterator(); iter.hasNext(); ) {
@@ -139,7 +139,7 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
     }
 
     @Override
-    public @Nonnull ScheduledFuture<?> schedule(@Nonnull Runnable command, long delay, @Nonnull TimeUnit unit) {
+    public @NotNull ScheduledFuture<?> schedule(@NotNull Runnable command, long delay, @NotNull TimeUnit unit) {
         try {
             threadLocalRunnableInfo.set(SerializableLambdaUtils.computeRunnableInfo(command, delay, 0, unit, logIfCannotSerializeLevel));
             return super.schedule(command, delay, unit);
@@ -149,7 +149,7 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
     }
 
     @Override
-    public @Nonnull <V> ScheduledFuture<V> schedule(@Nonnull Callable<V> callable, long delay, @Nonnull TimeUnit unit) {
+    public @NotNull <V> ScheduledFuture<V> schedule(@NotNull Callable<V> callable, long delay, @NotNull TimeUnit unit) {
         try {
             threadLocalRunnableInfo.set(SerializableLambdaUtils.computeRunnableInfo(callable, delay, unit, logIfCannotSerializeLevel));
             return super.schedule(callable, delay, unit);
@@ -159,7 +159,7 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
     }
 
     @Override
-    public @Nonnull ScheduledFuture<?> scheduleAtFixedRate(@Nonnull Runnable command, long initialDelay, long period, @Nonnull TimeUnit unit) {
+    public @NotNull ScheduledFuture<?> scheduleAtFixedRate(@NotNull Runnable command, long initialDelay, long period, @NotNull TimeUnit unit) {
         try {
             threadLocalRunnableInfo.set(SerializableLambdaUtils.computeRunnableInfo(command, initialDelay, period, unit, logIfCannotSerializeLevel));
             return super.scheduleAtFixedRate(command, initialDelay, period, unit);
@@ -169,7 +169,7 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
     }
 
     @Override
-    public @Nonnull ScheduledFuture<?> scheduleWithFixedDelay(@Nonnull Runnable command, long initialDelay, long delay, @Nonnull TimeUnit unit) {
+    public @NotNull ScheduledFuture<?> scheduleWithFixedDelay(@NotNull Runnable command, long initialDelay, long delay, @NotNull TimeUnit unit) {
         try {
             threadLocalRunnableInfo.set(SerializableLambdaUtils.computeRunnableInfo(command, initialDelay, -delay, unit, logIfCannotSerializeLevel));
             return super.scheduleWithFixedDelay(command, initialDelay, delay, unit);
@@ -265,17 +265,17 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
         }
 
         @Override
-        public V get(long timeout, @Nonnull TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+        public V get(long timeout, @NotNull TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
             return future.get(timeout, unit);
         }
 
         @Override
-        public long getDelay(@Nonnull TimeUnit unit) {
+        public long getDelay(@NotNull TimeUnit unit) {
             return future.getDelay(unit);
         }
 
         @Override
-        public int compareTo(@Nonnull Delayed that) {
+        public int compareTo(@NotNull Delayed that) {
             return future.compareTo(that);
         }
 

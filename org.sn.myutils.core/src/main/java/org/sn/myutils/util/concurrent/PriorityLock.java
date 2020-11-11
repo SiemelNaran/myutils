@@ -13,8 +13,8 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
+import org.sn.myutils.annotations.NotNull;
+import org.sn.myutils.annotations.Nullable;
 
 
 /**
@@ -87,7 +87,7 @@ public class PriorityLock implements Lock {
          *                         Other threads are awaiting for this priority's condition object to be signaled
          * @param threadLockDetails same as priorityLock.threadLockDetails                         
          */
-        private void removeThreadAndSignal(int originalPriority, @Nonnull ThreadLockDetails threadLockDetails) {
+        private void removeThreadAndSignal(int originalPriority, @NotNull ThreadLockDetails threadLockDetails) {
             // if we called condition.signal() it would only wake up one thread, and the others would be waiting for the higher priority thread to finish,
             // which will never happen if this thread is the last of the higher priority ones.
             conditions[originalPriority - 1].signalAll();
@@ -483,7 +483,7 @@ public class PriorityLock implements Lock {
          * Set the internal lock creator to be a function that returns a custom lock.
          * Implementations must be sure that no two PriorityLock objects share the same internal lock.
          */
-        public PriorityLockNamedParams setInternalLockCreator(@Nonnull Supplier<Lock> internalLockCreator) {
+        public PriorityLockNamedParams setInternalLockCreator(@NotNull Supplier<Lock> internalLockCreator) {
             this.internalLockCreator = internalLockCreator;
             return this;
         }
@@ -609,7 +609,7 @@ public class PriorityLock implements Lock {
     }
 
     @Override
-    public boolean tryLock(long time, @Nonnull TimeUnit unit) throws InterruptedException {
+    public boolean tryLock(long time, @NotNull TimeUnit unit) throws InterruptedException {
         boolean alreadyLocked = threadLockDetails.isExplicitlyLockedByCurrentThread();
         if (alreadyLocked) {
             threadLockDetails.incrementHoldCount();
@@ -660,7 +660,7 @@ public class PriorityLock implements Lock {
 
     @Override
     @SuppressWarnings("exports")
-    public @Nonnull PriorityLockCondition newCondition() {
+    public @NotNull PriorityLockCondition newCondition() {
         return new PriorityLockCondition(allowEarlyInterruptFromAwait);
     }
     

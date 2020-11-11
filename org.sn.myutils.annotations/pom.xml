@@ -10,19 +10,11 @@
         <version>1.0.0</version>
     </parent>
 
-    <artifactId>myutils-testutils</artifactId>
+    <artifactId>myutils-annotations</artifactId>
     <packaging>jar</packaging>
-    <name>org.sn.myutils: myutils-testutils</name>
+    <name>org.sn.myutils: myutils-annotations</name>
 
     <dependencies>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.hamcrest</groupId>
-            <artifactId>hamcrest</artifactId>
-        </dependency>
     </dependencies>
 
     <build>

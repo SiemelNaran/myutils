@@ -51,8 +51,8 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.StampedLock;
 import java.util.stream.LongStream;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
+import org.sn.myutils.annotations.NotNull;
+import org.sn.myutils.annotations.Nullable;
 import org.sn.myutils.util.concurrent.SerializableLambdaUtils.RunnableInfo;
 
 
@@ -88,7 +88,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
          * @param filename the file's basename. The real file will be this filename within the folder passed to TimeBucketScheduledThreadPoolExecutor's constructor.
          * @return a buffered writer. It is the caller's responsibility to close this.
          */
-        @Nonnull BufferedWriter create(String filename) throws IOException;
+        @NotNull BufferedWriter create(String filename) throws IOException;
 
         /**
          * Open an existing file.
@@ -270,13 +270,13 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             }
 
             @Override // ScheduledFuture -> Delayed
-            public long getDelay(@Nonnull TimeUnit unit) {
+            public long getDelay(@NotNull TimeUnit unit) {
                 return unit.convert(whenMillis - System.currentTimeMillis(), TimeUnit.MILLISECONDS);
             }
 
             @Override // ScheduledFuture -> Delayed -> Comparable
             @SuppressWarnings("unchecked")
-            public int compareTo(@Nonnull Delayed thatObject) {
+            public int compareTo(@NotNull Delayed thatObject) {
                 if (thatObject instanceof TimeBucketFutureTask) {
                     TimeBucketFutureTask<V> that = (TimeBucketFutureTask<V>) thatObject;
                     return Long.compare(this.whenMillis, that.whenMillis);
@@ -324,7 +324,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             }
 
             @Override // Future
-            public V get(long timeout, @Nonnull TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+            public V get(long timeout, @NotNull TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
                 long maxWaitNanos = TimeUnit.NANOSECONDS.convert(timeout, unit);
                 long start = System.nanoTime();
                 if (realFuture == null) {
@@ -355,12 +355,12 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             }
 
             @SuppressWarnings("unchecked")
-            private @Nonnull RunnableScheduledFuture<V> awaitRealFuture(TimeBucket timeBucket) throws InterruptedException {
+            private @NotNull RunnableScheduledFuture<V> awaitRealFuture(TimeBucket timeBucket) throws InterruptedException {
                 return (RunnableScheduledFuture<V>) timeBucket.pullRealFuture(position);
             }
 
             @SuppressWarnings("unchecked")
-            private @Nonnull RunnableScheduledFuture<V> awaitRealFuture(long nanos) throws InterruptedException, TimeoutException {
+            private @NotNull RunnableScheduledFuture<V> awaitRealFuture(long nanos) throws InterruptedException, TimeoutException {
                 return (RunnableScheduledFuture<V>) timeBucket.pullRealFuture(position, nanos);
             }
         }
@@ -509,7 +509,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
          * @param when when the future occurs
          * @return a time bucket, or null if a new one must be created
          */
-        private @Nonnull TimeBucket lookupTimeBucket(long when) {
+        private @NotNull TimeBucket lookupTimeBucket(long when) {
             int attemptWriteLockIndex = -1;
             long lock = 0;
             try {
@@ -644,7 +644,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             }
         }
 
-        private @Nonnull RandomAccessFile lookupTimeBucketDataFile(TimeBucket timeBucket, boolean createIfNotFound) {
+        private @NotNull RandomAccessFile lookupTimeBucketDataFile(TimeBucket timeBucket, boolean createIfNotFound) {
             return timeBucketFileMap.computeIfAbsent(timeBucket, unused -> {
                 try {
                     RandomAccessFile randomAccessFile = Objects.requireNonNull(dataFileLoader.open(timeBucket.getFilename(), createIfNotFound));
@@ -878,7 +878,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             return futureTask.realFuture;
         }
 
-        void resolveWaitingFuture(long position, @Nonnull TimeBucketManager.TimeBucketFutureTask<?> future) {
+        void resolveWaitingFuture(long position, @NotNull TimeBucketManager.TimeBucketFutureTask<?> future) {
             waitingFutures.computeIfPresent(position, (unusedPosition, blockingValue) -> blockingValue.setValue(future));
         }
     }
@@ -910,7 +910,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                                                  int corePoolSize, ThreadFactory threadFactory, RejectedExecutionHandler rejectedHandler) throws IOException {
         IndexFileLoader indexFileLoader = new IndexFileLoader() {
             @Override
-            public @Nonnull BufferedWriter create(String filename) throws FileNotFoundException {
+            public @NotNull BufferedWriter create(String filename) throws FileNotFoundException {
                 File file = new File(folder.toFile(), filename);
                 return new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file)));
             }
@@ -997,7 +997,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
     }
 
     @Override
-    public @Nonnull ScheduledFuture<?> schedule(@Nonnull Runnable runnable, long delay, @Nonnull TimeUnit unit) {
+    public @NotNull ScheduledFuture<?> schedule(@NotNull Runnable runnable, long delay, @NotNull TimeUnit unit) {
         TimeBucketManager.TimeBucketFutureTask<?> futureTask = threadLocalFutureTask.get();
         if (futureTask != null) {
             // we are being called from the call to RunnableInfo.apply in scheduleTaskNow
@@ -1017,7 +1017,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
 
     @Override
     @SuppressWarnings("unchecked")
-    public @Nonnull <V> ScheduledFuture<V> schedule(@Nonnull Callable<V> callable, long delay, @Nonnull TimeUnit unit) {
+    public @NotNull <V> ScheduledFuture<V> schedule(@NotNull Callable<V> callable, long delay, @NotNull TimeUnit unit) {
         // RunnableInfo.apply never calls this function, so threadLocalFutureTask.get() is always null when this code is hit
         checkShutdown(callable);
         if (callable instanceof Serializable) {
@@ -1043,7 +1043,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
      * so this function would return all the tasks from the second bucket as well as the unfinished ones of the first.
      */
     @Override
-    public @Nonnull List<Runnable> shutdownNow() {
+    public @NotNull List<Runnable> shutdownNow() {
         executorState = ExecutorState.SHUTDOWN;
         timeBucketManager.stopBackgroundTasks(true);
         return mainExecutor.shutdownNow();
@@ -1063,7 +1063,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
      * Caveat: if all tasks in the future time bucket(s) have been canceled, this functions still returns false even though there are no more tasks to run.
      */
     @Override
-    public boolean awaitTermination(long timeout, @Nonnull TimeUnit unit) throws InterruptedException {
+    public boolean awaitTermination(long timeout, @NotNull TimeUnit unit) throws InterruptedException {
         if (!isShutdown() && !isTerminated()) {
             throw new IllegalStateException("awaitTermination called before shutdown/shutdownNow");
         }
@@ -1100,58 +1100,58 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
     // Forwarding functions
 
     @Override // Executor
-    public void execute(@Nonnull Runnable command) {
+    public void execute(@NotNull Runnable command) {
         checkShutdown(command);
         mainExecutor.execute(command);
     }
 
     @Override // ExecutorService
-    public @Nonnull Future<?> submit(@Nonnull Runnable task) {
+    public @NotNull Future<?> submit(@NotNull Runnable task) {
         checkShutdown(task);
         return mainExecutor.submit(task);
     }
 
     @Override // ExecutorService
-    public @Nonnull <T> Future<T> submit(@Nonnull Runnable task, T result) {
+    public @NotNull <T> Future<T> submit(@NotNull Runnable task, T result) {
         checkShutdown(task);
         return mainExecutor.submit(task, result);
     }
 
     @Override // ExecutorService
-    public @Nonnull <T> Future<T> submit(@Nonnull Callable<T> task) {
+    public @NotNull <T> Future<T> submit(@NotNull Callable<T> task) {
         checkShutdown(task);
         return mainExecutor.submit(task);
     }
 
     @Override // ExecutorService
-    public @Nonnull <T> List<Future<T>> invokeAll(@Nonnull Collection<? extends Callable<T>> tasks) throws InterruptedException {
+    public @NotNull <T> List<Future<T>> invokeAll(@NotNull Collection<? extends Callable<T>> tasks) throws InterruptedException {
         return mainExecutor.invokeAll(tasks);
     }
 
     @Override // ExecutorService
-    public @Nonnull <T> List<Future<T>> invokeAll(@Nonnull Collection<? extends Callable<T>> tasks, long timeout, @Nonnull TimeUnit unit) throws InterruptedException {
+    public @NotNull <T> List<Future<T>> invokeAll(@NotNull Collection<? extends Callable<T>> tasks, long timeout, @NotNull TimeUnit unit) throws InterruptedException {
         return mainExecutor.invokeAll(tasks, timeout, unit);
     }
 
     @Override // ExecutorService
-    public @Nonnull <T> T invokeAny(@Nonnull Collection<? extends Callable<T>> tasks) throws InterruptedException, ExecutionException {
+    public @NotNull <T> T invokeAny(@NotNull Collection<? extends Callable<T>> tasks) throws InterruptedException, ExecutionException {
         return mainExecutor.invokeAny(tasks);
     }
 
     @Override // ExecutorService
-    public <T> T invokeAny(@Nonnull Collection<? extends Callable<T>> tasks, long timeout,
-                           @Nonnull TimeUnit unit)throws InterruptedException, ExecutionException, TimeoutException {
+    public <T> T invokeAny(@NotNull Collection<? extends Callable<T>> tasks, long timeout,
+                           @NotNull TimeUnit unit)throws InterruptedException, ExecutionException, TimeoutException {
         return mainExecutor.invokeAny(tasks, timeout, unit);
     }
 
     @Override // ScheduledExecutorService
-    public @Nonnull ScheduledFuture<?> scheduleAtFixedRate(@Nonnull Runnable command, long initialDelay, long period, @Nonnull TimeUnit unit) {
+    public @NotNull ScheduledFuture<?> scheduleAtFixedRate(@NotNull Runnable command, long initialDelay, long period, @NotNull TimeUnit unit) {
         checkShutdown(command);
         return mainExecutor.scheduleAtFixedRate(command, initialDelay, period, unit);
     }
 
     @Override // ScheduledExecutorService
-    public @Nonnull ScheduledFuture<?> scheduleWithFixedDelay(@Nonnull Runnable command, long initialDelay, long delay, @Nonnull TimeUnit unit) {
+    public @NotNull ScheduledFuture<?> scheduleWithFixedDelay(@NotNull Runnable command, long initialDelay, long delay, @NotNull TimeUnit unit) {
         checkShutdown(command);
         return mainExecutor.scheduleWithFixedDelay(command, initialDelay, delay, unit);
     }

@@ -45,8 +45,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
+import org.sn.myutils.annotations.NotNull;
+import org.sn.myutils.annotations.NotThreadSafe;
+import org.sn.myutils.annotations.Nullable;
 import org.sn.myutils.pubsub.MessageClasses.AddSubscriber;
 import org.sn.myutils.pubsub.MessageClasses.AddSubscriberFailed;
 import org.sn.myutils.pubsub.MessageClasses.ClientAccepted;
@@ -198,6 +199,7 @@ public class DistributedSocketPubSub extends PubSub {
      * 
      * @throws java.util.concurrent.RejectedExecutionException if client was shutdown
      */
+    @NotThreadSafe
     public CompletableFuture<Void> startAsync() {
         startWriterThreadIfNotStarted();
         return doStartAllAsync(false);
@@ -540,7 +542,7 @@ public class DistributedSocketPubSub extends PubSub {
             }
         }
 
-        void queueSendAddSubscriber(long createdAtTimestamp, @Nonnull String topic, @Nonnull String subscriberName, boolean isResend) {
+        void queueSendAddSubscriber(long createdAtTimestamp, @NotNull String topic, @NotNull String subscriberName, boolean isResend) {
             var addSubscriber = new AddSubscriber(createdAtTimestamp, topic, subscriberName, true, isResend);
             Map<String, String> customProperties = new LinkedHashMap<>();
             DistributedSocketPubSub.this.addCustomPropertiesForAddSubscriber(customProperties, topic, subscriberName);
@@ -548,7 +550,7 @@ public class DistributedSocketPubSub extends PubSub {
             internalPutMessage(addSubscriber);
         }
 
-        void queueSendRemoveSubscriber(@Nonnull String topic, @Nonnull String subscriberName) {
+        void queueSendRemoveSubscriber(@NotNull String topic, @NotNull String subscriberName) {
             var removeSubscriber = new RemoveSubscriber(topic, subscriberName);
             Map<String, String> customProperties = new LinkedHashMap<>();
             DistributedSocketPubSub.this.addCustomPropertiesForRemoveSubscriber(customProperties, topic, subscriberName);
@@ -556,7 +558,7 @@ public class DistributedSocketPubSub extends PubSub {
             internalPutMessage(removeSubscriber);
         }
 
-        void queueSendCreatePublisher(long createdAtTimestamp, @Nonnull String topic, @Nonnull Class<?> publisherClass, RelayFields relayFields, boolean isResend) {
+        void queueSendCreatePublisher(long createdAtTimestamp, @NotNull String topic, @NotNull Class<?> publisherClass, RelayFields relayFields, boolean isResend) {
             var createPublisher = new CreatePublisher(createdAtTimestamp, localMaxMessage.incrementAndGet(), topic, publisherClass, isResend);
             createPublisher.setRelayFields(relayFields);
             Map<String, String> customProperties = new LinkedHashMap<>();
@@ -565,7 +567,7 @@ public class DistributedSocketPubSub extends PubSub {
             internalPutMessage(createPublisher);
         }
 
-        void queueSendPublishMessage(@Nonnull String topic, @Nonnull CloneableObject<?> message, RetentionPriority priority) {
+        void queueSendPublishMessage(@NotNull String topic, @NotNull CloneableObject<?> message, RetentionPriority priority) {
             var publishMessage = new PublishMessage(localMaxMessage.incrementAndGet(), topic, message, priority);
             internalPutMessage(publishMessage);
         }
@@ -730,7 +732,7 @@ public class DistributedSocketPubSub extends PubSub {
         private volatile boolean isDormant;
         private RelayFields remoteRelayFields;
 
-        private DistributedPublisher(@Nonnull String topic, @Nonnull Class<?> publisherClass, RelayFields remoteRelayFields) {
+        private DistributedPublisher(@NotNull String topic, @NotNull Class<?> publisherClass, RelayFields remoteRelayFields) {
             super(topic, publisherClass);
             this.isDormant = true;
             this.remoteRelayFields = remoteRelayFields;
@@ -754,12 +756,12 @@ public class DistributedSocketPubSub extends PubSub {
          * If the publisher is dormant then add the message to a queue to be published once the publisher goes live.
          */
         @Override
-        public final <T extends CloneableObject<?>> void publish(@Nonnull T message, RetentionPriority priority) {
+        public final <T extends CloneableObject<?>> void publish(@NotNull T message, RetentionPriority priority) {
             boolean isRemoteMessage = threadLocalRemoteRelayMessage.get() != null;
             doPublish(message, priority, isRemoteMessage);
         }
         
-        private void doPublish(@Nonnull CloneableObject<?> message, RetentionPriority priority, boolean isRemoteMessage) {
+        private void doPublish(@NotNull CloneableObject<?> message, RetentionPriority priority, boolean isRemoteMessage) {
             if (isDormant) {
                 messagesWhileDormant.add(new DeferredMessage(message, priority, isRemoteMessage));
             } else {
@@ -808,10 +810,10 @@ public class DistributedSocketPubSub extends PubSub {
     public final class DistributedSubscriber extends Subscriber {
         private volatile boolean invalid;
         
-        private DistributedSubscriber(@Nonnull String topic,
-                                      @Nonnull String subscriberName,
-                                      @Nonnull Class<? extends CloneableObject<?>> subscriberClass,
-                                      @Nonnull Consumer<CloneableObject<?>> callback) {
+        private DistributedSubscriber(@NotNull String topic,
+                                      @NotNull String subscriberName,
+                                      @NotNull Class<? extends CloneableObject<?>> subscriberClass,
+                                      @NotNull Consumer<CloneableObject<?>> callback) {
             super(topic, subscriberName, subscriberClass, callback);
         }
 
@@ -1016,7 +1018,7 @@ public class DistributedSocketPubSub extends PubSub {
          * This is set upon receiving the PublisherCreated message.
          * Remote publishers are always created as live.
          */
-        synchronized void setReadyToGoLive(@Nonnull RelayFields relayFields) {
+        synchronized void setReadyToGoLive(@NotNull RelayFields relayFields) {
             assert dormantPublisher.getRemoteRelayFields() == null;
             dormantPublisher.setRemoteRelayFields(relayFields);
             readyToGoLive = true;
@@ -1104,17 +1106,17 @@ public class DistributedSocketPubSub extends PubSub {
     }
 
     @Override
-    protected DistributedSubscriber newSubscriber(@Nonnull String topic,
-                                                  @Nonnull String subscriberName,
-                                                  @Nonnull Class<? extends CloneableObject<?>> subscriberClass,
-                                                  @Nonnull Consumer<CloneableObject<?>> callback) {
+    protected DistributedSubscriber newSubscriber(@NotNull String topic,
+                                                  @NotNull String subscriberName,
+                                                  @NotNull Class<? extends CloneableObject<?>> subscriberClass,
+                                                  @NotNull Consumer<CloneableObject<?>> callback) {
         return new DistributedSubscriber(topic, subscriberName, subscriberClass, callback);
     }
     
     /**
      * Fetch the publisher from central server.
      */
-    public final CompletableFuture<Publisher> fetchPublisher(@Nonnull String topic) {
+    public final CompletableFuture<Publisher> fetchPublisher(@NotNull String topic) {
         synchronized (fetchPublisherMap) {
             var publisher = getPublisher(topic);
             if (publisher != null) {
@@ -1148,7 +1150,7 @@ public class DistributedSocketPubSub extends PubSub {
     }
     
     @Override
-    public DistributedPublisher getPublisher(@Nonnull String topic) {
+    public DistributedPublisher getPublisher(@NotNull String topic) {
         return (DistributedPublisher) super.getPublisher(topic);
     }
     

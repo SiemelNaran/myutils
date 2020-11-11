@@ -4,8 +4,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.function.IntPredicate;
-import javax.annotation.Nonnull;
-import javax.annotation.concurrent.NotThreadSafe;
+import org.sn.myutils.annotations.NotNull;
+import org.sn.myutils.annotations.NotThreadSafe;
 
 
 /**
@@ -139,10 +139,10 @@ public class SimpleStringTokenizerFactory {
      * 
      * @throws IllegalArgumentException if every sub-word in symbols is not also in symbols
      */
-    public SimpleStringTokenizerFactory(@Nonnull IntPredicate skipChars,
-                                        @Nonnull QuoteStrategy quoteStrategy,
-                                        @Nonnull List<String> symbols,
-                                        @Nonnull List<IntPredicate> characterClasses) {
+    public SimpleStringTokenizerFactory(@NotNull IntPredicate skipChars,
+                                        @NotNull QuoteStrategy quoteStrategy,
+                                        @NotNull List<String> symbols,
+                                        @NotNull List<IntPredicate> characterClasses) {
         this.skipChars = skipChars;
         this.quoteStrategy = quoteStrategy;
         this.symbols = buildTrie(symbols);
@@ -173,12 +173,12 @@ public class SimpleStringTokenizerFactory {
         private final String token;
         private final int tokenStart;
         
-        public Token(@Nonnull CharSequence token, int tokenStart) {
+        public Token(@NotNull CharSequence token, int tokenStart) {
             this.token = token.toString(); // StringBuilder does not define equals, so using CharSequence is erroneous
             this.tokenStart = tokenStart;
         }
         
-        public @Nonnull String getText() {
+        public @NotNull String getText() {
             return token;
         }
         
@@ -314,7 +314,7 @@ public class SimpleStringTokenizerFactory {
             return str.subSequence(tokenStart, iterCodePoints.getNextIndex());
         }
         
-        private @Nonnull IntPredicate determineCharacterClass(int c) {
+        private @NotNull IntPredicate determineCharacterClass(int c) {
             for (IntPredicate predicate : characterClasses) {
                 if (predicate.test(c)) {
                     return predicate;
