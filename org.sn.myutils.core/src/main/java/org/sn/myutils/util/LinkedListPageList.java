@@ -6,7 +6,6 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.RandomAccess;
-import javax.annotation.concurrent.NotThreadSafe;
 
 
 /**
@@ -18,7 +17,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  * 
  * @author snaran
  */
-@NotThreadSafe
+// NotThreadSafe
 public class LinkedListPageList<E> extends AbstractPageList<E> implements PageList<E>, RandomAccess, Serializable {
 
     private static final long serialVersionUID = 1L;

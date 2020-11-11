@@ -18,7 +18,6 @@ import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
-import javax.annotation.concurrent.NotThreadSafe;
 import org.sn.myutils.util.MoreCollections.FindWhich;
 
 /**
@@ -31,7 +30,7 @@ import org.sn.myutils.util.MoreCollections.FindWhich;
  * <p>The spliterator splits by pages. If a page has too many elements in it, the page itself
  * does not get split.
  */
-@NotThreadSafe
+// NotThreadSafe
 public abstract class AbstractPageList<E> extends AbstractList<E> implements PageList<E>, RandomAccess, Serializable {
     private static final long serialVersionUID = 1L;
     private static final int DEFAULT_PREFERRED_MAX_PAGE_SIZE = 50;

@@ -14,8 +14,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <downloadSources>true</downloadSources>
         <downloadJavadocs>true</downloadJavadocs>
-        <junit.version>5.5.0-M1</junit.version>
-        <junit.platform.version>1.6.2</junit.platform.version>
+        <junit.version>5.7.0</junit.version>
+        <junit.platform.version>1.7.0</junit.platform.version>
         <maven-surefire-plugin.argLine>-Djava.util.logging.config.file=${project.build.testOutputDirectory}/logging.properties</maven-surefire-plugin.argLine>
     </properties>
 
@@ -23,9 +23,9 @@
         <dependencies>
             <!-- main dependencies -->
             <dependency>
-                <groupId>com.google.code.findbugs</groupId>
-                <artifactId>jsr305</artifactId>
-                <version>3.0.2</version>
+                <groupId>org.jetbrains</groupId>
+                <artifactId>annotations</artifactId>
+                <version>20.1.0</version>
             </dependency>
 
             <!-- test dependencies -->

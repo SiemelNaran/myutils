@@ -6,7 +6,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.RandomAccess;
-import javax.annotation.concurrent.NotThreadSafe;
 
 
 /**
@@ -16,7 +15,7 @@ import javax.annotation.concurrent.NotThreadSafe;
  * 
  * <p>Fetching an element by index via a call to {@code get(int index)} is O(lg(N)).
  */
-@NotThreadSafe
+// NotThreadSafe
 public class ArrayListPageList<E> extends AbstractPageList<E> implements PageList<E>, RandomAccess, Serializable {
 
     private static final long serialVersionUID = 1L;

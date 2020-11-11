@@ -11,8 +11,8 @@ import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
+import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.NotNull;
 
 
 /**
@@ -110,7 +110,7 @@ public class HashLocks<LockType, LockStatisticsType> {
         
         private final CollisionTracking collisionTracking;
         
-        private HashLocksKeyMap(@Nonnull CollisionTracking collisionTracking) {
+        private HashLocksKeyMap(@NotNull CollisionTracking collisionTracking) {
             this.collisionTracking = collisionTracking;
         }
 

@@ -22,9 +22,9 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Stream;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import org.hamcrest.Matchers;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -2032,7 +2032,7 @@ public class PriorityLockTest extends TestBase {
          * @param newPriority if not null the new priority of the thread after await returns. Used to verify that threads waiting on the original thread are signaled.
          * @param waitArg the timeout parameter to await - only applicable for DoThreadTryLockWith2000Timeout
          */
-        void awaitAction(int priority, Integer newPriority, @Nonnull WaitArg waitArg) {
+        void awaitAction(int priority, Integer newPriority, @NotNull WaitArg waitArg) {
             final Thread currentThread = Thread.currentThread();
             currentThread.setPriority(priority);
             logString("start " + priorityLock.toString() + " " + conditionToString());
@@ -2339,7 +2339,7 @@ public class PriorityLockTest extends TestBase {
         }
 
         @Override
-        public @Nonnull Condition newCondition() {
+        public @NotNull Condition newCondition() {
             return super.newCondition();
         }        
         
@@ -2376,7 +2376,7 @@ public class PriorityLockTest extends TestBase {
         }
 
         @Override
-        public @Nonnull Condition newCondition() {
+        public @NotNull Condition newCondition() {
             return new InternalCondition(super.newCondition());
         }
         
@@ -2418,7 +2418,7 @@ public class PriorityLockTest extends TestBase {
             }
 
             @Override
-            public boolean awaitUntil(@Nonnull Date deadline) throws InterruptedException {
+            public boolean awaitUntil(@NotNull Date deadline) throws InterruptedException {
                 throwIfNecessaryBefore();
                 boolean acquired = condition.awaitUntil(deadline);
                 throwIfNecessaryAfter();

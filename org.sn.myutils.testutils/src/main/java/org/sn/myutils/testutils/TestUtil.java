@@ -207,7 +207,7 @@ public class TestUtil {
         return new Between<>(low, high);
     }
     
-    static class Between<T extends Comparable<T>> extends BaseMatcher<T> {
+    public static class Between<T extends Comparable<T>> extends BaseMatcher<T> {
         private final T low;
         private final T high;
         

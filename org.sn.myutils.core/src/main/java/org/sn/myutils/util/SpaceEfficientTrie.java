@@ -13,15 +13,14 @@ import java.util.Optional;
 import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.stream.Stream;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import javax.annotation.concurrent.NotThreadSafe;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 
 /**
  * Trie class that merges all chars into one string for a node if there are no child nodes.
  */
-@NotThreadSafe
+// NotThreadSafe
 public class SpaceEfficientTrie<T extends Comparable<T>, U> extends TrieIterationHelper.TrieMap<T, U> {
     private SpaceEfficientTrieNode<T, U> root;
     private int modCount;
@@ -36,7 +35,7 @@ public class SpaceEfficientTrie<T extends Comparable<T>, U> extends TrieIteratio
     }
 
     @Override
-    public @Nullable U put(Iterable<T> codePoints, @Nonnull U data) {
+    public @Nullable U put(Iterable<T> codePoints, @NotNull U data) {
         U oldData = root.add(codePoints, data);
         modCount++;
         return oldData;
@@ -90,7 +89,7 @@ public class SpaceEfficientTrie<T extends Comparable<T>, U> extends TrieIteratio
         }
 
         @Override
-        public U setData(@Nonnull U newData) {
+        public U setData(@NotNull U newData) {
             U old = data;
             data = Objects.requireNonNull(newData);
             return old;
@@ -125,7 +124,7 @@ public class SpaceEfficientTrie<T extends Comparable<T>, U> extends TrieIteratio
             return size;
         }
 
-        U add(Iterable<T> codePoints, @Nonnull U data) {
+        U add(Iterable<T> codePoints, @NotNull U data) {
             var find = doAddOrFind(this, codePoints, Optional.of(data));
             return find != null ? find.oldData : null;
         }
