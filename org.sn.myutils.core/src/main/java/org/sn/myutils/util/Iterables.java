@@ -8,7 +8,7 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
-import javax.annotation.Nonnull;
+import org.sn.myutils.annotations.NotNull;
 
 
 public class Iterables {
@@ -188,7 +188,7 @@ public class Iterables {
         }
 
         @Override
-        public @Nonnull Iterator<Integer> iterator() {
+        public @NotNull Iterator<Integer> iterator() {
             return streamSupplier.get().iterator();
         }
 
@@ -208,7 +208,7 @@ public class Iterables {
         }
 
         @Override
-        public @Nonnull Iterator<Character> iterator() {
+        public @NotNull Iterator<Character> iterator() {
             return streamSupplier.get().mapToObj(intValue -> (char)intValue).iterator();
         }
 

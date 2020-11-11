@@ -7,7 +7,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
-import javax.annotation.Nonnull;
+import org.sn.myutils.annotations.NotNull;
 
 
 /**
@@ -30,7 +30,7 @@ public abstract class KeyToSocketAddressMapper {
      * @return address of the remote machine
      * @throws IllegalStateException if the remote machine returned by the abstract protected function is not in the universe of possible machines 
      */
-    public final @Nonnull SocketAddress mapKeyToRemoteAddress(String key) {
+    public final @NotNull SocketAddress mapKeyToRemoteAddress(String key) {
         var result = Objects.requireNonNull(doMapKeyToRemoteAddress(key));
         var universe = getRemoteUniverse();
         if (!universe.contains(result)) {
@@ -46,7 +46,7 @@ public abstract class KeyToSocketAddressMapper {
      * @param remoteAddress the remote address
      * @return the local address. This will usually be localhost and a unique port.
      */
-    public final @Nonnull SocketAddress getLocalAddress(SocketAddress remoteAddress) {
+    public final @NotNull SocketAddress getLocalAddress(SocketAddress remoteAddress) {
         return remoteToLocalMap.computeIfAbsent(remoteAddress, unused -> generateLocalAddress());
     }
     
@@ -58,13 +58,13 @@ public abstract class KeyToSocketAddressMapper {
     /**
      * Map a key to a remote machine in the universe.
      */
-    protected abstract @Nonnull SocketAddress doMapKeyToRemoteAddress(String key);
+    protected abstract @NotNull SocketAddress doMapKeyToRemoteAddress(String key);
     
     /**
      * Create a new local address.
      * Should throw if user is requesting more socket local ports than are in the universe.
      */
-    protected abstract @Nonnull SocketAddress generateLocalAddress();
+    protected abstract @NotNull SocketAddress generateLocalAddress();
 
     /**
      * Return a KeyToSocketAddressMapper for a single remote machine and local machine port.
@@ -80,12 +80,12 @@ public abstract class KeyToSocketAddressMapper {
             }
 
             @Override
-            protected @Nonnull SocketAddress doMapKeyToRemoteAddress(String key) {
+            protected @NotNull SocketAddress doMapKeyToRemoteAddress(String key) {
                 return remoteAddress;
             }
 
             @Override
-            protected @Nonnull SocketAddress generateLocalAddress() {
+            protected @NotNull SocketAddress generateLocalAddress() {
                 // the purpose of the Objects.requireNonNull and getAndSet is to ensure that the 2nd call to this function throws an exception
                 return Objects.requireNonNull(localAddress.getAndSet(null));
             }

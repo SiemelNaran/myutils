@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.IntPredicate;
-import javax.annotation.Nonnull;
+import org.sn.myutils.annotations.NotNull;
 import org.sn.myutils.util.RewindableIterator;
 import org.sn.myutils.util.SimpleStringTokenizerFactory;
 import org.sn.myutils.util.SimpleStringTokenizerFactory.QuoteStrategy;
@@ -349,7 +349,7 @@ public class ExpressionParser {
          * @return this
          * @throws IllegalStateException if function case has already been set
          */
-        public Builder setFunctionCase(@Nonnull StringCase functionCase) {
+        public Builder setFunctionCase(@NotNull StringCase functionCase) {
             if (this.functionCase != null) {
                 throw new IllegalStateException("functionCase has already been set");
             }

@@ -12,8 +12,8 @@ import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
+import org.sn.myutils.annotations.NotNull;
+import org.sn.myutils.annotations.Nullable;
 import org.sn.myutils.pubsub.MessageClasses.MessageBase;
 import org.sn.myutils.pubsub.MessageClasses.RelayMessageBase;
 
@@ -111,7 +111,7 @@ class PubSubUtils {
         }
     }
 
-    public static void unlockSafely(@Nonnull Lock lock) throws IllegalMonitorStateException {
+    public static void unlockSafely(@NotNull Lock lock) throws IllegalMonitorStateException {
         try {
             lock.unlock();
         } catch (IllegalMonitorStateException ignored) {

@@ -3,8 +3,8 @@ package org.sn.myutils.util;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
+import org.sn.myutils.annotations.NotNull;
+import org.sn.myutils.annotations.Nullable;
 
 
 /**
@@ -23,7 +23,7 @@ public interface Trie<T extends Comparable<T>, U> extends Map<Iterable<T>, U> {
      * @throws NullPointerException if data is null
      */
     @Override
-    @Nullable U put(Iterable<T> codePoints, @Nonnull U data);
+    @Nullable U put(Iterable<T> codePoints, @NotNull U data);
 
     /**
      * Remove a word from the trie.

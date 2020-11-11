@@ -1,8 +1,8 @@
 package org.sn.myutils.pubsub;
 
 import java.util.function.Consumer;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
+import org.sn.myutils.annotations.NotNull;
+import org.sn.myutils.annotations.Nullable;
 
 
 /**
@@ -22,16 +22,16 @@ public class InMemoryPubSub extends PubSub {
     }
 
     public final class InMemoryPublisher extends Publisher {
-        private InMemoryPublisher(@Nonnull String topic, @Nonnull Class<?> publisherClass) {
+        private InMemoryPublisher(@NotNull String topic, @NotNull Class<?> publisherClass) {
             super(topic, publisherClass);
         }
     }
 
     public final class InMemorySubscriber extends Subscriber {
-        private InMemorySubscriber(@Nonnull String topic,
-                                   @Nonnull String subscriberName,
-                                   @Nonnull Class<? extends CloneableObject<?>> subscriberClass,
-                                   @Nonnull Consumer<CloneableObject<?>> callback) {
+        private InMemorySubscriber(@NotNull String topic,
+                                   @NotNull String subscriberName,
+                                   @NotNull Class<? extends CloneableObject<?>> subscriberClass,
+                                   @NotNull Consumer<CloneableObject<?>> callback) {
             super(topic, subscriberName, subscriberClass, callback);
         }
     }
@@ -42,10 +42,10 @@ public class InMemoryPubSub extends PubSub {
     }
     
     @Override
-    protected Subscriber newSubscriber(@Nonnull String topic,
-                                       @Nonnull String subscriberName,
-                                       @Nonnull Class<? extends CloneableObject<?>> subscriberClass,
-                                       @Nonnull Consumer<CloneableObject<?>> callback) {
+    protected Subscriber newSubscriber(@NotNull String topic,
+                                       @NotNull String subscriberName,
+                                       @NotNull Class<? extends CloneableObject<?>> subscriberClass,
+                                       @NotNull Consumer<CloneableObject<?>> callback) {
         return new InMemorySubscriber(topic, subscriberName, subscriberClass, callback);
     }
 

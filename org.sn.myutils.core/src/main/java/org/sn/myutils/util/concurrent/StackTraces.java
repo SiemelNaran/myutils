@@ -10,8 +10,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletionException;
 import java.util.stream.Collectors;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
+import org.sn.myutils.annotations.NotNull;
+import org.sn.myutils.annotations.Nullable;
 
 
 public class StackTraces {
@@ -47,7 +47,7 @@ public class StackTraces {
         _ignoreModuleNameList = newList;
     }
     
-    private static boolean shouldIgnore(@Nullable String moduleName, @Nonnull String className) {
+    private static boolean shouldIgnore(@Nullable String moduleName, @NotNull String className) {
         if (shouldIgnoreClassOrPackage(className)) {
             return true;
         }
@@ -57,7 +57,7 @@ public class StackTraces {
         return false;
     }
     
-    private static boolean shouldIgnoreClassOrPackage(@Nonnull String className) {
+    private static boolean shouldIgnoreClassOrPackage(@NotNull String className) {
         List<String> ignoreList = _ignoreClassOrPackageNameList;
         int index = Collections.binarySearch(ignoreList, className);
         if (index >= 0) {
@@ -100,7 +100,7 @@ public class StackTraces {
     }
 
     private final @Nullable StackTraces parent; 
-    private final @Nonnull List<StackTraceElement> stackTrace;
+    private final @NotNull List<StackTraceElement> stackTrace;
     
     StackTraces(@Nullable StackTraces parent) {
         this.parent = parent;

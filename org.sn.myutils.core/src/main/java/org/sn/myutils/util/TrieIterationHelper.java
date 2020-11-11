@@ -13,15 +13,15 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.Stack;
 import java.util.stream.Stream;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
+import org.sn.myutils.annotations.NotNull;
+import org.sn.myutils.annotations.Nullable;
 
 
 class TrieIterationHelper {
     interface TrieNode<T extends Comparable<T>, U> {
         U getData();
 
-        U setData(@Nonnull U newData);
+        U setData(@NotNull U newData);
 
         Stream<Map.Entry<Iterable<T>, ? extends TrieNode<T, U>>> childrenIterator();
     }
@@ -173,7 +173,7 @@ class TrieIterationHelper {
         }
 
         @Override
-        public final @Nonnull Set<Entry<Iterable<T>, U>> entrySet() {
+        public final @NotNull Set<Entry<Iterable<T>, U>> entrySet() {
             return new TrieSet<>(this);
         }
     }
@@ -191,7 +191,7 @@ class TrieIterationHelper {
         }
 
         @Override
-        public @Nonnull Iterator<Map.Entry<Iterable<T>, U>> iterator() {
+        public @NotNull Iterator<Map.Entry<Iterable<T>, U>> iterator() {
             return new AdaptingIterator<>(trie.trieIterator(), trieEntry -> trieEntry, true); // 2nd arg as Function.identity() gives compile error
         }
     }

@@ -4,8 +4,8 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.Objects;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
+import org.sn.myutils.annotations.NotNull;
+import org.sn.myutils.annotations.Nullable;
 
 
 public class DefaultNumberFactory implements NumberFactory {
@@ -29,7 +29,7 @@ public class DefaultNumberFactory implements NumberFactory {
     }
     
     private final @Nullable IntegerPolicy integerPolicy;
-    private final @Nonnull FloatPolicy floatPolicy;
+    private final @NotNull FloatPolicy floatPolicy;
     private final @Nullable Integer bigDecimalScale;
     private final @Nullable RoundingMode roundingMode;
     
@@ -120,7 +120,7 @@ public class DefaultNumberFactory implements NumberFactory {
 
     public static class Builder {
         private @Nullable IntegerPolicy integerPolicy = IntegerPolicy.PREFER_INTEGER;
-        private @Nonnull FloatPolicy floatPolicy = FloatPolicy.PREFER_DOUBLE;
+        private @NotNull FloatPolicy floatPolicy = FloatPolicy.PREFER_DOUBLE;
         private @Nullable Integer bigDecimalScale;
         private @Nullable RoundingMode roundingMode;
         
@@ -137,7 +137,7 @@ public class DefaultNumberFactory implements NumberFactory {
         /**
          * Set the float policy.
          */
-        public Builder setFloatPolicy(@Nonnull FloatPolicy floatPolicy) {
+        public Builder setFloatPolicy(@NotNull FloatPolicy floatPolicy) {
             this.floatPolicy = Objects.requireNonNull(floatPolicy);
             return this;
         }

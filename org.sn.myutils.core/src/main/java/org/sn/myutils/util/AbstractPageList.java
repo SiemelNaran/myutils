@@ -18,7 +18,7 @@ import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
-import javax.annotation.concurrent.NotThreadSafe;
+import org.sn.myutils.annotations.NotThreadSafe;
 import org.sn.myutils.util.MoreCollections.FindWhich;
 
 /**

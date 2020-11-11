@@ -4,8 +4,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
+import org.sn.myutils.annotations.NotNull;
+import org.sn.myutils.annotations.Nullable;
 
 
 public class UnitNumberFactory implements NumberFactory {    
@@ -13,10 +13,10 @@ public class UnitNumberFactory implements NumberFactory {
         return new Builder();
     }
     
-    private final @Nonnull DefaultNumberFactory numberFactory;
-    private final @Nonnull UnitPosition unitPosition;
-    private final @Nonnull StringCase unitCase;
-    private final @Nonnull Map<String /*unit*/, UnaryOperator<Number>> units;
+    private final @NotNull DefaultNumberFactory numberFactory;
+    private final @NotNull UnitPosition unitPosition;
+    private final @NotNull StringCase unitCase;
+    private final @NotNull Map<String /*unit*/, UnaryOperator<Number>> units;
     private final @Nullable UnaryOperator<Number> defaultConverter;
     
     private UnitNumberFactory(DefaultNumberFactory numberFactory,
@@ -92,11 +92,11 @@ public class UnitNumberFactory implements NumberFactory {
         return converter.apply(basic);
     }
     
-    private static @Nonnull int[] getWordAtStart(String str) {
+    private static @NotNull int[] getWordAtStart(String str) {
         return str.codePoints().takeWhile(Character::isLetter).toArray();
     }
     
-    private static @Nonnull int[] getNumberAtStart(String str) {
+    private static @NotNull int[] getNumberAtStart(String str) {
         return str.codePoints().takeWhile(UnitNumberFactory::isNumberChar).toArray();
     }
     
@@ -110,10 +110,10 @@ public class UnitNumberFactory implements NumberFactory {
     }
 
     public static class Builder {
-        private @Nonnull DefaultNumberFactory numberFactory = DefaultNumberFactory.DEFAULT_NUMBER_FACTORY;
+        private @NotNull DefaultNumberFactory numberFactory = DefaultNumberFactory.DEFAULT_NUMBER_FACTORY;
         private UnitPosition unitPosition = UnitPosition.AFTER;
         private StringCase unitCase = null;
-        private @Nonnull final Map<String /*unit*/, UnaryOperator<Number>> units = new HashMap<>();
+        private @NotNull final Map<String /*unit*/, UnaryOperator<Number>> units = new HashMap<>();
         private @Nullable String defaultUnit;
         
         /**
@@ -122,7 +122,7 @@ public class UnitNumberFactory implements NumberFactory {
          * @param numberFactory the number factory
          * @return this
          */
-        public Builder setNumberFactory(@Nonnull DefaultNumberFactory numberFactory) {
+        public Builder setNumberFactory(@NotNull DefaultNumberFactory numberFactory) {
             this.numberFactory = Objects.requireNonNull(numberFactory);
             return this;
         }
@@ -133,7 +133,7 @@ public class UnitNumberFactory implements NumberFactory {
          * @param unitPosition the unit position
          * @return this
          */
-        public Builder setUnitPosition(@Nonnull UnitPosition unitPosition) {
+        public Builder setUnitPosition(@NotNull UnitPosition unitPosition) {
             this.unitPosition = Objects.requireNonNull(unitPosition);
             return this;
         }
@@ -146,7 +146,7 @@ public class UnitNumberFactory implements NumberFactory {
          * @return this
          * @throws IllegalStateException if unit case has already been set
          */
-        public Builder setUnitCase(@Nonnull StringCase unitCase) {
+        public Builder setUnitCase(@NotNull StringCase unitCase) {
             if (this.unitCase != null) {
                 throw new IllegalStateException("unitCase has already been set");
             }
@@ -162,7 +162,7 @@ public class UnitNumberFactory implements NumberFactory {
          * @return this
          * @throws IllegalArgumentException if unit name is not all letters
          */
-        public Builder addUnit(@Nonnull String unit, UnaryOperator<Number> converter) {
+        public Builder addUnit(@NotNull String unit, UnaryOperator<Number> converter) {
             Objects.requireNonNull(unitCase);
             unit = unitCase.convert(unit);
             verifyUnit(unit);
