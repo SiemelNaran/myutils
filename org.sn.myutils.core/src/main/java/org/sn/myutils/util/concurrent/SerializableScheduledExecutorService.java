@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.stream.Stream;
+import javax.annotation.Nonnull;
 
 
 /**
@@ -50,7 +51,7 @@ public interface SerializableScheduledExecutorService extends ScheduledExecutorS
      * @return list of tasks
      */
     @Override
-    List<Runnable> shutdownNow();
+    @Nonnull List<Runnable> shutdownNow();
     
     
     default void importUnfinishedTasks(UnfinishedTasks unfinishedTasks) throws RecreateRunnableFailedException {
@@ -72,7 +73,7 @@ public interface SerializableScheduledExecutorService extends ScheduledExecutorS
 
     
     @SuppressWarnings("checkstyle:SummaryJavadoc")
-    public interface UnfinishedTasks extends Serializable {
+    interface UnfinishedTasks extends Serializable {
         Stream<TaskInfo> stream();
         
         interface TaskInfo {
@@ -117,8 +118,7 @@ public interface SerializableScheduledExecutorService extends ScheduledExecutorS
     /**
      * Checked exception that is thrown when import fails.
      */
-    @SuppressWarnings("checkstyle:SummaryJavadoc")
-    public static class RecreateRunnableFailedException extends Exception {
+    class RecreateRunnableFailedException extends Exception {
         private static final long serialVersionUID = 1L;
         private static final String UNABLE_TO_RECREATE = "Unable to recreate ";
         
@@ -128,8 +128,8 @@ public interface SerializableScheduledExecutorService extends ScheduledExecutorS
             this.listClass = Collections.singletonList(clazz);
         }
         
-        RecreateRunnableFailedException(List<Class<?>> clazzs) {
-            this.listClass = Collections.unmodifiableList(clazzs);
+        RecreateRunnableFailedException(@Nonnull List<Class<?>> clazzList) {
+            this.listClass = Collections.unmodifiableList(clazzList);
         }
         
         @Override
@@ -138,9 +138,9 @@ public interface SerializableScheduledExecutorService extends ScheduledExecutorS
         }
 
         /**
-         * @return list of class of runnable or callable, will always be not empty
+         * Return a list of class of runnable or callable.
          */
-        public List<Class<?>> getFailedClasses() {
+        public @Nonnull List<Class<?>> getFailedClasses() {
             return listClass;
         }
     }

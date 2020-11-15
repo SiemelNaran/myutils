@@ -22,6 +22,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
+import javax.annotation.Nonnull;
 
 
 public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPoolExecutor implements SerializableScheduledExecutorService {
@@ -29,7 +30,7 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
     private static final System.Logger LOGGER = System.getLogger(SerializableScheduledThreadPoolExecutor.class.getName());
     
     private final ThreadLocal<RunnableInfo> threadLocalRunnableInfo = new ThreadLocal<>();
-    private volatile Level logIfCannotSerialize = Level.TRACE;
+    private volatile Level logIfCannotSerializeLevel = Level.TRACE;
     private ArrayList<RunnableInfo> exceptionalRunnableInfos = new ArrayList<>();
     private UnfinishedTasksImpl unfinishedTasks;
     
@@ -41,28 +42,28 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
     }
 
     public SerializableScheduledThreadPoolExecutor(int corePoolSize,
-                                         ThreadFactory threadFactory) {
+                                                   ThreadFactory threadFactory) {
         super(corePoolSize, threadFactory);
     }
 
     public SerializableScheduledThreadPoolExecutor(int corePoolSize,
-                                         RejectedExecutionHandler handler) {
+                                                   RejectedExecutionHandler handler) {
         super(corePoolSize, handler);
     }
 
     public SerializableScheduledThreadPoolExecutor(int corePoolSize,
-                                         ThreadFactory threadFactory,
-                                         RejectedExecutionHandler handler) {
+                                                   ThreadFactory threadFactory,
+                                                   RejectedExecutionHandler handler) {
         super(corePoolSize, threadFactory, handler);
     }
     
     
-    public void logIfCannotSerialize(Level logIfCannotSerialize) {
-        this.logIfCannotSerialize = logIfCannotSerialize;
+    public void setLogIfCannotSerializeLevel(Level level) {
+        this.logIfCannotSerializeLevel = level;
     }
 
     @Override
-    public List<Runnable> shutdownNow() {
+    public @Nonnull List<Runnable> shutdownNow() {
         List<Runnable> runnables = super.shutdownNow();
         ArrayList<RunnableInfo> tasks = new ArrayList<>();
         for (Iterator<Runnable> iter = runnables.iterator(); iter.hasNext(); ) {
@@ -94,10 +95,10 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
     
     @Override
     public UnfinishedTasks exportUnfinishedTasks(boolean includeExceptions) {
-        UnfinishedTasks tasks = unfinishedTasks;
+        UnfinishedTasksImpl tasks = unfinishedTasks;
         unfinishedTasks = null;
         if (includeExceptions) {
-            ((UnfinishedTasksImpl) tasks).addRunnableInfos(exceptionalRunnableInfos);
+            tasks.addRunnableInfos(exceptionalRunnableInfos);
         }
         exceptionalRunnableInfos = new ArrayList<>();
         return tasks;
@@ -132,9 +133,9 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
     }
 
     @Override
-    public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
+    public @Nonnull ScheduledFuture<?> schedule(@Nonnull Runnable command, long delay, @Nonnull TimeUnit unit) {
         try {
-            threadLocalRunnableInfo.set(computeRunnableInfo(command, delay, 0, unit));
+            threadLocalRunnableInfo.set(computeRunnableInfo(command, delay, 0, unit, logIfCannotSerializeLevel));
             return super.schedule(command, delay, unit);
         } finally {
             threadLocalRunnableInfo.remove();
@@ -142,9 +143,9 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
     }
 
     @Override
-    public <V> ScheduledFuture<V> schedule(Callable<V> callable, long delay, TimeUnit unit) {
+    public @Nonnull <V> ScheduledFuture<V> schedule(@Nonnull Callable<V> callable, long delay, @Nonnull TimeUnit unit) {
         try {
-            threadLocalRunnableInfo.set(computeRunnableInfo(callable, delay, 0, unit));
+            threadLocalRunnableInfo.set(computeRunnableInfo(callable, delay, unit, logIfCannotSerializeLevel));
             return super.schedule(callable, delay, unit);
         } finally {
             threadLocalRunnableInfo.remove();
@@ -152,9 +153,9 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
     }
 
     @Override
-    public ScheduledFuture<?> scheduleAtFixedRate(Runnable command, long initialDelay, long period, TimeUnit unit) {
+    public @Nonnull ScheduledFuture<?> scheduleAtFixedRate(@Nonnull Runnable command, long initialDelay, long period, @Nonnull TimeUnit unit) {
         try {
-            threadLocalRunnableInfo.set(computeRunnableInfo(command, initialDelay, period, unit));
+            threadLocalRunnableInfo.set(computeRunnableInfo(command, initialDelay, period, unit, logIfCannotSerializeLevel));
             return super.scheduleAtFixedRate(command, initialDelay, period, unit);
         } finally {
             threadLocalRunnableInfo.remove();
@@ -162,16 +163,16 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
     }
 
     @Override
-    public ScheduledFuture<?> scheduleWithFixedDelay(Runnable command, long initialDelay, long delay, TimeUnit unit) {
+    public @Nonnull ScheduledFuture<?> scheduleWithFixedDelay(@Nonnull Runnable command, long initialDelay, long delay, @Nonnull TimeUnit unit) {
         try {
-            threadLocalRunnableInfo.set(computeRunnableInfo(command, initialDelay, -delay, unit));
+            threadLocalRunnableInfo.set(computeRunnableInfo(command, initialDelay, -delay, unit, logIfCannotSerializeLevel));
             return super.scheduleWithFixedDelay(command, initialDelay, delay, unit);
         } finally {
             threadLocalRunnableInfo.remove();
         }
     }
     
-    private RunnableInfo computeRunnableInfo(Runnable command, long initialDelay, long period, TimeUnit unit) {
+    static RunnableInfo computeRunnableInfo(Runnable command, long initialDelay, long period, TimeUnit unit, Level logIfCannotSerializeLevel) {
         if (command instanceof SerializableRunnable) {
             return new RunnableInfo(new TimeInfo(initialDelay, period, unit), (SerializableRunnable) command);
         } else {
@@ -182,13 +183,13 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
                         clazz.getConstructor();
                         return new RunnableInfo(new TimeInfo(initialDelay, period, unit), clazz);
                     } catch (NoSuchMethodException | SecurityException e) {
-                        LOGGER.log(logIfCannotSerialize, "Cannot serialize " + clazz.getName() + " - no public constructor");
+                        LOGGER.log(logIfCannotSerializeLevel, "Cannot serialize " + clazz.getName() + " - no public constructor");
                     }
                 } else {
-                    LOGGER.log(logIfCannotSerialize, "Cannot serialize " + clazz.getName() + " - synthetic class");
+                    LOGGER.log(logIfCannotSerializeLevel, "Cannot serialize " + clazz.getName() + " - synthetic class");
                 }
             } else {
-                LOGGER.log(logIfCannotSerialize, "Cannot serialize " + clazz.getName() + " - local class");
+                LOGGER.log(logIfCannotSerializeLevel, "Cannot serialize " + clazz.getName() + " - local class");
             }
         }
         return null;
@@ -196,10 +197,10 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
     
     
     @SuppressWarnings("rawtypes")
-    private <V> RunnableInfo computeRunnableInfo(Callable<V> callable, long initialDelay, long period, TimeUnit unit) {
+    static <V> RunnableInfo computeRunnableInfo(Callable<V> callable, long initialDelay, TimeUnit unit, Level logIfCannotSerializeLevel) {
         if (callable instanceof SerializableCallable) {
             SerializableRunnable command = new AdaptSerializableCallable((SerializableCallable<V>) callable); 
-            return new RunnableInfo(new TimeInfo(initialDelay, period, unit), command);
+            return new RunnableInfo(new TimeInfo(initialDelay, 0, unit), command);
         } else {
             Class<? extends Callable> clazz = callable.getClass();
             if (!clazz.isLocalClass()) { 
@@ -207,15 +208,15 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
                     try {
                         clazz.getConstructor();
                         SerializableRunnable command = new AdaptSerializableCallableClass(clazz); 
-                        return new RunnableInfo(new TimeInfo(initialDelay, period, unit), command);
+                        return new RunnableInfo(new TimeInfo(initialDelay, 0, unit), command);
                     } catch (NoSuchMethodException | SecurityException e) {
-                        LOGGER.log(logIfCannotSerialize, "Cannot serialize " + clazz.getName() + " - no public constructor");
+                        LOGGER.log(logIfCannotSerializeLevel, "Cannot serialize " + clazz.getName() + " - no public constructor");
                     }
                 } else {
-                    LOGGER.log(logIfCannotSerialize, "Cannot serialize " + clazz.getName() + " - synthetic class");
+                    LOGGER.log(logIfCannotSerializeLevel, "Cannot serialize " + clazz.getName() + " - synthetic class");
                 }
             } else {
-                LOGGER.log(logIfCannotSerialize, "Cannot serialize " + clazz.getName() + " - local class");
+                LOGGER.log(logIfCannotSerializeLevel, "Cannot serialize " + clazz.getName() + " - local class");
             }
         }
         return null;
@@ -246,7 +247,7 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
 
         private final Class<? extends Callable> clazz;
 
-        <V> AdaptSerializableCallableClass(Class<? extends Callable> clazz) {
+        AdaptSerializableCallableClass(Class<? extends Callable> clazz) {
             this.clazz = clazz;
         }
 
@@ -267,7 +268,7 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
         task = super.decorateTask(runnable, task);
         RunnableInfo runnableInfo = threadLocalRunnableInfo.get();
         if (runnableInfo != null) {
-            return new DecoratedRunnableScheduledFuture<V>(task, runnableInfo);
+            return new DecoratedRunnableScheduledFuture<>(task, runnableInfo);
         } else {
             return task;
         }
@@ -278,7 +279,7 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
         task = super.decorateTask(callable, task);
         RunnableInfo runnableInfo = threadLocalRunnableInfo.get();
         if (runnableInfo != null) {
-            return new DecoratedRunnableScheduledFuture<V>(task, runnableInfo);
+            return new DecoratedRunnableScheduledFuture<>(task, runnableInfo);
         } else {
             return task;
         }
@@ -319,11 +320,15 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
             this.period = period;
             this.unit = unit;
         }
-        
+
         protected long getInitialDelay() {
             return initialDelay;
         }
-        
+
+        protected long getInitialDelayMillis() {
+            return unit.toMillis(initialDelay);
+        }
+
         /**
          * Return the period.
          * A positive value means scheduleAtFixedRate.
@@ -385,7 +390,7 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
                     future = service.schedule(runnable, timeInfo.getInitialDelay(), timeInfo.getUnit());
                 }
             }
-            return new SimpleEntry<Class<?>, ScheduledFuture<?>>(clazz, future);
+            return new SimpleEntry<>(clazz, future);
         }
 
         private void setCompletedExceptionally() {
@@ -478,7 +483,8 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
             };
         }
     }
-    
+
+
     private static class DecoratedRunnableScheduledFuture<V> implements RunnableScheduledFuture<V> {
         private final RunnableScheduledFuture<V> future;
         private RunnableInfo runnableInfo;
@@ -521,17 +527,17 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
         }
 
         @Override
-        public V get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+        public V get(long timeout, @Nonnull TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
             return future.get(timeout, unit);
         }
 
         @Override
-        public long getDelay(TimeUnit unit) {
+        public long getDelay(@Nonnull TimeUnit unit) {
             return future.getDelay(unit);
         }
 
         @Override
-        public int compareTo(Delayed that) {
+        public int compareTo(@Nonnull Delayed that) {
             return future.compareTo(that);
         }
 

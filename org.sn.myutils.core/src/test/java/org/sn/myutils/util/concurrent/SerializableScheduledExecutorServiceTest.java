@@ -1,6 +1,8 @@
 package org.sn.myutils.util.concurrent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -11,6 +13,7 @@ import java.lang.System.Logger.Level;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +50,7 @@ public class SerializableScheduledExecutorServiceTest {
     // Runnables created via a lambdas appear to have only a private constructor with no arguments in Java 8.
     //
     private static class TestBasicRunnable implements Runnable {
-        private static AtomicInteger number = new AtomicInteger(); 
+        private static final AtomicInteger number = new AtomicInteger();
 
         public TestBasicRunnable() {
         }
@@ -310,7 +313,7 @@ public class SerializableScheduledExecutorServiceTest {
 
 
     private static class TestStandardCallable implements Callable<Integer> {
-        private static AtomicInteger number = new AtomicInteger(); 
+        private static final AtomicInteger number = new AtomicInteger();
 
         public TestStandardCallable() {
         }
@@ -373,15 +376,15 @@ public class SerializableScheduledExecutorServiceTest {
             future1630.cancel(false);
 
             List<Runnable> unfinishedRunnables = service.shutdownNow();
-            assertEquals(Arrays.asList(1 * 3, 6 * 5), Arrays.asList(TestStandardCallable.number.get(), TestSerializableCallable.number.get()));
+            assertEquals(Arrays.asList(3, 6 * 5), Arrays.asList(TestStandardCallable.number.get(), TestSerializableCallable.number.get()));
             assertEquals(1, unfinishedRunnables.size()); // returns the cancelled tasks
             
             UnfinishedTasks unfinishedTasks = service.exportUnfinishedTasks();
             assertEquals(4, unfinishedTasks.stream().count());
             assertEquals(0, unfinishedTasks.stream().filter(UnfinishedTasks.TaskInfo::isPeriodic).count());
-            
-            assertEquals(true, future620.isDone());
-            assertEquals(false, future620.isCancelled());
+
+            assertTrue(future620.isDone());
+            assertFalse(future620.isCancelled());
             assertEquals(6, future620.get(1, TimeUnit.MILLISECONDS).intValue());
             assertEquals(6, future620.get().intValue());
             
@@ -410,7 +413,7 @@ public class SerializableScheduledExecutorServiceTest {
             SerializableScheduledExecutorService service = MoreExecutors.newSerializableScheduledThreadPool(1);
             Map<Class<?>, List<ScheduledFuture<?>>> futures
                     = service.importUnfinishedTasks(tasks,
-                                                    Arrays.asList(TestSerializableCallable.class));
+                                                    Collections.singletonList(TestSerializableCallable.class));
             assertEquals(1, futures.size());
             assertEquals(TestSerializableCallable.class, futures.keySet().iterator().next());
             assertEquals(3, futures.entrySet().iterator().next().getValue().size());
@@ -420,10 +423,8 @@ public class SerializableScheduledExecutorServiceTest {
                 = (ScheduledFuture<Integer>) futures.entrySet()
                                                     .iterator()
                                                     .next()
-                                                    .getValue().stream()
-                                                               .collect(Collectors.minBy((lhs, rhs) -> Long.compare(lhs.getDelay(TimeUnit.MILLISECONDS),
-                                                                                                                    rhs.getDelay(TimeUnit.MILLISECONDS))))
-                                                               .get();
+                                                    .getValue().stream().min(Comparator.comparingLong(lhs -> lhs.getDelay(TimeUnit.MILLISECONDS)))
+                                                    .get();
             
             Thread.sleep(1000);
             // callable1: 610 already done
@@ -440,9 +441,9 @@ public class SerializableScheduledExecutorServiceTest {
 
             UnfinishedTasks unfinishedTasks = service.exportUnfinishedTasks();
             assertEquals(2, unfinishedTasks.stream().count());
-            
-            assertEquals(true, future1620.isDone());
-            assertEquals(false, future1620.isCancelled());
+
+            assertTrue(future1620.isDone());
+            assertFalse(future1620.isCancelled());
             assertEquals(7, future1620.get(1, TimeUnit.MILLISECONDS).intValue());
             assertEquals(7, future1620.get().intValue());
             
@@ -459,17 +460,19 @@ public class SerializableScheduledExecutorServiceTest {
         public void run() { }                    
     }
 
-    @SuppressWarnings("checkstyle:RightCurlyAlone")
     private class TestNonStaticClassRunnable implements Runnable {
-        public TestNonStaticClassRunnable() { }
+        public TestNonStaticClassRunnable() {
+            System.out.println(SerializableScheduledExecutorServiceTest.this.hashCode()); // to suppress IntelliJ warning that class may be static
+        }
 
         @Override
-        public void run() { }                    
+        public void run() {
+        }
     }
 
-    @SuppressWarnings("checkstyle:RightCurlyAlone")
     private static class TestNonPublicConstructorCallable implements Callable<Integer> {
-        TestNonPublicConstructorCallable() { }
+        TestNonPublicConstructorCallable() {
+        }
 
         @Override
         public Integer call() {
@@ -477,9 +480,10 @@ public class SerializableScheduledExecutorServiceTest {
         }                    
     }
 
-    @SuppressWarnings("checkstyle:RightCurlyAlone")
     private class TestNonStaticClassCallable implements Callable<Integer> {
-        public TestNonStaticClassCallable() { }
+        public TestNonStaticClassCallable() {
+            System.out.println(SerializableScheduledExecutorServiceTest.this.hashCode()); // to suppress IntelliJ warning that class may be static
+        }
 
         @Override
         public Integer call() {
@@ -489,7 +493,7 @@ public class SerializableScheduledExecutorServiceTest {
 
     @Test
     @SuppressWarnings("checkstyle:RightCurlyAlone")
-    void testNonSerializable() throws InterruptedException, IOException, ClassNotFoundException, RecreateRunnableFailedException {
+    void testNonSerializable() throws InterruptedException {
         class LocalClassRunnable implements Runnable {
             public LocalClassRunnable() { }
 
@@ -518,7 +522,7 @@ public class SerializableScheduledExecutorServiceTest {
 
         {
             SerializableScheduledExecutorService service = MoreExecutors.newSerializableScheduledThreadPool(1);
-            ((SerializableScheduledThreadPoolExecutor) service).logIfCannotSerialize(Level.WARNING);
+            ((SerializableScheduledThreadPoolExecutor) service).setLogIfCannotSerializeLevel(Level.WARNING);
             service.scheduleAtFixedRate(runnable1, 1410, 100, TimeUnit.MILLISECONDS);
             service.scheduleAtFixedRate(runnable2, 1420, 100, TimeUnit.MILLISECONDS);
             service.scheduleAtFixedRate(runnable3, 1430, 100, TimeUnit.MILLISECONDS);
