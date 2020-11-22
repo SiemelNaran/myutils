@@ -14,6 +14,8 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.hamcrest.BaseMatcher;
@@ -24,6 +26,15 @@ import org.junit.jupiter.params.ParameterizedTest;
 public class TestUtil {
     
     public static final String PARAMETRIZED_TEST_DISPLAY_NAME = ParameterizedTest.DISPLAY_NAME_PLACEHOLDER + " [" + ParameterizedTest.INDEX_PLACEHOLDER + "]";
+
+
+    /**
+     * Return a ThreadFactory whose first thread is threadA, second is threadB, etc.
+     */
+    public static ThreadFactory myThreadFactory() {
+        AtomicInteger threadNumber = new AtomicInteger();
+        return runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A'));
+    }
 
 
     /**
