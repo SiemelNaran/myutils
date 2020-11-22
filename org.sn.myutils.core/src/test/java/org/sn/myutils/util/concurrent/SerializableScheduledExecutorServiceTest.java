@@ -28,6 +28,7 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.sn.myutils.testutils.TestUtil;
 import org.sn.myutils.util.concurrent.SerializableScheduledExecutorService.RecreateRunnableFailedException;
+import org.sn.myutils.util.concurrent.SerializableScheduledExecutorService.TaskInfo;
 import org.sn.myutils.util.concurrent.SerializableScheduledExecutorService.UnfinishedTasks;
 
 
@@ -157,12 +158,12 @@ public class SerializableScheduledExecutorServiceTest {
             
             UnfinishedTasks unfinishedTasks = service.exportUnfinishedTasks();
             assertEquals(4, unfinishedTasks.stream().count()); // 6-2 = 4 because 2 tasks were cancelled
-            assertEquals(2, unfinishedTasks.stream().filter(UnfinishedTasks.TaskInfo::isPeriodic).count());
+            assertEquals(2, unfinishedTasks.stream().filter(TaskInfo::isPeriodic).count());
 
             assertEquals(Arrays.asList("FirstRunnable", "SecondRunnable", "ThirdRunnable", "FirstRunnable"),
                          unfinishedTasks.stream()
-                                        .sorted(Comparator.comparing(UnfinishedTasks.TaskInfo::getInitialDelayInNanos))
-                                        .map(UnfinishedTasks.TaskInfo::getUnderlyingClass)
+                                        .sorted(Comparator.comparing(TaskInfo::getInitialDelayInNanos))
+                                        .map(TaskInfo::getUnderlyingClass)
                                         .map(Class::getSimpleName)
                                         .collect(Collectors.toList()));
             
@@ -202,7 +203,7 @@ public class SerializableScheduledExecutorServiceTest {
             
             UnfinishedTasks unfinishedTasks = service.exportUnfinishedTasks();
             assertEquals(3, unfinishedTasks.stream().count());
-            assertEquals(2, unfinishedTasks.stream().filter(UnfinishedTasks.TaskInfo::isPeriodic).count());
+            assertEquals(2, unfinishedTasks.stream().filter(TaskInfo::isPeriodic).count());
         }
     }
 
@@ -265,12 +266,12 @@ public class SerializableScheduledExecutorServiceTest {
             
             UnfinishedTasks unfinishedTasks = service.exportUnfinishedTasks();
             assertEquals(4, unfinishedTasks.stream().count()); // 6-2 = 4 because 2 tasks were cancelled
-            assertEquals(2, unfinishedTasks.stream().filter(UnfinishedTasks.TaskInfo::isPeriodic).count());
+            assertEquals(2, unfinishedTasks.stream().filter(TaskInfo::isPeriodic).count());
 
             assertEquals(Arrays.asList(1, 2, 3, 1),
                     unfinishedTasks.stream()
-                                   .sorted(Comparator.comparing(UnfinishedTasks.TaskInfo::getInitialDelayInNanos))
-                                   .map(UnfinishedTasks.TaskInfo::getSerializableRunnable)
+                                   .sorted(Comparator.comparing(TaskInfo::getInitialDelayInNanos))
+                                   .map(TaskInfo::getSerializableRunnable)
                                    .map(serializableRunnable -> (TestSerializableRunnable) serializableRunnable)
                                    .map(TestSerializableRunnable::getIndex)
                                    .collect(Collectors.toList()));
@@ -305,7 +306,7 @@ public class SerializableScheduledExecutorServiceTest {
             
             UnfinishedTasks unfinishedTasks = service.exportUnfinishedTasks();
             assertEquals(3, unfinishedTasks.stream().count());
-            assertEquals(2, unfinishedTasks.stream().filter(UnfinishedTasks.TaskInfo::isPeriodic).count());
+            assertEquals(2, unfinishedTasks.stream().filter(TaskInfo::isPeriodic).count());
         }
     }
     
@@ -381,7 +382,7 @@ public class SerializableScheduledExecutorServiceTest {
             
             UnfinishedTasks unfinishedTasks = service.exportUnfinishedTasks();
             assertEquals(4, unfinishedTasks.stream().count());
-            assertEquals(0, unfinishedTasks.stream().filter(UnfinishedTasks.TaskInfo::isPeriodic).count());
+            assertEquals(0, unfinishedTasks.stream().filter(TaskInfo::isPeriodic).count());
 
             assertTrue(future620.isDone());
             assertFalse(future620.isCancelled());
@@ -391,8 +392,8 @@ public class SerializableScheduledExecutorServiceTest {
             // future620 caused callableTwo.call to be run, thereby increasing TestSerializableCallable.number from 5 to 6
             assertEquals(Arrays.asList(6, 6, 6),
                     unfinishedTasks.stream()
-                                   .sorted(Comparator.comparing(UnfinishedTasks.TaskInfo::getInitialDelayInNanos))
-                                   .map(UnfinishedTasks.TaskInfo::getSerializableCallable)
+                                   .sorted(Comparator.comparing(TaskInfo::getInitialDelayInNanos))
+                                   .map(TaskInfo::getSerializableCallable)
                                    .filter(Objects::nonNull)
                                    .map(serializableCallable -> (TestSerializableCallable) serializableCallable)
                                    .map(TestSerializableCallable::getLocal)
@@ -640,7 +641,7 @@ public class SerializableScheduledExecutorServiceTest {
             
             UnfinishedTasks unfinishedTasks = service.exportUnfinishedTasks();
             assertEquals(3, unfinishedTasks.stream().count());
-            assertEquals(2, unfinishedTasks.stream().filter(UnfinishedTasks.TaskInfo::isPeriodic).count());
+            assertEquals(2, unfinishedTasks.stream().filter(TaskInfo::isPeriodic).count());
 
             ObjectOutputStream oos = new ObjectOutputStream(bos);
             oos.writeObject(unfinishedTasks);
@@ -689,7 +690,7 @@ public class SerializableScheduledExecutorServiceTest {
     }
     
     @Test
-    void testSerializeTaskThatExceptionedOut() throws InterruptedException, IOException, ClassNotFoundException, RecreateRunnableFailedException  {
+    void testSerializeTaskThatHadException() throws InterruptedException, IOException, ClassNotFoundException, RecreateRunnableFailedException  {
         final ByteArrayOutputStream bos = new ByteArrayOutputStream();
 
         {
@@ -709,9 +710,9 @@ public class SerializableScheduledExecutorServiceTest {
             
             UnfinishedTasks unfinishedTasks = service.exportUnfinishedTasks(true);
             assertEquals(1, unfinishedTasks.stream().count());
-            assertEquals(1, unfinishedTasks.stream().filter(UnfinishedTasks.TaskInfo::isCompletedExceptionally).count());
-            assertEquals(1, unfinishedTasks.stream().filter(UnfinishedTasks.TaskInfo::isPeriodic).count());
-            assertEquals(0, unfinishedTasks.stream().filter(UnfinishedTasks.TaskInfo::wasInterrupted).count());
+            assertEquals(1, unfinishedTasks.stream().filter(TaskInfo::isCompletedExceptionally).count());
+            assertEquals(1, unfinishedTasks.stream().filter(TaskInfo::isPeriodic).count());
+            assertEquals(0, unfinishedTasks.stream().filter(TaskInfo::wasInterrupted).count());
 
             ObjectOutputStream oos = new ObjectOutputStream(bos);
             oos.writeObject(unfinishedTasks);
@@ -726,8 +727,8 @@ public class SerializableScheduledExecutorServiceTest {
             
             TestRunnableThatExceptionsOut anotherInstanceOfRunnableOne
                 = tasks.stream()
-                       .sorted(Comparator.comparing(UnfinishedTasks.TaskInfo::getInitialDelayInNanos))
-                       .map(UnfinishedTasks.TaskInfo::getSerializableRunnable)
+                       .sorted(Comparator.comparing(TaskInfo::getInitialDelayInNanos))
+                       .map(TaskInfo::getSerializableRunnable)
                        .findFirst()
                        .map(serializableRunnable -> (TestRunnableThatExceptionsOut) serializableRunnable)
                        .get();
