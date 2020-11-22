@@ -101,6 +101,8 @@ SpaceEfficientTrie:
 
 ### Concurrent classes
 
+- *BlockingValue*: Class with a get function that blocks until a value is available. When another thread calls setValue, then the getValue returns.
+
 - *CompletionStageUtils*: Utilities for completion stages.
     - Given a list of completion stages, return a single completion stage whose result is a list of the value of each completion stage.
 
