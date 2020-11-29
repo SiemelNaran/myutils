@@ -25,7 +25,7 @@ class SerializableLambdaUtils {
 
         private long initialDelay;
         private final long period;
-        private final TimeUnit unit;
+        private TimeUnit unit;
 
         private TimeInfo(long initialDelay, long period, TimeUnit unit) {
             this.initialDelay = initialDelay;
@@ -54,8 +54,18 @@ class SerializableLambdaUtils {
             return unit;
         }
 
+        /**
+         * Reset the initial delay.
+         * For example, when you call shutdownNow on a serialized scheduled executor,
+         * the unfinished task's initial delay is reset to be from the time of shutdown.
+         */
         void setInitialDelay(long initialDelay) {
             this.initialDelay = initialDelay;
+        }
+
+        void setInitialDelay(long initialDelay, TimeUnit unit) {
+            this.initialDelay = initialDelay;
+            this.unit = unit;
         }
     }
 

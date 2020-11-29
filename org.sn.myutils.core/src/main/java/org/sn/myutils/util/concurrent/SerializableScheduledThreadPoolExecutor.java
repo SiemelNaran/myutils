@@ -60,6 +60,14 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
         this.logIfCannotSerializeLevel = level;
     }
 
+    /**
+     * {@inheritdoc}
+     *
+     * <p>This function does not return tasks that are serializable and not canceled.
+     * Instead they are added to a member variable 'unfinishedTasks',
+     * and the initial delay is reset from what the user created the task as to from the time of export.
+     * Running time O(N^2).
+     */
     @Override
     public @Nonnull List<Runnable> shutdownNow() {
         List<Runnable> runnables = super.shutdownNow();

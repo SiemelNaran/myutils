@@ -162,6 +162,12 @@ Called from
 
 - *TestScheduledThreadPoolExecutor*: A scheduled thread pool executor to be used for testing. You can schedule a task to run in the future, say in 10 minutes from now, and then call a function advanceTime to advance time by 10 minutes and verify that the task was called.
 
+- *TimeBucketScheduledThreadPoolExecutor*: A scheduled thread pool executor that saves tasks to run on disk. The normal ScheduledThreadPoolExecutor stores all tasks to run in memory, but this is a problem if there are millions of tasks.
+    - The interface is the same as ScheduledThreadPoolExecutor
+    - The constructor of TimeBucketScheduledThreadPoolExecutor takes a folder name, time bucket duration, and other standard parameters.
+    - Tasks to run are stored in a particular bucket of time (or file), and as that time approaches all tasks in that bucket are loaded into memory for running in the regular ScheduledThreadPoolExecutor.
+    - Regular Runnable and Callable classes are not serializable. One must use SerializableRunnable and SerializableCallable.
+
 - *TimedReentrantLock*: An ReentrantLock that has additional functions to track the usage of the lock. You can get total wait time, total lock running time, and total idle time. TimedReentrantLock can be used inside HashLocks.
 
 

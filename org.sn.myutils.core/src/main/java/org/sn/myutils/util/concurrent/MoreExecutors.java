@@ -1,7 +1,10 @@
 package org.sn.myutils.util.concurrent;
 
+import java.nio.file.Path;
+import java.time.Duration;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -37,7 +40,7 @@ public class MoreExecutors {
     public static SerializableScheduledExecutorService newSerializableScheduledThreadPool(int corePoolSize) {
         return new SerializableScheduledThreadPoolExecutor(corePoolSize);
     }
-    
+
     /**
      * Create a serializable scheduled executor service.
      * If scheduled tasks inherit from SerializableRunnable or SerializableCallable, the executor can serialize/export unfinished tasks.
@@ -45,8 +48,21 @@ public class MoreExecutors {
     public static SerializableScheduledExecutorService newSerializableScheduledThreadPool(int corePoolSize, ThreadFactory threadFactory) {
         return new SerializableScheduledThreadPoolExecutor(corePoolSize, threadFactory);
     }
-    
-    
+
+
+    /**
+     * Create a scheduled executor service that stores tasks to run in time buckets (i.e. files)
+     * so that we don't have to store millions of tasks in memory.
+     */
+    public static ScheduledExecutorService newTimeBucketScheduledThreadPool(Path folder,
+                                                                            Duration timeBucketLength,
+                                                                            int corePoolSize,
+                                                                            ThreadFactory threadFactory,
+                                                                            RejectedExecutionHandler rejectedHandler) {
+        return new TimeBucketScheduledThreadPoolExecutor(folder, timeBucketLength, corePoolSize, threadFactory, rejectedHandler);
+    }
+
+
     /**
      * Create a scheduled executor service for testing.
      * Similar to {@link java.util.concurrent.Executors#newScheduledThreadPool}
