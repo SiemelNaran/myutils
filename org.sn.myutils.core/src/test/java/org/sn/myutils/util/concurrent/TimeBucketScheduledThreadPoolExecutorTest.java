@@ -30,7 +30,10 @@ import java.util.stream.Collectors;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.sn.myutils.testutils.TestBase;
+import org.sn.myutils.testutils.TestUtil;
 
 
 /**
@@ -58,6 +61,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
 
         @Override
         public void run() {
+            System.out.println("Running " + toString());
             words.add(value);
         }
 
@@ -78,6 +82,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
 
         @Override
         public String call() {
+            System.out.println("Running " + toString());
             words.add(value);
             return value;
         }
@@ -285,38 +290,46 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     void testAwaitTermination1() throws IOException, InterruptedException {
         Duration timeBucketLength = Duration.ofSeconds(1);
         ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory(), new ThreadPoolExecutor.AbortPolicy());
-        assertEquals(0, countFiles());
 
         sleepTillNextSecond();
 
-        service.schedule(new MyRunnable("1800"), 1800, TimeUnit.MILLISECONDS); // bucket [1000, 2000)
-        service.schedule(new MyRunnable("1900"), 1900, TimeUnit.MILLISECONDS); // bucket [1000, 2000)
+        service.schedule(new MyRunnable("1100"), 1100, TimeUnit.MILLISECONDS); // bucket [1000, 2000)
+        service.schedule(new MyRunnable("1200"), 1200, TimeUnit.MILLISECONDS); // bucket [1000, 2000)
         assertEquals(1, countFiles());
         assertThat(words, Matchers.empty());
 
         service.shutdown();
-        assertFalse(service.awaitTermination(500, TimeUnit.MILLISECONDS));
+        assertFalse(service.awaitTermination(500, TimeUnit.MILLISECONDS)); // as there are tasks to run in time bucket [1000, 2000)
         assertThat(words, Matchers.empty());
-        assertEquals(0, countFiles());
+        assertEquals(1, countFiles());
+
+        // because executor is shutdown future tasks do not run:
+        sleep(1700);
+        assertThat(words, Matchers.empty());
+        assertEquals(1, countFiles()); // we're now at time 500+1700=2300, but time bucket file is neither loaded nor deleted
     }
 
-    @Test
-    void testAwaitTermination2() throws IOException, InterruptedException {
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ValueSource(booleans = {false, true})
+    void testAwaitTermination2(boolean addExtra) throws IOException, InterruptedException {
         Duration timeBucketLength = Duration.ofSeconds(1);
         ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory(), new ThreadPoolExecutor.AbortPolicy());
-        assertEquals(0, countFiles());
 
         sleepTillNextSecond();
 
-        service.schedule(new MyRunnable("1800"), 1800, TimeUnit.MILLISECONDS); // bucket [1000, 2000)
-        service.schedule(new MyRunnable("1900"), 1900, TimeUnit.MILLISECONDS); // bucket [1000, 2000)
+        service.schedule(new MyRunnable("1100"), 1100, TimeUnit.MILLISECONDS); // bucket [1000, 2000)
+        service.schedule(new MyRunnable("1200"), 1200, TimeUnit.MILLISECONDS); // bucket [1000, 2000)
+        if (addExtra) {
+            service.schedule(new MyRunnable("1800"), 1800, TimeUnit.MILLISECONDS); // bucket [1000, 2000)
+        }
         assertEquals(1, countFiles());
         assertThat(words, Matchers.empty());
 
         service.shutdown();
-        assertTrue(service.awaitTermination(2, TimeUnit.SECONDS));
-        assertThat(words, Matchers.contains("800", "1900"));
-        assertEquals(0, countFiles());
+        boolean terminated = service.awaitTermination(1400, TimeUnit.MILLISECONDS);
+        assertEquals(!addExtra, terminated);
+        assertThat(words, Matchers.contains("1100", "1200"));
+        assertEquals(1, countFiles());
     }
 
     /**

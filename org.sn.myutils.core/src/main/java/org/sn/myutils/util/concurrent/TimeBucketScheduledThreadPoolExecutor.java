@@ -20,11 +20,13 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Callable;
@@ -32,7 +34,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.RejectedExecutionHandler;
@@ -41,7 +43,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.Lock;
@@ -68,7 +69,7 @@ import org.sn.myutils.util.concurrent.SerializableLambdaUtils.RunnableInfo;
  * <p>The current implementation does not handle periodic tasks.
  * So tasks at fixed rate or fixed delay are run in the internal executor and are not stored in time bucket files.
  */
-public class TimeBucketScheduledThreadPoolExecutor extends ScheduledThreadPoolExecutor {
+public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorService {
     private interface IndexFileCreator {
         /**
          * Create or overwrite a file.
@@ -139,7 +140,7 @@ public class TimeBucketScheduledThreadPoolExecutor extends ScheduledThreadPoolEx
         }
 
         private final ScheduledThreadPoolExecutor mainExecutor;
-        private final ScheduledExecutorService timeBucketExecutor = Executors.newSingleThreadScheduledExecutor();
+        private final ScheduledThreadPoolExecutor timeBucketExecutor = new ScheduledThreadPoolExecutor(1, MoreExecutors.createThreadFactory("TimeBucketManager", false));
 
         private final StampedLock timeBucketsLock = new StampedLock();
         private final List<TimeBucket> timeBuckets = new ArrayList<>();
@@ -152,8 +153,7 @@ public class TimeBucketScheduledThreadPoolExecutor extends ScheduledThreadPoolEx
          * A LRU cache of each time bucket to the random access file, which is an open file.
          * When an time bucket is explicitly removed or evicted from the map, we close the file.
          *
-         * <p>This class is not complete, so it is not suitable for general use, and is therefore private.
-         * For example, if one calls clear, then the files are not closed.
+         * <p>This class may not be complete, so it is not suitable for general use, and is therefore private.
          *
          * <p>There is no need for finalize/Cleaner because RandomAccessFile registers a cleaner to close the file when it becomes phantom reachable.
          */
@@ -176,6 +176,14 @@ public class TimeBucketScheduledThreadPoolExecutor extends ScheduledThreadPoolEx
                 return oldStream;
             }
 
+            @Override
+            public void clear() {
+                for (var entry : entrySet()) {
+                    closeFile(entry.getKey(), entry.getValue());
+                }
+                super.clear();
+            }
+
             private void closeFile(TimeBucket timeBucket, Closeable stream) {
                 try {
                     stream.close();
@@ -185,6 +193,7 @@ public class TimeBucketScheduledThreadPoolExecutor extends ScheduledThreadPoolEx
             }
         });
 
+        private boolean terminated;
 
         TimeBucketManager(ScheduledThreadPoolExecutor mainExecutor,
                           Duration bucketLength,
@@ -373,6 +382,9 @@ public class TimeBucketScheduledThreadPoolExecutor extends ScheduledThreadPoolEx
                     long position;
                     int countSuccess = 0, countFailure = 0;
                     while ((position = dataStream.getFilePointer()) < dataStream.length()) {
+                        if (suspendLoadingTimeBuckets()) {
+                            break;
+                        }
                         FutureStatus futureStatus = FutureStatus.fromByte(dataStream.readByte());
                         byte[] runnableInfoBytes = new byte[dataStream.readInt()];
                         dataStream.readFully(runnableInfoBytes);
@@ -398,8 +410,8 @@ public class TimeBucketScheduledThreadPoolExecutor extends ScheduledThreadPoolEx
                                     + ", countSuccess=" + countSuccess
                                     + ", countFailure=" + countFailure
                                     + ", timeTaken=" + timeTaken.toMillis() + "ms");
-                } catch (IOException e) {
-                    LOGGER.log(ERROR, "Error loading time bucket: timeBucket=" + timeBucket, e);
+                } catch (IOException | RuntimeException | Error e) {
+                    LOGGER.log(ERROR, "Error loading time bucket: terminated=" + suspendLoadingTimeBuckets() + ", timeBucket=" + timeBucket, e);
                 }
             }, delayMillis, TimeUnit.MILLISECONDS);
         }
@@ -542,6 +554,9 @@ public class TimeBucketScheduledThreadPoolExecutor extends ScheduledThreadPoolEx
         private @Nonnull RandomAccessFile lookupTimeBucketDataFile(TimeBucket timeBucket, boolean createIfNotFound) {
             return timeBucketFileMap.computeIfAbsent(timeBucket, unused -> {
                 try {
+                    if (terminated) {
+                        throw new IllegalStateException("Cannot load time bucket files as time bucket manager is terminated");
+                    }
                     RandomAccessFile randomAccessFile = Objects.requireNonNull(dataFileLoader.open(timeBucket.getFilename(), createIfNotFound));
                     if (randomAccessFile.length() == 0) {
                         randomAccessFile.writeInt(TIME_BUCKET_VERSION);
@@ -553,6 +568,83 @@ public class TimeBucketScheduledThreadPoolExecutor extends ScheduledThreadPoolEx
                     throw new CompletionException(e);
                 }
             });
+        }
+
+        void stopBackgroundTasks(boolean immediate) {
+            if (immediate) {
+                timeBucketExecutor.shutdownNow();
+            } else {
+                timeBucketExecutor.shutdown();
+            }
+        }
+
+        private boolean suspendLoadingTimeBuckets() {
+            return terminated;
+        }
+
+        /**
+         * Wait for background tasks (i.e. loading time bucket file into memory and deleting time bucket file) up to the given timeout to finish.
+         * If time bucket A is [1000, 2000), B is [2000, 3000), C is [3000, 4000) and timeout is  2500,
+         * then basically call timeBucketExecutor.awaitTermination(2000ms),
+         * and return 2500 - 2000 = 500ms.
+         *
+         * @param timeout the maximum length of time to wait
+         * @param unit the length of time unit
+         * @return the amount of time left to wait
+         */
+        Duration waitForBackgroundTasksToFinish(long timeout, TimeUnit unit) throws InterruptedException {
+            Duration duration = Duration.of(timeout, unit.toChronoUnit());
+            Instant startTime = Instant.now();
+            var blockingQueue = timeBucketExecutor.getQueue();
+            System.out.println("snaran queue-size " + blockingQueue.size());
+            blockingQueue.removeIf(runnable -> {
+                var future = (RunnableScheduledFuture<?>) runnable;
+                return future.getDelay(unit) > timeout;
+            });
+            System.out.println("snaran queue-size " + blockingQueue.size());
+//            TimeBucket timeBucket = findTimeBucketClosestToTimeout(startTime.toEpochMilli() + TimeUnit.MILLISECONDS.convert(timeout, unit));
+//            if (timeBucket != null) {
+//                long waitMillis = zeroIfNegative(timeBucket.getStartInclusiveMillis() - startTime.toEpochMilli());
+//                System.out.println("snaran timeBucketExecutor.awaitTermination: timeout=" + waitMillis);
+//                timeBucketExecutor.awaitTermination(waitMillis, TimeUnit.MILLISECONDS);
+//            }
+//            var unused = timeBucketExecutor.shutdownNow();
+//            System.out.println("snaran timeBucketExecutor.awaitTermination: numTasks=" + unused.size());
+            timeBucketExecutor.awaitTermination(timeout, unit);
+            terminated = true;
+            System.out.println("snaran queue-size " + blockingQueue.size());
+            timeBucketFileMap.clear(); // closes files
+            Duration durationForTimeBucketManagerShutdown = Duration.between(startTime, Instant.now());
+            System.out.println("snaran timeBucketExecutor.awaitTermination: durationForTimeBucketManagerShutdown=" + durationForTimeBucketManagerShutdown.toMillis());
+            return duration.minus(durationForTimeBucketManagerShutdown);
+        }
+
+        private static long zeroIfNegative(long val) {
+            return val < 0 ? 0 : val;
+        }
+
+        private TimeBucket findTimeBucketClosestToTimeout(long millis) {
+            long readLock = timeBucketsLock.readLock();
+            try {
+                for (ListIterator<TimeBucket> iter = timeBuckets.listIterator(timeBuckets.size()); iter.hasPrevious(); ) {
+                    var timeBucket = iter.previous();
+                    if (timeBucket.getStartInclusiveMillis() <= millis) {
+                        return timeBucket;
+                    }
+                }
+                return null;
+            } finally {
+                timeBucketsLock.unlockRead(readLock);
+            }
+        }
+
+        boolean hasFutureTimeBuckets() {
+            long readLock = timeBucketsLock.readLock();
+            try {
+                return timeBuckets.stream().anyMatch(timeBucket -> !timeBucket.isInMemory());
+            } finally {
+                timeBucketsLock.unlockRead(readLock);
+            }
         }
 
         private void skipHeaders(RandomAccessFile randomAccessFile) throws IOException {
@@ -643,6 +735,10 @@ public class TimeBucketScheduledThreadPoolExecutor extends ScheduledThreadPoolEx
 
         long getEndExclusiveMillis() {
             return endExclusiveMillis;
+        }
+
+        public boolean contains(long time) {
+            return startInclusiveMillis <= time && time < endExclusiveMillis;
         }
 
         String getFilename() {
@@ -740,7 +836,15 @@ public class TimeBucketScheduledThreadPoolExecutor extends ScheduledThreadPoolEx
 
     private static final ThreadLocal<TimeBucketManager.TimeBucketFutureTask<?>> threadLocalFutureTask = new ThreadLocal<>();
 
+    private final ScheduledThreadPoolExecutor mainExecutor;
     private final TimeBucketManager timeBucketManager;
+    private ExecutorState executorState = ExecutorState.ALIVE;
+
+    private enum ExecutorState {
+        ALIVE,
+        SHUTDOWN,
+        TERMINATED
+    }
 
     /**
      * Create a scheduled executor.
@@ -754,8 +858,6 @@ public class TimeBucketScheduledThreadPoolExecutor extends ScheduledThreadPoolEx
     public TimeBucketScheduledThreadPoolExecutor(Path folder,
                                                  Duration timeBucketLength,
                                                  int corePoolSize, ThreadFactory threadFactory, RejectedExecutionHandler rejectedHandler) {
-        super(corePoolSize, threadFactory, rejectedHandler);
-
         IndexFileCreator indexFileCreator = new IndexFileCreator() {
             @Override
             public @Nonnull Writer create(String filename) throws FileNotFoundException {
@@ -784,7 +886,35 @@ public class TimeBucketScheduledThreadPoolExecutor extends ScheduledThreadPoolEx
             }
         };
 
-        this.timeBucketManager = new TimeBucketManager(this, timeBucketLength, indexFileCreator, dataFileLoader);
+        this.mainExecutor = new ScheduledThreadPoolExecutor(corePoolSize, threadFactory, rejectedHandler) {
+            @Override
+            @SuppressWarnings("unchecked")
+            protected <V> RunnableScheduledFuture<V> decorateTask(Runnable runnable, RunnableScheduledFuture<V> task) {
+                task = super.decorateTask(runnable, task);
+                TimeBucketManager.TimeBucketFutureTask<V> futureTask = (TimeBucketManager.TimeBucketFutureTask<V>) threadLocalFutureTask.get();
+                if (futureTask != null) {
+                    futureTask.setRealFuture(task);
+                    return futureTask;
+                } else {
+                    return task;
+                }
+            }
+
+            @Override
+            @SuppressWarnings("unchecked")
+            protected <V> RunnableScheduledFuture<V> decorateTask(Callable<V> callable, RunnableScheduledFuture<V> task) {
+                task = super.decorateTask(callable, task);
+                TimeBucketManager.TimeBucketFutureTask<V> futureTask = (TimeBucketManager.TimeBucketFutureTask<V>) threadLocalFutureTask.get();
+                if (futureTask != null) {
+                    futureTask.setRealFuture(task);
+                    task = futureTask;
+                }
+                return task;
+            }
+
+        };
+
+        this.timeBucketManager = new TimeBucketManager(mainExecutor, timeBucketLength, indexFileCreator, dataFileLoader);
     }
 
     public void setTimeBucketLength(Duration timeBucketLength) {
@@ -793,56 +923,144 @@ public class TimeBucketScheduledThreadPoolExecutor extends ScheduledThreadPoolEx
 
     @Override
     public @Nonnull ScheduledFuture<?> schedule(@Nonnull Runnable runnable, long delay, @Nonnull TimeUnit unit) {
-        if (isShutdown()) {
-            getRejectedExecutionHandler().rejectedExecution(runnable, this);
-        }
         TimeBucketManager.TimeBucketFutureTask<?> futureTask = threadLocalFutureTask.get();
-        if (futureTask == null && runnable instanceof Serializable) {
-            var info = Objects.requireNonNull(SerializableLambdaUtils.computeRunnableInfo(runnable, delay, 0, unit, WARNING));
-            return timeBucketManager.addToTimeBucket(info);
+        if (futureTask != null) {
+            return mainExecutor.schedule(runnable, delay, unit); // invokes decorateTask
         } else {
-            return super.schedule(runnable, delay, unit); // invokes decorateTask
+            checkShutdown(runnable);
+            if (runnable instanceof Serializable) {
+                var info = Objects.requireNonNull(SerializableLambdaUtils.computeRunnableInfo(runnable, delay, 0, unit, WARNING));
+                return timeBucketManager.addToTimeBucket(info);
+            } else {
+                return mainExecutor.schedule(runnable, delay, unit); // invokes decorateTask
+            }
         }
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public @Nonnull<V> ScheduledFuture<V> schedule(@Nonnull Callable<V> callable, long delay, @Nonnull TimeUnit unit) {
-        if (isShutdown()) {
-            getRejectedExecutionHandler().rejectedExecution(new FutureTask<>(callable), this);
-        }
         TimeBucketManager.TimeBucketFutureTask<?> futureTask = threadLocalFutureTask.get();
-        if (futureTask == null && callable instanceof Serializable) {
-            var info = Objects.requireNonNull(SerializableLambdaUtils.computeRunnableInfo(callable, delay, unit, WARNING));
-            return (ScheduledFuture<V>) timeBucketManager.addToTimeBucket(info);
+        if (futureTask != null) {
+            return mainExecutor.schedule(callable, delay, unit); // invokes decorateTask
         } else {
-            return super.schedule(callable, delay, unit); // invokes decorateTask
+            checkShutdown(callable);
+            if (callable instanceof Serializable) {
+                var info = Objects.requireNonNull(SerializableLambdaUtils.computeRunnableInfo(callable, delay, unit, WARNING));
+                return (ScheduledFuture<V>) timeBucketManager.addToTimeBucket(info);
+            } else {
+                return mainExecutor.schedule(callable, delay, unit); // invokes decorateTask
+            }
         }
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    protected <V> RunnableScheduledFuture<V> decorateTask(Runnable runnable, RunnableScheduledFuture<V> task) {
-        task = super.decorateTask(runnable, task);
-        TimeBucketManager.TimeBucketFutureTask<V> futureTask = (TimeBucketManager.TimeBucketFutureTask<V>) threadLocalFutureTask.get();
-        if (futureTask != null) {
-            futureTask.setRealFuture(task);
-            return futureTask;
-        } else {
-            return task;
-        }
+    public void shutdown() {
+        executorState = ExecutorState.SHUTDOWN;
+        timeBucketManager.stopBackgroundTasks(false);
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    protected <V> RunnableScheduledFuture<V> decorateTask(Callable<V> callable, RunnableScheduledFuture<V> task) {
-        task = super.decorateTask(callable, task);
-        TimeBucketManager.TimeBucketFutureTask<V> futureTask = (TimeBucketManager.TimeBucketFutureTask<V>) threadLocalFutureTask.get();
-        if (futureTask != null) {
-            futureTask.setRealFuture(task);
-            task = futureTask;
+    public @Nonnull List<Runnable> shutdownNow() {
+        executorState = ExecutorState.SHUTDOWN;
+        timeBucketManager.stopBackgroundTasks(true);
+        return mainExecutor.shutdownNow();
+    }
+
+    @Override
+    public boolean isShutdown() {
+        return executorState.ordinal() >= 1;
+    }
+
+    @Override
+    public boolean awaitTermination(long timeout, @Nonnull TimeUnit unit) throws InterruptedException {
+        if (!isShutdown()) {
+            throw new IllegalStateException("awaitTermination called before shutdown/shutdownNow");
         }
-        return task;
+        Duration durationLeft = timeBucketManager.waitForBackgroundTasksToFinish(timeout, unit);
+        System.out.println("snaran wait extra " + durationLeft.toMillis());
+        mainExecutor.shutdown();
+        boolean terminated = mainExecutor.awaitTermination(durationLeft.toNanos(), TimeUnit.NANOSECONDS);
+        System.out.println("snaran terminated= " + terminated);
+        terminated &= !timeBucketManager.hasFutureTimeBuckets();
+        System.out.println("snaran terminated= " + terminated);
+        if (terminated) {
+            executorState = ExecutorState.TERMINATED;
+        }
+        return terminated;
+    }
+
+    @Override
+    public boolean isTerminated() {
+        return executorState.ordinal() >= 2;
+    }
+
+    private void checkShutdown(Runnable runnable) {
+        if (isShutdown()) {
+            mainExecutor.getRejectedExecutionHandler().rejectedExecution(runnable, mainExecutor);
+        }
+    }
+
+    private <V> void checkShutdown(Callable<V> callable) {
+        checkShutdown(new FutureTask<>(callable));
+    }
+
+    // Forwarding functions
+
+    @Override // Executor
+    public void execute(@Nonnull Runnable command) {
+        checkShutdown(command);
+        mainExecutor.execute(command);
+    }
+
+    @Override // ExecutorService
+    public @Nonnull Future<?> submit(@Nonnull Runnable task) {
+        checkShutdown(task);
+        return mainExecutor.submit(task);
+    }
+
+    @Override // ExecutorService
+    public @Nonnull <T> Future<T> submit(@Nonnull Runnable task, T result) {
+        checkShutdown(task);
+        return mainExecutor.submit(task, result);
+    }
+
+    @Override // ExecutorService
+    public @Nonnull<T> Future<T> submit(@Nonnull Callable<T> task) {
+        checkShutdown(task);
+        return mainExecutor.submit(task);
+    }
+
+    @Override // ExecutorService
+    public @Nonnull <T> List<Future<T>> invokeAll(@Nonnull Collection<? extends Callable<T>> tasks) throws InterruptedException {
+        return mainExecutor.invokeAll(tasks);
+    }
+
+    @Override // ExecutorService
+    public @Nonnull <T> List<Future<T>> invokeAll(@Nonnull Collection<? extends Callable<T>> tasks, long timeout, @Nonnull TimeUnit unit) throws InterruptedException {
+        return mainExecutor.invokeAll(tasks, timeout, unit);
+    }
+
+    @Override // ExecutorService
+    public @Nonnull <T> T invokeAny(@Nonnull Collection<? extends Callable<T>> tasks) throws InterruptedException, ExecutionException {
+        return mainExecutor.invokeAny(tasks);
+    }
+
+    @Override // ExecutorService
+    public <T> T invokeAny(@Nonnull Collection<? extends Callable<T>> tasks, long timeout, @Nonnull TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+        return mainExecutor.invokeAny(tasks, timeout, unit);
+    }
+
+    @Override // ScheduledExecutorService
+    public @Nonnull ScheduledFuture<?> scheduleAtFixedRate(@Nonnull Runnable command, long initialDelay, long period, @Nonnull TimeUnit unit) {
+        checkShutdown(command);
+        return mainExecutor.scheduleAtFixedRate(command, initialDelay, period, unit);
+    }
+
+    @Override // ScheduledExecutorService
+    public @Nonnull ScheduledFuture<?> scheduleWithFixedDelay(@Nonnull Runnable command, long initialDelay, long delay, @Nonnull TimeUnit unit) {
+        checkShutdown(command);
+        return mainExecutor.scheduleWithFixedDelay(command, initialDelay, delay, unit);
     }
 
     /**
