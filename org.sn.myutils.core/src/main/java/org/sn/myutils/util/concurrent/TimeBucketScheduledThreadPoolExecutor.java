@@ -32,6 +32,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.RunnableScheduledFuture;
@@ -39,6 +40,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.Lock;
@@ -805,6 +807,9 @@ public class TimeBucketScheduledThreadPoolExecutor extends ScheduledThreadPoolEx
 
     @Override
     public @Nonnull ScheduledFuture<?> schedule(@Nonnull Runnable runnable, long delay, @Nonnull TimeUnit unit) {
+        if (isShutdown()) {
+            getRejectedExecutionHandler().rejectedExecution(runnable, this);
+        }
         TimeBucketManager.TimeBucketFutureTask<?> futureTask = threadLocalFutureTask.get();
         if (futureTask == null && runnable instanceof Serializable) {
             var info = Objects.requireNonNull(SerializableLambdaUtils.computeRunnableInfo(runnable, delay, 0, unit, WARNING));
@@ -817,6 +822,9 @@ public class TimeBucketScheduledThreadPoolExecutor extends ScheduledThreadPoolEx
     @Override
     @SuppressWarnings("unchecked")
     public @Nonnull<V> ScheduledFuture<V> schedule(@Nonnull Callable<V> callable, long delay, @Nonnull TimeUnit unit) {
+        if (isShutdown()) {
+            getRejectedExecutionHandler().rejectedExecution(new FutureTask<>(callable), this);
+        }
         TimeBucketManager.TimeBucketFutureTask<?> futureTask = threadLocalFutureTask.get();
         if (futureTask == null && callable instanceof Serializable) {
             var info = Objects.requireNonNull(SerializableLambdaUtils.computeRunnableInfo(callable, delay, unit, WARNING));

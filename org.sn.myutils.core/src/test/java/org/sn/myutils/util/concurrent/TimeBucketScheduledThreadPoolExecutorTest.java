@@ -2,6 +2,7 @@ package org.sn.myutils.util.concurrent;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.sn.myutils.testutils.TestUtil.assertExceptionFromCallable;
 import static org.sn.myutils.testutils.TestUtil.myThreadFactory;
@@ -218,10 +219,28 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     }
 
     @Test
-    void testAwaitTermination() throws IOException, InterruptedException {
+    void testAwaitTermination1() throws IOException, InterruptedException {
         Duration timeBucketLength = Duration.ofSeconds(1);
         ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory(), new ThreadPoolExecutor.AbortPolicy());
-        TimeBucketScheduledThreadPoolExecutor serviceImpl = (TimeBucketScheduledThreadPoolExecutor) service;
+        assertEquals(0, countFiles());
+
+        sleepTillNextSecond();
+
+        service.schedule(new MyRunnable("1800"), 1800, TimeUnit.MILLISECONDS); // bucket [1000, 2000)
+        service.schedule(new MyRunnable("1900"), 1900, TimeUnit.MILLISECONDS); // bucket [1000, 2000)
+        assertEquals(1, countFiles());
+        assertThat(words, Matchers.empty());
+
+        service.shutdown();
+        assertFalse(service.awaitTermination(500, TimeUnit.MILLISECONDS));
+        assertThat(words, Matchers.empty());
+        assertEquals(0, countFiles());
+    }
+
+    @Test
+    void testAwaitTermination2() throws IOException, InterruptedException {
+        Duration timeBucketLength = Duration.ofSeconds(1);
+        ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory(), new ThreadPoolExecutor.AbortPolicy());
         assertEquals(0, countFiles());
 
         sleepTillNextSecond();
