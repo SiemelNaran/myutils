@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.ExecutionException;
@@ -225,21 +226,6 @@ public class TimeBucketScheduledThreadPoolExecutor extends ScheduledThreadPoolEx
                 this.realFuture = realFuture;
             }
 
-            @Override // Object
-            @SuppressWarnings("unchecked")
-            public boolean equals(Object thatObject) {
-                if (!(thatObject instanceof TimeBucketFutureTask)) {
-                    return false;
-                }
-                TimeBucketFutureTask<V> that = (TimeBucketFutureTask<V>) thatObject;
-                return this.timeBucket.equals(that.timeBucket) && this.position == that.position;
-            }
-
-            @Override // Object
-            public int hashCode() {
-                return Objects.hash(timeBucket, position);
-            }
-
             @Override // ScheduledFuture -> Delayed
             public long getDelay(@Nonnull TimeUnit unit) {
                 return unit.convert(Duration.between(Instant.now(), time));
@@ -272,7 +258,7 @@ public class TimeBucketScheduledThreadPoolExecutor extends ScheduledThreadPoolEx
                     canceled = localCanceled;
                     return localCanceled;
                 } catch (IOException e) {
-                    throw new RuntimeException(e);
+                    throw new CancellationException(e.getMessage());
                 }
             }
 
@@ -283,7 +269,7 @@ public class TimeBucketScheduledThreadPoolExecutor extends ScheduledThreadPoolEx
 
             @Override // Future
             public boolean isDone() {
-                return realFuture != null && realFuture.isDone();
+                return canceled || (realFuture != null && realFuture.isDone());
             }
 
             @Override // Future
@@ -832,16 +818,6 @@ public class TimeBucketScheduledThreadPoolExecutor extends ScheduledThreadPoolEx
         } else {
             return super.schedule(callable, delay, unit); // invokes decorateTask
         }
-    }
-
-    @Override
-    public @Nonnull ScheduledFuture<?> scheduleAtFixedRate(@Nonnull Runnable command, long initialDelay, long period, @Nonnull TimeUnit unit) {
-        return super.scheduleAtFixedRate(command, initialDelay, period, unit);
-    }
-
-    @Override
-    public @Nonnull ScheduledFuture<?> scheduleWithFixedDelay(@Nonnull Runnable command, long initialDelay, long delay, @Nonnull TimeUnit unit) {
-        return super.scheduleWithFixedDelay(command, initialDelay, delay, unit);
     }
 
     @Override
