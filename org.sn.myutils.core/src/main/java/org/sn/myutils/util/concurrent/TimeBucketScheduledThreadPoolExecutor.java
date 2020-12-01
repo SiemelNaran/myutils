@@ -26,7 +26,6 @@ import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.ListIterator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Callable;
@@ -139,6 +138,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
             }
         }
 
+        private final ThreadLocal<TimeBucketFutureTask<?>> threadLocalFutureTask;
         private final ScheduledThreadPoolExecutor mainExecutor;
         private final ScheduledThreadPoolExecutor timeBucketExecutor = new ScheduledThreadPoolExecutor(1, MoreExecutors.createThreadFactory("TimeBucketManager", false));
 
@@ -195,10 +195,12 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
 
         private boolean terminated;
 
-        TimeBucketManager(ScheduledThreadPoolExecutor mainExecutor,
+        TimeBucketManager(ThreadLocal<TimeBucketFutureTask<?>> threadLocalFutureTask,
+                          ScheduledThreadPoolExecutor mainExecutor,
                           Duration bucketLength,
                           IndexFileCreator indexFileCreator,
                           DataFileLoader dataFileLoader) {
+            this.threadLocalFutureTask = threadLocalFutureTask;
             this.mainExecutor = mainExecutor;
             this.timeBucketLengthMillis = bucketLength.toMillis();
             this.indexFileCreator = indexFileCreator;
@@ -596,46 +598,15 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
             Duration duration = Duration.of(timeout, unit.toChronoUnit());
             Instant startTime = Instant.now();
             var blockingQueue = timeBucketExecutor.getQueue();
-            System.out.println("snaran queue-size " + blockingQueue.size());
             blockingQueue.removeIf(runnable -> {
                 var future = (RunnableScheduledFuture<?>) runnable;
                 return future.getDelay(unit) > timeout;
             });
-            System.out.println("snaran queue-size " + blockingQueue.size());
-//            TimeBucket timeBucket = findTimeBucketClosestToTimeout(startTime.toEpochMilli() + TimeUnit.MILLISECONDS.convert(timeout, unit));
-//            if (timeBucket != null) {
-//                long waitMillis = zeroIfNegative(timeBucket.getStartInclusiveMillis() - startTime.toEpochMilli());
-//                System.out.println("snaran timeBucketExecutor.awaitTermination: timeout=" + waitMillis);
-//                timeBucketExecutor.awaitTermination(waitMillis, TimeUnit.MILLISECONDS);
-//            }
-//            var unused = timeBucketExecutor.shutdownNow();
-//            System.out.println("snaran timeBucketExecutor.awaitTermination: numTasks=" + unused.size());
             timeBucketExecutor.awaitTermination(timeout, unit);
             terminated = true;
-            System.out.println("snaran queue-size " + blockingQueue.size());
             timeBucketFileMap.clear(); // closes files
             Duration durationForTimeBucketManagerShutdown = Duration.between(startTime, Instant.now());
-            System.out.println("snaran timeBucketExecutor.awaitTermination: durationForTimeBucketManagerShutdown=" + durationForTimeBucketManagerShutdown.toMillis());
             return duration.minus(durationForTimeBucketManagerShutdown);
-        }
-
-        private static long zeroIfNegative(long val) {
-            return val < 0 ? 0 : val;
-        }
-
-        private TimeBucket findTimeBucketClosestToTimeout(long millis) {
-            long readLock = timeBucketsLock.readLock();
-            try {
-                for (ListIterator<TimeBucket> iter = timeBuckets.listIterator(timeBuckets.size()); iter.hasPrevious(); ) {
-                    var timeBucket = iter.previous();
-                    if (timeBucket.getStartInclusiveMillis() <= millis) {
-                        return timeBucket;
-                    }
-                }
-                return null;
-            } finally {
-                timeBucketsLock.unlockRead(readLock);
-            }
         }
 
         boolean hasFutureTimeBuckets() {
@@ -834,8 +805,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
         }
     }
 
-    private static final ThreadLocal<TimeBucketManager.TimeBucketFutureTask<?>> threadLocalFutureTask = new ThreadLocal<>();
-
+    private final ThreadLocal<TimeBucketManager.TimeBucketFutureTask<?>> threadLocalFutureTask = new ThreadLocal<>();
     private final ScheduledThreadPoolExecutor mainExecutor;
     private final TimeBucketManager timeBucketManager;
     private ExecutorState executorState = ExecutorState.ALIVE;
@@ -914,7 +884,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
 
         };
 
-        this.timeBucketManager = new TimeBucketManager(mainExecutor, timeBucketLength, indexFileCreator, dataFileLoader);
+        this.timeBucketManager = new TimeBucketManager(threadLocalFutureTask, mainExecutor, timeBucketLength, indexFileCreator, dataFileLoader);
     }
 
     public void setTimeBucketLength(Duration timeBucketLength) {
@@ -978,12 +948,9 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
             throw new IllegalStateException("awaitTermination called before shutdown/shutdownNow");
         }
         Duration durationLeft = timeBucketManager.waitForBackgroundTasksToFinish(timeout, unit);
-        System.out.println("snaran wait extra " + durationLeft.toMillis());
         mainExecutor.shutdown();
         boolean terminated = mainExecutor.awaitTermination(durationLeft.toNanos(), TimeUnit.NANOSECONDS);
-        System.out.println("snaran terminated= " + terminated);
         terminated &= !timeBucketManager.hasFutureTimeBuckets();
-        System.out.println("snaran terminated= " + terminated);
         if (terminated) {
             executorState = ExecutorState.TERMINATED;
         }
