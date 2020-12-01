@@ -61,6 +61,10 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
 
         @Override
         public void run() {
+            if (Thread.currentThread().isInterrupted()) {
+                System.out.println("Interrupted " + toString());
+                return;
+            }
             System.out.println("Running " + toString());
             words.add(value);
         }
@@ -82,6 +86,10 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
 
         @Override
         public String call() {
+            if (Thread.currentThread().isInterrupted()) {
+                System.out.println("Interrupted " + toString());
+                return null;
+            }
             System.out.println("Running " + toString());
             words.add(value);
             return value;
@@ -273,12 +281,15 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         System.out.println("Number of time buckets: " + numBuckets);
         assertEquals(18, numBuckets);
         assertEquals(numBuckets, getNumTimeBuckets(service));
+        assertEquals(16, getNumOpenFiles(service));
         assertEquals(numBuckets, countFiles());
 
         service.schedule(new MyRunnable(Integer.toString(260)), 260, TimeUnit.MILLISECONDS);
         assertEquals(numBuckets, getNumTimeBuckets(service));
+        assertEquals(16, getNumOpenFiles(service));
 
         sleep(4600);
+        System.out.println("words=" + words);
         assertThat(words, Matchers.contains("250", "260", "500", "750", "1000",
                                             "1250", "1500", "1750", "2000",
                                             "2250", "2500", "2750", "3000",
@@ -332,6 +343,26 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         assertEquals(1, countFiles());
     }
 
+    @Test
+    void testShutdownNow() throws IOException, InterruptedException {
+        Duration timeBucketLength = Duration.ofSeconds(1);
+        ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory(), new ThreadPoolExecutor.AbortPolicy());
+
+        sleepTillNextSecond();
+
+        service.schedule(new MyRunnable("1100"), 1100, TimeUnit.MILLISECONDS); // bucket [1000, 2000)
+        service.schedule(new MyRunnable("1200"), 1200, TimeUnit.MILLISECONDS); // bucket [1000, 2000)
+        assertEquals(1, countFiles());
+        assertThat(words, Matchers.empty());
+
+        var tasksNotStarted = service.shutdownNow();
+        assertThat(tasksNotStarted, Matchers.empty());
+        boolean terminated = service.awaitTermination(1400, TimeUnit.MILLISECONDS);
+        assertTrue(terminated);
+        assertThat(words, Matchers.empty());
+        assertEquals(1, countFiles());
+    }
+
     /**
      * If now is 1606087891647, then sleep for 353ms so that the test starts at the whole second.
      * This is because if the time bucket length is 1000ms, the time buckets range from [0, 1000), [1000, 2000), ..., [1606087891000, 1606087892000), ...
@@ -350,6 +381,11 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     private static long getNumTimeBuckets(ScheduledExecutorService service) {
         TimeBucketScheduledThreadPoolExecutor serviceImpl = (TimeBucketScheduledThreadPoolExecutor) service;
         return serviceImpl.getTimeBuckets().count();
+    }
+
+    private static long getNumOpenFiles(ScheduledExecutorService service) {
+        TimeBucketScheduledThreadPoolExecutor serviceImpl = (TimeBucketScheduledThreadPoolExecutor) service;
+        return serviceImpl.getTimeBucketOpenFiles().count();
     }
 
     private static long[] getTimeBuckets(ScheduledExecutorService service) {

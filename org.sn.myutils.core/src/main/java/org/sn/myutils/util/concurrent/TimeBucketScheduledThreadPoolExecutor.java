@@ -69,6 +69,7 @@ import org.sn.myutils.util.concurrent.SerializableLambdaUtils.RunnableInfo;
  * So tasks at fixed rate or fixed delay are run in the internal executor and are not stored in time bucket files.
  */
 public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorService {
+
     private interface IndexFileCreator {
         /**
          * Create or overwrite a file.
@@ -311,7 +312,9 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
                 Objects.requireNonNull(realFuture).run();
                 try {
                     TimeBucketManager.this.done(timeBucket, position);
-                } catch (IOException e) {
+                } catch (ExecutorTerminatedException e) {
+                    LOGGER.log(ERROR, "Unable to mark task as done: timeBucket=" + timeBucket + ", position=" + position + ", error=" + e.getClass().getSimpleName());
+                } catch (IOException | RuntimeException | Error e) {
                     LOGGER.log(ERROR, "Unable to mark task as done: timeBucket=" + timeBucket + ", position=" + position + ", error='" + e.toString() + "'");
                 }
             }
@@ -412,6 +415,8 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
                                     + ", countSuccess=" + countSuccess
                                     + ", countFailure=" + countFailure
                                     + ", timeTaken=" + timeTaken.toMillis() + "ms");
+                } catch (ExecutorTerminatedException e) {
+                    LOGGER.log(ERROR, "Error loading time bucket: terminated=" + suspendLoadingTimeBuckets() + ", timeBucket=" + timeBucket + ", error=" + e.getClass().getSimpleName());
                 } catch (IOException | RuntimeException | Error e) {
                     LOGGER.log(ERROR, "Error loading time bucket: terminated=" + suspendLoadingTimeBuckets() + ", timeBucket=" + timeBucket, e);
                 }
@@ -557,7 +562,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
             return timeBucketFileMap.computeIfAbsent(timeBucket, unused -> {
                 try {
                     if (terminated) {
-                        throw new IllegalStateException("Cannot load time bucket files as time bucket manager is terminated");
+                        throw new ExecutorTerminatedException("Cannot load time bucket files");
                     }
                     RandomAccessFile randomAccessFile = Objects.requireNonNull(dataFileLoader.open(timeBucket.getFilename(), createIfNotFound));
                     if (randomAccessFile.length() == 0) {
@@ -572,9 +577,16 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
             });
         }
 
+        private static class ExecutorTerminatedException extends RuntimeException {
+            ExecutorTerminatedException(String context) {
+                super(context + " : time bucket manager is terminated");
+            }
+        }
+
         void stopBackgroundTasks(boolean immediate) {
             if (immediate) {
                 timeBucketExecutor.shutdownNow();
+                timeBuckets.clear();
             } else {
                 timeBucketExecutor.shutdown();
             }
@@ -654,6 +666,10 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
         private LongStream getTimeBuckets() {
             return timeBuckets.stream().mapToLong(TimeBucket::getStartInclusiveMillis);
         }
+
+        private LongStream getTimeBucketOpenFiles() {
+            return timeBucketFileMap.keySet().stream().mapToLong(TimeBucket::getStartInclusiveMillis);
+        }
     }
 
     /**
@@ -706,10 +722,6 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
 
         long getEndExclusiveMillis() {
             return endExclusiveMillis;
-        }
-
-        public boolean contains(long time) {
-            return startInclusiveMillis <= time && time < endExclusiveMillis;
         }
 
         String getFilename() {
@@ -950,6 +962,9 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
         Duration durationLeft = timeBucketManager.waitForBackgroundTasksToFinish(timeout, unit);
         mainExecutor.shutdown();
         boolean terminated = mainExecutor.awaitTermination(durationLeft.toNanos(), TimeUnit.NANOSECONDS);
+        if (!terminated) {
+            var list = mainExecutor.shutdownNow(); // to interrupt remaining tasks
+        }
         terminated &= !timeBucketManager.hasFutureTimeBuckets();
         if (terminated) {
             executorState = ExecutorState.TERMINATED;
@@ -1036,5 +1051,13 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
      */
     LongStream getTimeBuckets() {
         return timeBucketManager.getTimeBuckets();
+    }
+
+    /**
+     * Return the number of time buckets.
+     * Used for testing.
+     */
+    LongStream getTimeBucketOpenFiles() {
+        return timeBucketManager.getTimeBucketOpenFiles();
     }
 }
