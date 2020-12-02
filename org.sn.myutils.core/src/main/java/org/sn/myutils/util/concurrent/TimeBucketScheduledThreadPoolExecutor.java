@@ -63,13 +63,17 @@ import org.sn.myutils.util.concurrent.SerializableLambdaUtils.RunnableInfo;
  * If a task is canceled, it is marked as canceled in the time bucket file, and the loader will not load that task into the current executor.
  *
  * <p>Once a task is done, it is marked as done in the time bucket file.
- * This allows us to not load that task into memory again in case the system goes down and restarts.
+ * This allows us to not load that task into memory again in case the system crashes and restarts.
  *
  * <p>The current implementation does not handle periodic tasks.
  * So tasks at fixed rate or fixed delay are run in the internal executor and are not stored in time bucket files.
+ *
+ * <p>This class implements the Closeable interface, which calls shutdownNow and awaitTermination of 1 nanosecond,
+ * and closes any open files.
+ * It is not necessary to call the close function as files will be closed as program exit anyway,
+ * but the unit tests do it each test creates a new TimeBucketScheduledThreadPoolExecutor.
  */
-public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorService {
-
+public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableScheduledExecutorService {
     private interface IndexFileCreator {
         /**
          * Create or overwrite a file.
@@ -1058,5 +1062,19 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
      */
     LongStream getTimeBucketOpenFiles() {
         return timeBucketManager.getTimeBucketOpenFiles();
+    }
+
+    @Override
+    public void close() throws IOException {
+        shutdownNow();
+        try {
+            awaitTermination(1, TimeUnit.NANOSECONDS); // closes files
+        } catch (InterruptedException | RuntimeException | Error ignored) {
+            try {
+                awaitTermination(1, TimeUnit.NANOSECONDS); // closes files
+            } catch (InterruptedException | RuntimeException | Error e) {
+                throw new IOException(e);
+            }
+        }
     }
 }

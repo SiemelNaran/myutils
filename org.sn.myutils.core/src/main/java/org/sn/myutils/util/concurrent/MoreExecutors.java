@@ -7,6 +7,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -54,12 +55,11 @@ public class MoreExecutors {
      * Create a scheduled executor service that stores tasks to run in time buckets (i.e. files)
      * so that we don't have to store millions of tasks in memory.
      */
-    public static ScheduledExecutorService newTimeBucketScheduledThreadPool(Path folder,
-                                                                            Duration timeBucketLength,
-                                                                            int corePoolSize,
-                                                                            ThreadFactory threadFactory,
-                                                                            RejectedExecutionHandler rejectedHandler) {
-        return new TimeBucketScheduledThreadPoolExecutor(folder, timeBucketLength, corePoolSize, threadFactory, rejectedHandler);
+    public static AutoCloseableScheduledExecutorService newTimeBucketScheduledThreadPool(Path folder,
+                                                                                         Duration timeBucketLength,
+                                                                                         int corePoolSize,
+                                                                                         ThreadFactory threadFactory) {
+        return new TimeBucketScheduledThreadPoolExecutor(folder, timeBucketLength, corePoolSize, threadFactory, new ThreadPoolExecutor.AbortPolicy());
     }
 
 
