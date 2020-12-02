@@ -387,10 +387,12 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                 Instant startTime = Instant.now();
                 RandomAccessFile dataStream = lookupTimeBucketDataFile(timeBucket, false);
                 try {
+                    long fileLength = dataStream.length();
+                    timeBucket.setIsInMemory();
                     skipHeaders(dataStream);
                     long position;
                     int countSuccess = 0, countFailure = 0;
-                    while ((position = dataStream.getFilePointer()) < dataStream.length()) {
+                    while ((position = dataStream.getFilePointer()) < fileLength) {
                         if (suspendLoadingTimeBuckets()) { // TODO: function isTerminated
                             break;
                         }
@@ -411,7 +413,6 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                             }
                         }
                     }
-                    timeBucket.setIsInMemory();
                     Duration timeTaken = Duration.between(startTime, Instant.now());
                     LOGGER.log(
                             TRACE,
