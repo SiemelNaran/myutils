@@ -76,6 +76,17 @@ public class TestUtil {
         }
         return list;
     }
+
+    /**
+     * Same as future.get() except throws CompletionException in case of error.
+     */
+    public static <T> T join(Future<T> future) {
+        try {
+            return future.get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new CompletionException(e);
+        }
+    }
     
     /**
      * Convert a CompletionStage to a Future.

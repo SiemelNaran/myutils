@@ -361,7 +361,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
                     return new TimeBucketFutureTask<>(timeBucket, startPosition, Instant.ofEpochMilli(whenMillis));
                 }
             } catch (IOException | SerializableScheduledExecutorService.RecreateRunnableFailedException e) {
-                throw new RejectedExecutionException(e);
+                throw new RejectedExecutionException(e); // TODO: reject
             } finally {
                 timeBucket.dataFileAppendLock.unlock();
             }
@@ -387,7 +387,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
                     long position;
                     int countSuccess = 0, countFailure = 0;
                     while ((position = dataStream.getFilePointer()) < dataStream.length()) {
-                        if (suspendLoadingTimeBuckets()) {
+                        if (suspendLoadingTimeBuckets()) { // TODO: function isTerminated
                             break;
                         }
                         FutureStatus futureStatus = FutureStatus.fromByte(dataStream.readByte());
@@ -424,7 +424,9 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
         }
 
         private TimeBucketFutureTask<Object> scheduleTaskNow(TimeBucket timeBucket, RunnableInfo info, long startPosition) throws SerializableScheduledExecutorService.RecreateRunnableFailedException {
-            Instant when = timeBucket.padInitialDelay(info, Instant.now());
+            Instant now = Instant.now();
+            long oldDelay = info.getTimeInfo().getInitialDelay();
+            Instant when = timeBucket.padInitialDelay(info, now);
             var futureTask = new TimeBucketFutureTask<>(timeBucket, startPosition, when);
             threadLocalFutureTask.set(futureTask);
             try {
@@ -780,7 +782,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
             TimeUnit unit = info.getTimeInfo().getUnit();
             long delta;
             if (unit == TimeUnit.NANOSECONDS) {
-                delta = zeroIfNegative((startInclusiveMillis - now.toEpochMilli()) * 1_000_000 - now.getNano());
+                delta = zeroIfNegative(startInclusiveMillis - now.toEpochMilli()) * 1_000_000 - now.getNano() % 1_000_000;
             } else {
                 delta = zeroIfNegative(startInclusiveMillis - now.toEpochMilli());
             }
@@ -907,6 +909,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
     public @Nonnull ScheduledFuture<?> schedule(@Nonnull Runnable runnable, long delay, @Nonnull TimeUnit unit) {
         TimeBucketManager.TimeBucketFutureTask<?> futureTask = threadLocalFutureTask.get();
         if (futureTask != null) {
+            // we are being called from the call to RunnableInfo.apply in scheduleTaskNow
             return mainExecutor.schedule(runnable, delay, unit); // invokes decorateTask
         } else {
             checkShutdown(runnable);
@@ -922,17 +925,13 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
     @Override
     @SuppressWarnings("unchecked")
     public @Nonnull<V> ScheduledFuture<V> schedule(@Nonnull Callable<V> callable, long delay, @Nonnull TimeUnit unit) {
-        TimeBucketManager.TimeBucketFutureTask<?> futureTask = threadLocalFutureTask.get();
-        if (futureTask != null) {
-            return mainExecutor.schedule(callable, delay, unit); // invokes decorateTask
+        // RunnableInfo.apply never calls this function, so threadLocalFutureTask.get() is always null when this code is hit
+        checkShutdown(callable);
+        if (callable instanceof Serializable) {
+            var info = Objects.requireNonNull(SerializableLambdaUtils.computeRunnableInfo(callable, delay, unit, WARNING));
+            return (ScheduledFuture<V>) timeBucketManager.addToTimeBucket(info);
         } else {
-            checkShutdown(callable);
-            if (callable instanceof Serializable) {
-                var info = Objects.requireNonNull(SerializableLambdaUtils.computeRunnableInfo(callable, delay, unit, WARNING));
-                return (ScheduledFuture<V>) timeBucketManager.addToTimeBucket(info);
-            } else {
-                return mainExecutor.schedule(callable, delay, unit); // invokes decorateTask
-            }
+            return mainExecutor.schedule(callable, delay, unit); // invokes decorateTask
         }
     }
 
@@ -963,7 +962,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
         mainExecutor.shutdown();
         boolean terminated = mainExecutor.awaitTermination(durationLeft.toNanos(), TimeUnit.NANOSECONDS);
         if (!terminated) {
-            var list = mainExecutor.shutdownNow(); // to interrupt remaining tasks
+            mainExecutor.shutdownNow(); // to interrupt remaining tasks
         }
         terminated &= !timeBucketManager.hasFutureTimeBuckets();
         if (terminated) {
@@ -1054,7 +1053,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorS
     }
 
     /**
-     * Return the number of time buckets.
+     * Return the number of open files.
      * Used for testing.
      */
     LongStream getTimeBucketOpenFiles() {

@@ -3,7 +3,9 @@ package org.sn.myutils.util.concurrent;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.sn.myutils.testutils.TestUtil.assertException;
 import static org.sn.myutils.testutils.TestUtil.assertExceptionFromCallable;
 import static org.sn.myutils.testutils.TestUtil.myThreadFactory;
 import static org.sn.myutils.testutils.TestUtil.sleep;
@@ -18,6 +20,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.RunnableScheduledFuture;
 import java.util.concurrent.ScheduledExecutorService;
@@ -166,6 +169,89 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     }
 
     @Test
+    void basicTestCallable() throws IOException {
+        Duration timeBucketLength = Duration.ofSeconds(1);
+        ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory(), new ThreadPoolExecutor.AbortPolicy());
+        assertEquals(0, countFiles());
+
+        sleepTillNextSecond();
+        Instant realStart = Instant.now();
+        long[] timeBuckets;
+
+        service.schedule(new MyCallable("800"), 800, TimeUnit.MILLISECONDS); // bucket [0000, 1000)
+        assertEquals(1, getNumTimeBuckets(service));
+        service.schedule(new MyCallable("1700"), 1700, TimeUnit.MILLISECONDS); // bucket [1000, 2000)
+        assertEquals(2, getNumTimeBuckets(service));
+        service.schedule(new MyCallable("1500"), 1500, TimeUnit.MILLISECONDS); // bucket [1000, 1000)
+        assertEquals(2, getNumTimeBuckets(service));
+        service.schedule(
+                () -> {
+                    words.add("2100");
+                    return "2100";
+                },
+                2100,
+                TimeUnit.MILLISECONDS); // no bucket as not serializable
+        System.out.println("Time to schedule 3 futures: " + Duration.between(realStart, Instant.now()).toMillis() + "ms"); // typical output: Time to schedule 6 futures: 33ms
+        assertEquals(2, getNumTimeBuckets(service));
+        assertEquals(2, countFiles());
+        timeBuckets = getTimeBuckets(service);
+        System.out.println("timeBuckets=" + Arrays.stream(timeBuckets).mapToObj(Long::toString).collect(Collectors.joining(",")));
+        assertEquals(timeBuckets[0] + 1000, timeBuckets[1]);
+        assertThat(words, Matchers.empty());
+
+        sleep(1200); // advance time to 1200ms
+        System.out.println("words=" + words);
+        assertThat(words, Matchers.contains("800"));
+        assertEquals(1, getNumTimeBuckets(service));
+        assertEquals(1, countFiles());
+
+        sleep(1200); // advance time to 2400ms
+        System.out.println("words=" + words);
+        assertThat(words, Matchers.contains("800", "1500", "1700", "2100"));
+        assertEquals(0, countFiles());
+    }
+
+    @Test
+    void testNanos() throws IOException {
+        Duration timeBucketLength = Duration.ofSeconds(1);
+        ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory(), new ThreadPoolExecutor.AbortPolicy());
+        assertEquals(0, countFiles());
+
+        sleepTillNextSecond();
+        long[] timeBuckets;
+
+        service.schedule(new MyCallable("800"), 800, TimeUnit.MILLISECONDS); // bucket [0000, 1000)
+        assertEquals(1, getNumTimeBuckets(service));
+        service.schedule(new MyCallable("1500+"), 1508 * 1_000_000 + 111_222, TimeUnit.NANOSECONDS); // bucket [1000, 2000)
+        assertEquals(2, getNumTimeBuckets(service));
+        service.schedule(new MyCallable("1500"), 1500, TimeUnit.MILLISECONDS); // bucket [1000, 1000)
+        assertEquals(2, getNumTimeBuckets(service));
+        assertEquals(2, countFiles());
+        timeBuckets = getTimeBuckets(service);
+        System.out.println("timeBuckets=" + Arrays.stream(timeBuckets).mapToObj(Long::toString).collect(Collectors.joining(",")));
+        assertEquals(timeBuckets[0] + 1000, timeBuckets[1]);
+        assertThat(words, Matchers.empty());
+
+        sleep(1200); // advance time to 1200ms
+        System.out.println("words=" + words);
+        assertThat(words, Matchers.contains("800"));
+        assertEquals(1, getNumTimeBuckets(service));
+        assertEquals(1, countFiles());
+
+        sleep(1200); // advance time to 2400ms
+        System.out.println("words=" + words);
+        assertThat(words, Matchers.contains("800", "1500", "1500+"));
+        assertEquals(0, countFiles());
+    }
+
+    @Test
+    void multipleThreadsWriteToTimeBucketAtSameTime() throws IOException {
+        // TODO: write test: verify these lines hit the
+//        timeBucketsLock.unlock(lock);
+//        lock = timeBucketsLock.writeLock();
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void cancelAndGet() throws IOException, ExecutionException, InterruptedException {
         Duration timeBucketLength = Duration.ofSeconds(1);
@@ -232,14 +318,57 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     }
 
     @Test
-    void testRejectWhenShutdown() throws IOException {
+    void testForwardingFunctions() throws ExecutionException, InterruptedException {
+        Duration timeBucketLength = Duration.ofSeconds(1);
+        ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory(), new ThreadPoolExecutor.AbortPolicy());
+        try {
+            service.execute(new MyRunnable("execute"));
+            var future1 = service.submit(new MyRunnable("apple"));
+            var future2 = service.submit(new MyRunnable("banana"), "banana");
+            var future3 = service.submit(new MyCallable("carrot"));
+            assertNull(future1.get());
+            assertThat(future2.get(), Matchers.equalTo("banana"));
+            assertThat(future3.get(), Matchers.equalTo("carrot"));
+            assertThat(words, Matchers.contains("execute", "apple", "banana", "carrot"));
+
+            words.clear();
+            service.scheduleAtFixedRate(new MyRunnable("hello"), 0, 100, TimeUnit.MILLISECONDS);
+            service.scheduleWithFixedDelay(new MyRunnable("world"), 40, 100, TimeUnit.MILLISECONDS);
+            sleep(280);
+            assertThat(words, Matchers.contains("hello", "world", "hello", "world", "hello", "world"));
+        } finally {
+            service.shutdownNow();
+            service.awaitTermination(1, TimeUnit.NANOSECONDS);
+        }
+    }
+
+    @Test
+    void testRejectWhenShutdown() throws IOException, InterruptedException, ExecutionException, TimeoutException {
         Duration timeBucketLength = Duration.ofSeconds(1);
         ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory(), new ThreadPoolExecutor.AbortPolicy());
         assertEquals(0, countFiles());
 
         service.shutdown();
+        assertException(() -> service.execute(new MyRunnable("apple")), RejectedExecutionException.class);
+        assertExceptionFromCallable(() -> service.submit(new MyRunnable("apple")), RejectedExecutionException.class);
+        assertExceptionFromCallable(() -> service.submit(new MyRunnable("banana"), "banana"), RejectedExecutionException.class);
+        assertExceptionFromCallable(() -> service.submit(new MyCallable("carrot")), RejectedExecutionException.class);
         assertExceptionFromCallable(() -> service.schedule(new MyRunnable("600"), 600, TimeUnit.MILLISECONDS), RejectedExecutionException.class);
         assertExceptionFromCallable(() -> service.schedule(new MyCallable("600"), 600, TimeUnit.MILLISECONDS), RejectedExecutionException.class);
+        assertExceptionFromCallable(() -> service.scheduleAtFixedRate(new MyRunnable("hello"), 0, 100, TimeUnit.MILLISECONDS), RejectedExecutionException.class);
+        assertExceptionFromCallable(() -> service.scheduleWithFixedDelay(new MyRunnable("world"), 40, 100, TimeUnit.MILLISECONDS), RejectedExecutionException.class);
+
+        // invokeAll and invokeAny continue to work even when executor is shut down:
+        List<Future<String>> result = service.invokeAll(List.of(new MyCallable("hello"), new MyCallable("world")));
+        assertThat(result.stream().map(Future::isDone).collect(Collectors.toList()), Matchers.contains(true, true));
+        assertThat(result.stream().map(TestUtil::join).collect(Collectors.toList()), Matchers.contains("hello", "world"));
+        result = service.invokeAll(List.of(new MyCallable("hello"), new MyCallable("world")), 100, TimeUnit.MILLISECONDS);
+        assertThat(result.stream().map(Future::isDone).collect(Collectors.toList()), Matchers.contains(true, true));
+        assertThat(result.stream().map(TestUtil::join).collect(Collectors.toList()), Matchers.contains("hello", "world"));
+        String anyString = service.invokeAny(List.of(new MyCallable("hello"), new MyCallable("world")));
+        assertThat(anyString, Matchers.oneOf("hello", "world"));
+        anyString = service.invokeAny(List.of(new MyCallable("hello"), new MyCallable("world")), 100, TimeUnit.MILLISECONDS);
+        assertThat(anyString, Matchers.oneOf("hello", "world"));
     }
 
     @Test
@@ -267,7 +396,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
 
 
     @Test
-    void tooManyTimeBuckets() throws IOException, InterruptedException {
+    void tooManyTimeBuckets() throws IOException {
         Duration timeBucketLength = Duration.ofMillis(250);
         ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory(), new ThreadPoolExecutor.AbortPolicy());
 
