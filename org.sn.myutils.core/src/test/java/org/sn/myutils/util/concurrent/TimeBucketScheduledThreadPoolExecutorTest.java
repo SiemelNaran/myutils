@@ -302,7 +302,9 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
             assertEquals(1, getNumTimeBuckets(service));
             assertThat(words, Matchers.empty());
 
+            Instant start = Instant.now();
             assertExceptionFromCallable(() -> future1300.get(400, TimeUnit.MILLISECONDS), TimeoutException.class);
+            assertThat(Duration.between(start, Instant.now()).toMillis(), TestUtil.between(380L, 420L));
         }
     }
 
@@ -318,7 +320,9 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
             assertEquals(1, getNumTimeBuckets(service));
             assertThat(words, Matchers.empty());
 
-            assertExceptionFromCallable(() -> future1300.get(1, TimeUnit.SECONDS), TimeoutException.class);
+            Instant start = Instant.now();
+            assertExceptionFromCallable(() -> future1300.get(1100, TimeUnit.MILLISECONDS), TimeoutException.class);
+            assertThat(Duration.between(start, Instant.now()).toMillis(), TestUtil.between(1080L, 1120L));
         }
     }
 
@@ -446,6 +450,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         sleep(1700);
         assertThat(words, Matchers.empty());
         assertEquals(1, countFiles()); // we're now at time 500+1700=2300, but time bucket file is neither loaded nor deleted
+        assertFalse(service.isTerminated());
     }
 
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
@@ -466,6 +471,8 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         service.shutdown();
         boolean terminated = service.awaitTermination(1400, TimeUnit.MILLISECONDS);
         assertEquals(!addExtra, terminated);
+        assertEquals(!addExtra, service.isTerminated());
+        System.out.println("words=" + words);
         assertThat(words, Matchers.contains("1100", "1200"));
         assertEquals(1, countFiles());
     }

@@ -38,7 +38,6 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.RunnableScheduledFuture;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
@@ -198,8 +197,6 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             }
         });
 
-        private boolean terminated;
-
         TimeBucketManager(ThreadLocal<TimeBucketFutureTask<?>> threadLocalFutureTask,
                           ScheduledThreadPoolExecutor mainExecutor,
                           Duration bucketLength,
@@ -219,10 +216,6 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             } finally {
                 timeBucketsLock.unlockWrite(writeLock);
             }
-        }
-
-        private ScheduledExecutorService getMainExecutor() {
-            return mainExecutor;
         }
 
         private class TimeBucketFutureTask<V> implements RunnableScheduledFuture<V> {
@@ -299,10 +292,12 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             @Override // Future
             public V get(long timeout, @Nonnull TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
                 long maxWaitNanos = TimeUnit.NANOSECONDS.convert(timeout, unit);
+                long start = System.nanoTime();
                 if (realFuture == null) {
                     realFuture = awaitRealFuture(maxWaitNanos);
                 }
-                long waitNanos = maxWaitNanos - System.nanoTime();
+                long waitNanos = maxWaitNanos - (System.nanoTime() - start);
+                System.out.println("snaran get " + maxWaitNanos + " " + waitNanos);
                 return realFuture.get(waitNanos, TimeUnit.NANOSECONDS);
             }
 
@@ -376,24 +371,27 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
          * If now is 105ms, time bucket length is 1000ms, and time bucket starts at 3000ms,
          * bucket will be loaded when time is 3000 - (20% of 1000) = 2800ms.
          */
-        private void maybeScheduleLoadingOfTimeBucket(TimeBucket timeBucket) {
-            if (timeBucket.isInMemory()) {
-                return;
-            }
+        private void scheduleLoadingOfTimeBucket(TimeBucket timeBucket) {
             long whenMillis = timeBucket.getStartInclusiveMillis() - timeBucketLengthMillis / 5;
             long delayMillis = whenMillis - System.currentTimeMillis();
+            LOGGER.log(TRACE, () -> "Schedule loading of time bucket: timeBucket=" + timeBucket + ", whenMillis=" + whenMillis);
             timeBucketExecutor.schedule(() -> {
-                LOGGER.log(TRACE, () -> "About to load time bucket: timeBucket=" + timeBucket);
+                if (Thread.currentThread().isInterrupted() ) {
+                    LOGGER.log(TRACE, "Loading time bucket interrupted: timeBucket=" + timeBucket);
+                    return;
+                }
+                LOGGER.log(TRACE, () -> "Loading time bucket: timeBucket=" + timeBucket);
                 Instant startTime = Instant.now();
                 RandomAccessFile dataStream = lookupTimeBucketDataFile(timeBucket, false);
+                int countSuccess = 0, countFailure = 0;
                 try {
                     long fileLength = dataStream.length();
                     timeBucket.setIsInMemory();
                     skipHeaders(dataStream);
                     long position;
-                    int countSuccess = 0, countFailure = 0;
                     while ((position = dataStream.getFilePointer()) < fileLength) {
-                        if (suspendLoadingTimeBuckets()) { // TODO: function isTerminated
+                        if (Thread.currentThread().isInterrupted() ) {
+                            LOGGER.log(TRACE, "Loading time bucket interrupted within loop: timeBucket=" + timeBucket);
                             break;
                         }
                         FutureStatus futureStatus = FutureStatus.fromByte(dataStream.readByte());
@@ -404,7 +402,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                                 RunnableInfo info = RunnableInfo.fromBytes(runnableInfoBytes);
                                 var futureTask = scheduleTaskNow(timeBucket, info, position);
                                 countSuccess++;
-                                timeBucket.resolveWaitingFutures(position, futureTask);
+                                timeBucket.resolveWaitingFuture(position, futureTask);
                             } catch (SerializableScheduledExecutorService.RecreateRunnableFailedException | IOException e) {
                                 LOGGER.log(WARNING, "Unable to recreate runnable: timeBucket=" + timeBucket + ", error='" + e.toString() + "'");
                                 countFailure++;
@@ -413,6 +411,11 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                             }
                         }
                     }
+                } catch (ExecutorTerminatedException e) {
+                    LOGGER.log(ERROR, "Error loading time bucket: timeBucketExecutorShutdown=" + timeBucketExecutor.isTerminated() + ", timeBucket=" + timeBucket + ", error=" + e.getClass().getSimpleName());
+                } catch (IOException | RuntimeException | Error e) {
+                    LOGGER.log(ERROR, "Error loading time bucket: timeBucketExecutorShutdown=" + timeBucketExecutor.isTerminated() + ", timeBucket=" + timeBucket, e);
+                } finally {
                     Duration timeTaken = Duration.between(startTime, Instant.now());
                     LOGGER.log(
                             TRACE,
@@ -420,17 +423,12 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                                     + ", countSuccess=" + countSuccess
                                     + ", countFailure=" + countFailure
                                     + ", timeTaken=" + timeTaken.toMillis() + "ms");
-                } catch (ExecutorTerminatedException e) {
-                    LOGGER.log(ERROR, "Error loading time bucket: terminated=" + suspendLoadingTimeBuckets() + ", timeBucket=" + timeBucket + ", error=" + e.getClass().getSimpleName());
-                } catch (IOException | RuntimeException | Error e) {
-                    LOGGER.log(ERROR, "Error loading time bucket: terminated=" + suspendLoadingTimeBuckets() + ", timeBucket=" + timeBucket, e);
                 }
             }, delayMillis, TimeUnit.MILLISECONDS);
         }
 
         private TimeBucketFutureTask<Object> scheduleTaskNow(TimeBucket timeBucket, RunnableInfo info, long startPosition) throws SerializableScheduledExecutorService.RecreateRunnableFailedException {
             Instant now = Instant.now();
-            long oldDelay = info.getTimeInfo().getInitialDelay();
             Instant when = timeBucket.padInitialDelay(info, now);
             var futureTask = new TimeBucketFutureTask<>(timeBucket, startPosition, when);
             threadLocalFutureTask.set(futureTask);
@@ -440,7 +438,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                 // which creates a ScheduledThreadPoolExecutor.ScheduledFutureTask and calls decorateTask
                 // which makes ScheduledThreadPoolExecutor.schedule return this futureTask
                 // with the native ScheduledThreadPoolExecutor.ScheduledFutureTask as a member variable of the futureTask
-                info.apply(TimeBucketManager.this.getMainExecutor()); // may throw RecreateRunnableFailedException
+                info.apply(TimeBucketManager.this.mainExecutor); // may throw RecreateRunnableFailedException
                 return futureTask;
             } finally {
                 threadLocalFutureTask.remove();
@@ -530,7 +528,9 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             LOGGER.log(INFO, () -> "Creating time bucket: timeBucket=" + timeBucket);
             timeBuckets.add(arrayIndex, timeBucket);
             saveTimeBucketsAsync();
-            maybeScheduleLoadingOfTimeBucket(timeBucket);
+            if (!timeBucket.isInMemory()) {
+                scheduleLoadingOfTimeBucket(timeBucket);
+            }
             scheduleDeletionOfTimeBucket(timeBucket);
             return timeBucket;
         }
@@ -568,7 +568,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         private @Nonnull RandomAccessFile lookupTimeBucketDataFile(TimeBucket timeBucket, boolean createIfNotFound) {
             return timeBucketFileMap.computeIfAbsent(timeBucket, unused -> {
                 try {
-                    if (terminated) {
+                    if (timeBucketExecutor.isTerminated()) {
                         throw new ExecutorTerminatedException("Cannot load time bucket files");
                     }
                     RandomAccessFile randomAccessFile = Objects.requireNonNull(dataFileLoader.open(timeBucket.getFilename(), createIfNotFound));
@@ -599,10 +599,6 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             }
         }
 
-        private boolean suspendLoadingTimeBuckets() {
-            return terminated;
-        }
-
         /**
          * Wait for background tasks (i.e. loading time bucket file into memory and deleting time bucket file) up to the given timeout to finish.
          * If time bucket A is [1000, 2000), B is [2000, 3000), C is [3000, 4000) and timeout is  2500,
@@ -617,12 +613,16 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             Duration duration = Duration.of(timeout, unit.toChronoUnit());
             Instant startTime = Instant.now();
             var blockingQueue = timeBucketExecutor.getQueue();
-            blockingQueue.removeIf(runnable -> {
-                var future = (RunnableScheduledFuture<?>) runnable;
-                return future.getDelay(unit) > timeout;
-            });
+            var sizeBefore = blockingQueue.size();
+            blockingQueue.stream()
+                         .map(runnable -> (RunnableScheduledFuture<?>) runnable)
+                         .filter(future -> future.getDelay(unit) > timeout)
+                         .forEach(future -> future.cancel(true));
+            timeBucketExecutor.purge();
+            var sizeAfter = blockingQueue.size();
+            LOGGER.log(TRACE, "Purged future tasks from timeBucketExecutor: numPurged=" + (sizeAfter - sizeBefore) + ", numRemaining=" + sizeAfter);
             timeBucketExecutor.awaitTermination(timeout, unit);
-            terminated = true;
+            assert timeBucketExecutor.isTerminated();
             timeBucketFileMap.clear(); // closes files
             Duration durationForTimeBucketManagerShutdown = Duration.between(startTime, Instant.now());
             return duration.minus(durationForTimeBucketManagerShutdown);
@@ -653,9 +653,9 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
          */
         private void scheduleDeletionOfTimeBucket(TimeBucket timeBucket) {
             long delayMillis = timeBucket.getEndExclusiveMillis() - System.currentTimeMillis();
-            LOGGER.log(TRACE, () -> "Schedule deletion of time bucket: timeBucket=" + timeBucket + ", delayMillis=" + delayMillis);
+            LOGGER.log(TRACE, () -> "Schedule deletion of time bucket: timeBucket=" + timeBucket + ", whenMillis=" + timeBucket.getEndExclusiveMillis());
             timeBucketExecutor.schedule(() -> {
-                LOGGER.log(TRACE, () -> "About to delete time bucket: timeBucket=" + timeBucket);
+                LOGGER.log(TRACE, () -> "Deleting time bucket: timeBucket=" + timeBucket);
                 long writeLock = timeBucketsLock.writeLock();
                 try {
                     timeBuckets.remove(timeBucket);
@@ -690,7 +690,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         private final long startInclusiveMillis;
         private final long endExclusiveMillis;
         private final Lock dataFileAppendLock = new ReentrantLock();
-        private final Map<Long, BlockingValue<RunnableScheduledFuture<?>>> waitingFutures = Collections.synchronizedMap(new HashMap<>());
+        private final Map<Long, BlockingValue<TimeBucketManager.TimeBucketFutureTask<?>>> waitingFutures = Collections.synchronizedMap(new HashMap<>());
         private volatile boolean inMemory;
 
         /**
@@ -806,20 +806,20 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         }
 
         RunnableScheduledFuture<?> pullRealFuture(long position) throws InterruptedException {
-            BlockingValue<RunnableScheduledFuture<?>> blockingValue = waitingFutures.computeIfAbsent(position, unused -> new BlockingValue<>());
-            var runnableScheduledFuture = blockingValue.get();
+            var blockingValue = waitingFutures.computeIfAbsent(position, unused -> new BlockingValue<>());
+            var futureTask = blockingValue.get();
             waitingFutures.remove(position);
-            return runnableScheduledFuture;
+            return futureTask.realFuture;
         }
 
         RunnableScheduledFuture<?> pullRealFuture(long position, long nanos) throws InterruptedException, TimeoutException {
-            BlockingValue<RunnableScheduledFuture<?>> blockingValue = waitingFutures.computeIfAbsent(position, unused -> new BlockingValue<>());
-            var runnableScheduledFuture = blockingValue.get(nanos, TimeUnit.NANOSECONDS);
+            var blockingValue = waitingFutures.computeIfAbsent(position, unused -> new BlockingValue<>());
+            var futureTask = blockingValue.get(nanos, TimeUnit.NANOSECONDS);
             waitingFutures.remove(position);
-            return runnableScheduledFuture;
+            return futureTask.realFuture;
         }
 
-        void resolveWaitingFutures(long position, @Nonnull RunnableScheduledFuture<?> future) {
+        void resolveWaitingFuture(long position, @Nonnull TimeBucketManager.TimeBucketFutureTask<?> future) {
             waitingFutures.computeIfPresent(position, (unusedPosition, blockingValue) -> blockingValue.setValue(future));
         }
     }
@@ -1069,7 +1069,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
     public void close() throws IOException {
         shutdownNow();
         try {
-            awaitTermination(1, TimeUnit.NANOSECONDS); // closes files
+            awaitTermination(1, TimeUnit.MICROSECONDS); // closes files
         } catch (InterruptedException | RuntimeException | Error ignored) {
             try {
                 awaitTermination(1, TimeUnit.NANOSECONDS); // closes files
