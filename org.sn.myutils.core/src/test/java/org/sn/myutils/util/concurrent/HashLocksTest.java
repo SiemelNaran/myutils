@@ -3,6 +3,7 @@ package org.sn.myutils.util.concurrent;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.sn.myutils.testutils.TestUtil.sleep;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -187,14 +188,6 @@ public class HashLocksTest {
         assertEquals(0, queueLengths[2]);
     }
     
-    
-    private static void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-    }
     
     private static void print(String line) {
         System.out.println(line);

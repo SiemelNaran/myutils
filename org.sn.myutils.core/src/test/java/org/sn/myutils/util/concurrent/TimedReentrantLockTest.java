@@ -2,6 +2,7 @@ package org.sn.myutils.util.concurrent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.sn.myutils.testutils.TestUtil.sleep;
 
 import java.time.Duration;
 import java.util.Date;
@@ -101,9 +102,9 @@ public class TimedReentrantLockTest {
         service.shutdown();
         service.awaitTermination(10, TimeUnit.SECONDS);
         
-        assertEquals(1800, lock.getTotalWaitTime().toMillis(), 40.0); // thread 1 ends at 2300, thread 2 waiting from 500, so waitTime=2300-500=1800
-        assertEquals(3000, lock.getTotalLockRunningTime().toMillis(), 40.0); // thread 1 runs for 2000ms, thread 2 runs for 1000ms
-        assertEquals(300, lock.getTotalIdleTime().toMillis(), 40.0); // as lock waiting from time 0ms to 300ms when thread 1 starts
+        assertEquals(1800, lock.getTotalWaitTime().toMillis(), 50.0); // thread 1 ends at 2300, thread 2 waiting from 500, so waitTime=2300-500=1800
+        assertEquals(3000, lock.getTotalLockRunningTime().toMillis(), 50.0); // thread 1 runs for 2000ms, thread 2 runs for 1000ms
+        assertEquals(300, lock.getTotalIdleTime().toMillis(), 50.0); // as lock waiting from time 0ms to 300ms when thread 1 starts
     }
     
 
@@ -176,9 +177,9 @@ public class TimedReentrantLockTest {
         service.shutdown();
         service.awaitTermination(10, TimeUnit.SECONDS);
         
-        assertEquals(200, lock.getTotalWaitTime().toMillis(), 40.0); // thread 2 cancelled at 700 so never runs, and waited only from time 500ms to time 700ms
-        assertEquals(2000, lock.getTotalLockRunningTime().toMillis(), 40.0); // only thread 1 runs
-        assertEquals(300, lock.getTotalIdleTime().toMillis(), 40.0); // as lock waiting from time 0ms to 300ms when thread 1 starts
+        assertEquals(200, lock.getTotalWaitTime().toMillis(), 50.0); // thread 2 cancelled at 700 so never runs, and waited only from time 500ms to time 700ms
+        assertEquals(2000, lock.getTotalLockRunningTime().toMillis(), 50.0); // only thread 1 runs
+        assertEquals(300, lock.getTotalIdleTime().toMillis(), 50.0); // as lock waiting from time 0ms to 300ms when thread 1 starts
     }
     
 
@@ -236,8 +237,8 @@ public class TimedReentrantLockTest {
         service.awaitTermination(10, TimeUnit.SECONDS);
         
         assertEquals(0, lock.getTotalWaitTime().toMillis(), 10.0); // because tryLock returns right away it never increments waitTime
-        assertEquals(2000, lock.getTotalLockRunningTime().toMillis(), 40.0); // because only thread 1 runs
-        assertEquals(300, lock.getTotalIdleTime().toMillis(), 40.0); // as lock waiting from time 0ms to 300ms when thread 1 starts
+        assertEquals(2000, lock.getTotalLockRunningTime().toMillis(), 50.0); // because only thread 1 runs
+        assertEquals(300, lock.getTotalIdleTime().toMillis(), 50.0); // as lock waiting from time 0ms to 300ms when thread 1 starts
     }
 
 
@@ -301,9 +302,9 @@ public class TimedReentrantLockTest {
         service.shutdown();
         service.awaitTermination(10, TimeUnit.SECONDS);
         
-        assertEquals(400, lock.getTotalWaitTime().toMillis(), 40.0); // as lock2 starts waiting at 300ms and waits till 700ms before throwing, so wait time is 400ms 
-        assertEquals(2000, lock.getTotalLockRunningTime().toMillis(), 40.0);
-        assertEquals(300, lock.getTotalIdleTime().toMillis(), 40.0); // as lock waiting from time 0ms to 300ms when thread 1 starts
+        assertEquals(400, lock.getTotalWaitTime().toMillis(), 50.0); // as lock2 starts waiting at 300ms and waits till 700ms before throwing, so wait time is 400ms 
+        assertEquals(2000, lock.getTotalLockRunningTime().toMillis(), 50.0);
+        assertEquals(300, lock.getTotalIdleTime().toMillis(), 50.0); // as lock waiting from time 0ms to 300ms when thread 1 starts
     }
     
     @FunctionalInterface
@@ -313,8 +314,8 @@ public class TimedReentrantLockTest {
     
     @SuppressWarnings("checkstyle:indentation")
     private static final AwaitFunction[] AWAIT_FUNCTIONS = {
-        condition -> condition.awaitUninterruptibly(),
-        condition -> condition.await(),
+        Condition::awaitUninterruptibly,
+        Condition::await,
         condition -> condition.await(250, TimeUnit.MILLISECONDS),
         condition -> condition.awaitNanos(TimeUnit.MILLISECONDS.toNanos(250)),
         condition -> condition.awaitUntil(new Date(System.currentTimeMillis() + 250))
@@ -377,9 +378,9 @@ public class TimedReentrantLockTest {
         service.shutdown();
         service.awaitTermination(10, TimeUnit.SECONDS);
         
-        assertEquals(1200, lock.getTotalWaitTime().toMillis(), 40.0); // thread 1 starts waiting at 300+500=800ms and acquires lock at 2000ms
-        assertEquals(2000, lock.getTotalLockRunningTime().toMillis(), 40.0); // each thread runs for 1000, so net 2000ms
-        assertEquals(500, lock.getTotalIdleTime().toMillis(), 40.0); // as lock waiting from time 0ms to 300ms, and 800ms to 1000ms
+        assertEquals(1200, lock.getTotalWaitTime().toMillis(), 50.0); // thread 1 starts waiting at 300+500=800ms and acquires lock at 2000ms
+        assertEquals(2000, lock.getTotalLockRunningTime().toMillis(), 50.0); // each thread runs for 1000, so net 2000ms
+        assertEquals(500, lock.getTotalIdleTime().toMillis(), 50.0); // as lock waiting from time 0ms to 300ms, and 800ms to 1000ms
     }
     
     /**
@@ -444,23 +445,15 @@ public class TimedReentrantLockTest {
         service.shutdown();
         service.awaitTermination(10, TimeUnit.SECONDS);
         
-        assertEquals(1200, lock.getTotalWaitTime().toMillis(), 40.0); // thread 1 starts waiting at 300+500=800ms and acquires lock at 2000ms
-        assertEquals(2000, lock.getTotalLockRunningTime().toMillis(), 40.0); // each thread runs for 1000, so net 2000ms
-        assertEquals(500, lock.getTotalIdleTime().toMillis(), 40.0); // as lock waiting from time 0ms to 300ms, and 800ms to 1000ms
+        assertEquals(1200, lock.getTotalWaitTime().toMillis(), 50.0); // thread 1 starts waiting at 300+500=800ms and acquires lock at 2000ms
+        assertEquals(2000, lock.getTotalLockRunningTime().toMillis(), 50.0); // each thread runs for 1000, so net 2000ms
+        assertEquals(500, lock.getTotalIdleTime().toMillis(), 50.0); // as lock waiting from time 0ms to 300ms, and 800ms to 1000ms
     }
     
 
     private static ThreadFactory myThreadFactory() {
         AtomicInteger threadNumber = new AtomicInteger();
         return runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A'));
-    }
-    
-    private static void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
     }
     
     private void logString(String message) {
