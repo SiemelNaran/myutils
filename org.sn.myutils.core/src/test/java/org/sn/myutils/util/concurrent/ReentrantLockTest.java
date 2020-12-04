@@ -1,5 +1,6 @@
 package org.sn.myutils.util.concurrent;
 
+import static java.lang.Thread.sleep;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -153,6 +154,8 @@ public class ReentrantLockTest {
                 logStringPlus(reentrantLock, "acquired lock in thread 1");
                 sleep(1000);
                 logStringPlus(reentrantLock, "end thread 2");
+            } catch (InterruptedException e) {
+                logStringPlus(reentrantLock, "caught " + e.toString());
             } finally {
                 reentrantLock.unlock();
                 logStringPlus(reentrantLock, "unlock in thread 2");
@@ -211,6 +214,8 @@ public class ReentrantLockTest {
                 sleep(1000);
                 logStringPlus(reentrantLock, "no signal sent in thread 2");
                 logStringPlus(reentrantLock, "end thread 2");
+            } catch (InterruptedException e) {
+                logStringPlus(reentrantLock, "caught " + e.toString());
             } finally {
                 reentrantLock.unlock();
                 logStringPlus(reentrantLock, "unlock in thread 2");
@@ -253,6 +258,8 @@ public class ReentrantLockTest {
                 logStringPlus(reentrantLock, "right after await in thread 1");
                 sleep(1000);
                 logStringPlus(reentrantLock, "end thread 1");
+            } catch (InterruptedException e) {
+                logStringPlus(reentrantLock, "caught " + e.toString());
             } finally {
                 logStringPlus(reentrantLock, "running assertions in thread 1");
                 assertTrue(reentrantLock.isLocked());
@@ -273,6 +280,8 @@ public class ReentrantLockTest {
                 logStringPlus(reentrantLock, "about to signal in thread 2");
                 condition.signal();
                 logStringPlus(reentrantLock, "end thread 2");
+            } catch (InterruptedException e) {
+                logStringPlus(reentrantLock, "caught " + e.toString());
             } finally {
                 reentrantLock.unlock();
                 logStringPlus(reentrantLock, "unlock in thread 2");
@@ -295,22 +304,6 @@ public class ReentrantLockTest {
         return runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A'));
     }
     
-    private static void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            throw new SleepInterruptedException(e);
-        }
-    }
-
-    private static class SleepInterruptedException extends RuntimeException {
-        private static final long serialVersionUID = 1L;
-        
-        SleepInterruptedException(InterruptedException cause) {
-            super(cause);
-        }
-    }
-
     private void logStringPlus(ReentrantLock reentrantLock, String message) {
         message += " :";
         message += " isLocked=" + reentrantLock.isLocked();

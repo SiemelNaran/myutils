@@ -2,6 +2,7 @@ package org.sn.myutils.util.concurrent;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.sn.myutils.testutils.TestUtil.sleep;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -44,12 +45,12 @@ public class PriorityThreadPoolExecutorTest {
         PriorityExecutorService executor = MoreExecutors.newFixedPriorityThreadPool(3);
         DoThread doThread = new DoThread();
 
-        sleep(30); executor.submit(4, () -> doThread.run());
-        sleep(30); executor.submit(() -> doThread.run());
-        sleep(30); executor.submit(6, () -> doThread.run());
-        sleep(30); executor.submit(7, () -> doThread.run());
-        sleep(30); executor.submit(8, () -> doThread.run());
-        sleep(30); executor.submit(9, () -> doThread.run());
+        sleep(30); executor.submit(4, doThread::run);
+        sleep(30); executor.submit(doThread::run);
+        sleep(30); executor.submit(6, doThread::run);
+        sleep(30); executor.submit(7, doThread::run);
+        sleep(30); executor.submit(8, doThread::run);
+        sleep(30); executor.submit(9, doThread::run);
 
         executor.shutdown();
         executor.awaitTermination(10, TimeUnit.SECONDS);
@@ -72,12 +73,12 @@ public class PriorityThreadPoolExecutorTest {
         DoThread doThread = new DoThread();
         List<Future<String>> futures = new ArrayList<>();
 
-        sleep(30); futures.add(executor.submit(4, () -> doThread.run(), "44"));
-        sleep(30); futures.add(executor.submit(() -> doThread.run(), "55"));
-        sleep(30); futures.add(executor.submit(6, () -> doThread.run(), "66"));
-        sleep(30); futures.add(executor.submit(7, () -> doThread.run(), "77"));
-        sleep(30); futures.add(executor.submit(8, () -> doThread.run(), "88"));
-        sleep(30); futures.add(executor.submit(9, () -> doThread.run(), "99"));
+        sleep(30); futures.add(executor.submit(4, doThread::run, "44"));
+        sleep(30); futures.add(executor.submit(doThread::run, "55"));
+        sleep(30); futures.add(executor.submit(6, doThread::run, "66"));
+        sleep(30); futures.add(executor.submit(7, doThread::run, "77"));
+        sleep(30); futures.add(executor.submit(8, doThread::run, "88"));
+        sleep(30); futures.add(executor.submit(9, doThread::run, "99"));
 
         executor.shutdown();
         executor.awaitTermination(10, TimeUnit.SECONDS);
@@ -103,12 +104,12 @@ public class PriorityThreadPoolExecutorTest {
         DoThread doThread = new DoThread();
         List<Future<String>> futures = new ArrayList<>();
 
-        sleep(30); futures.add(executor.submit(4, () -> doThread.call()));
-        sleep(30); futures.add(executor.submit(() -> doThread.call()));
-        sleep(30); futures.add(executor.submit(6, () -> doThread.call()));
-        sleep(30); futures.add(executor.submit(7, () -> doThread.call()));
-        sleep(30); futures.add(executor.submit(8, () -> doThread.call()));
-        sleep(30); futures.add(executor.submit(9, () -> doThread.call()));
+        sleep(30); futures.add(executor.submit(4, doThread::call));
+        sleep(30); futures.add(executor.submit(doThread::call));
+        sleep(30); futures.add(executor.submit(6, doThread::call));
+        sleep(30); futures.add(executor.submit(7, doThread::call));
+        sleep(30); futures.add(executor.submit(8, doThread::call));
+        sleep(30); futures.add(executor.submit(9, doThread::call));
 
         executor.shutdown();
         executor.awaitTermination(10, TimeUnit.SECONDS);
@@ -155,7 +156,7 @@ public class PriorityThreadPoolExecutorTest {
                 logString("caught exception " + e.toString());
                 messages.add("thread with priority " + currentThread.getPriority() + " encountered exception " + e.toString());
             }
-            return Integer.toString(Thread.currentThread().getPriority()) + Integer.toString(Thread.currentThread().getPriority());
+            return Integer.toString(Thread.currentThread().getPriority()) + Thread.currentThread().getPriority();
         }
         
         List<String> getMessages() {
@@ -177,14 +178,6 @@ public class PriorityThreadPoolExecutorTest {
         System.out.println("]");
     }
 
-    private static void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-    }
-    
     private static <T> T getFromFuture(Future<T> future) {
         try {
             assertTrue(future.isDone());
