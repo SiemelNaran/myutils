@@ -10,7 +10,7 @@ import javax.annotation.Nonnull;
 /**
  * All of the messages sent between client and server.
  */
-interface MessageClasses {
+public interface MessageClasses {
     
     /**
      * A method toLoggingString that can be used for logging purposes.
@@ -134,7 +134,7 @@ interface MessageClasses {
     class ClientAccepted extends ServerGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
-        private CentralServerId centralServerId;
+        private final CentralServerId centralServerId;
         
         ClientAccepted(CentralServerId centralServerId) {
             this.centralServerId = centralServerId;
@@ -156,7 +156,7 @@ interface MessageClasses {
     class ClientRejected extends ServerGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
-        private CentralServerId centralServerId;
+        private final CentralServerId centralServerId;
         private final @Nonnull String error;
         
         ClientRejected(CentralServerId centralServerId, @Nonnull String error) {
@@ -696,7 +696,7 @@ interface MessageClasses {
         }
         
         @Override
-        public String getTopic() {
+        public @Nonnull String getTopic() {
             return topic;
         }
         

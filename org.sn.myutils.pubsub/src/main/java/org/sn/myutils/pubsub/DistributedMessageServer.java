@@ -115,7 +115,7 @@ import org.sn.myutils.util.ZipMinIterator;
  * However, using the field serverIndex, the server detects that it already processed the message and therefore ignores it.
  * But clients should still not send the message to avoid unnecessary network traffic.
  * 
- * <p>The server caches the last N messages of each RententionPriority.
+ * <p>The server caches the last N messages of each RetentionPriority.
  * Clients can download all publish message commands from a particular server index, and all messages in the cache from this time up to the time of download
  * will be sent to that client.
  * 
@@ -377,10 +377,8 @@ public class DistributedMessageServer implements Shutdowneable {
             info.lock.lock();
             try {
                 info.subscriberEndpoints.removeIf(subscriberEndpoint -> subscriberEndpoint.getSubscriberName().equals(subscriberName));
-                if (info.inactiveSubscriberEndpoints != null) {
-                    info.inactiveSubscriberEndpoints.removeIf(endpoint -> endpoint.getClientMachineId().equals(clientMachineId)
-                                                                  && endpoint.getSubscriberName().equals(subscriberName));
-                }
+                info.inactiveSubscriberEndpoints.removeIf(endpoint -> endpoint.getClientMachineId().equals(clientMachineId)
+                                                              && endpoint.getSubscriberName().equals(subscriberName));
                 info.mostRecentMessages.removeClientMachineState(clientMachineId);
             } finally {
                 info.lock.unlock();
@@ -583,7 +581,7 @@ public class DistributedMessageServer implements Shutdowneable {
                 if (info.createPublisher != null) {
                     info.mostRecentMessages.save(publishMessage);
                     relayAction = relayAction.andThen(
-                        subscriberParamsForCallack -> info.mostRecentMessages.onMessageRelayed(subscriberParamsForCallack.getClientMachineId(), publishMessage));
+                        subscriberParamsForCallback -> info.mostRecentMessages.onMessageRelayed(subscriberParamsForCallback.getClientMachineId(), publishMessage));
                     forClientsSubscribedToPublisher(topic,
                                                     publishMessage.getRelayFields().getSourceMachineId(),
                                                     false,
@@ -600,7 +598,7 @@ public class DistributedMessageServer implements Shutdowneable {
          * This function is used to send saved messages to a client.
          * 
          * @param clientMachine the client to send messages to
-         * @param topic null means send messages for all topics, otherwise send messages only for this topic
+         * @param topics null means send messages for all topics, otherwise send messages only for these topics
          * @param minClientTimestamp find messages on or after this client timestamp
          * @param lowerBoundInclusive send messages from this point. If null, calculate lowerBoundInclusive as the current server index the client is on plus one.
          * @param upperBoundInclusive send messages till this point
@@ -630,7 +628,7 @@ public class DistributedMessageServer implements Shutdowneable {
                                               .collect(Collectors.toList());
                 
                 // lock all topics
-                infos.stream().forEach(info -> {
+                infos.forEach(info -> {
                     Lock lock = info.lock;
                     lock.lock();
                     locks.add(lock);
@@ -676,7 +674,7 @@ public class DistributedMessageServer implements Shutdowneable {
                 }
             } finally {
                 // unlock all topics
-                locks.forEach(lock -> PubSubUtils.unlockSafely(lock));
+                locks.forEach(PubSubUtils::unlockSafely);
             }
             
             // return the number of messages relayed
@@ -789,9 +787,7 @@ public class DistributedMessageServer implements Shutdowneable {
             }
         }
         
-        private static final Comparator<PublishMessage> COMPARE_BY_SERVER_INDEX = (lhs, rhs) -> {
-            return lhs.getRelayFields().getServerIndex().compareTo(rhs.getRelayFields().getServerIndex());
-        };
+        private static final Comparator<PublishMessage> COMPARE_BY_SERVER_INDEX = Comparator.comparing(lhs -> lhs.getRelayFields().getServerIndex());
 
         List<LinkedList<PublishMessage>> getMessagesOfAllRetentionPriorities() {
             return allMessages;
@@ -1214,7 +1210,7 @@ public class DistributedMessageServer implements Shutdowneable {
             if (relay instanceof CreatePublisher) {
                 handleCreatePublisher(clientMachine, (CreatePublisher) relay);
             } else if (relay instanceof PublishMessage) {
-                handlePublishMessage(clientMachine, (PublishMessage) relay);
+                handlePublishMessage((PublishMessage) relay);
             } else {
                 throw new UnsupportedOperationException();
             }
@@ -1301,13 +1297,12 @@ public class DistributedMessageServer implements Shutdowneable {
         }
     }
     
-    private void handlePublishMessage(ClientMachine clientMachine, PublishMessage relay) {
-        PublishMessage publishMessage = (PublishMessage) relay;
+    private void handlePublishMessage(PublishMessage relay) {
         Consumer<SubscriberParamsForCallback> relayAction = params -> {
             var otherClientMachine = lookupClientMachine(params.getClientMachineId());
             send(relay, otherClientMachine, 0);
         };
-        publishersAndSubscribers.saveMessage(publishMessage, relayAction);
+        publishersAndSubscribers.saveMessage(relay, relayAction);
     }
     
     private void handleDownload(ClientMachine clientMachine, DownloadPublishedMessages download) {

@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import javax.annotation.Nonnull;
 
 
 /**
@@ -36,9 +37,8 @@ public class MultimapUtils<K, V> {
      * Get the collection with the given key.
      * Create an empty collection if one does not exist.
      */
-    public Collection<V> getOrCreate(K key) {
-        Collection<V> collection = map.computeIfAbsent(key, unused -> creator.get());
-        return collection;
+    public @Nonnull Collection<V> getOrCreate(K key) {
+        return map.computeIfAbsent(key, unused -> creator.get());
     }
 
     /**

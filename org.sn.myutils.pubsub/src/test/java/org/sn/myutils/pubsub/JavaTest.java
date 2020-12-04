@@ -27,11 +27,11 @@ public class JavaTest extends TestBase {
         
         executor.submit(() -> {
             try {
-                list.stream()
+                list.stream() // replacing with list.forEach causes test to fail
                     .forEach(val -> {
                         sleep(100);
                         System.out.println("found result " + val);
-                        result.append(val + ", ");
+                        result.append(val).append(", ");
                     });
             } catch (RuntimeException | Error e) {
                 result.append(e.getClass().getSimpleName());

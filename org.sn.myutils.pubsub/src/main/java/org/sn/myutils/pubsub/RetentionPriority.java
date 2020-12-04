@@ -7,5 +7,5 @@ package org.sn.myutils.pubsub;
  */
 public enum RetentionPriority implements Comparable<RetentionPriority> {
     MEDIUM,
-    HIGH;
+    HIGH
 }

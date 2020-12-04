@@ -50,6 +50,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
@@ -176,8 +177,8 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      * Basic test for publish + subscribe.
      * There is a central server, 2 clients, and one subscribers in each client.
      * 
-     * @param order if "CreatePublisherFirst" then client1 creates publisher and waits for a response before creating the subscriber.
-     *              If "CreatePublisherAndAddSubscriberAtSameTime" then client1 creates publisher and subscriber at the same time.
+     * @param orderString if "CreatePublisherFirst" then client1 creates publisher and waits for a response before creating the subscriber.
+     *                    If "CreatePublisherAndAddSubscriberAtSameTime" then client1 creates publisher and subscriber at the same time.
      */
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(strings = {"CreatePublisherFirst", "CreatePublisherAndAddSubscriberAtSameTime"})
@@ -533,7 +534,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         client2.enableSecurityKey("hello123");
         subscriber2 = (DistributedSubscriber) client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a")));
         sleep(250); // time to let subscriber be sent to server
-        System.out.println("after subscribe succesful: actual=" + words);
+        System.out.println("after subscribe successful: actual=" + words);
         assertFalse(subscriber2.isInvalid());
         assertEquals("CreatePublisher=2, Identification=1, PublishMessage=1", client1.getTypesSent());
         assertEquals("ClientAccepted=1, CreatePublisherFailed=1, PublisherCreated=1", client1.getTypesReceived());
@@ -1798,7 +1799,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
             }
 
             @Override
-            protected SocketAddress doMapKeyToRemoteAddress(String key) {
+            protected @Nonnull SocketAddress doMapKeyToRemoteAddress(String key) {
                 if (Character.toUpperCase(key.charAt(0)) <= 'M') {
                     return centralServer1.getMessageServerAddress();
                 } else {
@@ -1807,7 +1808,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
             }
 
             @Override
-            protected SocketAddress generateLocalAddress() {
+            protected @Nonnull SocketAddress generateLocalAddress() {
                 if (currentPort == firstPort + 2) {
                     throw new IllegalStateException("too many ports");
                 }

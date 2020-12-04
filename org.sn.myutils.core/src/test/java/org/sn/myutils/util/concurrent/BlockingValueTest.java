@@ -1,16 +1,15 @@
 package org.sn.myutils.util.concurrent;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.sn.myutils.testutils.TestUtil.assertExceptionFromCallable;
+
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
 import org.junit.jupiter.api.Test;
 import org.sn.myutils.testutils.TestUtil;
-
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.sn.myutils.testutils.TestUtil.assertExceptionFromCallable;
 
 
 class BlockingValueTest {

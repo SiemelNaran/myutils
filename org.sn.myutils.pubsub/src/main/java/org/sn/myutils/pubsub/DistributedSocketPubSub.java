@@ -359,7 +359,7 @@ public class DistributedSocketPubSub extends PubSub {
                                                            publisher.getRemoteRelayFields(),
                                                            /*isResend*/ true);
                 }
-                for (var subscriber : publisher.getSubscibers()) {
+                for (var subscriber : publisher.getSubscribers()) {
                     messageWriter.queueSendAddSubscriber(subscriber.getCreatedAtTimestamp(),
                                                          topic,
                                                          subscriber.getSubscriberName(),
@@ -390,7 +390,7 @@ public class DistributedSocketPubSub extends PubSub {
      * @param topics the topics to download
      * @param startIndexInclusive the start index. Use 0 or 1 for no minimum.
      * @param endIndexInclusive the end index. Use ServerIndex.MAX_VALUE for no maximum.
-     * @see DistributedMessageServer#DistributedMessageServer(String, int, java.util.Map) for the number of messages of each RetentionPriority to remember
+     * @see DistributedMessageServer#DistributedMessageServer(SocketAddress, java.util.Map) for the number of messages of each RetentionPriority to remember
      * @see RetentionPriority
      */
     public void download(Collection<String> topics, ServerIndex startIndexInclusive, ServerIndex endIndexInclusive) {
@@ -451,7 +451,7 @@ public class DistributedSocketPubSub extends PubSub {
             return started;
         }
 
-        private void sendIdentificationNow(SocketAddress messageServer) throws IOException {
+        private void sendIdentificationNow(SocketAddress messageServer) {
             send(new RegularMessage(new Identification(machineId), messageServer));
         }
 
@@ -591,7 +591,7 @@ public class DistributedSocketPubSub extends PubSub {
             Map<SocketAddress, List<String /*topic*/>> messageServers =
                     message.getTopics()
                            .stream()
-                           .collect(Collectors.groupingBy(topic -> DistributedSocketPubSub.this.messageServerLookup.mapKeyToRemoteAddress(topic),
+                           .collect(Collectors.groupingBy(DistributedSocketPubSub.this.messageServerLookup::mapKeyToRemoteAddress,
                                                           Collectors.mapping(Function.identity(), Collectors.toList())));
                            
             for (var entry : messageServers.entrySet()) {
@@ -725,10 +725,10 @@ public class DistributedSocketPubSub extends PubSub {
      * Publisher that forwards publish commands to the message server.
      */
     public final class DistributedPublisher extends Publisher {
+        private final List<DeferredMessage> messagesWhileDormant = new ArrayList<>();
         private volatile boolean invalid;
         private volatile boolean isDormant;
         private RelayFields remoteRelayFields;
-        private List<DeferredMessage> messagesWhileDormant = new ArrayList<>();
 
         private DistributedPublisher(@Nonnull String topic, @Nonnull Class<?> publisherClass, RelayFields remoteRelayFields) {
             super(topic, publisherClass);
@@ -840,7 +840,7 @@ public class DistributedSocketPubSub extends PubSub {
     @Override
     protected void registerPublisher(Publisher publisher) {
         var info = dormantInfoMap.computeIfAbsent(publisher.getTopic(), topic -> new DormantInfo());
-        if (info != null && info.dormantPublisher != null) {
+        if (info.dormantPublisher != null) {
             throw new IllegalStateException("publisher already exists: topic=" + publisher.getTopic());
         }
         info.setDormantPublisher((DistributedPublisher) publisher);
@@ -949,7 +949,7 @@ public class DistributedSocketPubSub extends PubSub {
         String subscriberName = subscriberRemoved.getSubscriberName();
         LOGGER.log(Level.TRACE, "Confirm subscriber removed: topic={0}, subscriberName={1}",
                    topic, subscriberName);
-        super.basicUnsubscibe(topic, subscriberName, false);
+        super.basicUnsubscribe(topic, subscriberName, false);
         var dormantInfo = DistributedSocketPubSub.this.dormantInfoMap.get(topic);
         if (dormantInfo != null) {
             dormantInfo.removeDormantSubscriber(subscriberName);
@@ -1242,7 +1242,7 @@ public class DistributedSocketPubSub extends PubSub {
                                      .map(channel -> getLocalAddress(channel) + " -> " + getRemoteAddress(channel))
                                      .collect(Collectors.toList()));
             LOGGER.log(Level.TRACE, "Call stack at creation:" + getCallStack());
-            socketChannels.forEach(channel -> closeQuietly(channel));
+            socketChannels.forEach(PubSubUtils::closeQuietly);
             closeExecutorQuietly(channelExecutor);
             closeExecutorQuietly(retryExecutor);
         }

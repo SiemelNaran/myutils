@@ -122,12 +122,12 @@ public class InMemoryPubSubIntegrationTest {
         assertEquals("hello", publisher.getTopic());
         assertEquals("CloneableString", publisher.getPublisherClass().getSimpleName());
         assertEquals((double) System.currentTimeMillis(), (double) publisher.getCreatedAtTimestamp(), 20.0);
-        assertEquals(2, publisher.getSubscibers().size());
+        assertEquals(2, publisher.getSubscribers().size());
         
         assertEquals("world", secondPublisher.getTopic());
         assertEquals("CloneableString", secondPublisher.getPublisherClass().getSimpleName());
         assertEquals((double) System.currentTimeMillis(), (double) secondPublisher.getCreatedAtTimestamp(), 20.0);
-        assertEquals(0, secondPublisher.getSubscibers().size());
+        assertEquals(0, secondPublisher.getSubscribers().size());
         
         List<String> allTopics = Collections.synchronizedList(new ArrayList<>());
         pubSub.forEachPublisher(p -> allTopics.add(p.getTopic())); // protected function forEachPublisher
@@ -170,7 +170,7 @@ public class InMemoryPubSubIntegrationTest {
      * This could happen in a multi-threaded environment.
      */
     @Test
-    void testSubscribeAndPublishAndUnsubcribe() {
+    void testSubscribeAndPublishAndUnsubscribe() {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
         Consumer<CloneableString> handleString1 = str -> words.add(str.append("-s1"));
@@ -256,9 +256,7 @@ public class InMemoryPubSubIntegrationTest {
             publisher.publish(new CloneableString("one"));
             publisher.publish(new CloneableString("two"));
         }, 0, TimeUnit.MILLISECONDS);
-        executor.schedule(() -> {
-            pubSub.unsubscribe(subscriber);
-        }, 250, TimeUnit.MILLISECONDS); 
+        executor.schedule(() -> pubSub.unsubscribe(subscriber), 250, TimeUnit.MILLISECONDS);
         
         executor.shutdown();
         executor.awaitTermination(1, TimeUnit.SECONDS);
@@ -277,7 +275,7 @@ public class InMemoryPubSubIntegrationTest {
         AtomicReference<Instant> endTime = new AtomicReference<>();
         PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(3, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
         PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
-        IntStream.rangeClosed(1, 5).forEach(i -> {
+        IntStream.rangeClosed(1, 5).forEach(i ->
             pubSub.subscribe("hello", "Subscriber" + i,
                 CloneableString.class,
                 str -> {
@@ -287,8 +285,8 @@ public class InMemoryPubSubIntegrationTest {
                     words.add(word);
                     System.out.println("currentThread=" + Thread.currentThread().getName() + ", i=" + i + ", word=" + word);
                     endTime.set(Instant.now());
-                });
-        });
+                })
+        );
 
         publisher.publish(new CloneableString("one"));
         publisher.publish(new CloneableString("two"));

@@ -2,7 +2,6 @@ package org.sn.myutils.pubsub;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -25,7 +24,7 @@ public class CentralServerIdTest {
         
         CentralServerId centralServerId1 = new CentralServerId(1595660400000L);
         CentralServerId centralServerId2 = new CentralServerId(1595660400001L);
-        assertFalse(centralServerId.equals(null));
+        assertNotEquals(centralServerId, null);
         assertEquals(centralServerId, centralServerId1);
         assertNotSame(centralServerId, centralServerId1);
         assertNotEquals(centralServerId1, centralServerId2);
@@ -33,7 +32,7 @@ public class CentralServerIdTest {
         assertNotEquals(centralServerId1.hashCode(), centralServerId2.hashCode());
         assertTrue(centralServerId1.compareTo(centralServerId2) < 0);
         assertTrue(centralServerId2.compareTo(centralServerId1) > 0);
-        assertTrue(centralServerId1.compareTo(centralServerId) == 0);
+        assertEquals(centralServerId1.compareTo(centralServerId), 0);
     }
     
     @Test

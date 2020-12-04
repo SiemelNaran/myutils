@@ -15,7 +15,7 @@ import org.junit.platform.launcher.listeners.SummaryGeneratingListener;
  * because the tests pass when run one at a time but fail if we run the entire class.
  */
 public class DistributedPubSubTestRunner {
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) {
         String basename = DistributedPubSubIntegrationTest.class.getName();
         LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request().selectors(
                 selectMethod(basename + "#testPerformance()"),

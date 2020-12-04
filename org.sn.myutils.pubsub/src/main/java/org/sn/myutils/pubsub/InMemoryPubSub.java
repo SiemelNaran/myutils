@@ -63,6 +63,6 @@ public class InMemoryPubSub extends PubSub {
     
     @Override
     protected void unregisterSubscriber(@Nullable Publisher publisher, Subscriber subscriber, boolean isDeferred) {
-        basicUnsubscibe(subscriber.getTopic(), subscriber.getSubscriberName(), isDeferred);
+        basicUnsubscribe(subscriber.getTopic(), subscriber.getSubscriberName(), isDeferred);
     }
 }

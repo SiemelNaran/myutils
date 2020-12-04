@@ -2,7 +2,6 @@ package org.sn.myutils.pubsub;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -27,7 +26,7 @@ public class ClientMachineIdTest {
         assertEquals(0, c1.compareTo(c1b));
         assertNotEquals(c1, c2);
         assertNotEquals(c1.hashCode(), c2.hashCode());
-        assertFalse(c1.equals(null));
+        assertNotEquals(c1, null);
         
         assertEquals("one", c1.toString());
         assertEquals(3, c1.length());

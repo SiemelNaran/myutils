@@ -33,8 +33,8 @@ public final class ClientMachineId implements java.io.Serializable, Comparable<C
     }
     
     @Override
-    public String toString() {
-        return value.toString();
+    public @Nonnull String toString() {
+        return value;
     }
 
     @Override

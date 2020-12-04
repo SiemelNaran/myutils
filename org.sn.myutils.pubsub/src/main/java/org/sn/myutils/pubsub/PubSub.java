@@ -52,7 +52,7 @@ public abstract class PubSub implements Shutdowneable {
      * The default way in which messages to process in this PubSub are stored, which is just a standard queue.
      */
     public static Supplier<Queue<Subscriber>> defaultQueueCreator() {
-        return () -> new ArrayDeque<>();
+        return ArrayDeque::new;
     }
 
     /**
@@ -80,7 +80,7 @@ public abstract class PubSub implements Shutdowneable {
         private static final System.Logger LOGGER = System.getLogger(DefaultSubscriptionMessageExceptionHandler.class.getName());
 
         @Override
-        public void handleException(Subscriber subcriber, CloneableObject<?> message, Throwable e) {
+        public void handleException(Subscriber subscriber, CloneableObject<?> message, Throwable e) {
             LOGGER.log(System.Logger.Level.WARNING, "Exception invoking subscriber", e);
         }
     }
@@ -162,7 +162,7 @@ public abstract class PubSub implements Shutdowneable {
         /**
          * Return subscribers in the order they were created.
          */
-        protected @Nonnull List<Subscriber> getSubscibers() {
+        protected @Nonnull List<Subscriber> getSubscribers() {
             return new ArrayList<>(subscribers);
         }
         
@@ -194,7 +194,7 @@ public abstract class PubSub implements Shutdowneable {
     public abstract class Subscriber {
         private final long createdAtTimestamp;
         private final @Nonnull String topic;
-        private final @Nonnull String subsriberName;
+        private final @Nonnull String subscriberName;
         private final @Nonnull Class<? extends CloneableObject<?>> subscriberClass; // same as or inherits from publisherClass
         private final @Nonnull Consumer<CloneableObject<?>> callback;
         private final @Nonnull Queue<CloneableObject<?>> messages = new ArrayDeque<>();
@@ -205,7 +205,7 @@ public abstract class PubSub implements Shutdowneable {
                              @Nonnull Consumer<CloneableObject<?>> callback) {
             this.createdAtTimestamp = System.currentTimeMillis();
             this.topic = topic;
-            this.subsriberName = subscriberName;
+            this.subscriberName = subscriberName;
             this.subscriberClass = subscriberClass;
             this.callback = callback;
         }
@@ -221,7 +221,7 @@ public abstract class PubSub implements Shutdowneable {
 
         @Nonnull
         public String getSubscriberName() {
-            return subsriberName;
+            return subscriberName;
         }
 
         public void addMessage(CloneableObject<?> message) {
@@ -347,7 +347,7 @@ public abstract class PubSub implements Shutdowneable {
         } else {
             MultimapUtils<String, Subscriber> multimap = new MultimapUtils<>(deferredSubscribersMap, ArrayList::new);
             var deferredSubscribers = multimap.getOrCreate(topic);
-            if (deferredSubscribers != null && deferredSubscribers.stream().anyMatch(s -> s.getSubscriberName().equals(subscriberName))) {
+            if (deferredSubscribers.stream().anyMatch(s -> s.getSubscriberName().equals(subscriberName))) {
                 throw new IllegalStateException("already subscribed: topic=" + topic + ", subscriberName=" + subscriberName);
             }
             subscriber = subscriberCreator.get();
@@ -374,7 +374,7 @@ public abstract class PubSub implements Shutdowneable {
      * Attempt to unsubscribe a subscriber.
      * Running time O(k) where k is the number of subscribers.
      * 
-     * @see basicUnsubscribe for more notes on running time.
+     * @see PubSub#basicUnsubscribe(String, String, boolean) for more notes on running time.
      */
     public synchronized void unsubscribe(Subscriber findSubscriber) {
         String topic = findSubscriber.getTopic();
@@ -398,7 +398,7 @@ public abstract class PubSub implements Shutdowneable {
      * @param findSubscriberName the subscriber name to unsubscribe
      * @param isDeferred true if this is a deferred subscriber
      */
-    protected synchronized void basicUnsubscibe(String topic, String findSubscriberName, boolean isDeferred) {
+    protected synchronized void basicUnsubscribe(String topic, String findSubscriberName, boolean isDeferred) {
         if (isDeferred) {
             MultimapUtils<String, Subscriber> multimap = new MultimapUtils<>(deferredSubscribersMap, ArrayList::new);
             multimap.removeIf(topic, subscriber -> subscriber.getSubscriberName().equals(findSubscriberName));
