@@ -1,5 +1,6 @@
 package org.sn.myutils.util.concurrent;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.CompletionException;
@@ -58,7 +59,7 @@ public class MoreExecutors {
     public static AutoCloseableScheduledExecutorService newTimeBucketScheduledThreadPool(Path folder,
                                                                                          Duration timeBucketLength,
                                                                                          int corePoolSize,
-                                                                                         ThreadFactory threadFactory) {
+                                                                                         ThreadFactory threadFactory) throws IOException {
         return new TimeBucketScheduledThreadPoolExecutor(folder, timeBucketLength, corePoolSize, threadFactory, new ThreadPoolExecutor.AbortPolicy());
     }
 

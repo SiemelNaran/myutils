@@ -436,20 +436,24 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         AutoCloseableScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory());
         sleepTillNextSecond();
 
+        service.schedule(new MyRunnable("800"), 800, TimeUnit.MILLISECONDS); // bucket [0, 1000)
         service.schedule(new MyRunnable("1100"), 1100, TimeUnit.MILLISECONDS); // bucket [1000, 2000)
         service.schedule(new MyRunnable("1200"), 1200, TimeUnit.MILLISECONDS); // bucket [1000, 2000)
-        assertEquals(1, countFiles());
+        assertEquals(2, getNumTimeBuckets(service));
         assertThat(words, Matchers.empty());
 
         service.shutdown();
         assertFalse(service.awaitTermination(500, TimeUnit.MILLISECONDS)); // as there are tasks to run in time bucket [1000, 2000)
         assertThat(words, Matchers.empty());
-        assertEquals(1, countFiles());
+        assertEquals(0, getNumTimeBuckets(service)); // awaitTermination removes all time buckets from memory
+        assertEquals(2, countFiles());
 
-        // because executor is shutdown future tasks do not run:
+        // even though executor is shutdown future tasks still run
+        // this is the behavior of java.util.concurrent.ScheduledThreadPoolExecutor
+        // but future tasks in the next time bucket do not run
         sleep(1700);
-        assertThat(words, Matchers.empty());
-        assertEquals(1, countFiles()); // we're now at time 500+1700=2300, but time bucket file is neither loaded nor deleted
+        assertThat(words, Matchers.contains("800"));
+        assertEquals(2, countFiles()); // we're now at time 500+1700=2300, but time bucket file is neither loaded nor deleted
         assertFalse(service.isTerminated());
     }
 
@@ -495,6 +499,68 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         assertTrue(terminated);
         assertThat(words, Matchers.empty());
         assertEquals(1, countFiles());
+    }
+
+    @Test
+    void testRestartExecutor() throws IOException, InterruptedException {
+        Duration timeBucketLength = Duration.ofSeconds(1);
+
+        AutoCloseableScheduledExecutorService service = null;
+
+        try {
+            service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory());
+
+            sleepTillNextSecond();
+
+            service.schedule(new MyRunnable("200"), 400, TimeUnit.MILLISECONDS);
+            service.schedule(new MyRunnable("800"), 800, TimeUnit.MILLISECONDS);
+            service.schedule(new MyRunnable("1000"), 1, TimeUnit.SECONDS);
+            service.schedule(new MyRunnable("1800"), 1600, TimeUnit.MILLISECONDS);
+            service.schedule(new MyRunnable("2200"), 2200, TimeUnit.MILLISECONDS);
+            service.schedule(new MyRunnable("2800"), 2800, TimeUnit.MILLISECONDS);
+            service.schedule(new MyRunnable("3600"), 3600, TimeUnit.MILLISECONDS);
+            service.schedule(new MyRunnable("3800"), 3800, TimeUnit.MILLISECONDS);
+            service.schedule(new MyRunnable("4200"), 4200, TimeUnit.MILLISECONDS);
+            service.schedule(new MyRunnable("4800"), 4800, TimeUnit.MILLISECONDS);
+            assertEquals(5, countFiles());
+
+            sleep(1490); // at 1490ms mark
+            System.out.println("words1=" + words);
+            assertThat(words, Matchers.contains("200", "800", "1000"));
+
+            service.shutdownNow();
+            service.awaitTermination(10, TimeUnit.MILLISECONDS); // at 1500ms mark
+            service = null;
+
+            assertEquals(4, countFiles()); // file for [0, 1000) was removed
+        } finally {
+            if (service != null) {
+                service.close();
+            }
+        }
+
+        sleep(1500); // at 3000ms mark.  Normally 1800, 2200, 2800 would run, but the executor is shut down
+        System.out.println("Restarting executor");
+
+        try {
+            service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory());
+
+            sleep(100); // give executor time to load jobs till the 3000ms mark and run them, now at 3100ms mark
+            System.out.println("words2=" + words);
+            assertThat(words, Matchers.contains("200", "800", "1000", "1800", "2200", "2800"));
+
+            Instant startInstant = Instant.now();
+            service.shutdown();
+            boolean terminated = service.awaitTermination(2, TimeUnit.SECONDS);
+            System.out.println("words3=" + words);
+            assertThat(words, Matchers.contains("200", "800", "1000", "1800", "2200", "2800", "3600", "3800", "4200", "4800"));
+            assertThat(Duration.between(startInstant, Instant.now()).toMillis(), TestUtil.between(1500L, 1900L));
+            assertTrue(terminated);
+        } finally {
+            if (service != null) {
+                service.close();
+            }
+        }
     }
 
     /**

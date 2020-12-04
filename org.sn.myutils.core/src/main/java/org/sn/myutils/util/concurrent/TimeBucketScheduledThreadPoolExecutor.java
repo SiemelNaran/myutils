@@ -5,17 +5,19 @@ import static java.lang.System.Logger.Level.INFO;
 import static java.lang.System.Logger.Level.TRACE;
 import static java.lang.System.Logger.Level.WARNING;
 
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.Closeable;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.RandomAccessFile;
 import java.io.Serializable;
-import java.io.Writer;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -28,6 +30,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.StringTokenizer;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletionException;
@@ -73,14 +76,22 @@ import org.sn.myutils.util.concurrent.SerializableLambdaUtils.RunnableInfo;
  * but the unit tests do it each test creates a new TimeBucketScheduledThreadPoolExecutor.
  */
 public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableScheduledExecutorService {
-    private interface IndexFileCreator {
+    private interface IndexFileLoader {
         /**
          * Create or overwrite a file.
          *
          * @param filename the file's basename. The real file will be this filename within the folder passed to TimeBucketScheduledThreadPoolExecutor's constructor.
-         * @return a Writer. It is the caller's responsibility to close this.
+         * @return a buffered writer. It is the caller's responsibility to close this.
          */
-        @Nonnull Writer create(String filename) throws IOException;
+        @Nonnull BufferedWriter create(String filename) throws IOException;
+
+        /**
+         * Open an existing file.
+         *
+         * @param filename the file's basename. The real file will be this filename within the folder passed to TimeBucketScheduledThreadPoolExecutor's constructor.
+         * @return a buffered reader or null if the file does not exist. It is the caller's responsibility to close this.
+         */
+        @Nullable BufferedReader open(String filename) throws IOException;
     }
 
     private interface DataFileLoader {
@@ -150,7 +161,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         private final List<TimeBucket> timeBuckets = new ArrayList<>();
         private volatile long timeBucketLengthMillis;
 
-        private final IndexFileCreator indexFileCreator;
+        private final IndexFileLoader indexFileLoader;
         private final DataFileLoader dataFileLoader;
 
         /**
@@ -200,13 +211,15 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         TimeBucketManager(ThreadLocal<TimeBucketFutureTask<?>> threadLocalFutureTask,
                           ScheduledThreadPoolExecutor mainExecutor,
                           Duration bucketLength,
-                          IndexFileCreator indexFileCreator,
-                          DataFileLoader dataFileLoader) {
+                          IndexFileLoader indexFileLoader,
+                          DataFileLoader dataFileLoader) throws IOException {
             this.threadLocalFutureTask = threadLocalFutureTask;
             this.mainExecutor = mainExecutor;
             this.timeBucketLengthMillis = bucketLength.toMillis();
-            this.indexFileCreator = indexFileCreator;
+            this.indexFileLoader = indexFileLoader;
             this.dataFileLoader = dataFileLoader;
+
+            loadTimeBuckets();
         }
 
         void setTimeBucketLengthMillis(Duration bucketLength) {
@@ -297,7 +310,6 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                     realFuture = awaitRealFuture(maxWaitNanos);
                 }
                 long waitNanos = maxWaitNanos - (System.nanoTime() - start);
-                System.out.println("snaran get " + maxWaitNanos + " " + waitNanos);
                 return realFuture.get(waitNanos, TimeUnit.NANOSECONDS);
             }
 
@@ -311,8 +323,6 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                 Objects.requireNonNull(realFuture).run();
                 try {
                     TimeBucketManager.this.done(timeBucket, position);
-                } catch (ExecutorTerminatedException e) {
-                    LOGGER.log(ERROR, "Unable to mark task as done: timeBucket=" + timeBucket + ", position=" + position + ", error=" + e.getClass().getSimpleName());
                 } catch (IOException | RuntimeException | Error e) {
                     LOGGER.log(ERROR, "Unable to mark task as done: timeBucket=" + timeBucket + ", position=" + position + ", error='" + e.toString() + "'");
                 }
@@ -411,10 +421,8 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                             }
                         }
                     }
-                } catch (ExecutorTerminatedException e) {
-                    LOGGER.log(ERROR, "Error loading time bucket: timeBucketExecutorShutdown=" + timeBucketExecutor.isTerminated() + ", timeBucket=" + timeBucket + ", error=" + e.getClass().getSimpleName());
                 } catch (IOException | RuntimeException | Error e) {
-                    LOGGER.log(ERROR, "Error loading time bucket: timeBucketExecutorShutdown=" + timeBucketExecutor.isTerminated() + ", timeBucket=" + timeBucket, e);
+                    LOGGER.log(ERROR, "Error loading time bucket: timeBucket=" + timeBucket, e);
                 } finally {
                     Duration timeTaken = Duration.between(startTime, Instant.now());
                     LOGGER.log(
@@ -514,7 +522,8 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                     }
                 } // end while
                 assert timeBucketsLock.isWriteLocked();
-                return addTimeBucket(when, attemptWriteLockIndex);
+                long bucketStartMillis = when / timeBucketLengthMillis * timeBucketLengthMillis;
+                return addTimeBucket(bucketStartMillis, timeBucketLengthMillis, attemptWriteLockIndex, /*forceAsyncLoad*/ false);
             } finally {
                 if (timeBucketsLock.isWriteLocked() || timeBucketsLock.isReadLocked()) {
                     timeBucketsLock.unlock(lock);
@@ -522,16 +531,15 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             }
         }
 
-        private TimeBucket addTimeBucket(long when, int arrayIndex) {
-            long startMillis = when / timeBucketLengthMillis * timeBucketLengthMillis;
-            var timeBucket = new TimeBucket(startMillis, timeBucketLengthMillis);
+        private TimeBucket addTimeBucket(long startInclusiveMillis, long durationMillis, int arrayIndex, boolean forceAsyncLoad) {
+            var timeBucket = new TimeBucket(startInclusiveMillis, durationMillis);
             LOGGER.log(INFO, () -> "Creating time bucket: timeBucket=" + timeBucket);
             timeBuckets.add(arrayIndex, timeBucket);
             saveTimeBucketsAsync();
-            if (!timeBucket.isInMemory()) {
+            if (forceAsyncLoad || !timeBucket.isInMemory()) {
                 scheduleLoadingOfTimeBucket(timeBucket);
             }
-            scheduleDeletionOfTimeBucket(timeBucket);
+            scheduleDeletionOfTimeBucket(timeBucket); // as there is one thread in the time bucket executor, this will always run after load
             return timeBucket;
         }
 
@@ -546,11 +554,12 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         private void saveTimeBucketsAsync() {
             timeBucketExecutor.submit(() -> {
                 long writeLock = timeBucketsLock.writeLock();
-                try (PrintWriter writer = new PrintWriter(new BufferedWriter(indexFileCreator.create("index.txt")))) {
+                try (PrintWriter writer = new PrintWriter(indexFileLoader.create("index.txt"))) {
+                    writer.println("[title]");
                     writer.println("version=" + TIME_BUCKET_VERSION);
                     writer.println();
-                    writer.println("[futures]");
-                    timeBuckets.forEach(timeBucket -> writer.println(timeBucket.getStartInclusiveMillis()));
+                    writer.println("[buckets]");
+                    timeBuckets.forEach(timeBucket -> writer.println(timeBucket.getStartInclusiveMillis() + " " + timeBucket.getEndExclusiveMillis()));
                     writer.close();
                     if (writer.checkError()) {
                         throw new IOException();
@@ -565,12 +574,52 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             });
         }
 
+        private void loadTimeBuckets() throws IOException {
+            long writeLock = timeBucketsLock.writeLock();
+            try {
+                int lineNumber = 0;
+                try (BufferedReader bufferedReader = indexFileLoader.open("index.txt")) {
+                    if (bufferedReader != null) {
+                        boolean loadingTitle = false;
+                        boolean loadingBuckets = false;
+                        Integer version = null;
+                        while (true) {
+                            String line = bufferedReader.readLine();
+                            if (line == null) {
+                                break;
+                            }
+                            lineNumber++;
+                            if (line.isEmpty()) {
+                                loadingTitle = false;
+                                loadingBuckets = false;
+                            } else if (line.equals("[title]")) {
+                                loadingTitle = true;
+                            } else if (line.equals("[buckets]")) {
+                                Objects.requireNonNull(version);
+                                loadingBuckets = true;
+                            } else if (loadingTitle) {
+                                if (line.startsWith("version=")) {
+                                    version = Integer.parseInt(line.substring("version=".length()));
+                                }
+                            } else if (loadingBuckets) {
+                                StringTokenizer tokenizer = new StringTokenizer(line);
+                                long startMillis = Long.parseLong(tokenizer.nextToken());
+                                long endMillis = Long.parseLong(tokenizer.nextToken());
+                                addTimeBucket(startMillis, endMillis - startMillis, timeBuckets.size(), /*forceAsyncLoad*/ true);
+                            }
+                        }
+                    }
+                } catch (NumberFormatException e) {
+                    throw new IOException("Parse error on line " + lineNumber, e);
+                }
+            } finally {
+                timeBucketsLock.unlockWrite(writeLock);
+            }
+        }
+
         private @Nonnull RandomAccessFile lookupTimeBucketDataFile(TimeBucket timeBucket, boolean createIfNotFound) {
             return timeBucketFileMap.computeIfAbsent(timeBucket, unused -> {
                 try {
-                    if (timeBucketExecutor.isTerminated()) {
-                        throw new ExecutorTerminatedException("Cannot load time bucket files");
-                    }
                     RandomAccessFile randomAccessFile = Objects.requireNonNull(dataFileLoader.open(timeBucket.getFilename(), createIfNotFound));
                     if (randomAccessFile.length() == 0) {
                         randomAccessFile.writeInt(TIME_BUCKET_VERSION);
@@ -584,16 +633,17 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             });
         }
 
-        private static class ExecutorTerminatedException extends RuntimeException {
-            ExecutorTerminatedException(String context) {
-                super(context + " : time bucket manager is terminated");
-            }
-        }
-
+        /**
+         * Stops background tasks of the time bucket executor.
+         * These are loading buckets and deleted buckets.
+         *
+         * @param immediate true means call shutdownNow and close files. false means call shutdown.
+         */
         void stopBackgroundTasks(boolean immediate) {
             if (immediate) {
                 timeBucketExecutor.shutdownNow();
                 timeBuckets.clear();
+                timeBucketFileMap.clear(); // closes files
             } else {
                 timeBucketExecutor.shutdown();
             }
@@ -612,18 +662,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         Duration waitForBackgroundTasksToFinish(long timeout, TimeUnit unit) throws InterruptedException {
             Duration duration = Duration.of(timeout, unit.toChronoUnit());
             Instant startTime = Instant.now();
-            var blockingQueue = timeBucketExecutor.getQueue();
-            var sizeBefore = blockingQueue.size();
-            blockingQueue.stream()
-                         .map(runnable -> (RunnableScheduledFuture<?>) runnable)
-                         .filter(future -> future.getDelay(unit) > timeout)
-                         .forEach(future -> future.cancel(true));
-            timeBucketExecutor.purge();
-            var sizeAfter = blockingQueue.size();
-            LOGGER.log(TRACE, "Purged future tasks from timeBucketExecutor: numPurged=" + (sizeAfter - sizeBefore) + ", numRemaining=" + sizeAfter);
             timeBucketExecutor.awaitTermination(timeout, unit);
-            assert timeBucketExecutor.isTerminated();
-            timeBucketFileMap.clear(); // closes files
             Duration durationForTimeBucketManagerShutdown = Duration.between(startTime, Instant.now());
             return duration.minus(durationForTimeBucketManagerShutdown);
         }
@@ -787,9 +826,9 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             TimeUnit unit = info.getTimeInfo().getUnit();
             long delta;
             if (unit == TimeUnit.NANOSECONDS) {
-                delta = zeroIfNegative(startInclusiveMillis - now.toEpochMilli()) * 1_000_000 - now.getNano() % 1_000_000;
+                delta = startInclusiveMillis - now.toEpochMilli() * 1_000_000 - now.getNano() % 1_000_000;
             } else {
-                delta = zeroIfNegative(startInclusiveMillis - now.toEpochMilli());
+                delta = startInclusiveMillis - now.toEpochMilli();
             }
             long initialDelay = info.getTimeInfo().getInitialDelay();
             initialDelay += delta;
@@ -799,10 +838,6 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             } else {
                 return now.plusMillis(initialDelay);
             }
-        }
-
-        private static long zeroIfNegative(long val) {
-            return val < 0 ? 0 : val;
         }
 
         RunnableScheduledFuture<?> pullRealFuture(long position) throws InterruptedException {
@@ -846,12 +881,21 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
      */
     public TimeBucketScheduledThreadPoolExecutor(Path folder,
                                                  Duration timeBucketLength,
-                                                 int corePoolSize, ThreadFactory threadFactory, RejectedExecutionHandler rejectedHandler) {
-        IndexFileCreator indexFileCreator = new IndexFileCreator() {
+                                                 int corePoolSize, ThreadFactory threadFactory, RejectedExecutionHandler rejectedHandler) throws IOException {
+        IndexFileLoader indexFileLoader = new IndexFileLoader() {
             @Override
-            public @Nonnull Writer create(String filename) throws FileNotFoundException {
+            public @Nonnull BufferedWriter create(String filename) throws FileNotFoundException {
                 File file = new File(folder.toFile(), filename);
-                return new OutputStreamWriter(new FileOutputStream(file));
+                return new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file)));
+            }
+
+            @Override
+            public @Nullable BufferedReader open(String filename) throws IOException {
+                File file = new File(folder.toFile(), filename);
+                if (!file.exists()) {
+                    return null;
+                }
+                return new BufferedReader(new InputStreamReader(new FileInputStream(file)));
             }
         };
 
@@ -903,7 +947,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
 
         };
 
-        this.timeBucketManager = new TimeBucketManager(threadLocalFutureTask, mainExecutor, timeBucketLength, indexFileCreator, dataFileLoader);
+        this.timeBucketManager = new TimeBucketManager(threadLocalFutureTask, mainExecutor, timeBucketLength, indexFileLoader, dataFileLoader);
     }
 
     public void setTimeBucketLength(Duration timeBucketLength) {
@@ -940,12 +984,23 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         }
     }
 
+    /**
+     * {@inheritdoc}
+     */
     @Override
     public void shutdown() {
         executorState = ExecutorState.SHUTDOWN;
         timeBucketManager.stopBackgroundTasks(false);
+        // we cannot shutdown mainExecutor because during awaitTermination tasks from future time buckets may be added to it
     }
 
+    /**
+     * {@inheritdoc}
+     *
+     * This functions returns the tasks not started of the current time bucket(s).
+     * As we approach the end of one time bucket, the other is loaded into memory,
+     * so this function would return all the tasls from the second bucket as well as the unfinished ones of the first.
+     */
     @Override
     public @Nonnull List<Runnable> shutdownNow() {
         executorState = ExecutorState.SHUTDOWN;
@@ -958,17 +1013,27 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         return executorState.ordinal() >= 1;
     }
 
+    /**
+     * {@inheritdoc}
+     *
+     * <p>This function calls shutdown on the main executor.
+     *
+     * <p>This function returns false if the tasks in the main executor did not complete or of there is at least one future time bucket not yet loaded into memory.
+     * Caveat: if all tasks in the future time bucket(s) have been canceled, this functions still returns false even though there are no more tasks to run.
+     */
     @Override
     public boolean awaitTermination(long timeout, @Nonnull TimeUnit unit) throws InterruptedException {
-        if (!isShutdown()) {
+        if (!isShutdown() && !isTerminated()) {
             throw new IllegalStateException("awaitTermination called before shutdown/shutdownNow");
         }
         Duration durationLeft = timeBucketManager.waitForBackgroundTasksToFinish(timeout, unit);
         mainExecutor.shutdown();
-        boolean terminated = mainExecutor.awaitTermination(durationLeft.toNanos(), TimeUnit.NANOSECONDS);
-        if (!terminated) {
-            mainExecutor.shutdownNow(); // to interrupt remaining tasks
+        long durationLeftNanos = durationLeft.toNanos();
+        if (durationLeftNanos <= 100_000) {
+            durationLeftNanos = 100_000;
         }
+        boolean terminated = mainExecutor.awaitTermination(durationLeftNanos, TimeUnit.NANOSECONDS);
+        timeBucketManager.stopBackgroundTasks(true);
         terminated &= !timeBucketManager.hasFutureTimeBuckets();
         if (terminated) {
             executorState = ExecutorState.TERMINATED;
@@ -1072,7 +1137,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             awaitTermination(1, TimeUnit.MICROSECONDS); // closes files
         } catch (InterruptedException | RuntimeException | Error ignored) {
             try {
-                awaitTermination(1, TimeUnit.NANOSECONDS); // closes files
+                awaitTermination(1, TimeUnit.MICROSECONDS); // closes files
             } catch (InterruptedException | RuntimeException | Error e) {
                 throw new IOException(e);
             }
