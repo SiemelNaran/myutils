@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.RunnableScheduledFuture;
@@ -247,10 +248,27 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     }
 
     @Test
-    void multipleThreadsWriteToTimeBucketAtSameTime() throws IOException {
-        // TODO: write test: verify these lines hit the
-//        timeBucketsLock.unlock(lock);
-//        lock = timeBucketsLock.writeLock();
+    void multipleThreadsWriteToTimeBucketAtSameTime() throws IOException, InterruptedException {
+        Duration timeBucketLength = Duration.ofSeconds(1);
+        try (AutoCloseableScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
+            sleepTillNextSecond();
+
+            ScheduledExecutorService runner = Executors.newScheduledThreadPool(4, myThreadFactory());
+            runner.schedule(() -> service.schedule(new MyRunnable("1400"), 1400, TimeUnit.MILLISECONDS), 100, TimeUnit.MILLISECONDS);
+            runner.schedule(() -> service.schedule(new MyRunnable("1300"), 1300, TimeUnit.MILLISECONDS), 100, TimeUnit.MILLISECONDS);
+            runner.schedule(() -> service.schedule(new MyRunnable("1200"), 1200, TimeUnit.MILLISECONDS), 100, TimeUnit.MILLISECONDS);
+            runner.schedule(() -> service.schedule(new MyRunnable("1100"), 1100, TimeUnit.MILLISECONDS), 100, TimeUnit.MILLISECONDS);
+            runner.shutdown();
+            assertTrue(runner.awaitTermination(250, TimeUnit.MILLISECONDS));
+
+            assertEquals(1, getNumTimeBuckets(service));
+            assertThat(words, Matchers.empty());
+
+            service.shutdown();
+            assertTrue(service.awaitTermination(2, TimeUnit.SECONDS));
+            assertEquals(0, getNumTimeBuckets(service));
+            assertThat(words, Matchers.contains("1100", "1200", "1300", "1400"));
+        }
     }
 
     @Test
@@ -479,6 +497,9 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         System.out.println("words=" + words);
         assertThat(words, Matchers.contains("1100", "1200"));
         assertEquals(1, countFiles());
+
+        var remainingTasks = service.shutdownNow();
+        assertEquals(addExtra ? 1 : 0, remainingTasks.size());
     }
 
     @Test
@@ -503,11 +524,10 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
 
     @Test
     void testRestartExecutor() throws IOException, InterruptedException {
-        Duration timeBucketLength = Duration.ofSeconds(1);
-
         AutoCloseableScheduledExecutorService service = null;
 
         try {
+            Duration timeBucketLength = Duration.ofSeconds(1);
             service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory());
 
             sleepTillNextSecond();
@@ -543,6 +563,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         System.out.println("Restarting executor");
 
         try {
+            Duration timeBucketLength = Duration.ofSeconds(2);
             service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory());
 
             sleep(100); // give executor time to load jobs till the 3000ms mark and run them, now at 3100ms mark
