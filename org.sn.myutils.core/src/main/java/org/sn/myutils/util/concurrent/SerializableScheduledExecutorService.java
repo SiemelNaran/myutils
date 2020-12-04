@@ -5,6 +5,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.stream.Stream;
@@ -92,6 +94,15 @@ public interface SerializableScheduledExecutorService extends ScheduledExecutorS
          * @return the serializable callable, if any, or null.
          */
         SerializableCallable<?> getSerializableCallable();
+
+        @SuppressWarnings("unchecked")
+        default @Nonnull Runnable getActionAsRunnable() {
+            Runnable runnable = getSerializableRunnable();
+            if (runnable == null) {
+                runnable = new FutureTask<>((Callable<Object>) getSerializableCallable());
+            }
+            return runnable;
+        }
 
         /**
          * @return the time till the next execution of this task in nanoseconds.

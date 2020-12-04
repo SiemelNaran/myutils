@@ -370,6 +370,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                     return new TimeBucketFutureTask<>(timeBucket, startPosition, Instant.ofEpochMilli(whenMillis));
                 }
             } catch (IOException | SerializableScheduledExecutorService.RecreateRunnableFailedException e) {
+                mainExecutor.getRejectedExecutionHandler().rejectedExecution(info.toTaskInfo().getActionAsRunnable(), mainExecutor);
                 throw new RejectedExecutionException(e); // TODO: reject
             } finally {
                 timeBucket.dataFileAppendLock.unlock();
@@ -1000,7 +1001,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
      *
      * <p>This functions returns the tasks not started of the current time bucket(s).
      * As we approach the end of one time bucket, the other is loaded into memory,
-     * so this function would return all the tasls from the second bucket as well as the unfinished ones of the first.
+     * so this function would return all the tasks from the second bucket as well as the unfinished ones of the first.
      */
     @Override
     public @Nonnull List<Runnable> shutdownNow() {
