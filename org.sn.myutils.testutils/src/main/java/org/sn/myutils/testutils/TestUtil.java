@@ -79,6 +79,8 @@ public class TestUtil {
 
     /**
      * Same as future.get() except throws CompletionException in case of error.
+     *
+     * @throws CompletionException if there was an exception with the cause as the real exception
      */
     public static <T> T join(Future<T> future) {
         try {

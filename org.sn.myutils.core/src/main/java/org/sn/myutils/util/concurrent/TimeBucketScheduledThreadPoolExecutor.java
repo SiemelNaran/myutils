@@ -386,21 +386,22 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             long delayMillis = whenMillis - System.currentTimeMillis();
             LOGGER.log(TRACE, () -> "Schedule loading of time bucket: timeBucket=" + timeBucket + ", whenMillis=" + whenMillis);
             timeBucketExecutor.schedule(() -> {
-                if (Thread.currentThread().isInterrupted() ) {
+                if (Thread.currentThread().isInterrupted()) {
                     LOGGER.log(TRACE, "Loading time bucket interrupted: timeBucket=" + timeBucket);
                     return;
                 }
                 LOGGER.log(TRACE, () -> "Loading time bucket: timeBucket=" + timeBucket);
                 Instant startTime = Instant.now();
                 RandomAccessFile dataStream = lookupTimeBucketDataFile(timeBucket, false);
-                int countSuccess = 0, countFailure = 0;
+                int countSuccess = 0;
+                int countFailure = 0;
                 try {
                     long fileLength = dataStream.length();
                     timeBucket.setIsInMemory();
                     skipHeaders(dataStream);
                     long position;
                     while ((position = dataStream.getFilePointer()) < fileLength) {
-                        if (Thread.currentThread().isInterrupted() ) {
+                        if (Thread.currentThread().isInterrupted()) {
                             LOGGER.log(TRACE, "Loading time bucket interrupted within loop: timeBucket=" + timeBucket);
                             break;
                         }
@@ -435,7 +436,9 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             }, delayMillis, TimeUnit.MILLISECONDS);
         }
 
-        private TimeBucketFutureTask<Object> scheduleTaskNow(TimeBucket timeBucket, RunnableInfo info, long startPosition) throws SerializableScheduledExecutorService.RecreateRunnableFailedException {
+        private TimeBucketFutureTask<Object> scheduleTaskNow(TimeBucket timeBucket,
+                                                             RunnableInfo info,
+                                                             long startPosition) throws SerializableScheduledExecutorService.RecreateRunnableFailedException {
             Instant now = Instant.now();
             Instant when = timeBucket.padInitialDelay(info, now);
             var futureTask = new TimeBucketFutureTask<>(timeBucket, startPosition, when);
@@ -878,6 +881,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
      * @param corePoolSize the number of threads in this executor
      * @param threadFactory the thread factory
      * @param rejectedHandler the rejection rejectedHandler
+     * @throws IOException if there was an error loading the existing time buckets
      */
     public TimeBucketScheduledThreadPoolExecutor(Path folder,
                                                  Duration timeBucketLength,
@@ -973,7 +977,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
 
     @Override
     @SuppressWarnings("unchecked")
-    public @Nonnull<V> ScheduledFuture<V> schedule(@Nonnull Callable<V> callable, long delay, @Nonnull TimeUnit unit) {
+    public @Nonnull <V> ScheduledFuture<V> schedule(@Nonnull Callable<V> callable, long delay, @Nonnull TimeUnit unit) {
         // RunnableInfo.apply never calls this function, so threadLocalFutureTask.get() is always null when this code is hit
         checkShutdown(callable);
         if (callable instanceof Serializable) {
@@ -984,9 +988,6 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         }
     }
 
-    /**
-     * {@inheritdoc}
-     */
     @Override
     public void shutdown() {
         executorState = ExecutorState.SHUTDOWN;
@@ -997,7 +998,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
     /**
      * {@inheritdoc}
      *
-     * This functions returns the tasks not started of the current time bucket(s).
+     * <p>This functions returns the tasks not started of the current time bucket(s).
      * As we approach the end of one time bucket, the other is loaded into memory,
      * so this function would return all the tasls from the second bucket as well as the unfinished ones of the first.
      */
@@ -1077,7 +1078,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
     }
 
     @Override // ExecutorService
-    public @Nonnull<T> Future<T> submit(@Nonnull Callable<T> task) {
+    public @Nonnull <T> Future<T> submit(@Nonnull Callable<T> task) {
         checkShutdown(task);
         return mainExecutor.submit(task);
     }
@@ -1098,7 +1099,8 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
     }
 
     @Override // ExecutorService
-    public <T> T invokeAny(@Nonnull Collection<? extends Callable<T>> tasks, long timeout, @Nonnull TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+    public <T> T invokeAny(@Nonnull Collection<? extends Callable<T>> tasks, long timeout,
+                           @Nonnull TimeUnit unit)throws InterruptedException, ExecutionException, TimeoutException {
         return mainExecutor.invokeAny(tasks, timeout, unit);
     }
 

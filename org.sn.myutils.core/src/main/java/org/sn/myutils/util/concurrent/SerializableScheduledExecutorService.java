@@ -76,6 +76,7 @@ public interface SerializableScheduledExecutorService extends ScheduledExecutorS
         Stream<TaskInfo> stream();
     }
 
+    @SuppressWarnings("checkstyle:SummaryJavadoc")
     interface TaskInfo {
         /**
          * @return Class<? extends Runnable> or Class<? extends Callable>

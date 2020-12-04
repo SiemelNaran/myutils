@@ -29,7 +29,6 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
-
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -186,12 +185,12 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
             service.schedule(new MyCallable("1500"), 1500, TimeUnit.MILLISECONDS); // bucket [1000, 1000)
             assertEquals(2, getNumTimeBuckets(service));
             service.schedule(
-                    () -> {
-                        words.add("2100");
-                        return "2100";
-                    },
-                    2100,
-                    TimeUnit.MILLISECONDS); // no bucket as not serializable
+                () -> {
+                    words.add("2100");
+                    return "2100";
+                },
+                2100,
+                TimeUnit.MILLISECONDS); // no bucket as not serializable
             System.out.println("Time to schedule 3 futures: " + Duration.between(realStart, Instant.now()).toMillis() + "ms"); // typical output: Time to schedule 6 futures: 33ms
             assertEquals(2, getNumTimeBuckets(service));
             assertEquals(2, countFiles());
@@ -396,7 +395,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     }
 
     @Test
-    void changeBucketLength() throws IOException, InterruptedException {
+    void changeBucketLength() throws IOException {
         Duration timeBucketLength = Duration.ofSeconds(1);
         try (AutoCloseableScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
             TimeBucketScheduledThreadPoolExecutor serviceImpl = (TimeBucketScheduledThreadPoolExecutor) service;

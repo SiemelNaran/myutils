@@ -23,9 +23,7 @@ import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -763,21 +761,21 @@ public class SerializableScheduledExecutorServiceTest {
 
         {
             SerializableScheduledExecutorService service = new SerializableScheduledThreadPoolExecutor(
-                    1,
-                    (r, executor) -> {
-                        throw new CustomRejectedExecutionException();
-                    });
+            1,
+            (r, executor) -> {
+                throw new CustomRejectedExecutionException();
+            });
             service.shutdown();
             assertExceptionFromCallable(() -> service.schedule(runnableOne, 600, TimeUnit.MILLISECONDS), CustomRejectedExecutionException.class);
         }
 
         {
             SerializableScheduledExecutorService service = new SerializableScheduledThreadPoolExecutor(
-                    1,
-                    myThreadFactory(),
-                    (r, executor) -> {
-                        throw new CustomRejectedExecutionException();
-                    });
+            1,
+            myThreadFactory(),
+            (r, executor) -> {
+                throw new CustomRejectedExecutionException();
+            });
             service.shutdown();
             assertExceptionFromCallable(() -> service.schedule(runnableOne, 600, TimeUnit.MILLISECONDS), CustomRejectedExecutionException.class);
         }

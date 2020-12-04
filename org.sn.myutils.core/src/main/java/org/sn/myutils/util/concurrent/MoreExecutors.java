@@ -5,7 +5,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -55,6 +54,8 @@ public class MoreExecutors {
     /**
      * Create a scheduled executor service that stores tasks to run in time buckets (i.e. files)
      * so that we don't have to store millions of tasks in memory.
+     *
+     * @throws IOException if there was an error loading the existing time buckets
      */
     public static AutoCloseableScheduledExecutorService newTimeBucketScheduledThreadPool(Path folder,
                                                                                          Duration timeBucketLength,
