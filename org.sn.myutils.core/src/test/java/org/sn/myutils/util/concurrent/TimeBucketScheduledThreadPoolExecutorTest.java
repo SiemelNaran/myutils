@@ -213,40 +213,6 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     }
 
     @Test
-    void testNanos() throws IOException {
-        Duration timeBucketLength = Duration.ofSeconds(1);
-        try (AutoCloseableScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
-            assertEquals(0, countFiles());
-
-            sleepTillNextSecond();
-            long[] timeBuckets;
-
-            service.schedule(new MyCallable("600"), 600, TimeUnit.MILLISECONDS); // bucket [0000, 1000)
-            assertEquals(1, getNumTimeBuckets(service));
-            service.schedule(new MyCallable("1500+"), 1508 * 1_000_000 + 111_222, TimeUnit.NANOSECONDS); // bucket [1000, 2000)
-            assertEquals(2, getNumTimeBuckets(service));
-            service.schedule(new MyCallable("1500"), 1500, TimeUnit.MILLISECONDS); // bucket [1000, 1000)
-            assertEquals(2, getNumTimeBuckets(service));
-            assertEquals(2, countFiles());
-            timeBuckets = getTimeBuckets(service);
-            System.out.println("timeBuckets=" + Arrays.stream(timeBuckets).mapToObj(Long::toString).collect(Collectors.joining(",")));
-            assertEquals(timeBuckets[0] + 1000, timeBuckets[1]);
-            assertThat(words, Matchers.empty());
-
-            sleep(1200); // advance time to 1200ms
-            System.out.println("words=" + words);
-            assertThat(words, Matchers.contains("600"));
-            assertEquals(1, getNumTimeBuckets(service));
-            assertEquals(1, countFiles());
-
-            sleep(1200); // advance time to 2400ms
-            System.out.println("words=" + words);
-            assertThat(words, Matchers.contains("600", "1500", "1500+"));
-            assertEquals(0, countFiles());
-        }
-    }
-
-    @Test
     void multipleThreadsWriteToTimeBucketAtSameTime() throws IOException, InterruptedException {
         Duration timeBucketLength = Duration.ofSeconds(1);
         try (AutoCloseableScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {

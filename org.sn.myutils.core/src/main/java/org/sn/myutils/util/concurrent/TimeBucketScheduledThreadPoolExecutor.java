@@ -70,7 +70,11 @@ import org.sn.myutils.util.concurrent.SerializableLambdaUtils.RunnableInfo;
  * <p>The current implementation does not handle periodic tasks.
  * So tasks at fixed rate or fixed delay are run in the internal executor and are not stored in time bucket files.
  *
- * <p>This class implements the Closeable interface, which calls shutdownNow and awaitTermination of 1 nanosecond,
+ * <p>This executor converts tasks scheduled with a time unit of NANOSECONDS to MILLISECONDS.
+ * So if you create a task A fpr 15ns and a task B for 10ns from now, both will run 0ms from now in the order A then B.
+ * The time of loading items from disk is so great that nanosecond precision does not even make sense.
+ *
+ * <p>This class implements the AutoCloseable interface, which calls shutdownNow and awaitTermination of 1 nanosecond,
  * and closes any open files.
  * It is not necessary to call the close function as files will be closed as program exit anyway,
  * but the unit tests do it each test creates a new TimeBucketScheduledThreadPoolExecutor.
@@ -234,14 +238,14 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         private class TimeBucketFutureTask<V> implements RunnableScheduledFuture<V> {
             private final TimeBucket timeBucket;
             private final long position;
-            private final Instant time;
+            private final long whenMillis;
             private @Nullable RunnableScheduledFuture<V> realFuture;
             private boolean canceled;
 
-            TimeBucketFutureTask(TimeBucket timeBucket, long position, Instant time) {
+            TimeBucketFutureTask(TimeBucket timeBucket, long position, long whenMillis) {
                 this.timeBucket = timeBucket;
                 this.position = position;
-                this.time = time;
+                this.whenMillis = whenMillis;
             }
 
             void setRealFuture(RunnableScheduledFuture<V> realFuture) {
@@ -250,7 +254,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
 
             @Override // ScheduledFuture -> Delayed
             public long getDelay(@Nonnull TimeUnit unit) {
-                return unit.convert(Duration.between(Instant.now(), time));
+                return unit.convert(whenMillis - System.currentTimeMillis(), TimeUnit.MILLISECONDS);
             }
 
             @Override // ScheduledFuture -> Delayed -> Comparable
@@ -258,9 +262,9 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             public int compareTo(@Nonnull Delayed thatObject) {
                 if (thatObject instanceof TimeBucketFutureTask) {
                     TimeBucketFutureTask<V> that = (TimeBucketFutureTask<V>) thatObject;
-                    return this.time.compareTo(that.time);
+                    return Long.compare(this.whenMillis, that.whenMillis);
                 } else {
-                    return Long.compare(this.getDelay(TimeUnit.NANOSECONDS), thatObject.getDelay(TimeUnit.NANOSECONDS));
+                    return Long.compare(this.getDelay(TimeUnit.MILLISECONDS), thatObject.getDelay(TimeUnit.MILLISECONDS));
                 }
             }
 
@@ -367,7 +371,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                 if (timeBucket.isInMemory()) {
                     return scheduleTaskNow(timeBucket, info, startPosition);
                 } else {
-                    return new TimeBucketFutureTask<>(timeBucket, startPosition, Instant.ofEpochMilli(whenMillis));
+                    return new TimeBucketFutureTask<>(timeBucket, startPosition, whenMillis);
                 }
             } catch (IOException | SerializableScheduledExecutorService.RecreateRunnableFailedException e) {
                 mainExecutor.getRejectedExecutionHandler().rejectedExecution(info.toTaskInfo().getActionAsRunnable(), mainExecutor);
@@ -440,9 +444,9 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         private TimeBucketFutureTask<Object> scheduleTaskNow(TimeBucket timeBucket,
                                                              RunnableInfo info,
                                                              long startPosition) throws SerializableScheduledExecutorService.RecreateRunnableFailedException {
-            Instant now = Instant.now();
-            Instant when = timeBucket.padInitialDelay(info, now);
-            var futureTask = new TimeBucketFutureTask<>(timeBucket, startPosition, when);
+            long now = System.currentTimeMillis();
+            long whenMillis = timeBucket.padInitialDelay(info, now);
+            var futureTask = new TimeBucketFutureTask<>(timeBucket, startPosition, whenMillis);
             threadLocalFutureTask.set(futureTask);
             try {
                 // call info.apply to call schedule on the main executor
@@ -661,14 +665,14 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
          *
          * @param timeout the maximum length of time to wait
          * @param unit the length of time unit
-         * @return the amount of time left to wait
+         * @return the amount of time in nanoseconds left to wait
          */
-        Duration waitForBackgroundTasksToFinish(long timeout, TimeUnit unit) throws InterruptedException {
-            Duration duration = Duration.of(timeout, unit.toChronoUnit());
-            Instant startTime = Instant.now();
+        long waitForBackgroundTasksToFinish(long timeout, TimeUnit unit) throws InterruptedException {
+            long timeoutNanos = TimeUnit.NANOSECONDS.convert(timeout, unit);
+            long startTime = System.nanoTime();
             timeBucketExecutor.awaitTermination(timeout, unit);
-            Duration durationForTimeBucketManagerShutdown = Duration.between(startTime, Instant.now());
-            return duration.minus(durationForTimeBucketManagerShutdown);
+            long durationForTimeBucketManagerShutdown = System.nanoTime() - startTime;
+            return timeoutNanos - durationForTimeBucketManagerShutdown;
         }
 
         boolean hasFutureTimeBuckets() {
@@ -800,21 +804,13 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
          * For example, if now is 200ms, the initial delay is 1500ms, then the event time is 1700ms (passed in as whenMillis to this function),
          * and if this time bucket starts at 1000ms reduce the initial delay to 1700 - 1000 = 700ms.
          *
-         * <p>The unit will be changed to be either MILLISECONDS or NANOSECONDS.
+         * <p>The unit will be changed to MILLISECONDS.
          *
          * @param whenMillis the time when the event should occur in milliseconds, or 1700ms in our example
          */
         void normalizeInitialDelay(RunnableInfo info, long whenMillis) {
-            long initialDelay = whenMillis - startInclusiveMillis;
-            TimeUnit unit = info.getTimeInfo().getUnit();
-            if (unit == TimeUnit.NANOSECONDS) {
-                long nanos = info.getTimeInfo().getInitialDelay() % 1_000_000;
-                initialDelay *= 1_000_000;
-                initialDelay += nanos;
-            } else {
-                unit = TimeUnit.MILLISECONDS;
-            }
-            info.getTimeInfo().setInitialDelay(initialDelay, unit);
+            long initialDelayMillis = whenMillis - startInclusiveMillis;
+            info.getTimeInfo().setInitialDelay(initialDelayMillis, TimeUnit.MILLISECONDS);
         }
 
         /**
@@ -822,26 +818,18 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
          * For example, if this time bucket starts at 1000ms, the initial delay is 700ms, now is 800ms,
          * then the event starts at 1700ms, so set initial delay to 700 + (1000 - 800) = 900ms
          *
-         * <p>This function assumes that the unit is MILLISECONDS or NANOSECONDS.
+         * <p>This function assumes that the unit is MILLISECONDS.
          *
-         * @return the instant when the event will occur
+         * @return the instant when the event will occur in milliseconds
          */
-        public Instant padInitialDelay(RunnableInfo info, Instant now) {
-            TimeUnit unit = info.getTimeInfo().getUnit();
+        public long padInitialDelay(RunnableInfo info, long now) {
+            assert info.getTimeInfo().getUnit() == TimeUnit.MILLISECONDS;
             long delta;
-            if (unit == TimeUnit.NANOSECONDS) {
-                delta = (startInclusiveMillis - now.toEpochMilli()) * 1_000_000 - now.getNano() % 1_000_000;
-            } else {
-                delta = startInclusiveMillis - now.toEpochMilli();
-            }
+            delta = startInclusiveMillis - now;
             long initialDelay = info.getTimeInfo().getInitialDelay();
             initialDelay += delta;
             info.getTimeInfo().setInitialDelay(initialDelay);
-            if (unit == TimeUnit.NANOSECONDS) {
-                return now.plusNanos(initialDelay);
-            } else {
-                return now.plusMillis(initialDelay);
-            }
+            return now + initialDelay;
         }
 
         RunnableScheduledFuture<?> pullRealFuture(long position) throws InterruptedException {
@@ -1028,9 +1016,8 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         if (!isShutdown() && !isTerminated()) {
             throw new IllegalStateException("awaitTermination called before shutdown/shutdownNow");
         }
-        Duration durationLeft = timeBucketManager.waitForBackgroundTasksToFinish(timeout, unit);
+        long durationLeftNanos = timeBucketManager.waitForBackgroundTasksToFinish(timeout, unit);
         mainExecutor.shutdown();
-        long durationLeftNanos = durationLeft.toNanos();
         if (durationLeftNanos <= 100_000) {
             durationLeftNanos = 100_000;
         }
