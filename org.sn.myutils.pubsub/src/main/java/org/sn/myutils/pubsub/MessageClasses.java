@@ -558,27 +558,48 @@ public interface MessageClasses {
             super(null, topic);
         }
     }
-    
+
     /**
      * Class sent by client to download published messages even if they have already been sent to the client.
      * The server will send a PublishMessage for each object that it has in its cache.
      */
-    class DownloadPublishedMessages extends ClientGeneratedMessage {
+    abstract class DownloadPublishedMessages<DOWNLOAD extends DownloadPublishedMessages<DOWNLOAD>> extends ClientGeneratedMessage {
+        private static final long serialVersionUID = 1L;
+
+        private final Collection<String> topics;
+
+        public DownloadPublishedMessages(Collection<String> topics) {
+            super(null);
+            this.topics = topics;
+        }
+
+        Collection<String> getTopics() {
+            return topics;
+        }
+
+        @Override
+        public String toLoggingString() {
+            return super.toLoggingString() + ", topics=" + topics;
+        }
+
+        abstract DOWNLOAD cloneTo(Collection<String> topicsSublist);
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * <p>Here the client is downloading messages within an id range.
+     */
+    class DownloadPublishedMessagesByServerId extends DownloadPublishedMessages<DownloadPublishedMessagesByServerId> {
         private static final long serialVersionUID = 1L;
         
-        private final Collection<String> topics;
         private final ServerIndex startServerIndexInclusive;
         private final ServerIndex endServerIndexInclusive;
 
-        public DownloadPublishedMessages(Collection<String> topics, ServerIndex startServerIndexInclusive, ServerIndex endServerIndexInclusive) {
-            super(null);
-            this.topics = topics;
+        public DownloadPublishedMessagesByServerId(Collection<String> topics, ServerIndex startServerIndexInclusive, ServerIndex endServerIndexInclusive) {
+            super(topics);
             this.startServerIndexInclusive = startServerIndexInclusive;
             this.endServerIndexInclusive = endServerIndexInclusive;
-        }
-        
-        Collection<String> getTopics() {
-            return topics;
         }
         
         ServerIndex getStartServerIndexInclusive() {
@@ -599,9 +620,52 @@ public interface MessageClasses {
          * If message server one hosts topics A and C, and message server two hosts topics B and D.
          * call this function to create two download commands.
          */
-        DownloadPublishedMessages cloneTo(Collection<String> topicsSublist) {
-            assert topics.containsAll(topicsSublist);
-            return new DownloadPublishedMessages(topicsSublist, startServerIndexInclusive, endServerIndexInclusive);
+        @Override
+        DownloadPublishedMessagesByServerId cloneTo(Collection<String> topicsSublist) {
+            assert getTopics().containsAll(topicsSublist);
+            return new DownloadPublishedMessagesByServerId(topicsSublist, startServerIndexInclusive, endServerIndexInclusive);
+        }
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * <p>Here the client is downloading messages within an id range.
+     */
+    class DownloadPublishedMessagesByClientTimestamp extends DownloadPublishedMessages<DownloadPublishedMessagesByClientTimestamp> {
+        private static final long serialVersionUID = 1L;
+
+        private final long startInclusive;
+        private final long endInclusive;
+
+        public DownloadPublishedMessagesByClientTimestamp(Collection<String> topics, long startInclusive, long endInclusive) {
+            super(topics);
+            this.startInclusive = startInclusive;
+            this.endInclusive = endInclusive;
+        }
+
+        long getStartInclusive() {
+            return startInclusive;
+        }
+
+        long getEndInclusive() {
+            return endInclusive;
+        }
+
+        @Override
+        public String toLoggingString() {
+            return super.toLoggingString() + ", startInclusive=" + startInclusive + ", endInclusive=" + endInclusive;
+        }
+
+        /**
+         * Split a message to download topics A, B, C according to the topics on each message server.
+         * If message server one hosts topics A and C, and message server two hosts topics B and D.
+         * call this function to create two download commands.
+         */
+        @Override
+        DownloadPublishedMessagesByClientTimestamp cloneTo(Collection<String> topicsSublist) {
+            assert getTopics().containsAll(topicsSublist);
+            return new DownloadPublishedMessagesByClientTimestamp(topicsSublist, startInclusive, endInclusive);
         }
     }
 

@@ -59,6 +59,8 @@ import org.sn.myutils.pubsub.MessageClasses.ClientRejected;
 import org.sn.myutils.pubsub.MessageClasses.CreatePublisher;
 import org.sn.myutils.pubsub.MessageClasses.CreatePublisherFailed;
 import org.sn.myutils.pubsub.MessageClasses.DownloadPublishedMessages;
+import org.sn.myutils.pubsub.MessageClasses.DownloadPublishedMessagesByClientTimestamp;
+import org.sn.myutils.pubsub.MessageClasses.DownloadPublishedMessagesByServerId;
 import org.sn.myutils.pubsub.MessageClasses.FetchPublisher;
 import org.sn.myutils.pubsub.MessageClasses.Identification;
 import org.sn.myutils.pubsub.MessageClasses.InvalidRelayMessage;
@@ -600,6 +602,7 @@ public class DistributedMessageServer implements Shutdowneable {
          * @param clientMachine the client to send messages to
          * @param topics null means send messages for all topics, otherwise send messages only for these topics
          * @param minClientTimestamp find messages on or after this client timestamp
+         * @param maxClientTimestamp find messages on or before this client timestamp
          * @param lowerBoundInclusive send messages from this point. If null, calculate lowerBoundInclusive as the current server index the client is on plus one.
          * @param upperBoundInclusive send messages till this point
          * @param callback function that sends messages
@@ -608,6 +611,7 @@ public class DistributedMessageServer implements Shutdowneable {
         int forSavedMessages(ClientMachine clientMachine,
                              Collection<String> topics,
                              long minClientTimestamp,
+                             long maxClientTimestamp,
                              @Nullable ServerIndex lowerBoundInclusive,
                              ServerIndex upperBoundInclusive,
                              Consumer<PublishMessage> callback,
@@ -661,7 +665,7 @@ public class DistributedMessageServer implements Shutdowneable {
                     if (message.getRelayFields().getServerIndex().compareTo(lowerBoundInclusive) < 0) {
                         continue;
                     }
-                    if (minClientTimestamp <= message.getClientTimestamp()) {
+                    if (minClientTimestamp <= message.getClientTimestamp() && message.getClientTimestamp() <= maxClientTimestamp) {
                         callback.accept(message);
                         count++;
                     }
@@ -786,8 +790,9 @@ public class DistributedMessageServer implements Shutdowneable {
                 linkedList.removeFirst();
             }
         }
-        
-        private static final Comparator<PublishMessage> COMPARE_BY_SERVER_INDEX = Comparator.comparing(lhs -> lhs.getRelayFields().getServerIndex());
+
+        private static final Comparator<PublishMessage> COMPARE_BY_SERVER_INDEX = Comparator.comparing(message -> message.getRelayFields().getServerIndex());
+        private static final Comparator<PublishMessage> COMPARE_BY_CLIENT_TIMESTAMP = Comparator.comparingLong(ClientGeneratedMessage::getClientTimestamp);
 
         List<LinkedList<PublishMessage>> getMessagesOfAllRetentionPriorities() {
             return allMessages;
@@ -983,9 +988,12 @@ public class DistributedMessageServer implements Shutdowneable {
                             }
                             logging.run();
                             DistributedMessageServer.this.handleRelayMessage(clientMachine, relay);
-                        } else if (message instanceof DownloadPublishedMessages) {
+                        } else if (message instanceof DownloadPublishedMessagesByServerId) {
                             logging.run();
-                            DistributedMessageServer.this.handleDownload(clientMachine, (DownloadPublishedMessages) message);
+                            DistributedMessageServer.this.handleDownload(clientMachine, (DownloadPublishedMessagesByServerId) message);
+                        } else if (message instanceof DownloadPublishedMessagesByClientTimestamp) {
+                            logging.run();
+                            DistributedMessageServer.this.handleDownload(clientMachine, (DownloadPublishedMessagesByClientTimestamp) message);
                         } else {
                             unhandled = true;
                         }
@@ -1177,7 +1185,15 @@ public class DistributedMessageServer implements Shutdowneable {
                 send(addSubscriberResult.getCreatePublisher(), clientMachine, 0);
             }
             if (doDownload) {
-                download("handleAddSubscriber", clientMachine, Collections.singletonList(topic), clientTimestamp, null, ServerIndex.MAX_VALUE, null, forceLogging);
+                download("handleAddSubscriber",
+                         clientMachine,
+                         Collections.singletonList(topic),
+                         clientTimestamp,
+                         Long.MAX_VALUE,
+                         null,
+                         ServerIndex.MAX_VALUE,
+                         null,
+                         forceLogging);
             }
         };
         
@@ -1288,6 +1304,7 @@ public class DistributedMessageServer implements Shutdowneable {
                              lookupClientMachine(params.getClientMachineId()),
                              Collections.singletonList(relay.getTopic()),
                              params.getMinClientTimestamp(),
+                             Long.MAX_VALUE,
                              null /*lowerBoundInclusive*/,
                              ServerIndex.MAX_VALUE,
                              null,
@@ -1304,23 +1321,38 @@ public class DistributedMessageServer implements Shutdowneable {
         };
         publishersAndSubscribers.saveMessage(relay, relayAction);
     }
-    
-    private void handleDownload(ClientMachine clientMachine, DownloadPublishedMessages download) {
+
+    private void handleDownload(ClientMachine clientMachine, DownloadPublishedMessagesByServerId download) {
         download(
-            "download",
-            clientMachine,
-            download.getTopics(),
-            0 /*minClientTimestamp*/,
-            download.getStartServerIndexInclusive(),
-            download.getEndServerIndexInclusive(),
-            exception -> send(exception.toInvalidMessage(), clientMachine, 0),
-            /*forceLogging*/ true);
+                "downloadByServerId",
+                clientMachine,
+                download.getTopics(),
+                Long.MIN_VALUE /*minClientTimestamp*/,
+                Long.MAX_VALUE /*maxClientTimestamp*/,
+                download.getStartServerIndexInclusive(),
+                download.getEndServerIndexInclusive(),
+                exception -> send(exception.toInvalidMessage(), clientMachine, 0),
+                /*forceLogging*/ true);
     }
-    
-    private void download(@NotNull String trigger,
+
+    private void handleDownload(ClientMachine clientMachine, DownloadPublishedMessagesByClientTimestamp download) {
+        download(
+                "downloadByClientTimestamp",
+                clientMachine,
+                download.getTopics(),
+                download.getStartInclusive() /*minClientTimestamp*/,
+                download.getEndInclusive() /*maxClientTimestamp*/,
+                ServerIndex.MIN_VALUE,
+                ServerIndex.MAX_VALUE,
+                exception -> send(exception.toInvalidMessage(), clientMachine, 0),
+                /*forceLogging*/ true);
+    }
+
+    private void download(@Nonnull String trigger,
                           ClientMachine clientMachine,
                           Collection<String> topics,
                           long minClientTimestamp,
+                          long maxClientTimestamp,
                           @Nullable ServerIndex lowerBoundInclusive,
                           ServerIndex upperBoundInclusive,
                           @Nullable Consumer<PubSubException> errorCallback,
@@ -1329,6 +1361,7 @@ public class DistributedMessageServer implements Shutdowneable {
             clientMachine,
             topics,
             minClientTimestamp,
+            maxClientTimestamp,
             lowerBoundInclusive, 
             upperBoundInclusive,
             publishMessage -> send(publishMessage, clientMachine, 0),

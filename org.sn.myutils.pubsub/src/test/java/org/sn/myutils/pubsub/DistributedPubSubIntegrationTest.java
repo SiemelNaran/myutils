@@ -16,6 +16,7 @@ import static org.sn.myutils.testutils.TestUtil.countElementsInListByType;
 import static org.sn.myutils.testutils.TestUtil.sleep;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.lang.System.Logger.Level;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -47,6 +48,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -595,8 +597,9 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      * The new client does not receive the messages which were published earlier.
      * However, the new client can call download to retrieve the old messages.
      */
-    @Test
-    void testDownloadMessages() throws IOException {
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ValueSource(strings = {"ByServerId", "ByClientTimestamp"})
+    void testDownloadMessages(String method) throws IOException {
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         
         var centralServer = createServer(Map.of(RetentionPriority.HIGH, 2, RetentionPriority.MEDIUM, 3));
@@ -607,10 +610,25 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                    "client1",
                                    31001
         );
+        AtomicReference<ServerIndex> serverIndexBanana = new AtomicReference<>(ServerIndex.MAX_VALUE); // index of first banana
+        AtomicReference<ServerIndex> serverIndexCarrot = new AtomicReference<>(ServerIndex.MIN_VALUE); // index of last carrot
+        client1.setMessageReceivedListener(message -> {
+            if (message instanceof PublishMessage) {
+                PublishMessage publishMessage = (PublishMessage) message;
+                if (publishMessage.getMessage().toString().equals("CloneableString:banana")) {
+                    // the idea is to capture the server id of the first banana so that we can test downloaad within range
+                    serverIndexBanana.updateAndGet(current -> TestUtil.min(current, publishMessage.getRelayFields().getServerIndex()));
+                }
+                if (publishMessage.getMessage().toString().equals("CloneableString:carrot")) {
+                    // the idea is to capture the server id of the last carrot so that we can test downloaad within range
+                    serverIndexCarrot.updateAndGet(current -> TestUtil.max(current, publishMessage.getRelayFields().getServerIndex()));
+                }
+            }
+        });
         waitFor(Collections.singletonList(client1.startAsync()));
         assertEquals(1, client1.getCountTypesSent());
         assertEquals(1, client1.getCountTypesReceived());
-        
+
         // create publishers on client1
         // as client2 does not exist yet, nor is subscribed, it does not receive the publisher
         Publisher helloPublisher1 = client1.createPublisher("hello", CloneableString.class);
@@ -629,15 +647,19 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         helloPublisher1.publish(new CloneableString("ImportantTwo"), RetentionPriority.HIGH);
         helloPublisher1.publish(new CloneableString("ImportantThree"), RetentionPriority.HIGH);
         helloPublisher1.publish(new CloneableString("apple"), RetentionPriority.MEDIUM);
-        helloPublisher1.publish(new CloneableString("banana"), RetentionPriority.MEDIUM);
-        helloPublisher1.publish(new CloneableString("carrot"));
-        helloPublisher1.publish(new CloneableString("dragonfruit"), RetentionPriority.MEDIUM);
         worldPublisher1.publish(new CloneableString("ImportantOne"), RetentionPriority.HIGH);
         worldPublisher1.publish(new CloneableString("ImportantTwo"), RetentionPriority.HIGH);
         worldPublisher1.publish(new CloneableString("ImportantThree"), RetentionPriority.HIGH);
         worldPublisher1.publish(new CloneableString("apple"), RetentionPriority.MEDIUM);
+        sleep(250);
+        long timeJustBeforeSendBanana = System.currentTimeMillis();
+        helloPublisher1.publish(new CloneableString("banana"), RetentionPriority.MEDIUM);
+        helloPublisher1.publish(new CloneableString("carrot"));
         worldPublisher1.publish(new CloneableString("banana"), RetentionPriority.MEDIUM);
         worldPublisher1.publish(new CloneableString("carrot"));
+        long timeJustBeforeSendDragonfruit = System.currentTimeMillis();
+        sleep(250);
+        helloPublisher1.publish(new CloneableString("dragonfruit"), RetentionPriority.MEDIUM);
         worldPublisher1.publish(new CloneableString("dragonfruit"), RetentionPriority.MEDIUM);
         sleep(250); // time to let messages be published to client2
         System.out.println("before client2 exists: actual=" + words);
@@ -674,8 +696,47 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals(5, client1.getCountTypesReceived());
         assertEquals(4, client2.getCountTypesSent()); // +3 = add subscriber
         assertEquals("ClientAccepted=1, CreatePublisher=2, SubscriberAdded=3", client2.getTypesReceived());
-        
-        client2.download(List.of("hello", "world"), ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE);
+
+        abstract class Download {
+            abstract void downloadFullRange(List<String> topics);
+
+            abstract void downloadWithinRange(List<String> topics, Object startInclusive, Object endInclusive);
+        }
+
+        class DownloadByServerId extends Download {
+            @Override
+            void downloadFullRange(List<String> topics) {
+                client2.downloadByServerId(topics, ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE);
+            }
+
+            @Override
+            void downloadWithinRange(List<String> topics, Object startInclusive, Object endInclusive) {
+                client2.downloadByServerId(topics, (ServerIndex) startInclusive, (ServerIndex) endInclusive);
+            }
+        }
+
+        class DownloadByClientTimestamp extends Download {
+            @Override
+            void downloadFullRange(List<String> topics) {
+                client2.downloadByClientTimestamp(topics, 0, Long.MAX_VALUE);
+            }
+
+            @Override
+            void downloadWithinRange(List<String> topics, Object startInclusive, Object endInclusive) {
+                client2.downloadByClientTimestamp(topics, (long) startInclusive, (long) endInclusive);
+            }
+        }
+
+        Download download;
+        if (method.equals("ByServerId")) {
+            download = new DownloadByServerId();
+        } else if (method.equals("ByClientTimestamp")) {
+            download = new DownloadByClientTimestamp();
+        } else {
+            throw new UnsupportedEncodingException(method);
+        }
+
+        download.downloadFullRange(List.of("hello", "world"));
         sleep(250); // time to let messages be sent to client2
         System.out.println("after client2 downloads (unsorted): actual=" + words);
         // because SubscriberAdded commands are received in a random order, subscriber1 may be added after subscriber2
@@ -699,7 +760,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
 
         // verify that messages can be downloaded a second time
         words.clear();
-        client2.download(List.of("hello"), ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE);
+        download.downloadFullRange(List.of("hello"));
         sleep(250); // time to let messages be sent to client2
         System.out.println("after client2 downloads a second time (unsorted): actual=" + words);
         words.subList(0, 2).sort(Comparator.naturalOrder()); // see above for comment why we sort
@@ -715,30 +776,42 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals(5, client1.getCountTypesReceived());
         assertEquals(6, client2.getCountTypesSent()); // +1 = DownloadPublishedMessages
         assertEquals("ClientAccepted=1, CreatePublisher=2, PublishMessage=15, SubscriberAdded=3", client2.getTypesReceived()); // +5 = PublishMessage
-        
+
+        // verify download within a range
+        words.clear();
+        Object startInclusive = download instanceof DownloadByServerId ? serverIndexBanana : timeJustBeforeSendBanana;
+        Object endInclusive = download instanceof DownloadByServerId ? serverIndexCarrot : timeJustBeforeSendDragonfruit;
+        download.downloadWithinRange(List.of("world"), startInclusive, endInclusive);
+        sleep(250); // time to let messages be sent to client2
+        System.out.println("after client2 downloads a second time within limited time range: actual=" + words);
+        assertThat(words,
+                   Matchers.contains("carrot-s2a-world", "dragonfruit-s2a-world"));
+        assertEquals(19, client1.getCountTypesSent());
+        assertEquals(5, client1.getCountTypesReceived());
+        assertEquals(7, client2.getCountTypesSent()); // +1 = DownloadPublishedMessages
+        assertEquals("ClientAccepted=1, CreatePublisher=2, PublishMessage=17, SubscriberAdded=3", client2.getTypesReceived()); // +2 = PublishMessage
+
         // verify error if download a topic that does not exist
         words.clear();
-        client2.download(List.of("NewTopic"), ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE);
+        download.downloadFullRange(List.of("NewTopic"));
         sleep(250); // time to let messages be sent to client2
         System.out.println("download topic that does not exist: actual=" + words);
         assertThat(words, Matchers.empty());
         assertEquals(19, client1.getCountTypesSent());
         assertEquals(5, client1.getCountTypesReceived());
-        assertEquals(7, client2.getCountTypesSent()); // +1 = DownloadPublishedMessages
-        assertEquals("ClientAccepted=1, CreatePublisher=2, InvalidMessage=1, PublishMessage=15, SubscriberAdded=3", client2.getTypesReceived()); // +1 = InvalidMessage
+        assertEquals(8, client2.getCountTypesSent()); // +1 = DownloadPublishedMessages
 
         // verify error if download a topic to which we are not subscribed
         client1.createPublisher("NewTopic", CloneableString.class);
         sleep(250); // time to let messages be sent to client2
         words.clear();
-        client2.download(List.of("NewTopic"), ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE);
+        download.downloadFullRange(List.of("NewTopic"));
         sleep(250); // time to let messages be sent to client2
         System.out.println("download messages for a topic to which we are not subscribed: actual=" + words);
         assertThat(words, Matchers.empty());
         assertEquals(20, client1.getCountTypesSent());
         assertEquals(6, client1.getCountTypesReceived()); // +1 = PublisherCreated
-        assertEquals(8, client2.getCountTypesSent()); // +1 = DownloadPublishedMessages
-        assertEquals("ClientAccepted=1, CreatePublisher=2, InvalidMessage=2, PublishMessage=15, SubscriberAdded=3", client2.getTypesReceived()); // +1 = InvalidMessage
+        assertEquals(9, client2.getCountTypesSent()); // +1 = DownloadPublishedMessages
     }
     
     /**
@@ -2219,6 +2292,9 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
     }
     
     void setMessageReceivedListener(Consumer<MessageBase> listener) {
+        if (this.messageReceivedListener != null) {
+            throw new IllegalStateException("too many listeners");
+        }
         this.messageReceivedListener = listener;
     }
 

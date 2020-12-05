@@ -55,6 +55,8 @@ import org.sn.myutils.pubsub.MessageClasses.ClientRejected;
 import org.sn.myutils.pubsub.MessageClasses.CreatePublisher;
 import org.sn.myutils.pubsub.MessageClasses.CreatePublisherFailed;
 import org.sn.myutils.pubsub.MessageClasses.DownloadPublishedMessages;
+import org.sn.myutils.pubsub.MessageClasses.DownloadPublishedMessagesByClientTimestamp;
+import org.sn.myutils.pubsub.MessageClasses.DownloadPublishedMessagesByServerId;
 import org.sn.myutils.pubsub.MessageClasses.FetchPublisher;
 import org.sn.myutils.pubsub.MessageClasses.Identification;
 import org.sn.myutils.pubsub.MessageClasses.InvalidRelayMessage;
@@ -395,8 +397,22 @@ public class DistributedSocketPubSub extends PubSub {
      * @see DistributedMessageServer#DistributedMessageServer(SocketAddress, java.util.Map) for the number of messages of each RetentionPriority to remember
      * @see RetentionPriority
      */
-    public void download(Collection<String> topics, ServerIndex startIndexInclusive, ServerIndex endIndexInclusive) {
-        messageWriter.queueSendDownload(topics, startIndexInclusive, endIndexInclusive);
+    public void downloadByServerId(Collection<String> topics, ServerIndex startIndexInclusive, ServerIndex endIndexInclusive) {
+        messageWriter.queueSendDownloadByServerId(topics, startIndexInclusive, endIndexInclusive);
+    }
+
+    /**
+     * Download as many messages starting with start from the server.
+     * The server does not retain messages forever, so it may not find the oldest messages.
+     *
+     * @param topics the topics to download
+     * @param startInclusive the start client time.
+     * @param endInclusive the end client time. Use Long.MAX_VALUE for no maximum.
+     * @see DistributedMessageServer#DistributedMessageServer(SocketAddress, java.util.Map) for the number of messages of each RetentionPriority to remember
+     * @see RetentionPriority
+     */
+    public void downloadByClientTimestamp(Collection<String> topics, long startInclusive, long endInclusive) {
+        messageWriter.queueSendDownloadByClientTimestamp(topics, startInclusive, endInclusive);
     }
 
     private interface MessageWriterMessage {
@@ -572,8 +588,12 @@ public class DistributedSocketPubSub extends PubSub {
             internalPutMessage(publishMessage);
         }
 
-        void queueSendDownload(Collection<String> topics, ServerIndex startIndexInclusive, ServerIndex endIndexInclusive) {
-            internalPutDownloadMessages(new DownloadPublishedMessages(topics, startIndexInclusive, endIndexInclusive));
+        void queueSendDownloadByServerId(Collection<String> topics, ServerIndex startIndexInclusive, ServerIndex endIndexInclusive) {
+            internalPutDownloadMessages(new DownloadPublishedMessagesByServerId(topics, startIndexInclusive, endIndexInclusive));
+        }
+
+        void queueSendDownloadByClientTimestamp(Collection<String> topics, long startInclusive, long endInclusive) {
+            internalPutDownloadMessages(new DownloadPublishedMessagesByClientTimestamp(topics, startInclusive, endInclusive));
         }
 
         void queueSendFetchPublisher(String topic) {
@@ -586,10 +606,11 @@ public class DistributedSocketPubSub extends PubSub {
 
         /**
          * See comment in MessageClasses for more context.
-         * 
-         * @see MessageClasses.DownloadPublishedMessages#cloneTo(Collection)
+         *
+         * @see DownloadPublishedMessagesByServerId#cloneTo(Collection)
+         * @see DownloadPublishedMessagesByClientTimestamp#cloneTo(Collection)
          */
-        private void internalPutDownloadMessages(DownloadPublishedMessages message) {
+        private <DOWNLOAD extends DownloadPublishedMessages<DOWNLOAD>> void internalPutDownloadMessages(DOWNLOAD message) {
             Map<SocketAddress, List<String /*topic*/>> messageServers =
                     message.getTopics()
                            .stream()
@@ -597,7 +618,7 @@ public class DistributedSocketPubSub extends PubSub {
                                                           Collectors.mapping(Function.identity(), Collectors.toList())));
                            
             for (var entry : messageServers.entrySet()) {
-                DownloadPublishedMessages newMessage = message.cloneTo(entry.getValue());
+                DOWNLOAD newMessage = message.cloneTo(entry.getValue());
                 try {
                     SocketAddress messageServer = entry.getKey();
                     queue.put(new RegularMessage(newMessage, messageServer));
