@@ -221,7 +221,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
             sleepTillNextSecond();
             long[] timeBuckets;
 
-            service.schedule(new MyCallable("800"), 800, TimeUnit.MILLISECONDS); // bucket [0000, 1000)
+            service.schedule(new MyCallable("600"), 600, TimeUnit.MILLISECONDS); // bucket [0000, 1000)
             assertEquals(1, getNumTimeBuckets(service));
             service.schedule(new MyCallable("1500+"), 1508 * 1_000_000 + 111_222, TimeUnit.NANOSECONDS); // bucket [1000, 2000)
             assertEquals(2, getNumTimeBuckets(service));
@@ -235,13 +235,13 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
 
             sleep(1200); // advance time to 1200ms
             System.out.println("words=" + words);
-            assertThat(words, Matchers.contains("800"));
+            assertThat(words, Matchers.contains("600"));
             assertEquals(1, getNumTimeBuckets(service));
             assertEquals(1, countFiles());
 
             sleep(1200); // advance time to 2400ms
             System.out.println("words=" + words);
-            assertThat(words, Matchers.contains("800", "1500", "1500+"));
+            assertThat(words, Matchers.contains("600", "1500", "1500+"));
             assertEquals(0, countFiles());
         }
     }

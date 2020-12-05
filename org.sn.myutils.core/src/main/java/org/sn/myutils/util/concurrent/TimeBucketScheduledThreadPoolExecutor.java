@@ -830,7 +830,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             TimeUnit unit = info.getTimeInfo().getUnit();
             long delta;
             if (unit == TimeUnit.NANOSECONDS) {
-                delta = startInclusiveMillis - now.toEpochMilli() * 1_000_000 - now.getNano() % 1_000_000;
+                delta = (startInclusiveMillis - now.toEpochMilli()) * 1_000_000 - now.getNano() % 1_000_000;
             } else {
                 delta = startInclusiveMillis - now.toEpochMilli();
             }
