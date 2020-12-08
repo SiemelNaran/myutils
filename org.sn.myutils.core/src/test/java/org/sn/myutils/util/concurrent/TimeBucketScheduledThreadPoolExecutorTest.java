@@ -31,7 +31,10 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.sn.myutils.testutils.TestBase;
@@ -47,6 +50,7 @@ import org.sn.myutils.testutils.TestUtil;
  -Djava.util.logging.config.file=../org.sn.myutils.testutils/target/classes/logging.properties
  * </code>
  */
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     private static final List<String> words = Collections.synchronizedList(new ArrayList<>());
 
@@ -111,6 +115,11 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         words.clear();
     }
 
+    /**
+     * With a time bucket length of 1s, create a few events for the current second as well as future seconds.
+     * Each event is a runnable.
+     * Verify that the time buckets get loaded and the tasks execute as expected and that the time buckets get deleted when they expire.
+     */
     @Test
     void basicTestRunnable() throws IOException {
         Duration timeBucketLength = Duration.ofSeconds(1);
@@ -168,6 +177,9 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         }
     }
 
+    /**
+     * Same as above but each event is a callable.
+     */
     @Test
     void basicTestCallable() throws IOException {
         Duration timeBucketLength = Duration.ofSeconds(1);
@@ -212,7 +224,18 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         }
     }
 
+    /**
+     * Test two threads trying to create the same bucket at the same time.
+     * Only one of the threads should be allowed through, while the other waits.
+     *
+     * <p>Without the @Order(1) this test runs somewhere in the middle of all tests, and the threads seem to run in sequence,
+     * as the part of the code where one thread fails to acquire to write lock does not get hit.
+     * But if we run this test on its own, or as the first step, then that line is hit.
+     *
+     * <p>I had tried calling System.gc() to really clear out old executors and Threads, but it didn't make a difference.
+     */
     @Test
+    @Order(1)
     void multipleThreadsWriteToTimeBucketAtSameTime() throws IOException, InterruptedException {
         Duration timeBucketLength = Duration.ofSeconds(1);
         try (AutoCloseableScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
@@ -224,7 +247,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
             runner.schedule(() -> service.schedule(new MyRunnable("1200"), 1200, TimeUnit.MILLISECONDS), 100, TimeUnit.MILLISECONDS);
             runner.schedule(() -> service.schedule(new MyRunnable("1100"), 1100, TimeUnit.MILLISECONDS), 100, TimeUnit.MILLISECONDS);
             runner.shutdown();
-            assertTrue(runner.awaitTermination(250, TimeUnit.MILLISECONDS));
+            assertTrue(runner.awaitTermination(1000, TimeUnit.MILLISECONDS));
 
             assertEquals(1, getNumTimeBuckets(service));
             assertThat(words, Matchers.empty());
@@ -236,6 +259,10 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         }
     }
 
+    /**
+     * With a time bucket length of 1s, create a few events for the current second as well as future seconds.
+     * Call cancel on some events, and get on some, and verify that the canceled futures don't get and that get blocks until a value is available.
+     */
     @Test
     @SuppressWarnings("unchecked")
     void cancelAndGet() throws IOException, ExecutionException, InterruptedException {
@@ -273,6 +300,10 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         }
     }
 
+    /**
+     * With a time bucket length of 1s, create an event for a future time bucket.
+     * Call get with timeout to wait till before the future bucket is even loaded, and verify that we get a timeout error.
+     */
     @Test
     void getTimeout1() throws IOException {
         Duration timeBucketLength = Duration.ofSeconds(1);
@@ -291,6 +322,10 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         }
     }
 
+    /**
+     * With a time bucket length of 1s, create an event for a future time bucket.
+     * Call get with timeout to wait till after the future bucket is loaded but before the event runs, and verify that we get a timeout error.
+     */
     @Test
     void getTimeout2() throws IOException {
         Duration timeBucketLength = Duration.ofSeconds(1);
@@ -309,6 +344,10 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         }
     }
 
+    /**
+     * The purpose of this test is to get code coverage for the funtions which just forward to the internal executor,
+     * such as execute, submit, invokeAll, etc.
+     */
     @Test
     void testForwardingFunctions() throws IOException, ExecutionException, InterruptedException {
         Duration timeBucketLength = Duration.ofSeconds(1);
@@ -330,6 +369,11 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         }
     }
 
+    /**
+     * Shutdown the executor and submit some tasks.  Verify that the rejection handler, which throws RejectedExecutionException, is called.
+     *
+     * <p>Also verify that invokeAll and invokeAny work even when the executor is shut down.
+     */
     @Test
     void testRejectWhenShutdown() throws IOException, InterruptedException, ExecutionException, TimeoutException {
         Duration timeBucketLength = Duration.ofSeconds(1);
@@ -360,6 +404,10 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         }
     }
 
+    /**
+     * With a time bucket length of 1s, create a few events for the current second as well as future seconds.
+     * Change the bucket length of 0.5s and verify that new buckets respect the new rules.
+     */
     @Test
     void changeBucketLength() throws IOException {
         Duration timeBucketLength = Duration.ofSeconds(1);
@@ -382,6 +430,10 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     }
 
 
+    /**
+     * With a time bucket length of 0.25s, create a 18 events for the current second as well as future quarter seconds.
+     * Verify that the number of open files is 16 as the executor only keeps 16 files open.
+     */
     @Test
     void tooManyTimeBuckets() throws IOException {
         Duration timeBucketLength = Duration.ofMillis(250);
@@ -413,6 +465,11 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         }
     }
 
+    /**
+     * With a time bucket length of 1s, create a few events for the current second as well as future seconds.
+     * Shutdown nd await termination for only a length of time that ends in the current time bucket.
+     * Assert that awaitTermination returns false and that the tasks in this time bucket continue to run, but that future time buckets do not run.
+     */
     @Test
     void testAwaitTermination1() throws IOException, InterruptedException {
         Duration timeBucketLength = Duration.ofSeconds(1);
@@ -440,6 +497,13 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         assertFalse(service.isTerminated());
     }
 
+    /**
+     * With a time bucket length of 1s, create a few events for the current second as well as future seconds.
+     * Shutdown nd await termination for only a length of time that ends in the next time bucket.
+     * In the first iteration all tasks finish.
+     * In the second iteration one task in the future bucket does not run by the time awaitTermination finishes.
+     * Assert that awaitTermination returns the appropriate result.
+     */
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(booleans = {false, true})
     void testAwaitTermination2(boolean addExtra) throws IOException, InterruptedException {
@@ -467,6 +531,10 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         assertEquals(addExtra ? 1 : 0, remainingTasks.size());
     }
 
+    /**
+     * With a time bucket length of 1s, create a few events for future seconds.
+     * Shutdown now and verify that awaitTermination returns true and that future tasks do not run.
+     */
     @Test
     void testShutdownNow() throws IOException, InterruptedException {
         Duration timeBucketLength = Duration.ofSeconds(1);
@@ -487,6 +555,13 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         assertEquals(1, countFiles());
     }
 
+    /**
+     * With a time bucket length of 1s, create a few events for the current second as well as future seconds.
+     * Let the executor run for a while.
+     * Then call shutdownNow to terminate it right away.
+     * Wait a bit.
+     * Then start a new executor pointing to the same folder, and verify that the tasks that did not run are loaded into memory and run.
+     */
     @Test
     void testRestartExecutor() throws IOException, InterruptedException {
         AutoCloseableScheduledExecutorService service = null;
