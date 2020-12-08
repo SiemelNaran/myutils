@@ -610,7 +610,7 @@ public class DistributedSocketPubSub extends PubSub {
          * @see DownloadPublishedMessagesByServerId#cloneTo(Collection)
          * @see DownloadPublishedMessagesByClientTimestamp#cloneTo(Collection)
          */
-        private <DOWNLOAD extends DownloadPublishedMessages<DOWNLOAD>> void internalPutDownloadMessages(DOWNLOAD message) {
+        private <DownloadType extends DownloadPublishedMessages<DownloadType>> void internalPutDownloadMessages(DownloadType message) {
             Map<SocketAddress, List<String /*topic*/>> messageServers =
                     message.getTopics()
                            .stream()
@@ -618,7 +618,7 @@ public class DistributedSocketPubSub extends PubSub {
                                                           Collectors.mapping(Function.identity(), Collectors.toList())));
                            
             for (var entry : messageServers.entrySet()) {
-                DOWNLOAD newMessage = message.cloneTo(entry.getValue());
+                DownloadType newMessage = message.cloneTo(entry.getValue());
                 try {
                     SocketAddress messageServer = entry.getKey();
                     queue.put(new RegularMessage(newMessage, messageServer));
@@ -1258,7 +1258,7 @@ public class DistributedSocketPubSub extends PubSub {
         @Override
         public void run() {
             Collection<SocketChannel> socketChannels = messageServers.values();
-            LOGGER.log(Level.INFO, "Shutting down %s: clientId=%s, sockets=%s",
+            LOGGER.log(Level.INFO, "Shutting down {0}: clientId={1}, sockets={2}",
                        DistributedSocketPubSub.class.getSimpleName(),
                        machineId,
                        socketChannels.stream()

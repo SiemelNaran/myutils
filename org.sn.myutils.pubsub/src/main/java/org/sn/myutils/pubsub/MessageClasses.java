@@ -563,7 +563,7 @@ public interface MessageClasses {
      * Class sent by client to download published messages even if they have already been sent to the client.
      * The server will send a PublishMessage for each object that it has in its cache.
      */
-    abstract class DownloadPublishedMessages<DOWNLOAD extends DownloadPublishedMessages<DOWNLOAD>> extends ClientGeneratedMessage {
+    abstract class DownloadPublishedMessages<DownloadType extends DownloadPublishedMessages<DownloadType>> extends ClientGeneratedMessage {
         private static final long serialVersionUID = 1L;
 
         private final Collection<String> topics;
@@ -582,7 +582,7 @@ public interface MessageClasses {
             return super.toLoggingString() + ", topics=" + topics;
         }
 
-        abstract DOWNLOAD cloneTo(Collection<String> topicsSublist);
+        abstract DownloadType cloneTo(Collection<String> topicsSublist);
     }
 
     /**

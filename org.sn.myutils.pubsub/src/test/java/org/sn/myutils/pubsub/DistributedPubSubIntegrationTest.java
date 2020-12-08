@@ -612,7 +612,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         );
         AtomicReference<ServerIndex> serverIndexBanana = new AtomicReference<>(ServerIndex.MAX_VALUE); // index of first banana
         AtomicReference<ServerIndex> serverIndexCarrot = new AtomicReference<>(ServerIndex.MIN_VALUE); // index of last carrot
-        client1.setMessageReceivedListener(message -> {
+        centralServer.setMessageSentListener(message -> {
             if (message instanceof PublishMessage) {
                 PublishMessage publishMessage = (PublishMessage) message;
                 if (publishMessage.getMessage().toString().equals("CloneableString:banana")) {
@@ -657,6 +657,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         helloPublisher1.publish(new CloneableString("carrot"));
         worldPublisher1.publish(new CloneableString("banana"), RetentionPriority.MEDIUM);
         worldPublisher1.publish(new CloneableString("carrot"));
+        sleep(50);
         long timeJustBeforeSendDragonfruit = System.currentTimeMillis();
         sleep(250);
         helloPublisher1.publish(new CloneableString("dragonfruit"), RetentionPriority.MEDIUM);
@@ -664,10 +665,12 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         sleep(250); // time to let messages be published to client2
         System.out.println("before client2 exists: actual=" + words);
         assertThat(words,
-                   Matchers.contains("ImportantOne-s1-hello", "ImportantTwo-s1-hello", "ImportantThree-s1-hello",
-                                     "apple-s1-hello", "banana-s1-hello", "carrot-s1-hello", "dragonfruit-s1-hello",
-                                     "ImportantOne-s1-world", "ImportantTwo-s1-world", "ImportantThree-s1-world",
-                                     "apple-s1-world", "banana-s1-world", "carrot-s1-world", "dragonfruit-s1-world"));
+                   Matchers.contains("ImportantOne-s1-hello", "ImportantTwo-s1-hello", "ImportantThree-s1-hello", "apple-s1-hello",
+                                     "ImportantOne-s1-world", "ImportantTwo-s1-world", "ImportantThree-s1-world", "apple-s1-world",
+                                     "banana-s1-hello", "carrot-s1-hello",
+                                     "banana-s1-world", "carrot-s1-world",
+                                     "dragonfruit-s1-hello",
+                                     "dragonfruit-s1-world"));
         assertEquals(19, client1.getCountTypesSent()); // +14 = PublishMessage
         assertEquals(5, client1.getCountTypesReceived());
 
@@ -687,7 +690,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         
         client2.subscribe("hello", "ClientTwo_HelloSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a-hello")));
         client2.subscribe("hello", "ClientTwo_HelloSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b-hello")));
-        client2.subscribe("world", "ClientTwo_WorldSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a-world")));
+        client2.subscribe("world", "ClientTwo_WorldSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2-world")));
         sleep(250); // time to let client2 subscribe and for server to send down the publisher
         assertNotNull(client2.getPublisher("hello"));
         assertNotNull(client2.getPublisher("world"));
@@ -744,15 +747,17 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         // this still proves that ImportantTwo sent first, then ImportantThree, then banana, then carrot, then dragonfruit
         words.subList(0, 2).sort(Comparator.naturalOrder());
         words.subList(2, 4).sort(Comparator.naturalOrder());
-        words.subList(4, 6).sort(Comparator.naturalOrder());
         words.subList(6, 8).sort(Comparator.naturalOrder());
         words.subList(8, 10).sort(Comparator.naturalOrder());
+        words.subList(12, 14).sort(Comparator.naturalOrder());
         System.out.println("after client2 downloads (sorted  ): actual=" + words);
         assertThat(words,
-                   Matchers.contains("ImportantTwo-s2a-hello", "ImportantTwo-s2b-hello", "ImportantThree-s2a-hello", "ImportantThree-s2b-hello",
-                                     "banana-s2a-hello", "banana-s2b-hello", "carrot-s2a-hello", "carrot-s2b-hello", "dragonfruit-s2a-hello", "dragonfruit-s2b-hello",
-                                     "ImportantTwo-s2a-world", "ImportantThree-s2a-world",
-                                     "banana-s2a-world", "carrot-s2a-world", "dragonfruit-s2a-world"));
+                Matchers.contains("ImportantTwo-s2a-hello", "ImportantTwo-s2b-hello", "ImportantThree-s2a-hello", "ImportantThree-s2b-hello",
+                                  "ImportantTwo-s2-world", "ImportantThree-s2-world",
+                                  "banana-s2a-hello", "banana-s2b-hello", "carrot-s2a-hello","carrot-s2b-hello",
+                                  "banana-s2-world", "carrot-s2-world",
+                                  "dragonfruit-s2a-hello", "dragonfruit-s2b-hello",
+                                  "dragonfruit-s2-world"));
         assertEquals(19, client1.getCountTypesSent());
         assertEquals(5, client1.getCountTypesReceived());
         assertEquals(5, client2.getCountTypesSent()); // +1 = DownloadPublishedMessages
@@ -779,13 +784,13 @@ public class DistributedPubSubIntegrationTest extends TestBase {
 
         // verify download within a range
         words.clear();
-        Object startInclusive = download instanceof DownloadByServerId ? serverIndexBanana : timeJustBeforeSendBanana;
-        Object endInclusive = download instanceof DownloadByServerId ? serverIndexCarrot : timeJustBeforeSendDragonfruit;
+        Object startInclusive = download instanceof DownloadByServerId ? serverIndexBanana.get() : timeJustBeforeSendBanana;
+        Object endInclusive = download instanceof DownloadByServerId ? serverIndexCarrot.get() : timeJustBeforeSendDragonfruit;
         download.downloadWithinRange(List.of("world"), startInclusive, endInclusive);
         sleep(250); // time to let messages be sent to client2
         System.out.println("after client2 downloads a second time within limited time range: actual=" + words);
         assertThat(words,
-                   Matchers.contains("carrot-s2a-world", "dragonfruit-s2a-world"));
+                   Matchers.contains("banana-s2-world", "carrot-s2-world"));
         assertEquals(19, client1.getCountTypesSent());
         assertEquals(5, client1.getCountTypesReceived());
         assertEquals(7, client2.getCountTypesSent()); // +1 = DownloadPublishedMessages
@@ -2160,6 +2165,7 @@ class TestDistributedMessageServer extends DistributedMessageServer {
     private final List<String> typesSent = Collections.synchronizedList(new ArrayList<>());
     private final List<String> sendFailures = Collections.synchronizedList(new ArrayList<>());
     private String securityKey;
+    private Consumer<MessageBase> messageSentListener;
 
     public TestDistributedMessageServer(SocketAddress messageServer,
                                         Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
@@ -2174,6 +2180,13 @@ class TestDistributedMessageServer extends DistributedMessageServer {
 
     public void setSecurityKey(String key) {
         securityKey = key;
+    }
+
+    void setMessageSentListener(Consumer<MessageBase> listener) {
+        if (this.messageSentListener != null) {
+            throw new IllegalStateException("too many listeners");
+        }
+        this.messageSentListener = listener;
     }
 
     /**
@@ -2213,6 +2226,9 @@ class TestDistributedMessageServer extends DistributedMessageServer {
     protected void onMessageSent(MessageBase message) {
         super.onMessageSent(message);
         typesSent.add(message.getClass().getSimpleName());
+        if (messageSentListener != null) {
+            messageSentListener.accept(message);
+        }
     }
     
     @Override

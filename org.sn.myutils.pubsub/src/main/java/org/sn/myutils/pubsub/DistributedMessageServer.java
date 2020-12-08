@@ -58,7 +58,6 @@ import org.sn.myutils.pubsub.MessageClasses.ClientGeneratedMessage;
 import org.sn.myutils.pubsub.MessageClasses.ClientRejected;
 import org.sn.myutils.pubsub.MessageClasses.CreatePublisher;
 import org.sn.myutils.pubsub.MessageClasses.CreatePublisherFailed;
-import org.sn.myutils.pubsub.MessageClasses.DownloadPublishedMessages;
 import org.sn.myutils.pubsub.MessageClasses.DownloadPublishedMessagesByClientTimestamp;
 import org.sn.myutils.pubsub.MessageClasses.DownloadPublishedMessagesByServerId;
 import org.sn.myutils.pubsub.MessageClasses.FetchPublisher;
@@ -792,7 +791,7 @@ public class DistributedMessageServer implements Shutdowneable {
         }
 
         private static final Comparator<PublishMessage> COMPARE_BY_SERVER_INDEX = Comparator.comparing(message -> message.getRelayFields().getServerIndex());
-        private static final Comparator<PublishMessage> COMPARE_BY_CLIENT_TIMESTAMP = Comparator.comparingLong(ClientGeneratedMessage::getClientTimestamp);
+        //private static final Comparator<PublishMessage> COMPARE_BY_CLIENT_TIMESTAMP = Comparator.comparingLong(ClientGeneratedMessage::getClientTimestamp);
 
         List<LinkedList<PublishMessage>> getMessagesOfAllRetentionPriorities() {
             return allMessages;
@@ -1324,28 +1323,28 @@ public class DistributedMessageServer implements Shutdowneable {
 
     private void handleDownload(ClientMachine clientMachine, DownloadPublishedMessagesByServerId download) {
         download(
-                "downloadByServerId",
-                clientMachine,
-                download.getTopics(),
-                Long.MIN_VALUE /*minClientTimestamp*/,
-                Long.MAX_VALUE /*maxClientTimestamp*/,
-                download.getStartServerIndexInclusive(),
-                download.getEndServerIndexInclusive(),
-                exception -> send(exception.toInvalidMessage(), clientMachine, 0),
-                /*forceLogging*/ true);
+            "downloadByServerId",
+            clientMachine,
+            download.getTopics(),
+            Long.MIN_VALUE /*minClientTimestamp*/,
+            Long.MAX_VALUE /*maxClientTimestamp*/,
+            download.getStartServerIndexInclusive(),
+            download.getEndServerIndexInclusive(),
+            exception -> send(exception.toInvalidMessage(), clientMachine, 0),
+            /*forceLogging*/ true);
     }
 
     private void handleDownload(ClientMachine clientMachine, DownloadPublishedMessagesByClientTimestamp download) {
         download(
-                "downloadByClientTimestamp",
-                clientMachine,
-                download.getTopics(),
-                download.getStartInclusive() /*minClientTimestamp*/,
-                download.getEndInclusive() /*maxClientTimestamp*/,
-                ServerIndex.MIN_VALUE,
-                ServerIndex.MAX_VALUE,
-                exception -> send(exception.toInvalidMessage(), clientMachine, 0),
-                /*forceLogging*/ true);
+            "downloadByClientTimestamp",
+            clientMachine,
+            download.getTopics(),
+            download.getStartInclusive() /*minClientTimestamp*/,
+            download.getEndInclusive() /*maxClientTimestamp*/,
+            ServerIndex.MIN_VALUE,
+            ServerIndex.MAX_VALUE,
+            exception -> send(exception.toInvalidMessage(), clientMachine, 0),
+            /*forceLogging*/ true);
     }
 
     private void download(@Nonnull String trigger,
