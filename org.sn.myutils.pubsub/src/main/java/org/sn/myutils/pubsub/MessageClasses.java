@@ -10,7 +10,7 @@ import org.sn.myutils.annotations.NotNull;
 /**
  * All of the messages sent between client and server.
  */
-interface MessageClasses {
+public interface MessageClasses {
     
     /**
      * A method toLoggingString that can be used for logging purposes.

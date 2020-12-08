@@ -207,7 +207,7 @@ public class TestUtil {
         return new Between<>(low, high);
     }
     
-    static class Between<T extends Comparable<T>> extends BaseMatcher<T> {
+    public static class Between<T extends Comparable<T>> extends BaseMatcher<T> {
         private final T low;
         private final T high;
         
@@ -227,7 +227,7 @@ public class TestUtil {
         }
 
         @Override
-        public void describeTo(Description description) {
+        public void describeTo(@SuppressWarnings("exports") Description description) {
             description.appendText("between " + low + " and " + high + " inclusive");
         }
     }

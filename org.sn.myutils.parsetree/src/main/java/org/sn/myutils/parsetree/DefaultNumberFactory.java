@@ -70,7 +70,7 @@ public class DefaultNumberFactory implements NumberFactory {
         return true;
     }
 
-    @SuppressWarnings("checkstyle:FallThrough")
+    @SuppressWarnings("fallthrough")
     private Number constructInteger(String str) {
         switch (integerPolicy) {
             case PREFER_INTEGER:
@@ -94,7 +94,7 @@ public class DefaultNumberFactory implements NumberFactory {
         return true;
     }
 
-    @SuppressWarnings("checkstyle:FallThrough")
+    @SuppressWarnings("fallthrough")
     private Number constructFloat(String str) {
         switch (floatPolicy) {
             case PREFER_FLOAT:

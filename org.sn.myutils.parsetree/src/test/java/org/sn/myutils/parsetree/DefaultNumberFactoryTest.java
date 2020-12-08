@@ -6,9 +6,13 @@ import static org.sn.myutils.testutils.TestUtil.assertException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import org.junit.jupiter.api.Test;
+//import org.junit.jupiter.api.extension.ExtendWith;
+//import org.sn.myutils.testutils.LogFailureToConsoleTestWatcher;
+import org.sn.myutils.testutils.TestBase;
 
 
-public class DefaultNumberFactoryTest {
+//@ExtendWith(LogFailureToConsoleTestWatcher.class)
+public class DefaultNumberFactoryTest extends TestBase {
     @Test
     void testDefaultNumberFactory() {
         NumberFactory factory = DefaultNumberFactory.DEFAULT_NUMBER_FACTORY;

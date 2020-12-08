@@ -44,7 +44,7 @@ class PriorityThreadPoolExecutor extends ThreadPoolExecutor implements PriorityE
 
     @Override
     protected <T> RunnableFuture<T> newTaskFor(Callable<T> callable) {
-        int priority = OptionalUtils.of(callable, PriorityCallable.class).map(PriorityCallable::getPriority).orElse(Thread.NORM_PRIORITY);
+        int priority = OptionalUtils.of(callable, PriorityCallable.class).map(PriorityCallable<T>::getPriority).orElse(Thread.NORM_PRIORITY);
         return new PriorityFutureTask<T>(callable, priority);
     }
     

@@ -12,25 +12,21 @@ import org.junit.jupiter.api.extension.TestWatcher;
  */
 public final class LogFailureToConsoleTestWatcher implements TestWatcher {
     @Override
-    @SuppressWarnings("exports")
-    public void testDisabled(ExtensionContext context, Optional<String> reason) {
+    public void testDisabled(@SuppressWarnings("exports") ExtensionContext context, Optional<String> reason) {
     }
 
     @Override
-    @SuppressWarnings("exports")
-    public void testSuccessful(ExtensionContext context) {
+    public void testSuccessful(@SuppressWarnings("exports") ExtensionContext context) {
     }
 
     @Override
-    @SuppressWarnings("exports")
-    public void testAborted(ExtensionContext context, Throwable cause) {
+    public void testAborted(@SuppressWarnings("exports") ExtensionContext context, Throwable cause) {
         System.err.println(context.getDisplayName() + " aborted");
         
     }
 
     @Override
-    @SuppressWarnings("exports")
-    public void testFailed(ExtensionContext context, Throwable cause) {
+    public void testFailed(@SuppressWarnings("exports") ExtensionContext context, Throwable cause) {
         System.err.println(context.getDisplayName() + " failed");
         cause.setStackTrace(truncateCallStack(cause.getStackTrace()));
         cause.printStackTrace();
