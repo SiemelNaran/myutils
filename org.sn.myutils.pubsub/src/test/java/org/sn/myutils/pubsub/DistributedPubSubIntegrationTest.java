@@ -38,6 +38,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -79,6 +80,7 @@ import org.sn.myutils.pubsub.PubSub.SubscriptionMessageExceptionHandler;
 import org.sn.myutils.testutils.LogFailureToConsoleTestWatcher;
 import org.sn.myutils.testutils.TestBase;
 import org.sn.myutils.testutils.TestUtil;
+import org.sn.myutils.util.ExceptionUtils;
 
 
 /**
@@ -118,7 +120,9 @@ public class DistributedPubSubIntegrationTest extends TestBase {
             s.shutdown();
         }
         shutdowns.clear();
+        sleep(250); // sleep to allow operating system to reclaim port (though this number 250 seems arbitrary)
     }
+    
     //////////////////////////////////////////////////////////////////////
 
     private static final String CENTRAL_SERVER_HOST = "localhost";
@@ -2151,10 +2155,20 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     }
     
     private static <T> void waitFor(List<CompletableFuture<T>> futures) {
-        Instant startTime = Instant.now();
-        TestUtil.toList(futures);
-        Duration timeTaken = Duration.between(startTime, Instant.now());
-        LOGGER.log(Level.INFO, "Time taken to start servers and clients: numObjects=" + futures.size() + ", timeTaken=" + timeTaken);
+        try {
+            Instant startTime = Instant.now();
+            TestUtil.toList(futures);
+            Duration timeTaken = Duration.between(startTime, Instant.now());
+            LOGGER.log(Level.INFO, "Time taken to start servers and clients: numObjects=" + futures.size() + ", timeTaken=" + timeTaken);
+        } catch (CompletionException e) {
+            var cause = ExceptionUtils.unwrapCompletionException(e);
+            if (cause instanceof StartException) {
+                StartException startException = (StartException) cause;
+                System.err.println(startException.getMessage());
+                startException.getExceptions().entrySet().forEach(entry -> System.err.println(entry.toString()));
+            }
+            throw e;
+        }
     }
 }
 
