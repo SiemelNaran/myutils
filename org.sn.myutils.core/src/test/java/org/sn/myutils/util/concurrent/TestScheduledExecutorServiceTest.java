@@ -4,6 +4,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.sn.myutils.testutils.TestUtil.myThreadFactory;
 import static org.sn.myutils.testutils.TestUtil.sleep;
 
 import java.util.ArrayList;
@@ -17,10 +18,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -501,11 +500,6 @@ public class TestScheduledExecutorServiceTest extends TestBase {
         assertTrue(service.isTerminated());
     }
     
-
-    private static ThreadFactory myThreadFactory() {
-        AtomicInteger threadNumber = new AtomicInteger();
-        return runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A'));
-    }
 
     private void addWord(ScheduledExecutorService baseService, List<String> list, String word) {
         addWord(baseService, list, word, 0);

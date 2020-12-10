@@ -2,6 +2,7 @@ package org.sn.myutils.util.concurrent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.sn.myutils.testutils.TestUtil.myThreadFactory;
 import static org.sn.myutils.testutils.TestUtil.sleep;
 
 import java.time.Duration;
@@ -9,9 +10,7 @@ import java.util.Date;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -448,12 +447,6 @@ public class TimedReentrantLockTest {
         assertEquals(1200, lock.getTotalWaitTime().toMillis(), 50.0); // thread 1 starts waiting at 300+500=800ms and acquires lock at 2000ms
         assertEquals(2000, lock.getTotalLockRunningTime().toMillis(), 50.0); // each thread runs for 1000, so net 2000ms
         assertEquals(500, lock.getTotalIdleTime().toMillis(), 50.0); // as lock waiting from time 0ms to 300ms, and 800ms to 1000ms
-    }
-    
-
-    private static ThreadFactory myThreadFactory() {
-        AtomicInteger threadNumber = new AtomicInteger();
-        return runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A'));
     }
     
     private void logString(String message) {

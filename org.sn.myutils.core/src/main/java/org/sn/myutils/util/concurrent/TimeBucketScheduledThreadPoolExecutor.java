@@ -248,7 +248,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
          * This is the type of runnable stored in the base class.
          * Regular scheduled tasks (i.e. those that are no serializable) are plain old java.util.concurrent.ScheduledThreadPoolExecutor.ScheduledFutureTask.
          *
-         * @param <V>
+         * @param <V> the type of object returned by the underlying callable, or Object for runnable
          */
         private class TimeBucketFutureTask<V> implements RunnableScheduledFuture<V> {
             private final TimeBucket timeBucket;
@@ -773,7 +773,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         /**
          * Create a time bucket.
          *
-         * Set inMemory to true if:
+         * <p>Set inMemory to true if:
          * - the start time of this bucket is less than or equal to now
          * - the start time of this bucket is slightly greater than now where slightly means 20% of the bucket length.  By example:
          *     if time bucket starts at 4000ms, and bucket length is 1000ms, and now is 3900ms, set inMemory=true
@@ -902,6 +902,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
      * @param rejectedHandler the rejection rejectedHandler
      * @throws IOException if there was an error loading the existing time buckets
      */
+    @SuppressWarnings("checkstyle:MethodLength")
     public TimeBucketScheduledThreadPoolExecutor(Path folder,
                                                  Duration timeBucketLength,
                                                  int corePoolSize, ThreadFactory threadFactory, RejectedExecutionHandler rejectedHandler) throws IOException {

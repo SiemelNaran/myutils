@@ -135,7 +135,7 @@ public class MoreExecutors {
      * 
      * @param basename the thread names will be basename-1, basename-2, etc
      * @param daemon true if the new threads should be daemon threads
-     * @return
+     * @return a thread factory whose whose first thread is basename-1, second is basename-2, etc.
      */
     public static ThreadFactory createThreadFactory(String basename, boolean daemon) {
         ThreadGroup threadGroup = new ThreadGroup(basename);

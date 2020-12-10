@@ -4,6 +4,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.sn.myutils.testutils.TestUtil.myThreadFactory;
 import static org.sn.myutils.testutils.TestUtil.sleep;
 
 import java.lang.reflect.Field;
@@ -14,10 +15,8 @@ import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -2467,12 +2466,7 @@ public class PriorityLockTest extends TestBase {
         }
         throw new UnsupportedOperationException();
     }
-    
-    private static ThreadFactory myThreadFactory() {
-        AtomicInteger threadNumber = new AtomicInteger();
-        return runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A'));
-    }
-    
+
     private void logString(String message) {
         Thread currentThread = Thread.currentThread();
         boolean isInterrupted = Thread.currentThread().isInterrupted();

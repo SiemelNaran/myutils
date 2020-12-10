@@ -4,14 +4,13 @@ import static java.lang.Thread.sleep;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.sn.myutils.testutils.TestUtil.myThreadFactory;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import org.junit.jupiter.api.AfterAll;
@@ -297,11 +296,6 @@ public class ReentrantLockTest {
         executor.awaitTermination(10_00, TimeUnit.SECONDS);
         
         assertTrue(assertionsRun.get());
-    }
-    
-    private static ThreadFactory myThreadFactory() {
-        AtomicInteger threadNumber = new AtomicInteger();
-        return runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A'));
     }
     
     private void logStringPlus(ReentrantLock reentrantLock, String message) {
