@@ -1,5 +1,6 @@
 package org.sn.myutils.util.concurrent;
 
+import static java.lang.System.Logger.Level.DEBUG;
 import static java.lang.System.Logger.Level.ERROR;
 import static java.lang.System.Logger.Level.INFO;
 import static java.lang.System.Logger.Level.TRACE;
@@ -65,7 +66,7 @@ import org.sn.myutils.util.concurrent.SerializableLambdaUtils.RunnableInfo;
  * If a task is canceled, it is marked as canceled in the time bucket file, and the loader will not load that task into the current executor.
  *
  * <p>Once a task is done, it is marked as done in the time bucket file.
- * This allows us to not load that task into memory again in case the system crashes and restarts.
+ * This allows us to not load that task into memory again in case the system crashes and restarts, and we restart the executor.
  *
  * <p>The current implementation does not handle periodic tasks.
  * So tasks at fixed rate or fixed delay are run in the internal executor and are not stored in time bucket files.
@@ -74,7 +75,7 @@ import org.sn.myutils.util.concurrent.SerializableLambdaUtils.RunnableInfo;
  * So if you create a task A fpr 15ns and a task B for 10ns from now, both will run 0ms from now in the order A then B.
  * The time of loading items from disk is so great that nanosecond precision does not even make sense.
  *
- * <p>This class implements the AutoCloseable interface, which calls shutdownNow and awaitTermination of 1 nanosecond,
+ * <p>This class implements the AutoCloseable interface, which calls shutdownNow and awaitTermination of 1 microsecond,
  * and closes any open files.
  * It is not necessary to call the close function as files will be closed as program exit anyway,
  * but the unit tests do it each test creates a new TimeBucketScheduledThreadPoolExecutor.
@@ -219,7 +220,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                           DataFileLoader dataFileLoader) throws IOException {
             this.threadLocalFutureTask = threadLocalFutureTask;
             this.mainExecutor = mainExecutor;
-            this.timeBucketLengthMillis = bucketLength.toMillis();
+            this.timeBucketLengthMillis = verifyBucketLength(bucketLength);
             this.indexFileLoader = indexFileLoader;
             this.dataFileLoader = dataFileLoader;
 
@@ -229,18 +230,32 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         void setTimeBucketLengthMillis(Duration bucketLength) {
             long writeLock = timeBucketsLock.writeLock();
             try {
-                this.timeBucketLengthMillis = bucketLength.toMillis();
+                this.timeBucketLengthMillis = verifyBucketLength(bucketLength);
             } finally {
                 timeBucketsLock.unlockWrite(writeLock);
             }
         }
 
+        private static long verifyBucketLength(Duration bucketLength) {
+            long millis = bucketLength.toMillis();
+            if (millis < 250) {
+                throw new IllegalStateException("bucketLength must be >= 250ms");
+            }
+            return millis;
+        }
+
+        /**
+         * This is the type of runnable stored in the base class.
+         * Regular scheduled tasks (i.e. those that are no serializable) are plain old java.util.concurrent.ScheduledThreadPoolExecutor.ScheduledFutureTask.
+         *
+         * @param <V>
+         */
         private class TimeBucketFutureTask<V> implements RunnableScheduledFuture<V> {
             private final TimeBucket timeBucket;
-            private final long position;
+            private final long position; // position of this task within the RandomAccessFile. Used to mark the task as done or canceled.
             private final long whenMillis;
-            private @Nullable RunnableScheduledFuture<V> realFuture;
-            private boolean canceled;
+            private volatile @Nullable RunnableScheduledFuture<V> realFuture; // will be non null when the time bucket is loaded into memory
+            private volatile boolean canceled;
 
             TimeBucketFutureTask(TimeBucket timeBucket, long position, long whenMillis) {
                 this.timeBucket = timeBucket;
@@ -387,7 +402,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
          * bucket will be loaded when time is 3000 - (20% of 1000) = 2800ms.
          */
         private void scheduleLoadingOfTimeBucket(TimeBucket timeBucket) {
-            long whenMillis = timeBucket.getStartInclusiveMillis() - timeBucketLengthMillis / 5;
+            long whenMillis = timeBucket.getStartInclusiveMillis() - timeBucket.getDurationMillis() / 5;
             long delayMillis = whenMillis - System.currentTimeMillis();
             LOGGER.log(TRACE, () -> "Schedule loading of time bucket: timeBucket=" + timeBucket + ", whenMillis=" + whenMillis);
             timeBucketExecutor.schedule(() -> {
@@ -400,6 +415,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                 RandomAccessFile dataStream = lookupTimeBucketDataFile(timeBucket, false);
                 int countSuccess = 0;
                 int countFailure = 0;
+                int countIgnored = 0;
                 try {
                     long fileLength = dataStream.length();
                     timeBucket.setIsInMemory();
@@ -422,9 +438,9 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                             } catch (SerializableScheduledExecutorService.RecreateRunnableFailedException | IOException e) {
                                 LOGGER.log(WARNING, "Unable to recreate runnable: timeBucket=" + timeBucket + ", error='" + e.toString() + "'");
                                 countFailure++;
-                            } finally {
-                                threadLocalFutureTask.remove();
                             }
+                        } else {
+                            countIgnored++;
                         }
                     }
                 } catch (IOException | RuntimeException | Error e) {
@@ -432,10 +448,11 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                 } finally {
                     Duration timeTaken = Duration.between(startTime, Instant.now());
                     LOGGER.log(
-                            TRACE,
+                            DEBUG,
                             "Time bucket loaded: timeBucket=" + timeBucket
                                     + ", countSuccess=" + countSuccess
                                     + ", countFailure=" + countFailure
+                                    + ", countIgnored =" + countIgnored
                                     + ", timeTaken=" + timeTaken.toMillis() + "ms");
                 }
             }, delayMillis, TimeUnit.MILLISECONDS);
@@ -561,7 +578,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
          */
         private void saveTimeBucketsAsync() {
             timeBucketExecutor.submit(() -> {
-                long writeLock = timeBucketsLock.writeLock();
+                long readLock = timeBucketsLock.readLock();
                 try (PrintWriter writer = new PrintWriter(indexFileLoader.create("index.txt"))) {
                     writer.println("[title]");
                     writer.println("version=" + TIME_BUCKET_VERSION);
@@ -577,7 +594,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                 } catch (RuntimeException | Error e) {
                     LOGGER.log(ERROR, "Unexpected exception while writing index.txt", e);
                 } finally {
-                    timeBucketsLock.unlockWrite(writeLock);
+                    timeBucketsLock.unlockRead(readLock);
                 }
             });
         }
@@ -643,7 +660,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
 
         /**
          * Stops background tasks of the time bucket executor.
-         * These are loading buckets and deleted buckets.
+         * These are loading buckets and deleting buckets.
          *
          * @param immediate true means call shutdownNow and close files. false means call shutdown.
          */
@@ -659,9 +676,14 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
 
         /**
          * Wait for background tasks (i.e. loading time bucket file into memory and deleting time bucket file) up to the given timeout to finish.
-         * If time bucket A is [1000, 2000), B is [2000, 3000), C is [3000, 4000) and timeout is  2500,
-         * then basically call timeBucketExecutor.awaitTermination(2000ms),
-         * and return 2500 - 2000 = 500ms.
+         * If time bucket A is [1000, 2000), B is [2000, 3000), C is [3000, 4000),
+         * and if timeout is 2500ms then basically call timeBucketExecutor.awaitTermination(2500ms) and return 0,
+         * and if timeout is 4500ms then basically call timeBucketExecutor.awaitTermination(4500ms) which ends at 4000ms and return 4500-400=500ms.
+         *
+         * <p>If there is only one task in the [3000, 4000) bucket, say at the 3000ms mark, this function still waits for 4000ms when called with a timeout of 4500ms,
+         * as the time bucket executor deletes the time bucket at 4000ms.
+         * But it could return after 3000ms have elapsed and return 1500ms as the time left.
+         * So waitForBackgroundTasksToFinish could run faster, but it's rare that this need would arise, so leaving the code simple for now.
          *
          * @param timeout the maximum length of time to wait
          * @param unit the length of time unit
@@ -717,10 +739,18 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             }, delayMillis, TimeUnit.MILLISECONDS);
         }
 
+        /**
+         * Return the start millis of all time buckets.
+         * Used for testing.
+         */
         private LongStream getTimeBuckets() {
             return timeBuckets.stream().mapToLong(TimeBucket::getStartInclusiveMillis);
         }
 
+        /**
+         * Return the start millis of all open files.
+         * Used for testing.
+         */
         private LongStream getTimeBucketOpenFiles() {
             return timeBucketFileMap.keySet().stream().mapToLong(TimeBucket::getStartInclusiveMillis);
         }
@@ -743,7 +773,11 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         /**
          * Create a time bucket.
          *
-         * @see TimeBucket#isInMemory() for a description of how inMemory is set
+         * Set inMemory to true if:
+         * - the start time of this bucket is less than or equal to now
+         * - the start time of this bucket is slightly greater than now where slightly means 20% of the bucket length.  By example:
+         *     if time bucket starts at 4000ms, and bucket length is 1000ms, and now is 3900ms, set inMemory=true
+         *     because 3900 >= 4000 - (20% of 1000) = 3800ms
          */
         TimeBucket(long startMillis, long durationMillis) {
             this.startInclusiveMillis = startMillis;
@@ -778,18 +812,14 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             return endExclusiveMillis;
         }
 
+        long getDurationMillis() {
+            return endExclusiveMillis - startInclusiveMillis;
+        }
+
         String getFilename() {
             return startInclusiveMillis + ".dat";
         }
 
-        /**
-         * Return true if the future should be scheduled to run in the current ScheduledExecutorService.
-         * This happens if:
-         * - the start time of this bucket is less than or equal to the start time of the future, or
-         * - the start time of this bucket is slightly after the time of the future.
-         *     if time bucket starts at 4000ms, and bucket length is 1000ms, and now is 3900ms, return true
-         *     because 3900 >= 4000 - (20% of 1000) = 3800ms
-         */
         boolean isInMemory() {
             return inMemory;
         }
@@ -820,7 +850,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
          *
          * <p>This function assumes that the unit is MILLISECONDS.
          *
-         * @return the instant when the event will occur in milliseconds
+         * @return the time in milliseconds when the event will occur
          */
         public long padInitialDelay(RunnableInfo info, long now) {
             assert info.getTimeInfo().getUnit() == TimeUnit.MILLISECONDS;
@@ -913,6 +943,15 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         };
 
         this.mainExecutor = new ScheduledThreadPoolExecutor(corePoolSize, threadFactory, rejectedHandler) {
+            /**
+             * If called from scheduleTaskNow in TimeBucketManager,
+             * then return the future task created in that function,
+             * except set the real future of that future task to the one obtained by calling super.decorateTask.
+             *
+             * <p>Otherwise just return super.decorateTask.
+             *
+             * @see TimeBucketManager.TimeBucketFutureTask
+             */
             @Override
             @SuppressWarnings("unchecked")
             protected <V> RunnableScheduledFuture<V> decorateTask(Runnable runnable, RunnableScheduledFuture<V> task) {
@@ -926,6 +965,13 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                 }
             }
 
+            /**
+             * If called from scheduleTaskNow in TimeBucketManager,
+             * then return the future task created in that function,
+             * except set the real future of that future task to the one obtained by calling super.decorateTask.
+             *
+             * <p>Otherwise just return super.decorateTask.
+             */
             @Override
             @SuppressWarnings("unchecked")
             protected <V> RunnableScheduledFuture<V> decorateTask(Callable<V> callable, RunnableScheduledFuture<V> task) {
@@ -952,14 +998,16 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         TimeBucketManager.TimeBucketFutureTask<?> futureTask = threadLocalFutureTask.get();
         if (futureTask != null) {
             // we are being called from the call to RunnableInfo.apply in scheduleTaskNow
-            return mainExecutor.schedule(runnable, delay, unit); // invokes decorateTask
+            // this happens when we schedule a task to run in the current time bucket
+            // or when a task from a future time bucket is loaded
+            return mainExecutor.schedule(runnable, delay, unit); // invokes mainExecutor.decorateTask
         } else {
             checkShutdown(runnable);
             if (runnable instanceof Serializable) {
                 var info = Objects.requireNonNull(SerializableLambdaUtils.computeRunnableInfo(runnable, delay, 0, unit, WARNING));
                 return timeBucketManager.addToTimeBucket(info);
             } else {
-                return mainExecutor.schedule(runnable, delay, unit); // invokes decorateTask
+                return mainExecutor.schedule(runnable, delay, unit); // invokes mainExecutor.decorateTask
             }
         }
     }
@@ -988,7 +1036,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
      * {@inheritdoc}
      *
      * <p>This functions returns the tasks not started of the current time bucket(s).
-     * As we approach the end of one time bucket, the other is loaded into memory,
+     * As we approach the end of one time bucket, the next one is loaded into memory,
      * so this function would return all the tasks from the second bucket as well as the unfinished ones of the first.
      */
     @Override
@@ -1018,6 +1066,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         }
         long durationLeftNanos = timeBucketManager.waitForBackgroundTasksToFinish(timeout, unit);
         mainExecutor.shutdown();
+        // this is needed for the unit tests to pass. Not sure why. Without it, this function returns false instead of true.
         if (durationLeftNanos <= 100_000) {
             durationLeftNanos = 100_000;
         }
