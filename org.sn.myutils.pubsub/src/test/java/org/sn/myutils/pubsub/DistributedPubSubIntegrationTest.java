@@ -92,7 +92,7 @@ import org.sn.myutils.testutils.TestUtil;
  * - RetentionPriority.java
  * - KeyToSocketAddressMapper
  * 
- * <p>In Eclipse and IntelliJ run with the following VM arguments
+ * <p>In Eclipse run with the following VM arguments to get full logs:
  * <code>
 -ea
 -Djava.util.logging.config.file=../org.sn.myutils.testutils/target/classes/logging.properties

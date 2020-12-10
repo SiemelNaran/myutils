@@ -5,6 +5,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.stream.Stream;
@@ -72,66 +74,74 @@ public interface SerializableScheduledExecutorService extends ScheduledExecutorS
             throws RecreateRunnableFailedException;
 
     
-    @SuppressWarnings("checkstyle:SummaryJavadoc")
     interface UnfinishedTasks extends Serializable {
         Stream<TaskInfo> stream();
-        
-        interface TaskInfo {
-            /**
-             * @return Class<? extends Runnable> or Class<? extends Callable>
-             */
-            Class<?> getUnderlyingClass();
-            
-            /**
-             * @return the serializable runnable, if any, or null.
-             */
-            SerializableRunnable getSerializableRunnable();
-            
-            /**
-             * @return the serializable callable, if any, or null.
-             */
-            SerializableCallable<?> getSerializableCallable();
-            
-            /**
-             * @return the time till the next execution of this task in nanoseconds.
-             */
-            long getInitialDelayInNanos();
-            
-            /**
-             * @return true if the task is periodic.
-             */
-            boolean isPeriodic();
-
-            /**
-             * @return if this runnable ended with an exception
-             */
-            boolean isCompletedExceptionally();
-
-            /**
-             * @return if this runnable ended with an InterruptedException, implies isCompletedExceptionally() is also true
-             */
-            boolean wasInterrupted();
-        }
     }
 
-    
+    @SuppressWarnings("checkstyle:SummaryJavadoc")
+    interface TaskInfo {
+        /**
+         * @return Class<? extends Runnable> or Class<? extends Callable>
+         */
+        Class<?> getUnderlyingClass();
+
+        /**
+         * @return the serializable runnable, if any, or null.
+         */
+        SerializableRunnable getSerializableRunnable();
+
+        /**
+         * @return the serializable callable, if any, or null.
+         */
+        SerializableCallable<?> getSerializableCallable();
+
+        @SuppressWarnings("unchecked")
+        default @Nonnull Runnable getActionAsRunnable() {
+            Runnable runnable = getSerializableRunnable();
+            if (runnable == null) {
+                runnable = new FutureTask<>((Callable<Object>) getSerializableCallable());
+            }
+            return runnable;
+        }
+
+        /**
+         * @return the time till the next execution of this task in nanoseconds.
+         */
+        long getInitialDelayInNanos();
+
+        /**
+         * @return true if the task is periodic.
+         */
+        boolean isPeriodic();
+
+        /**
+         * @return if this runnable ended with an exception
+         */
+        boolean isCompletedExceptionally();
+
+        /**
+         * @return if this runnable ended with an InterruptedException, implies isCompletedExceptionally() is also true
+         */
+        boolean wasInterrupted();
+    }
+
     /**
      * Checked exception that is thrown when import fails.
      */
     class RecreateRunnableFailedException extends Exception {
         private static final long serialVersionUID = 1L;
         private static final String UNABLE_TO_RECREATE = "Unable to recreate ";
-        
+
         private final List<Class<?>> listClass;
-        
+
         RecreateRunnableFailedException(Class<?> clazz) {
             this.listClass = Collections.singletonList(clazz);
         }
-        
+
         RecreateRunnableFailedException(@Nonnull List<Class<?>> clazzList) {
             this.listClass = Collections.unmodifiableList(clazzList);
         }
-        
+
         @Override
         public String getMessage() {
             return UNABLE_TO_RECREATE + listClass;

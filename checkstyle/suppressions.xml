@@ -11,6 +11,7 @@
     <suppress files="src[\\/]test" checks="OneStatementPerLine"/>
     <suppress files="src[\\/]test" checks="AbbreviationAsWordInName"/>
     <suppress files="src[\\/]test" checks="OneTopLevelClass"/>
+    <suppress files=".*logging.properties" checks="LineLength"/>
 
     <suppress files="src[\\/]test" id="LineLengthMain"/>
     <suppress files="src[\\/]main" id="LineLengthTest"/>
