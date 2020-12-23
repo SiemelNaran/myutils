@@ -1,36 +1,56 @@
 package org.sn.myutils.util;
 
-import java.util.*;
-import java.util.stream.Collectors;
-
+import java.util.AbstractMap;
+import java.util.AbstractSet;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Set;
 import javax.annotation.Nonnull;
 import javax.annotation.concurrent.NotThreadSafe;
 
 
 /**
  * An implementation of LRU (least recently used) cache.
- * In practice, prefer to use LinkedHashMap because it is a standard class
- * and according to one test, this class is almost the same speed as LinkedHashMap.
+ * In practice, prefer to use LinkedHashMap because it is a standard class.
+ * 
+ * <p>Two new things in this class as compared to LinkedHashMap:
+ * - A function removeOldest to remove the oldest entry now.
+ *   For example LruCache is used in LfuCache, where items fetched with the same
+ *   frequency are stored in a LruCache, and when an item is to be evicted,
+ *   the least recently used item in the bucket with the lowest frequency is evicted.
+ * - LinkedHashMap's internal map is a HashMap of key to value,
+ *   whereas for LruCache it is a HashMap of key to node.
  * 
  * <p>This implementation maintains a linked list of all the key-value pairs,
  * with the most recently used at the head of the list.
  * There is also a map of key to the linked list node.
  */
 @NotThreadSafe
-public class LruCache<K,V> implements Map<K,V> {
+public class LruCache<K, V> extends AbstractMap<K, V> {
     
     private final int maxSize;
-    private Node<K,V> newestNode;
-    private Node<K,V> oldestNode;
-    private Map<K, Node<K,V>> map = new HashMap<>();
-    
+    private Node<K, V> newestNode;
+    private Node<K, V> oldestNode;
+    private Map<K, Node<K, V>> map = new HashMap<>();
+
+    /**
+     * Create an LRU cache holding a certain number of elements.
+     * 
+     * @param maxSize the maximum size
+     * @throws IllegalArgumentException is maxSize is < 1
+     */
     public LruCache(int maxSize) {
         this.maxSize = checkMaxSize(maxSize);
     }
     
     private static int checkMaxSize(int maxSize) {
-        if (maxSize < 2) {
-            throw new IllegalArgumentException(Integer.toString(maxSize));
+        if (maxSize < 1) {
+            throw new IllegalArgumentException("maxSize must be greater than or equal to one: " + maxSize);
         }
         return maxSize;
     }
@@ -66,16 +86,6 @@ public class LruCache<K,V> implements Map<K,V> {
                 moveToFront(find);
                 return oldValue;
             }
-        }
-    }
-
-    /**
-     * Insert many items into the cache.
-     */
-    @Override
-    public void putAll(Map<? extends K, ? extends V> map) {
-        for (Map.Entry<? extends K, ? extends V> entry: map.entrySet()) {
-            put(entry.getKey(), entry.getValue());
         }
     }
 
@@ -117,6 +127,10 @@ public class LruCache<K,V> implements Map<K,V> {
     @Override
     public V remove(Object key) {
         Node<K,V> find = map.get(key);
+        return internalRemove(find);
+    }
+    
+    private V internalRemove(Node<K,V> find) {
         if (find == null) {
             return null;
         } else {
@@ -127,25 +141,9 @@ public class LruCache<K,V> implements Map<K,V> {
             } else {
                 oldestNode = null;
             }
-            map.remove(key);
+            map.remove(find.key);
             return find.value;
         }
-    }
-
-    /**
-     * The size of the cache.
-     */
-    @Override
-    public int size() {
-        return map.size();
-    }
-
-    /**
-     * Tell if the cache empty.
-     */
-    @Override
-    public boolean isEmpty() {
-        return size() == 0;
     }
 
     /**
@@ -163,7 +161,9 @@ public class LruCache<K,V> implements Map<K,V> {
      */
     @Override
     public boolean containsValue(Object value) {
-        return map.containsValue(value);
+        return map.entrySet()
+                  .stream()
+                  .anyMatch(entry -> Objects.equals(value, entry.getValue().value));
     }
 
     /**
@@ -177,59 +177,127 @@ public class LruCache<K,V> implements Map<K,V> {
     }
 
     /**
-     * Return all the keys in the cache, in no particular order unlike LinkedHashMap.
-     */
-    @Override
-    public @Nonnull Set<K> keySet() {
-        return map.keySet();
-    }
-
-    /**
-     * Return all the values in the map, in no particular order unlike LinkedHashMap.
-     */
-    @Override
-    public @Nonnull Collection<V> values() {
-        return map.values().stream().map(node -> node.value).collect(Collectors.toList());
-    }
-
-    /**
      * Return all entries in the map, in no particular order unlike LinkedHashMap.
      */
     @Override
     public @Nonnull Set<Map.Entry<K, V>> entrySet() {
-        return map.entrySet()
-                  .stream()
-                  .map(entry -> new AbstractMap.SimpleEntry<K, V>(entry.getKey(), entry.getValue().value))
-                  .collect(Collectors.toSet());
+        return new AbstractSet<Map.Entry<K, V>>() {
+            @Override
+            public int size() {
+                return map.size();
+            }
+            
+            @Override
+            public Iterator<Entry<K, V>> iterator() {
+                return new LruCacheIterator();
+            }
+            
+            @Override
+            public void clear() {
+                LruCache.this.clear();
+            }
+        };
+    }
+    
+    private class LruCacheIterator implements Iterator<Entry<K, V>> {
+        private Node<K, V> nextNode;
+        private Node<K, V> currentNode;
+
+        LruCacheIterator() {
+            this.nextNode = LruCache.this.newestNode;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return nextNode != null;
+        }
+
+        @Override
+        public Entry<K, V> next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            currentNode = nextNode;
+            var result = new LruCacheEntry(currentNode);
+            nextNode = currentNode.next;
+            return result;
+        }
+        
+        @Override
+        public void remove() {
+            if (currentNode == null) {
+                throw new IllegalStateException();
+            }
+            LruCache.this.internalRemove(currentNode);
+            currentNode = null;
+        }
     }
 
-    /**
-     * Return true if the two caches are the same instance.
-     */
-    @Override
-    public boolean equals(Object that) {
-        return this == that;
-    }
+    private class LruCacheEntry implements Entry<K, V> {
+        private final Node<K, V> node;
+        
+        private LruCacheEntry(Node<K, V> node) {
+            this.node = node;
+        }
+        
+        @Override
+        public K getKey() {
+            return node.key;
+        }
 
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public int hashCode() {
-        return map.hashCode();
+        @Override
+        public V getValue() {
+            return node.value;
+        }
+
+        @Override
+        public V setValue(V newValue) {
+            V old = getValue();
+            node.value = newValue;
+            LruCache.this.moveToFront(node);
+            return old;
+        }
+        
+        @Override
+        public String toString() {
+            return getKey() + "=" + getValue();
+        }
+        
+        @SuppressWarnings("unchecked")
+        @Override
+        public boolean equals(Object thatObject) {
+            if (!(thatObject instanceof LruCache.LruCacheEntry)) {
+                return false;
+            }
+            LruCacheEntry that = (LruCacheEntry) thatObject;
+            return Objects.equals(this.getKey(), that.getKey()) && Objects.equals(this.getValue(), that.getValue());
+        }
+        
+        @Override
+        public int hashCode() {
+            return Objects.hash(getKey(), getValue());
+        }
     }
+    
 
     /**
      * Remove oldest node.
+     * LinkedHashMap does not have this function.
      * 
+     * <p>This function is useful if you have an LRU cache of some large or infinite size
+     * and want to remove the least recently used element.
+     * 
+     * @return the key of the element removed
      * @throws NullPointerException if map is empty
      */
-    K removeOldest() {
+    public K removeOldest() {
         Node<K,V> removedNode = oldestNode;
         map.remove(removedNode.key);
         oldestNode = removedNode.prev;
         if (oldestNode != null) {
             oldestNode.next = null;
+        } else {
+            newestNode = null;
         }
         return removedNode.key;
     }

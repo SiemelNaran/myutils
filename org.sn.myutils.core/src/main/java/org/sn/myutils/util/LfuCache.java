@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
 import javax.annotation.concurrent.NotThreadSafe;
 
 
@@ -18,8 +17,8 @@ import javax.annotation.concurrent.NotThreadSafe;
  * 
  * <p>In the code below we implement this as a linked list of LRU caches.
  * This makes lookup O(1) because we have to lookup which LRU cache has the node,
- * then in that LRU cache lookup the node to get its value.  But it's a slow O(1)
- * as there are 2 lookups.
+ * then in that LRU cache lookup the node to get its value.
+ * But it's a slow O(1) as there are 2 lookups.
  * 
  * <p>It is also possible to simply have a linked list with the most frequent nodes
  * at the head of the list, similar to the implementation of LRUCache but with the
@@ -28,9 +27,9 @@ import javax.annotation.concurrent.NotThreadSafe;
  * <p>Fetching an item could then be O(N) because we have to scan the nodes leftwards
  * towards the head of the list to find the node with the next higher frequency.
  * For example if map is A,B,C,D,E and A has frequency 3 and the others have frequency 1,
- * and we lookup E, we quickly find E in the map.  But we must traverse the left pointers
- * of E to find A, the place after which to insert D as its frequency is less than A but
- * greater than C,B,D.
+ * and we lookup E, we quickly find E in the map.
+ * But we must traverse the left pointers of E to find A,
+ * the place after which to insert D as its frequency is less than A but greater than B, C, D.
  */
 @NotThreadSafe
 public class LfuCache<K,V> {

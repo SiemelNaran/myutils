@@ -1,9 +1,14 @@
 package org.sn.myutils.util;
 
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.sn.myutils.testutils.TestUtil.assertException;
+import static org.sn.myutils.testutils.TestUtil.assertExceptionFromCallable;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -13,14 +18,23 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
+import java.util.Map.Entry;
+import java.util.NoSuchElementException;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 
 public class LruCacheTest {
     
     @Test
-    public void testAddTooMany() {
+    void testInvalidSize() {
+        assertExceptionFromCallable(() -> new LruCache<>(0), IllegalArgumentException.class);
+    }
+    
+    @Test
+    void testAddTooMany() {
         LruCache<String, String> cache = new LruCache<>(3);
         assertTrue(cache.isEmpty());
         assertEquals(0, cache.size());
@@ -35,10 +49,22 @@ public class LruCacheTest {
         assertEquals(Arrays.asList("three=3", "two=2", "one=1"), getListForTesting(cache));
         assertNull(cache.put("four", "4"));
         assertEquals(Arrays.asList("four=4", "three=3", "two=2"), getListForTesting(cache));
+        
+        assertTrue(cache.containsKey("three"));
+        assertTrue(cache.containsKey("two"));
+        assertFalse(cache.containsKey("one"));
+        assertTrue(cache.containsKey("four"));
+        assertEquals(Arrays.asList("four=4", "three=3", "two=2"), getListForTesting(cache));
+        
+        assertTrue(cache.containsValue("3"));
+        assertTrue(cache.containsValue("2"));
+        assertFalse(cache.containsValue("1"));
+        assertTrue(cache.containsValue("4"));
+        assertEquals(Arrays.asList("four=4", "three=3", "two=2"), getListForTesting(cache));
     }
     
     @Test
-    public void testPutExisting() {
+    void testPutExisting() {
         LruCache<String, String> cache = new LruCache<>(3);
         assertEquals(Collections.emptyList(), getListForTesting(cache));
         assertNull(cache.put("one", "1"));
@@ -52,21 +78,7 @@ public class LruCacheTest {
     }
 
     @Test
-    public void testPutSame() {
-        LruCache<String, String> cache = new LruCache<>(3);
-        assertEquals(Collections.emptyList(), getListForTesting(cache));
-        assertNull(cache.put("one", "1"));
-        assertEquals(Collections.singletonList("one=1"), getListForTesting(cache));
-        assertNull(cache.put("two", "2"));
-        assertEquals(Arrays.asList("two=2", "one=1"), getListForTesting(cache));
-        assertNull(cache.put("three", "3"));
-        assertEquals(Arrays.asList("three=3", "two=2", "one=1"), getListForTesting(cache));
-        assertEquals("3", cache.put("three", "33"));
-        assertEquals(Arrays.asList("three=33", "two=2", "one=1"), getListForTesting(cache));
-    }
-
-    @Test
-    public void testGetExisting() {
+    void testGetExisting() {
         LruCache<String, String> cache = new LruCache<>(3);
         assertEquals(Collections.emptyList(), getListForTesting(cache));
         assertNull(cache.put("one", "1"));
@@ -86,10 +98,11 @@ public class LruCacheTest {
         assertEquals(Arrays.asList("one=1", "two=2", "three=3"), getListForTesting(cache));
         
         assertNull(cache.get("nine"));
+        assertEquals(Arrays.asList("one=1", "two=2", "three=3"), getListForTesting(cache));
     }
     
     @Test
-    public void testRemove() {
+    void testRemove() {
         LruCache<String, String> cache = new LruCache<>(3);
         assertEquals(Collections.emptyList(), getListForTesting(cache));
         assertNull(cache.put("one", "1"));
@@ -119,6 +132,135 @@ public class LruCacheTest {
         assertEquals(Arrays.asList(), getListForTesting(cache));
 
         assertNull(cache.remove("nine"));
+        assertTrue(cache.isEmpty());
+    }
+    
+    @ParameterizedTest
+    @ValueSource(strings = { "clear", "entrySet.clear" })
+    void testClear(String method) {
+        LruCache<String, String> cache = new LruCache<>(3);
+        assertTrue(cache.isEmpty());
+        assertNull(cache.put("one", "1"));
+        assertNull(cache.put("two", "2"));
+        assertNull(cache.put("three", "3"));
+        assertEquals(3, cache.size());
+        assertEquals(Arrays.asList("three=3", "two=2", "one=1"), getListForTesting(cache));
+        assertFalse(cache.isEmpty());
+        if ("clear".equals(method)) {
+            cache.clear();            
+            cache.entrySet().clear();
+        }
+        assertEquals(0, cache.size());
+        assertTrue(cache.isEmpty());
+        assertEquals(Collections.emptyList(), getListForTesting(cache));
+
+        assertTrue(cache.isEmpty());
+        assertNull(cache.put("one", "1"));
+        assertNull(cache.put("two", "2"));
+        assertNull(cache.put("three", "3"));
+        assertEquals(3, cache.size());
+        assertEquals(Arrays.asList("three=3", "two=2", "one=1"), getListForTesting(cache));
+        assertFalse(cache.isEmpty());
+    }
+    
+    @Test
+    void testRemoveOldest() {
+        LruCache<String, String> cache = new LruCache<>(3);
+        assertTrue(cache.isEmpty());
+        assertNull(cache.put("one", "1"));
+        assertNull(cache.put("two", "2"));
+        assertNull(cache.put("three", "3"));
+        assertEquals(3, cache.size());
+        assertEquals(Arrays.asList("three=3", "two=2", "one=1"), getListForTesting(cache));
+        cache.removeOldest();
+        assertEquals(Arrays.asList("three=3", "two=2"), getListForTesting(cache));
+        cache.removeOldest();
+        assertEquals(Collections.singletonList("three=3"), getListForTesting(cache));
+        assertFalse(cache.isEmpty());
+        cache.removeOldest();
+        assertEquals(Collections.emptyList(), getListForTesting(cache));
+        assertTrue(cache.isEmpty());
+    }
+    
+    @Test
+    void testEntrySet() {
+        LruCache<String, String> cache = new LruCache<>(4);
+        assertTrue(cache.isEmpty());
+        assertNull(cache.put("one", "1"));
+        assertNull(cache.put("two", "2"));
+        assertNull(cache.put("three", "3"));
+        assertNull(cache.put("four", "4"));
+        assertEquals(4, cache.size());
+        assertEquals(4, cache.entrySet().size());
+
+        {
+            var iter = cache.entrySet().iterator();
+            assertTrue(iter.hasNext());
+            List<String> keys = new ArrayList<>();
+            keys.add(iter.next().toString());
+            keys.add(iter.next().toString());
+            keys.add(iter.next().toString());
+            keys.add(iter.next().toString());
+            assertFalse(iter.hasNext());
+            assertThat(keys, Matchers.contains("four=4", "three=3", "two=2", "one=1"));
+            assertExceptionFromCallable(() -> iter.next(), NoSuchElementException.class);
+        }
+
+        {
+            var iter = cache.entrySet().iterator();
+            assertTrue(iter.hasNext());
+            assertException(() -> iter.remove(), IllegalStateException.class);
+            iter.next();
+            iter.remove();
+            assertException(() -> iter.remove(), IllegalStateException.class);
+            Entry<String, String> entryThree = iter.next();
+            Entry<String, String> entryTwo = iter.next();
+            entryTwo.setValue("22");
+            Entry<String, String> entryOne = iter.next();
+            assertFalse(iter.hasNext());
+            List<String> keys = new ArrayList<>();
+            keys.add(entryThree.toString());
+            keys.add(entryTwo.toString());
+            keys.add(entryOne.toString());
+            assertThat(keys, Matchers.contains("three=3", "two=22", "one=1"));
+        }
+        
+        {
+            // verify that two=22 moved to front of list as setValue was called on it
+            var iter = cache.entrySet().iterator();
+            assertTrue(iter.hasNext());
+            List<String> keys = new ArrayList<>();
+            keys.add(iter.next().toString());
+            keys.add(iter.next().toString());
+            keys.add(iter.next().toString());
+            assertFalse(iter.hasNext());
+            assertThat(keys, Matchers.contains("two=22", "three=3", "one=1"));
+        }
+        
+        {
+            // verify equals and hashCode
+            
+            // this part same as above
+            var iter = cache.entrySet().iterator();
+            Entry<String, String> entryTwo = iter.next();
+            Entry<String, String> entryThree = iter.next();
+            Entry<String, String> entryOne = iter.next();
+            assertFalse(iter.hasNext());
+            List<String> keys = new ArrayList<>();
+            keys.add(entryTwo.toString());
+            keys.add(entryThree.toString());
+            keys.add(entryOne.toString());
+            assertThat(keys, Matchers.contains("two=22", "three=3", "one=1"));
+
+            assertNotEquals(entryTwo.hashCode(), entryThree.hashCode());
+            assertNotEquals(entryTwo, entryThree);
+            assertNotEquals(entryTwo, null);
+            
+            var anotherEntryTwo = cache.entrySet().iterator().next();
+            assertNotSame(entryTwo, anotherEntryTwo);
+            assertEquals(entryTwo.hashCode(), anotherEntryTwo.hashCode());
+            assertEquals(entryTwo, anotherEntryTwo);
+        }
     }
     
     private static List<String> getListForTesting(LruCache<String,String> cache) {
@@ -134,8 +276,8 @@ public class LruCacheTest {
         return list;
     }
     
-    @Test
-    public void testCompareToLinkedHashMap() {
+    //@Test
+    void testCompareToLinkedHashMap() {
         {
             Instant startTime = Instant.now();
             LinkedHashMap<String, String> cache = new LinkedHashMap<String, String>() {
