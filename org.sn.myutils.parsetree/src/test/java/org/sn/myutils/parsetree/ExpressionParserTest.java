@@ -349,8 +349,13 @@ public class ExpressionParserTest {
     }
     
     private static void assertParseError(String expression, String expectedErrorMsg, int expectedOffset) {
-        ParseException pe = assertExceptionFromCallable(() -> PARSER.parse(expression), ParseException.class, expectedErrorMsg);
-        assertEquals(expectedOffset, pe.getErrorOffset());
+        assertExceptionFromCallable(
+            () -> PARSER.parse(expression),
+            ParseException.class,
+            pe -> {
+                assertEquals(expectedErrorMsg, pe.getMessage());
+                assertEquals(expectedOffset, pe.getErrorOffset());
+            });
     }
     
     /////

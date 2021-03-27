@@ -16,6 +16,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.hamcrest.BaseMatcher;
@@ -152,86 +153,79 @@ public class TestUtil {
     /**
      * Assert that the desired exception is thrown.
      * 
-     * @return the exception (not null)
+     * @throws AssertionError if assertion fails
+     */
+    public static <T, U extends Throwable> void assertExceptionFromCallable(Callable<T> callable, Class<U> expectedException) {
+        assertExceptionFromCallable(callable, expectedException, exception -> { });
+    }
+
+    /**
+     * Assert that the desired exception is thrown.
+     *
+     * @throws AssertionError if assertion fails
+     */
+    public static <T, U extends Throwable> void assertExceptionFromCallable(Callable<T> callable, Class<U> expectedExceptionClass, String expectedMessage) {
+        assertExceptionFromCallable(callable, expectedExceptionClass, exception -> assertEquals(expectedMessage, exception.getMessage()));
+    }
+
+    /**
+     * Assert that the desired exception is thrown.
+     *
      * @throws AssertionError if assertion fails
      */
     @SuppressWarnings("unchecked")
-    public static <T, U> U assertExceptionFromCallable(Callable<T> callable, Class<U> expectedException) {
+    public static <T, U extends Throwable> void assertExceptionFromCallable(Callable<T> callable, Class<U> expectedException, Consumer<U> exceptionChecker) {
         try {
             callable.call();
             fail("Expected exception " + expectedException.getSimpleName() + ", but got no exception");
             throw new AssertionError();
-        } catch (Exception e) {
+        } catch (Throwable e) {
             assertTrue(expectedException.isInstance(e), "Expected " + expectedException.getSimpleName()
                     + " or an exception derived from it, " + "but got " + e.getClass().getSimpleName());
-            return (U) e;
+            exceptionChecker.accept((U) e);
         }
     }
 
     /**
      * Assert that the desired exception is thrown.
      * 
-     * @return the exception (not null)
      * @throws AssertionError if assertion fails
      */
-    @SuppressWarnings("unchecked")
-    public static <T, U> U assertExceptionFromCallable(Callable<T> callable, Class<U> expectedException, String expectedMessage) {
-        try {
-            callable.call();
-            fail("Expected exception " + expectedException.getSimpleName() + ", but got no exception");
-            throw new AssertionError();
-        } catch (Exception e) {
-            assertTrue(expectedException.isInstance(e), "Expected " + expectedException.getSimpleName()
-                    + " or an exception derived from it, " + "but got " + e.getClass().getSimpleName());
-            assertEquals(expectedMessage, e.getMessage());
-            return (U) e;
-        }
+    public static <U extends Throwable> void assertException(Runnable runnable, Class<U> expectedExceptionClass) {
+        assertException(runnable, expectedExceptionClass, exception -> { });
     }
 
     /**
      * Assert that the desired exception is thrown.
-     * 
-     * @return the exception (not null)
+     *
      * @throws AssertionError if assertion fails
      */
-    @SuppressWarnings("unchecked")
-    public static <U> U assertException(Runnable runnable, Class<U> expectedException) {
+    public static <U extends Throwable> void assertException(Runnable runnable, Class<U> expectedExceptionClass, String expectedMessage) {
+        assertException(runnable, expectedExceptionClass, exception -> assertEquals(expectedMessage, exception.getMessage()));
+    }
+
+    /**
+     * Assert that the desired exception is thrown.
+     *
+     * @throws AssertionError if assertion fails
+     */
+    public static <U extends Throwable> void assertException(Runnable runnable, Class<U> expectedException, Consumer<U> exceptionChecker) {
         try {
             runnable.run();
             fail("Expected exception " + expectedException.getSimpleName() + ", but got no exception");
             throw new AssertionError();
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | Error e) {
             assertTrue(expectedException.isInstance(e), "Expected " + expectedException.getSimpleName()
                     + " or an exception derived from it, " + "but got " + e.getClass().getSimpleName());
-            return (U) e;
+            exceptionChecker.accept((U) e);
         }
     }
 
-    /**
-     * Assert that the desired exception is thrown.
-     * 
-     * @return the exception (not null)
-     * @throws AssertionError if assertion fails
-     */
-    @SuppressWarnings("unchecked")
-    public static <U> U assertException(Runnable runnable, Class<U> expectedException, String expectedMessage) {
-        try {
-            runnable.run();
-            fail("Expected exception " + expectedException.getSimpleName() + ", but got no exception");
-            throw new AssertionError();
-        } catch (RuntimeException e) {
-            assertTrue(expectedException.isInstance(e), "Expected " + expectedException.getSimpleName()
-                    + " or an exception derived from it, " + "but got " + e.getClass().getSimpleName());
-            assertEquals(expectedMessage, e.getMessage());
-            return (U) e;
-        }
-    }
-    
     public static <T extends Comparable<T>> Between<T> between(T low, T high) {
         return new Between<>(low, high);
     }
     
-    static class Between<T extends Comparable<T>> extends BaseMatcher<T> {
+    public static class Between<T extends Comparable<T>> extends BaseMatcher<T> {
         private final T low;
         private final T high;
         
