@@ -155,8 +155,8 @@ public class TestUtil {
      * 
      * @throws AssertionError if assertion fails
      */
-    public static <T, U extends Throwable> void assertExceptionFromCallable(Callable<T> callable, Class<U> expectedException) {
-        assertExceptionFromCallable(callable, expectedException, exception -> { });
+    public static <T, U extends Throwable> void assertExceptionFromCallable(Callable<T> callable, Class<U> expectedExceptionClass) {
+        assertExceptionFromCallable(callable, expectedExceptionClass, exception -> { });
     }
 
     /**
@@ -171,16 +171,19 @@ public class TestUtil {
     /**
      * Assert that the desired exception is thrown.
      *
+     * @param callable the function to run.
+     * @param expectedExceptionClass the class of exception to expect.
+     * @param exceptionChecker the function to check if the exception has the right value, for example <code>exception -> assertEquals(expectedMessage, exception.getMessage())</code>
      * @throws AssertionError if assertion fails
      */
     @SuppressWarnings("unchecked")
-    public static <T, U extends Throwable> void assertExceptionFromCallable(Callable<T> callable, Class<U> expectedException, Consumer<U> exceptionChecker) {
+    public static <T, U extends Throwable> void assertExceptionFromCallable(Callable<T> callable, Class<U> expectedExceptionClass, Consumer<U> exceptionChecker) {
         try {
             callable.call();
-            fail("Expected exception " + expectedException.getSimpleName() + ", but got no exception");
+            fail("Expected exception " + expectedExceptionClass.getSimpleName() + ", but got no exception");
             throw new AssertionError();
         } catch (Throwable e) {
-            assertTrue(expectedException.isInstance(e), "Expected " + expectedException.getSimpleName()
+            assertTrue(expectedExceptionClass.isInstance(e), "Expected " + expectedExceptionClass.getSimpleName()
                     + " or an exception derived from it, " + "but got " + e.getClass().getSimpleName());
             exceptionChecker.accept((U) e);
         }
@@ -207,15 +210,18 @@ public class TestUtil {
     /**
      * Assert that the desired exception is thrown.
      *
+     * @param runnable the function to run.
+     * @param expectedExceptionClass the class of exception to expect.
+     * @param exceptionChecker the function to check if the exception has the right value, for example <code>exception -> assertEquals(expectedMessage, exception.getMessage())</code>
      * @throws AssertionError if assertion fails
      */
-    public static <U extends Throwable> void assertException(Runnable runnable, Class<U> expectedException, Consumer<U> exceptionChecker) {
+    public static <U extends Throwable> void assertException(Runnable runnable, Class<U> expectedExceptionClass, Consumer<U> exceptionChecker) {
         try {
             runnable.run();
-            fail("Expected exception " + expectedException.getSimpleName() + ", but got no exception");
+            fail("Expected exception " + expectedExceptionClass.getSimpleName() + ", but got no exception");
             throw new AssertionError();
         } catch (RuntimeException | Error e) {
-            assertTrue(expectedException.isInstance(e), "Expected " + expectedException.getSimpleName()
+            assertTrue(expectedExceptionClass.isInstance(e), "Expected " + expectedExceptionClass.getSimpleName()
                     + " or an exception derived from it, " + "but got " + e.getClass().getSimpleName());
             exceptionChecker.accept((U) e);
         }
