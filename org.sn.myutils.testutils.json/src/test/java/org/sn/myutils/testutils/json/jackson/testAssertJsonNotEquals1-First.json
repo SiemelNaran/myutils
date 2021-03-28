@@ -1,0 +1,29 @@
+[
+  {
+    "firstName": "First",
+    "lastName": "Something",
+    "recordId": "r1",
+    "deleted": false,
+    "child": {
+      "intValue": 1,
+      "stringValue": "string",
+      "deleted": false,
+      "someArray": [
+        {"id":1, "name":"one", "booleanFlag":false},
+        {"id":2, "name":"two"},
+        {"id":3, "name":"three"}
+      ]
+    },
+    "mismatchedType": 1111
+  },
+  {
+    "recordId": "r2",
+    "deleted": true,
+    "firstName": "Second",
+    "lastName": "Something",
+    "child": {
+      "intValue": 1,
+      "stringValue": "string"
+    }
+  }
+]
