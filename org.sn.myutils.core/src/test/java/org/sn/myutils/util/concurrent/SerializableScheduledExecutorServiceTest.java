@@ -656,15 +656,17 @@ public class SerializableScheduledExecutorServiceTest {
             SerializableScheduledExecutorService.UnfinishedTasks tasks = (SerializableScheduledExecutorService.UnfinishedTasks) ois.readObject();
             
             SerializableScheduledExecutorService service = MoreExecutors.newSerializableScheduledThreadPool(1);
-            RecreateRunnableFailedException exception = TestUtil.assertExceptionFromCallable(
+            TestUtil.assertExceptionFromCallable(
                 () -> { service.importUnfinishedTasks(tasks); return null; },
-                RecreateRunnableFailedException.class);
-            assertEquals(3, exception.getFailedClasses().size());
-            assertEquals(Arrays.asList("TestCheckedExceptionRunnable", "TestRuntimeExceptionCallable", "TestRuntimeExceptionRunnable"),
-                         exception.getFailedClasses().stream()
-                                                     .map(Class::getSimpleName)
-                                                     .sorted()
-                                                     .collect(Collectors.toList()));
+                RecreateRunnableFailedException.class,
+                recreateRunnableFailedException -> {
+                    assertEquals(3, recreateRunnableFailedException.getFailedClasses().size());
+                    assertEquals(Arrays.asList("TestCheckedExceptionRunnable", "TestRuntimeExceptionCallable", "TestRuntimeExceptionRunnable"),
+                                 recreateRunnableFailedException.getFailedClasses().stream()
+                                          .map(Class::getSimpleName)
+                                          .sorted()
+                                          .collect(Collectors.toList()));
+                });
         }
     }
 
