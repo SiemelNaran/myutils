@@ -4,6 +4,7 @@
     "lastName": "Something",
     "recordId": "r1",
     "deleted": false,
+    "hidden": true,
     "child": {
       "intValue": 1,
       "stringValue": "string",

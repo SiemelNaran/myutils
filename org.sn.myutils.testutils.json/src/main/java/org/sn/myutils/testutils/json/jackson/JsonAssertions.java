@@ -13,18 +13,28 @@ public class JsonAssertions {
      *
      * @throws org.sn.myutils.testutils.json.JsonComparisonAssertionError if objects are not equal
      */
-    public static void assertJsonEquals(JsonNode expected, JsonNode actual, JsonComparisonBuilder builder) {
+    public static void assertJsonEquals(JsonNode expected, JsonNode actual, JsonComparisonParametersBuilder builder) {
         var jsonComparator = builder.build();
         jsonComparator.compareAndThrow(expected, actual);
     }
 
-    public static class JsonComparisonBuilder {
+    public static class JsonComparisonParametersBuilder {
+        private boolean printToStdErr;
         private final Map<String /*type*/, String /*sortField*/> pathToIdFieldMap = new HashMap<>();
         private final Collection<String> pathForWhichDontCompareValueList = new ArrayList<>();
         private final Collection<String> pathForWhichAssumeDefaultValueWhenComparingList = new ArrayList<>();
 
-        public static JsonComparisonBuilder newBuilder() {
-            return new JsonComparisonBuilder();
+        public static JsonComparisonParametersBuilder newBuilder() {
+            return new JsonComparisonParametersBuilder();
+        }
+
+        /**
+         * Tell whether to print differences to stderr as well as in the AssertionError.
+         * This is useful because exception message may be hard to read.
+         */
+        public JsonComparisonParametersBuilder setPrintToStdErr(boolean value) {
+            this.printToStdErr = value;
+            return this;
         }
 
         /**
@@ -43,49 +53,57 @@ public class JsonAssertions {
          *     </li>
          * </ul>
          */
-        public JsonComparisonBuilder addPathToIdField(String jsonPath, String idField) {
+        public JsonComparisonParametersBuilder addPathToIdField(String jsonPath, String idField) {
             pathToIdFieldMap.put(jsonPath, idField);
             return this;
         }
 
         /**
          * Add the path we should not compare.
-         * For example, there may be an attribute like updatedAt that will naturally differ between expected and actual output.
-         * However, the code will test for the existence of the attribute.
+         * For example, there may be an attribute like timeUpdated that will naturally differ between expected and actual output.
+         * However, the code will test for the existence of the attribute, and that the types are equivalent.
          *
          * <p>Examples<ul>
          *     <li>
-         *         <code>addPathForWhichAssumeDefaultValueWhenComparing("[].child.someArray[].booleanFlag")</code>
+         *         <code>addPathForWhichDontCompareValue("[].timeUpdated")</code>
          *         if top level is a JSON array of objects,
-         *         each having an attribute child,
-         *         each having an attribute someArray which is a JSON array,
-         *         and each of those objects has an attribute "booleanFlag"
+         *         each having an attribute "timeUpdated",
          *     </li>
          * </ul>
          */
-        public JsonComparisonBuilder addPathForWhichDontCompareValue(String jsonPath) {
+        public JsonComparisonParametersBuilder addPathForWhichDontCompareValue(String jsonPath) {
             pathForWhichDontCompareValueList.add(jsonPath);
             return this;
         }
 
         /**
          * Add path we should compare, where is one object does not exist we use the default value.
-         * For example, one JSON may have a boolean attribute set to false, and the other has the boolean attribute missing.
+         * For example, one JSON may have a boolean attribute set to false, and the other has the boolean attribute missing,
+         * yet they should be considered equal.
+         *
+         * <p>The only supported types are
+         * <ul>
+         *     <li>boolean, where missing means false</li>
+         * </ul>
          *
          * <p>Examples<ul>
          *     <li>
-         *         <code>.addPathForWhichDontCompareValue("[].updated_at")</code>
-         *         if top level is a JSON array of objects, each having an attribute updated_at
+         *         <code>addPathForWhichAssumeDefaultValueWhenComparing("[].child.someArray[].booleanFlag")</code>
+         *         if top level is a JSON array of objects,
+         *         each having an attribute "child" which is a JSON object,
+         *         which has an attribute "someArray" which is a JON array,
+         *         which has an attrubute "booleanFlag".
          *     </li>
          * </ul>
          */
-        public JsonComparisonBuilder addPathForWhichAssumeDefaultValueWhenComparing(String type) {
+        public JsonComparisonParametersBuilder addPathForWhichAssumeDefaultValueWhenComparing(String type) {
             pathForWhichAssumeDefaultValueWhenComparingList.add(type);
             return this;
         }
 
         private JsonComparator build() {
-            return new JsonComparator(pathToIdFieldMap,
+            return new JsonComparator(printToStdErr,
+                                      pathToIdFieldMap,
                                       pathForWhichDontCompareValueList,
                                       pathForWhichAssumeDefaultValueWhenComparingList);
         }

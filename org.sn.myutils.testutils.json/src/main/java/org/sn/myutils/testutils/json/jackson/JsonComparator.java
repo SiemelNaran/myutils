@@ -31,8 +31,8 @@ import org.sn.myutils.testutils.json.JsonComparisonAssertionError;
  *
  * <p>Some of the capabilities include:
  * - ability to treat JSON array as map so that we can compare objects with the same id
- * - ability to not compare certain attributes (such as createdDate field) as it will change from run to run
- * - ability to set value of attribute to its default value (so that an attribute missing is same as attribute=false)
+ * - ability to not compare certain attributes (such as timeUpdated field) as it will change from run to run
+ * - ability to assume missing attribute is set to its default value (so that an attribute missing is same as attribute=default)
  */
 class JsonComparator {
 
@@ -54,6 +54,10 @@ class JsonComparator {
             this.parent = parent;
         }
 
+        /**
+         * Return the JSON path, which is a string like "[].child.someArray[].booleanFlag" or "[].lastName".
+         * These are the same strings passed in to JsonComparisonParametersBuilder.
+         */
         String getType() {
             StringBuilder result = new StringBuilder();
             if (parent != null) {
@@ -66,6 +70,10 @@ class JsonComparator {
             return result.toString();
         }
 
+        /**
+         * Return a string like "[recordId=r1].lastName=MyLastName".
+         * These are used in the error message.
+         */
         String getPathAsString() {
             StringBuilder result = new StringBuilder();
             if (parent != null) {
@@ -94,6 +102,7 @@ class JsonComparator {
         }
     }
 
+    private final boolean printToStdErr;
     private final Map<String /*type*/, String /*idField*/> pathToIdFieldMap;
     private final Collection<String> pathForWhichDontCompareValueList;
     private final Collection<String> pathForWhichAssumeDefaultValueWhenComparingList;
@@ -105,9 +114,11 @@ class JsonComparator {
      * @param pathForWhichDontCompareValueList attributes with these names will not be compared, but we will compare the existence of the field value and field type
      * @param pathForWhichAssumeDefaultValueWhenComparingList attributes with these names will be compared, but if missing the attribute will assume the default value
      */
-    JsonComparator(Map<String, String> pathToIdFieldMap,
+    JsonComparator(boolean printToStdErr,
+                   Map<String, String> pathToIdFieldMap,
                    Collection<String> pathForWhichDontCompareValueList,
                    Collection<String> pathForWhichAssumeDefaultValueWhenComparingList) {
+        this.printToStdErr = printToStdErr;
         this.pathToIdFieldMap = pathToIdFieldMap;
         this.pathForWhichDontCompareValueList = pathForWhichDontCompareValueList;
         this.pathForWhichAssumeDefaultValueWhenComparingList = pathForWhichAssumeDefaultValueWhenComparingList;
@@ -123,7 +134,7 @@ class JsonComparator {
         private final List<String> errors = new ArrayList<>();
 
         private void compare(JsonPath path, JsonNode expected, JsonNode actual) {
-            if (!expected.getClass().equals(actual.getClass())) {
+            if (!equivalent(expected.getClass(), actual.getClass())) {
                 addError(path,
                          "Expected " + expected.getClass().getSimpleName() + "(" + expected.asText()
                                  + ") but got " + actual.getClass().getSimpleName() + "(" + actual.asText() + ")");
@@ -132,8 +143,10 @@ class JsonComparator {
                     addError(path, "Expected " + expected.asText() + " but got " + actual.asText());
                 }
             } else if (actual instanceof ObjectNode) {
+                assert expected instanceof ObjectNode;
                 compareObjects(path, (ObjectNode) expected, (ObjectNode) actual);
             } else if (actual instanceof ArrayNode) {
+                assert expected instanceof ArrayNode;
                 compareArrays(path, (ArrayNode) expected, (ArrayNode) actual);
             } else {
                 if (!expected.equals(actual)) {
@@ -242,10 +255,12 @@ class JsonComparator {
         void throwIfAssertionErrors(JsonNode actual) {
             if (errors.size() > 0) {
                 try {
-                    errors.forEach(System.err::println);
-                    System.err.println("\nACTUAL:");
-                    String actualAsString = PRINTER.writeValueAsString(actual);
-                    System.err.println(actualAsString);
+                    if (printToStdErr) {
+                        errors.forEach(System.err::println);
+                        System.err.println("\nACTUAL:");
+                        String actualAsString = PRINTER.writeValueAsString(actual);
+                        System.err.println(actualAsString);
+                    }
                     throw new JsonComparisonAssertionError(errors);
                 } catch (IOException e) {
                     throw new RuntimeException(e);
@@ -289,7 +304,7 @@ class JsonComparator {
 
     /**
      * Return true if the node types are the same, for example if both are TextNode.
-     * Also return true if one is an IntNode and the other a LongNode, or one a LongNode and the other an IntNode.
+     * Also return true if one is an IntNode and the other a LongNode.
      */
     private static boolean equivalent(Class<? extends JsonNode> first, Class<? extends JsonNode> second) {
         if (first.equals(second)) {

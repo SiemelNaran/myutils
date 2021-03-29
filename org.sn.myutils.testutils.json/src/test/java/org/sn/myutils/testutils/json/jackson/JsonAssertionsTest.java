@@ -19,13 +19,14 @@ public class JsonAssertionsTest {
     @Test
     public void testAssertJsonEquals1() throws IOException {
         var jsonComparisonBuilder =
-                JsonAssertions.JsonComparisonBuilder.newBuilder()
-                                                    .addPathToIdField("", "recordId")
-                                                    .addPathToIdField("[].child.someArray", "id")
-                                                    .addPathForWhichDontCompareValue("[].intOrLong")
-                                                    .addPathForWhichDontCompareValue("[].floatOrDouble")
-                                                    .addPathForWhichAssumeDefaultValueWhenComparing("[].deleted")
-                                                    .addPathForWhichAssumeDefaultValueWhenComparing("[].child.someArray[].booleanFlag");
+                JsonAssertions.JsonComparisonParametersBuilder.newBuilder()
+                                                              .setPrintToStdErr(true)
+                                                              .addPathToIdField("", "recordId")
+                                                              .addPathToIdField("[].child.someArray", "id")
+                                                              .addPathForWhichDontCompareValue("[].intOrLong")
+                                                              .addPathForWhichDontCompareValue("[].floatOrDouble")
+                                                              .addPathForWhichAssumeDefaultValueWhenComparing("[].deleted")
+                                                              .addPathForWhichAssumeDefaultValueWhenComparing("[].child.someArray[].booleanFlag");
 
         JsonNode json1 = loadJsonFromFile("testAssertJsonEquals1-First.json");
         JsonNode json2 = loadJsonFromFile("testAssertJsonEquals1-Second.json");
@@ -40,8 +41,9 @@ public class JsonAssertionsTest {
     @Test
     public void testAssertJsonEquals2() throws IOException {
         var jsonComparisonBuilder =
-                JsonAssertions.JsonComparisonBuilder.newBuilder()
-                                                    .addPathForWhichAssumeDefaultValueWhenComparing("someArray[].booleanFlag");
+                JsonAssertions.JsonComparisonParametersBuilder.newBuilder()
+                                                              .setPrintToStdErr(true)
+                                                              .addPathForWhichAssumeDefaultValueWhenComparing("someArray[].booleanFlag");
 
         JsonNode json1 = loadJsonFromFile("testAssertJsonEquals2-First.json");
         JsonNode json2 = loadJsonFromFile("testAssertJsonEquals2-Second.json");
@@ -56,12 +58,14 @@ public class JsonAssertionsTest {
     @Test
     public void testAssertJsonNotEquals1() throws IOException {
         var jsonComparisonBuilder =
-                JsonAssertions.JsonComparisonBuilder.newBuilder()
-                                                    .addPathToIdField("", "recordId")
-                                                    .addPathToIdField("[].child.someArray", "id")
-                                                    .addPathForWhichDontCompareValue("[].mismatchedType")
-                                                    .addPathForWhichAssumeDefaultValueWhenComparing("[].deleted")
-                                                    .addPathForWhichAssumeDefaultValueWhenComparing("[].child.someArray[].booleanFlag");
+                JsonAssertions.JsonComparisonParametersBuilder.newBuilder()
+                                                              .setPrintToStdErr(true)
+                                                              .addPathToIdField("", "recordId")
+                                                              .addPathToIdField("[].child.someArray", "id")
+                                                              .addPathForWhichDontCompareValue("[].mismatchedType")
+                                                              .addPathForWhichAssumeDefaultValueWhenComparing("[].deleted")
+                                                              .addPathForWhichAssumeDefaultValueWhenComparing("[].hidden")
+                                                              .addPathForWhichAssumeDefaultValueWhenComparing("[].child.someArray[].booleanFlag");
 
         JsonNode json1 = loadJsonFromFile("testAssertJsonNotEquals1-First.json");
         JsonNode json2 = loadJsonFromFile("testAssertJsonNotEquals1-Second.json");
@@ -73,6 +77,7 @@ public class JsonAssertionsTest {
                                containsInAnyOrder("[recordId=r1].firstName=First: Expected First but got FirstWrong",
                                                   "[recordId=r1].middleName=ExtraAttribute: Attribute in actual but not in expected",
                                                   "[recordId=r1].lastName=Something: Expected TextNode(Something) but got IntNode(999)",
+                                                  "[recordId=r1].hidden=true: Attribute in expected but not in actual",
                                                   "[recordId=r1].mismatchedType=1111: Expected type IntNode but got type TextNode",
                                                   "[recordId=r1].child.someArray: Expected JSON with 3 elements, but got JSON with 4 elements")));
 
@@ -84,6 +89,7 @@ public class JsonAssertionsTest {
                                containsInAnyOrder("[recordId=r1].firstName=FirstWrong: Expected FirstWrong but got First",
                                                   "[recordId=r1].middleName=ExtraAttribute: Attribute in expected but not in actual",
                                                   "[recordId=r1].lastName=999: Expected IntNode(999) but got TextNode(Something)",
+                                                  "[recordId=r1].hidden=true: Attribute in actual but not in expected",
                                                   "[recordId=r1].mismatchedType=SomeString: Expected type TextNode but got type IntNode",
                                                   "[recordId=r1].child.someArray: Expected JSON with 4 elements, but got JSON with 3 elements",
                                                   "[recordId=r1].child.someArray[id=4]: Record not in actual")));
@@ -95,8 +101,9 @@ public class JsonAssertionsTest {
     @Test
     public void testAssertJsonNotEquals2() throws IOException {
         var jsonComparisonBuilder =
-                JsonAssertions.JsonComparisonBuilder.newBuilder()
-                                                    .addPathForWhichAssumeDefaultValueWhenComparing("someArray[].booleanFlag");
+                JsonAssertions.JsonComparisonParametersBuilder.newBuilder()
+                                                              .setPrintToStdErr(false)
+                                                              .addPathForWhichAssumeDefaultValueWhenComparing("someArray[].booleanFlag");
 
         JsonNode json1 = loadJsonFromFile("testAssertJsonNotEquals2-First.json");
         JsonNode json2 = loadJsonFromFile("testAssertJsonNotEquals2-Second.json");
@@ -127,9 +134,10 @@ public class JsonAssertionsTest {
     @Test
     public void testAssertJsonNotEquals3() throws IOException {
         var jsonComparisonBuilder =
-                JsonAssertions.JsonComparisonBuilder.newBuilder()
-                                                    .addPathToIdField("someArray", "id")
-                                                    .addPathForWhichAssumeDefaultValueWhenComparing("someArray[].booleanFlag");
+                JsonAssertions.JsonComparisonParametersBuilder.newBuilder()
+                                                              .setPrintToStdErr(true)
+                                                              .addPathToIdField("someArray", "id")
+                                                              .addPathForWhichAssumeDefaultValueWhenComparing("someArray[].booleanFlag");
 
         JsonNode json1 = loadJsonFromFile("testAssertJsonNotEquals3-First.json");
         JsonNode json2 = loadJsonFromFile("testAssertJsonNotEquals3-Second.json");
@@ -158,9 +166,10 @@ public class JsonAssertionsTest {
     @Test
     public void testAssertJsonNotEquals4() throws IOException {
         var jsonComparisonBuilder =
-                JsonAssertions.JsonComparisonBuilder.newBuilder()
-                                                    .addPathToIdField("someArray", "id")
-                                                    .addPathForWhichAssumeDefaultValueWhenComparing("someArray[].booleanFlag");
+                JsonAssertions.JsonComparisonParametersBuilder.newBuilder()
+                                                              .setPrintToStdErr(true)
+                                                              .addPathToIdField("someArray", "id")
+                                                              .addPathForWhichAssumeDefaultValueWhenComparing("someArray[].booleanFlag");
 
         JsonNode json1 = loadJsonFromFile("testAssertJsonNotEquals4-First.json");
         JsonNode json2 = loadJsonFromFile("testAssertJsonNotEquals4-Second.json");
@@ -185,10 +194,11 @@ public class JsonAssertionsTest {
     @Test
     public void testAssertJsonNotEquals5() throws IOException {
         var jsonComparisonBuilder =
-                JsonAssertions.JsonComparisonBuilder.newBuilder()
-                                                    .addPathForWhichAssumeDefaultValueWhenComparing("boolean")
-                                                    .addPathForWhichAssumeDefaultValueWhenComparing("int")
-                                                    .addPathForWhichAssumeDefaultValueWhenComparing("double");
+                JsonAssertions.JsonComparisonParametersBuilder.newBuilder()
+                                                              .setPrintToStdErr(true)
+                                                              .addPathForWhichAssumeDefaultValueWhenComparing("boolean")
+                                                              .addPathForWhichAssumeDefaultValueWhenComparing("int")
+                                                              .addPathForWhichAssumeDefaultValueWhenComparing("double");
 
         JsonNode json1 = loadJsonFromFile("testAssertJsonNotEquals5-First.json");
         JsonNode json2 = loadJsonFromFile("testAssertJsonNotEquals5-Second.json");
