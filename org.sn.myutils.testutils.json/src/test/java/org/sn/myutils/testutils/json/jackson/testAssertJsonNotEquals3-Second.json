@@ -1,0 +1,8 @@
+{
+    "someArray": [
+        {"id":1, "name":"one", "booleanFlag":false},
+        {"id":3, "name":"three"},
+        {"id":2, "name":"two"},
+        {"id":2, "name":"anotherTwo"}
+    ]
+}

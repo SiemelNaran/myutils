@@ -1,0 +1,7 @@
+{
+    "fieldWithWrongValue": "hello",
+    "boolean": false,
+    "int": 0,
+    "double": 0.0,
+    "string": ""
+}

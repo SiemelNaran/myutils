@@ -1,0 +1,31 @@
+[
+    {
+        "firstName": "First",
+        "lastName": "Something",
+        "recordId": "r1",
+        "deleted": false,
+        "child": {
+            "intValue": 1,
+            "stringValue": "string",
+            "deleted": false,
+            "someArray": [
+                {"id":1, "name":"one", "booleanFlag":false},
+                {"id":2, "name":"two"},
+                {"id":3, "name":"three"}
+            ]
+        },
+        "int": 1111,
+        "intOrLong": 1111,
+        "floatOrDouble": "12.12345"
+    },
+    {
+        "recordId": "r2",
+        "deleted": true,
+        "firstName": "Second",
+        "lastName": "Something",
+        "child": {
+            "intValue": 1,
+            "stringValue": "string"
+        }
+    }
+]
