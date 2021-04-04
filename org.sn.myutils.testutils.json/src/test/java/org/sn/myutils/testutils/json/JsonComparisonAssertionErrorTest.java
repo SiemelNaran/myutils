@@ -4,12 +4,11 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.util.List;
-
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 
 
-public class JaonComparisonAssertionErrorTest {
+public class JsonComparisonAssertionErrorTest {
     @Test
     public void test() {
         var errors = List.of("[recordId=r1].firstName=First: Expected First but got FirstWrong",

@@ -9,7 +9,7 @@ import java.util.Map;
 
 public class JsonAssertions {
     /**
-     * Compare two json objects.
+     * Compare two JSON objects.
      *
      * @throws org.sn.myutils.testutils.json.JsonComparisonAssertionError if objects are not equal
      */

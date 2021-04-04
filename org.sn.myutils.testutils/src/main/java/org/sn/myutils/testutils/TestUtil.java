@@ -173,7 +173,8 @@ public class TestUtil {
      *
      * @param callable the function to run.
      * @param expectedExceptionClass the class of exception to expect.
-     * @param exceptionChecker the function to check if the exception has the right value, for example <code>exception -> assertEquals(expectedMessage, exception.getMessage())</code>
+     * @param exceptionChecker the function to check if the exception has the right value,
+     *        for example <code>exception -> assertEquals(expectedMessage, exception.getMessage())</code>
      * @throws AssertionError if assertion fails
      */
     @SuppressWarnings("unchecked")
@@ -212,9 +213,11 @@ public class TestUtil {
      *
      * @param runnable the function to run.
      * @param expectedExceptionClass the class of exception to expect.
-     * @param exceptionChecker the function to check if the exception has the right value, for example <code>exception -> assertEquals(expectedMessage, exception.getMessage())</code>
+     * @param exceptionChecker the function to check if the exception has the right value,
+     *        for example <code>exception -> assertEquals(expectedMessage, exception.getMessage())</code>
      * @throws AssertionError if assertion fails
      */
+    @SuppressWarnings("unchecked")
     public static <U extends Throwable> void assertException(Runnable runnable, Class<U> expectedExceptionClass, Consumer<U> exceptionChecker) {
         try {
             runnable.run();
