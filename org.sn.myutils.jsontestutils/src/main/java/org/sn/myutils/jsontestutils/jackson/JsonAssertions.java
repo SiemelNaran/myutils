@@ -1,4 +1,4 @@
-package org.sn.myutils.testutils.json.jackson;
+package org.sn.myutils.jsontestutils.jackson;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
@@ -11,7 +11,7 @@ public class JsonAssertions {
     /**
      * Compare two JSON objects.
      *
-     * @throws org.sn.myutils.testutils.json.JsonComparisonAssertionError if objects are not equal
+     * @throws org.sn.myutils.jsontestutils.JsonComparisonAssertionError if objects are not equal
      */
     public static void assertJsonEquals(JsonNode expected, JsonNode actual, JsonComparisonParametersBuilder builder) {
         var jsonComparator = builder.build();

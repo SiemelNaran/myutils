@@ -1,4 +1,4 @@
-package org.sn.myutils.testutils.json;
+package org.sn.myutils.jsontestutils;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertSame;

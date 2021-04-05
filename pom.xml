@@ -119,7 +119,7 @@
         <module>org.sn.myutils.parsetree</module>
         <module>org.sn.myutils.pubsub</module>
 
-        <module>org.sn.myutils.testutils.json</module>
+        <module>org.sn.myutils.jsontestutils</module>
     </modules>
 
 </project>

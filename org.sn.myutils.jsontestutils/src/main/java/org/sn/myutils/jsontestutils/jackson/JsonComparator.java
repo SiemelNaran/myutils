@@ -1,4 +1,4 @@
-package org.sn.myutils.testutils.json.jackson;
+package org.sn.myutils.jsontestutils.jackson;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.StringTokenizer;
-import org.sn.myutils.testutils.json.JsonComparisonAssertionError;
+import org.sn.myutils.jsontestutils.JsonComparisonAssertionError;
 
 
 /**
