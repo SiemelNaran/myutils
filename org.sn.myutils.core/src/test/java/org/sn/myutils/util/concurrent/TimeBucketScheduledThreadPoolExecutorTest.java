@@ -57,6 +57,8 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     private Path folder;
 
     private static class MyRunnable implements SerializableRunnable {
+        private static final long serialVersionUID = 1L;
+
         private final String value;
         private final transient int transientInteger;
 
@@ -82,6 +84,8 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     }
 
     private static class MyCallable implements SerializableCallable<String> {
+        private static final long serialVersionUID = 1L;
+
         private final String value;
         private final transient int transientInteger;
 
@@ -412,7 +416,6 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     void changeBucketLength() throws IOException {
         Duration timeBucketLength = Duration.ofSeconds(1);
         try (AutoCloseableScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
-            TimeBucketScheduledThreadPoolExecutor serviceImpl = (TimeBucketScheduledThreadPoolExecutor) service;
             assertEquals(0, countFiles());
 
             sleepTillNextSecond();
@@ -420,7 +423,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
             service.schedule(new MyRunnable("300"), 300, TimeUnit.MILLISECONDS); // bucket [0000, 1000)
             service.schedule(new MyRunnable("900"), 900, TimeUnit.MILLISECONDS); // bucket [0000, 1000)
             assertEquals(1, countFiles());
-            serviceImpl.setTimeBucketLength(Duration.ofMillis(500));
+            ((TimeBucketScheduledThreadPoolExecutor) service).setTimeBucketLength(Duration.ofMillis(500));
             service.schedule(new MyRunnable("1300"), 1300, TimeUnit.MILLISECONDS); // bucket [1000, 1500)
             service.schedule(new MyRunnable("1900"), 1900, TimeUnit.MILLISECONDS); // bucket [1500, 2000)
             assertEquals(3, getNumTimeBuckets(service));
@@ -590,6 +593,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
 
             service.shutdownNow();
             service.awaitTermination(10, TimeUnit.MILLISECONDS); // at 1500ms mark
+            service.close();
             service = null;
 
             assertEquals(4, countFiles()); // file for [0, 1000) was removed

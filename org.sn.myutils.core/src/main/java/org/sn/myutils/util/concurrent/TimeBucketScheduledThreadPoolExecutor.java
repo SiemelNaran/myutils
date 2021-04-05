@@ -178,6 +178,8 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
          * <p>There is no need for finalize/Cleaner because RandomAccessFile registers a cleaner to close the file when it becomes phantom reachable.
          */
         private final Map<TimeBucket, RandomAccessFile> timeBucketFileMap = Collections.synchronizedMap(new LinkedHashMap<>() {
+            private static final long serialVersionUID = 1L;
+
             @Override
             protected boolean removeEldestEntry(Map.Entry<TimeBucket, RandomAccessFile> entry) {
                 if (size() > MAX_BUCKETS_TO_KEEP_OPEN) {

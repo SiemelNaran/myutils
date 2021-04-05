@@ -1,4 +1,4 @@
-package org.sn.myutils.testutils.json.jackson;
+package org.sn.myutils.jsontestutils.jackson;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
@@ -9,7 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
 import java.io.IOException;
 import org.junit.jupiter.api.Test;
-import org.sn.myutils.testutils.json.JsonComparisonAssertionError;
+import org.sn.myutils.jsontestutils.JsonComparisonAssertionError;
 
 
 public class JsonAssertionsTest {
@@ -224,7 +224,7 @@ public class JsonAssertionsTest {
     }
 
     private static JsonNode loadJsonFromFile(String path) throws IOException {
-        return new ObjectMapper().readTree(new File("src/test/java/org/sn/myutils/testutils/json/jackson/" + path));
+        return new ObjectMapper().readTree(new File("src/test/java/org/sn/myutils/jsontestutils/jackson/" + path));
     }
 
     private static void printSeparator() {

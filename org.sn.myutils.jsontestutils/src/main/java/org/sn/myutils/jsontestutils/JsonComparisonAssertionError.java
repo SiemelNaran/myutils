@@ -1,4 +1,4 @@
-package org.sn.myutils.testutils.json;
+package org.sn.myutils.jsontestutils;
 
 import java.util.List;
 import java.util.StringJoiner;
