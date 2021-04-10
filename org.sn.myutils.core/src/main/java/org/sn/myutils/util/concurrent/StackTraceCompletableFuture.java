@@ -13,7 +13,7 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import javax.annotation.Nonnull;
+import org.sn.myutils.annotations.NotNull;
 
 
 /**
@@ -43,8 +43,8 @@ import javax.annotation.Nonnull;
 @SuppressWarnings("checkstyle:LineLength")
 class StackTraceCompletableFuture<T> extends CompletableFuture<T> {
 
-    private final @Nonnull StackTraces stackTraces;
-    private final @Nonnull CompletableFuture<T> future;
+    private final @NotNull StackTraces stackTraces;
+    private final @NotNull CompletableFuture<T> future;
     
     private StackTraceCompletableFuture(StackTraces source, CompletableFuture<T> future) {
         this.stackTraces = new StackTraces(source);

@@ -4,7 +4,7 @@ import java.io.Serializable;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
-import javax.annotation.Nonnull;
+import org.sn.myutils.annotations.NotNull;
 
 
 /**
@@ -157,9 +157,9 @@ public interface MessageClasses {
         private static final long serialVersionUID = 1L;
         
         private final CentralServerId centralServerId;
-        private final @Nonnull String error;
-        
-        ClientRejected(CentralServerId centralServerId, @Nonnull String error) {
+        private final @NotNull String error;
+
+        ClientRejected(CentralServerId centralServerId, @NotNull String error) {
             this.centralServerId = centralServerId;
             this.error = error;
         }
@@ -168,7 +168,7 @@ public interface MessageClasses {
             return centralServerId;
         }
         
-        @Nonnull String getError() {
+        @NotNull String getError() {
             return error;
         }
  
@@ -189,13 +189,13 @@ public interface MessageClasses {
     class InvalidMessage extends ServerGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
-        private final @Nonnull String error;
+        private final @NotNull String error;
 
-        InvalidMessage(@Nonnull String error) {
+        InvalidMessage(@NotNull String error) {
             this.error = error;
         }
 
-        public @Nonnull String getError() {
+        public @NotNull String getError() {
             return error;
         }
 
@@ -236,7 +236,7 @@ public interface MessageClasses {
     class AddSubscriberFailed extends AddOrRemoveSubscriberFailed {
         private static final long serialVersionUID = 1L;
         
-        AddSubscriberFailed(@Nonnull String error, String topic, String subscriberName) {
+        AddSubscriberFailed(@NotNull String error, String topic, String subscriberName) {
             super(error, topic, subscriberName);
         }
     }
@@ -247,7 +247,7 @@ public interface MessageClasses {
     class RemoveSubscriberFailed extends AddOrRemoveSubscriberFailed {
         private static final long serialVersionUID = 1L;
         
-        RemoveSubscriberFailed(@Nonnull String error, String topic, String subscriberName) {
+        RemoveSubscriberFailed(@NotNull String error, String topic, String subscriberName) {
             super(error, topic, subscriberName);
         }
     }
@@ -263,7 +263,7 @@ public interface MessageClasses {
         
         private final long failedClientIndex;
 
-        InvalidRelayMessage(@Nonnull String error, long failedClientIndex) {
+        InvalidRelayMessage(@NotNull String error, long failedClientIndex) {
             super(error);
             this.failedClientIndex = failedClientIndex;
         }
@@ -286,7 +286,7 @@ public interface MessageClasses {
         
         private final String topic;
 
-        CreatePublisherFailed(@Nonnull String error, long failedClientIndex, String topic) {
+        CreatePublisherFailed(@NotNull String error, long failedClientIndex, String topic) {
             super(error, failedClientIndex);
             this.topic = topic;
         }
@@ -688,15 +688,15 @@ public interface MessageClasses {
     abstract class RelayTopicMessageBase extends RelayMessageBase implements TopicMessageBase {
         private static final long serialVersionUID = 1L;
 
-        private final @Nonnull String topic;
+        private final @NotNull String topic;
         
-        RelayTopicMessageBase(Long createdAtTimestamp, long clientIndex, @Nonnull String topic) {
+        RelayTopicMessageBase(Long createdAtTimestamp, long clientIndex, @NotNull String topic) {
             super(null, clientIndex);
             this.topic = topic;
         }
         
         @Override
-        public @Nonnull String getTopic() {
+        public @NotNull String getTopic() {
             return topic;
         }
         
@@ -714,16 +714,16 @@ public interface MessageClasses {
     class CreatePublisher extends RelayTopicMessageBase implements Resendable {
         private static final long serialVersionUID = 1L;
         
-        private final @Nonnull Class<?> publisherClass;
+        private final @NotNull Class<?> publisherClass;
         private final boolean isResend;
 
-        CreatePublisher(long createdAtTimestamp, long clientIndex, @Nonnull String topic, @Nonnull Class<?> publisherClass, boolean isResend) {
+        CreatePublisher(long createdAtTimestamp, long clientIndex, @NotNull String topic, @NotNull Class<?> publisherClass, boolean isResend) {
             super(createdAtTimestamp, clientIndex, topic);
             this.publisherClass = publisherClass;
             this.isResend = isResend;
         }
 
-        @Nonnull Class<?> getPublisherClass() {
+        @NotNull Class<?> getPublisherClass() {
             return publisherClass;
         }
 
@@ -745,16 +745,16 @@ public interface MessageClasses {
     class PublishMessage extends RelayTopicMessageBase {
         private static final long serialVersionUID = 1L;
         
-        private final @Nonnull CloneableObject<?> message;
-        private final @Nonnull RetentionPriority priority;
+        private final @NotNull CloneableObject<?> message;
+        private final @NotNull RetentionPriority priority;
         
-        PublishMessage(long clientIndex, @Nonnull String topic, @Nonnull CloneableObject<?> message, @Nonnull RetentionPriority priority) {
+        PublishMessage(long clientIndex, @NotNull String topic, @NotNull CloneableObject<?> message, @NotNull RetentionPriority priority) {
             super(null, clientIndex, topic);
             this.message = message;
             this.priority = priority;
         }
 
-        @Nonnull CloneableObject<?> getMessage() {
+        @NotNull CloneableObject<?> getMessage() {
             return message;
         }
         

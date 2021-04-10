@@ -61,7 +61,7 @@ IntelliJ 2020.2.
 
 Steps:
 - Optional: Ensure that all .iml and the .idea folder are deleted.
-  If you get incomprehensible compile errors about java.util classes not being found, invalidate cache and restart.
+  If you get incomprehensible compile errors about java.util classes not being found, invalidate cache and restart. Sometimes the following is needed:
 ```
 find ../myutils/ -name "*.iml" -exec rm -rfv {} \;
 rm -rfv ../myutils/.idea/
@@ -69,3 +69,8 @@ rm -rfv ../myutils/.idea/
 - Open or Import
 - Pick the myutils folder and click OK
 
+### Custom NotNull
+
+Go to IntelliJ IDEA -> Preferences -> Editor -> Inspections -> @NotNull/@Nullable problems -> Configure Annotations<br/>
+Add `org.sn.myutils.annotations.NotNullable` to Nullable annotations<br/>
+Add `org.sn.myutils.annotations.NotNull` to NotNull annotations

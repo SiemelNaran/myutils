@@ -5,7 +5,7 @@ import java.util.Date;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
-import javax.annotation.Nonnull;
+import org.sn.myutils.annotations.NotNull;
 
 
 /**
@@ -88,7 +88,7 @@ public class TimedReentrantLock extends ReentrantLock {
     }
     
     @Override
-    public @Nonnull Condition newCondition() {
+    public @NotNull Condition newCondition() {
         return new InternalCondition(super.newCondition());
     }
     
@@ -144,7 +144,7 @@ public class TimedReentrantLock extends ReentrantLock {
         }
 
         @Override
-        public boolean awaitUntil(@Nonnull Date deadline) throws InterruptedException {
+        public boolean awaitUntil(@NotNull Date deadline) throws InterruptedException {
             setRunningTimeOnUnlock();
             setStartTimeWhenLocked();
             try {

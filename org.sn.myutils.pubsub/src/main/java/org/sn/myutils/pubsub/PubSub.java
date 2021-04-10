@@ -22,8 +22,8 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
+import org.sn.myutils.annotations.NotNull;
+import org.sn.myutils.annotations.Nullable;
 import org.sn.myutils.pubsub.PubSubUtils.CallStackCapturing;
 import org.sn.myutils.util.MultimapUtils;
 
@@ -133,11 +133,11 @@ public abstract class PubSub implements Shutdowneable {
      */
     public abstract class Publisher {
         private final long createdAtTimestamp;
-        private final @Nonnull String topic;
-        private final @Nonnull Class<?> publisherClass;
-        private final @Nonnull Collection<Subscriber> subscribers = new ArrayList<>();
+        private final @NotNull String topic;
+        private final @NotNull Class<?> publisherClass;
+        private final @NotNull Collection<Subscriber> subscribers = new ArrayList<>();
 
-        protected Publisher(@Nonnull String topic, @Nonnull Class<?> publisherClass) {
+        protected Publisher(@NotNull String topic, @NotNull Class<?> publisherClass) {
             this.createdAtTimestamp = System.currentTimeMillis();
             this.topic = topic;
             this.publisherClass = publisherClass;
@@ -147,11 +147,11 @@ public abstract class PubSub implements Shutdowneable {
             return createdAtTimestamp;
         }
         
-        public @Nonnull String getTopic() {
+        public @NotNull String getTopic() {
             return topic;
         }
         
-        protected @Nonnull Class<?> getPublisherClass() {
+        protected @NotNull Class<?> getPublisherClass() {
             return publisherClass;
         }
         
@@ -162,15 +162,15 @@ public abstract class PubSub implements Shutdowneable {
         /**
          * Return subscribers in the order they were created.
          */
-        protected @Nonnull List<Subscriber> getSubscribers() {
+        protected @NotNull List<Subscriber> getSubscribers() {
             return new ArrayList<>(subscribers);
         }
         
-        public final <T extends CloneableObject<?>> void publish(@Nonnull T message) {
+        public final <T extends CloneableObject<?>> void publish(@NotNull T message) {
             publish(message, RetentionPriority.MEDIUM);
         }
         
-        public <T extends CloneableObject<?>> void publish(@Nonnull T message, RetentionPriority priority) {
+        public <T extends CloneableObject<?>> void publish(@NotNull T message, RetentionPriority priority) {
             PubSub.this.lock.lock();
             try {
                 for (var subscriber : subscribers) {
@@ -193,16 +193,16 @@ public abstract class PubSub implements Shutdowneable {
      */
     public abstract class Subscriber {
         private final long createdAtTimestamp;
-        private final @Nonnull String topic;
-        private final @Nonnull String subscriberName;
-        private final @Nonnull Class<? extends CloneableObject<?>> subscriberClass; // same as or inherits from publisherClass
-        private final @Nonnull Consumer<CloneableObject<?>> callback;
-        private final @Nonnull Queue<CloneableObject<?>> messages = new ArrayDeque<>();
+        private final @NotNull String topic;
+        private final @NotNull String subscriberName;
+        private final @NotNull Class<? extends CloneableObject<?>> subscriberClass; // same as or inherits from publisherClass
+        private final @NotNull Consumer<CloneableObject<?>> callback;
+        private final @NotNull Queue<CloneableObject<?>> messages = new ArrayDeque<>();
 
-        protected Subscriber(@Nonnull String topic,
-                             @Nonnull String subscriberName,
-                             @Nonnull Class<? extends CloneableObject<?>> subscriberClass,
-                             @Nonnull Consumer<CloneableObject<?>> callback) {
+        protected Subscriber(@NotNull String topic,
+                             @NotNull String subscriberName,
+                             @NotNull Class<? extends CloneableObject<?>> subscriberClass,
+                             @NotNull Consumer<CloneableObject<?>> callback) {
             this.createdAtTimestamp = System.currentTimeMillis();
             this.topic = topic;
             this.subscriberName = subscriberName;
@@ -214,12 +214,12 @@ public abstract class PubSub implements Shutdowneable {
             return createdAtTimestamp;
         }
 
-        @Nonnull
+        @NotNull
         public String getTopic() {
             return topic;
         }
 
-        @Nonnull
+        @NotNull
         public String getSubscriberName() {
             return subscriberName;
         }
@@ -294,7 +294,7 @@ public abstract class PubSub implements Shutdowneable {
     /**
      * Get an existing publisher.
      */
-    public synchronized Publisher getPublisher(@Nonnull String topic) {
+    public synchronized Publisher getPublisher(@NotNull String topic) {
         return topicMap.get(topic);
     }
 
@@ -327,10 +327,10 @@ public abstract class PubSub implements Shutdowneable {
      * @throws IllegalStateException if the PubSub is already subscribed to the topic with the same subscriberName
 -     */
     @SuppressWarnings("unchecked")
-    public final synchronized <T extends CloneableObject<?>> Subscriber subscribe(@Nonnull String topic,
-                                                                                  @Nonnull String subscriberName,
-                                                                                  @Nonnull Class<T> subscriberClass,
-                                                                                  @Nonnull Consumer<T> callback) {
+    public final synchronized <T extends CloneableObject<?>> Subscriber subscribe(@NotNull String topic,
+                                                                                  @NotNull String subscriberName,
+                                                                                  @NotNull Class<T> subscriberClass,
+                                                                                  @NotNull Consumer<T> callback) {
         Consumer<CloneableObject<?>> callbackCasted = (Consumer<CloneableObject<?>>) callback;
         Supplier<Subscriber> subscriberCreator = () -> {
             onBeforeAddSubscriber(topic, subscriberName, subscriberClass);
@@ -357,10 +357,10 @@ public abstract class PubSub implements Shutdowneable {
         return subscriber;
     }
     
-    protected abstract Subscriber newSubscriber(@Nonnull String topic,
-                                                @Nonnull String subscriberName,
-                                                @Nonnull Class<? extends CloneableObject<?>> subscriberClass,
-                                                @Nonnull Consumer<CloneableObject<?>> callback);
+    protected abstract Subscriber newSubscriber(@NotNull String topic,
+                                                @NotNull String subscriberName,
+                                                @NotNull Class<? extends CloneableObject<?>> subscriberClass,
+                                                @NotNull Consumer<CloneableObject<?>> callback);
 
     private static void checkClassType(Class<?> publisherClass, Class<?> subscriberClass) {
         if (!(publisherClass.isAssignableFrom(subscriberClass))) {

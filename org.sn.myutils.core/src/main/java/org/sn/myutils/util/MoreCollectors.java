@@ -9,7 +9,7 @@ import java.util.function.BinaryOperator;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collector;
-import javax.annotation.Nonnull;
+import org.sn.myutils.annotations.NotNull;
 
 
 public class MoreCollectors {
@@ -68,7 +68,7 @@ public class MoreCollectors {
         MinMax() {
         }
 
-        MinMax(@Nonnull T min, @Nonnull T max) {
+        MinMax(@NotNull T min, @NotNull T max) {
             this.min = min;
             this.max = max;
         }

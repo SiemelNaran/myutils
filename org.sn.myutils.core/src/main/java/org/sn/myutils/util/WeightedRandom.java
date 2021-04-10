@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Random;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import javax.annotation.Nonnull;
+import org.sn.myutils.annotations.NotNull;
 import org.sn.myutils.util.MoreCollections.FindWhich;
 
 
@@ -112,7 +112,7 @@ public class WeightedRandom implements Supplier<Integer> {
      * @return a random weighted integer
      */
     @Override
-    public @Nonnull Integer get() {
+    public @NotNull Integer get() {
         int random = internalRandom.nextInt();
         int index = MoreCollections.binarySearch(positions, 0, positions.size(), Function.identity(), random, FindWhich.FIND_LAST);
         if (index < 0) {

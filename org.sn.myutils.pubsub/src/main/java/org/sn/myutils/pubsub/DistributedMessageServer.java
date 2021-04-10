@@ -48,8 +48,8 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
+import org.sn.myutils.annotations.NotNull;
+import org.sn.myutils.annotations.Nullable;
 import org.sn.myutils.pubsub.MessageClasses.AddOrRemoveSubscriber;
 import org.sn.myutils.pubsub.MessageClasses.AddSubscriber;
 import org.sn.myutils.pubsub.MessageClasses.AddSubscriberFailed;
@@ -145,26 +145,26 @@ public class DistributedMessageServer implements Shutdowneable {
      * Key fields are machineId (a string) and channel (an AsynchronousSocketChannel).
      */
     protected static final class ClientMachine {
-        private static ClientMachine unregistered(@Nonnull AsynchronousSocketChannel channel) {
+        private static ClientMachine unregistered(@NotNull AsynchronousSocketChannel channel) {
             return new ClientMachine(new ClientMachineId("<unregistered>"), channel);
         }
         
-        private final @Nonnull ClientMachineId machineId;
-        private final @Nonnull String remoteAddress;
-        private final @Nonnull AsynchronousSocketChannel channel;
-        private final @Nonnull WriteManager writeManager = new WriteManager();
+        private final @NotNull ClientMachineId machineId;
+        private final @NotNull String remoteAddress;
+        private final @NotNull AsynchronousSocketChannel channel;
+        private final @NotNull WriteManager writeManager = new WriteManager();
 
-        private ClientMachine(@Nonnull ClientMachineId machineId, @Nonnull AsynchronousSocketChannel channel) {
+        private ClientMachine(@NotNull ClientMachineId machineId, @NotNull AsynchronousSocketChannel channel) {
             this.machineId = machineId;
             this.remoteAddress = getRemoteAddress(channel);
             this.channel = channel;
         }
 
-        private @Nonnull AsynchronousSocketChannel getChannel() {
+        private @NotNull AsynchronousSocketChannel getChannel() {
             return channel;
         }
         
-        protected final @Nonnull ClientMachineId getMachineId() {
+        protected final @NotNull ClientMachineId getMachineId() {
             return machineId;
         }
         
@@ -187,7 +187,7 @@ public class DistributedMessageServer implements Shutdowneable {
             return this.machineId.equals(that.machineId);
         }
 
-        @Nonnull WriteManager getWriteManager() {
+        @NotNull WriteManager getWriteManager() {
             return writeManager;
         }
 
@@ -203,7 +203,7 @@ public class DistributedMessageServer implements Shutdowneable {
              * Acquire a write lock on this channel.
              * But if it is not available, add the message to send to the write queue.
              */
-            synchronized boolean acquireWriteLock(@Nonnull MessageBase message) {
+            synchronized boolean acquireWriteLock(@NotNull MessageBase message) {
                 boolean acquired = writeLock.compareAndSet(false, true);
                 if (!acquired) {
                     writeQueue.add(message);
@@ -800,7 +800,7 @@ public class DistributedMessageServer implements Shutdowneable {
         /**
          * Function must be called with lock held.
          */
-        private @Nonnull ServerIndex getMaxIndex(ClientMachineId clientMachineId) {
+        private @NotNull ServerIndex getMaxIndex(ClientMachineId clientMachineId) {
             ServerIndex index = highestIndexMap.get(clientMachineId);
             return index != null ? index : ServerIndex.MIN_VALUE;
         }
@@ -830,12 +830,12 @@ public class DistributedMessageServer implements Shutdowneable {
      * @param mostRecentMessagesToKeep the number of most recent messages of the given priority to keep (and zero if message not in this list)
      * @throws IOException if there is an error opening a socket (but no error if the host:port is already in use)
      */
-    public DistributedMessageServer(@Nonnull SocketAddress messageServer, Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
+    public DistributedMessageServer(@NotNull SocketAddress messageServer, Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
         this(new SocketTransformer(), messageServer, mostRecentMessagesToKeep);
     }
     
     DistributedMessageServer(SocketTransformer socketTransformer,
-                             @Nonnull SocketAddress messageServer,
+                             @NotNull SocketAddress messageServer,
                              Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
         this.socketTransformer = socketTransformer;
         this.messageServer = messageServer;
@@ -1205,7 +1205,7 @@ public class DistributedMessageServer implements Shutdowneable {
         LOGGER.log(Level.INFO, "Removed subscriber : topic={0} subscriberName={1} clientMachine={2}", topic, subscriberName, clientMachine.getMachineId());
     }
 
-    private void handleRelayMessage(@Nonnull ClientMachine clientMachine, RelayMessageBase relay) {
+    private void handleRelayMessage(@NotNull ClientMachine clientMachine, RelayMessageBase relay) {
         if (relay instanceof RelayTopicMessageBase) {
             if (relay instanceof CreatePublisher) {
                 handleCreatePublisher(clientMachine, (CreatePublisher) relay);
@@ -1317,7 +1317,7 @@ public class DistributedMessageServer implements Shutdowneable {
             /*forceLogging*/ true);
     }
     
-    private void download(@Nonnull String trigger,
+    private void download(@NotNull String trigger,
                           ClientMachine clientMachine,
                           Collection<String> topics,
                           long minClientTimestamp,

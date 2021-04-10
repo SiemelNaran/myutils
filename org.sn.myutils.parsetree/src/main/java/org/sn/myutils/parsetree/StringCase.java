@@ -1,6 +1,6 @@
 package org.sn.myutils.parsetree;
 
-import javax.annotation.Nonnull;
+import org.sn.myutils.annotations.NotNull;
 
 
 public enum StringCase {
@@ -9,7 +9,7 @@ public enum StringCase {
      */
     ACTUAL_CASE {
         @Override
-        @Nonnull String convert(@Nonnull String str) {
+        @NotNull String convert(@NotNull String str) {
             return str;
         }
     },
@@ -19,14 +19,14 @@ public enum StringCase {
      */
     IGNORE_CASE {
         @Override
-        @Nonnull String convert(@Nonnull String str) {
+        @NotNull String convert(@NotNull String str) {
             return str.toLowerCase();
         }
     },
     
     ALL_LETTERS_SAME_CASE {                
         @Override
-        @Nonnull String convert(@Nonnull String str) {
+        @NotNull String convert(@NotNull String str) {
             if (!str.isEmpty()) {
                 int first = str.codePointAt(0);
                 // verifyFunctionNameValid verifies first char is a letter
@@ -49,7 +49,7 @@ public enum StringCase {
      * @return the converted function
      * @throws IllegalArgumentException if the function case is invalid
      */
-    abstract String convert(@Nonnull String str);
+    abstract String convert(@NotNull String str);
     
     private static void assertLowerCase(int c) {
         if (Character.isLetter(c) && !Character.isLowerCase(c)) {

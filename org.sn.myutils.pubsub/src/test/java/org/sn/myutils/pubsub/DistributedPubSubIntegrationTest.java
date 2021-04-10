@@ -50,8 +50,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,6 +57,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.sn.myutils.annotations.NotNull;
+import org.sn.myutils.annotations.Nullable;
 import org.sn.myutils.pubsub.DistributedMessageServer.ClientMachine;
 import org.sn.myutils.pubsub.DistributedSocketPubSub.DistributedPublisher;
 import org.sn.myutils.pubsub.DistributedSocketPubSub.DistributedSubscriber;
@@ -1799,7 +1799,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
             }
 
             @Override
-            protected @Nonnull SocketAddress doMapKeyToRemoteAddress(String key) {
+            protected @NotNull SocketAddress doMapKeyToRemoteAddress(String key) {
                 if (Character.toUpperCase(key.charAt(0)) <= 'M') {
                     return centralServer1.getMessageServerAddress();
                 } else {
@@ -1808,7 +1808,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
             }
 
             @Override
-            protected @Nonnull SocketAddress generateLocalAddress() {
+            protected @NotNull SocketAddress generateLocalAddress() {
                 if (currentPort == firstPort + 2) {
                     throw new IllegalStateException("too many ports");
                 }

@@ -5,15 +5,15 @@ import java.lang.constant.ConstantDesc;
 import java.lang.invoke.MethodHandles.Lookup;
 import java.util.Objects;
 import java.util.Optional;
-import javax.annotation.Nonnull;
+import org.sn.myutils.annotations.NotNull;
 
 
 public final class ClientMachineId implements java.io.Serializable, Comparable<ClientMachineId>, CharSequence, Constable, ConstantDesc {
     private static final long serialVersionUID = 1L;
     
-    private final @Nonnull String value;
+    private final @NotNull String value;
     
-    public ClientMachineId(@Nonnull String value) {
+    public ClientMachineId(@NotNull String value) {
         this.value = Objects.requireNonNull(value);
     }
     
@@ -33,7 +33,7 @@ public final class ClientMachineId implements java.io.Serializable, Comparable<C
     }
     
     @Override
-    public @Nonnull String toString() {
+    public @NotNull String toString() {
         return value;
     }
 
