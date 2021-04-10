@@ -10,8 +10,8 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
-import javax.annotation.Nonnull;
-import javax.annotation.concurrent.NotThreadSafe;
+import org.sn.myutils.annotations.NotNull;
+import org.sn.myutils.annotations.NotThreadSafe;
 
 
 /**
@@ -36,7 +36,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
     private final int maxSize;
     private Node<K, V> newestNode;
     private Node<K, V> oldestNode;
-    private Map<K, Node<K, V>> map = new HashMap<>();
+    private final Map<K, Node<K, V>> map = new HashMap<>();
 
     /**
      * Create an LRU cache holding a certain number of elements.
@@ -64,7 +64,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
         if (map.size() == 0) {
             assert newestNode == null;
             assert oldestNode == null;
-            newestNode = new Node<K,V>(null, key, value, null);
+            newestNode = new Node<>(null, key, value, null);
             oldestNode = newestNode;
             map.put(key, newestNode);
             return null;
@@ -73,7 +73,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
             assert oldestNode != null;
             Node<K,V> find = map.get(key);
             if (find == null) {
-                newestNode = new Node<K,V>(null, key, value, newestNode);
+                newestNode = new Node<>(null, key, value, newestNode);
                 newestNode.next.prev = newestNode;
                 map.put(key, newestNode);
                 if (map.size() > maxSize) {
@@ -180,18 +180,18 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
      * Return all entries in the map, in no particular order unlike LinkedHashMap.
      */
     @Override
-    public @Nonnull Set<Map.Entry<K, V>> entrySet() {
-        return new AbstractSet<Map.Entry<K, V>>() {
+    public @NotNull Set<Map.Entry<K, V>> entrySet() {
+        return new AbstractSet<>() {
             @Override
             public int size() {
                 return map.size();
             }
-            
+
             @Override
             public Iterator<Entry<K, V>> iterator() {
                 return new LruCacheIterator();
             }
-            
+
             @Override
             public void clear() {
                 LruCache.this.clear();

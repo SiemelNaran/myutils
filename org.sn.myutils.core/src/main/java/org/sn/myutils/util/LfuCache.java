@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import javax.annotation.concurrent.NotThreadSafe;
+import org.sn.myutils.annotations.NotThreadSafe;
 
 
 /**
@@ -59,7 +59,7 @@ public class LfuCache<K,V> {
         if (map.size() == 0) {
             assert mostFrequentPage == null;
             assert leastFrequentPage == null;
-            mostFrequentPage = new Page<K,V>(null, 1, null);
+            mostFrequentPage = new Page<>(null, 1, null);
             leastFrequentPage = mostFrequentPage;
             map.put(key, mostFrequentPage);
             mostFrequentPage.lru.put(key, value);
@@ -78,7 +78,7 @@ public class LfuCache<K,V> {
                 }
                 if (leastFrequentPage.frequency > 1) {
                     // create a new leastFrequentPage
-                    Page<K,V> newPage = new Page<K,V>(leastFrequentPage, 1, null);
+                    Page<K,V> newPage = new Page<>(leastFrequentPage, 1, null);
                     leastFrequentPage.next = newPage;
                     leastFrequentPage = newPage;
                 }
@@ -143,7 +143,7 @@ public class LfuCache<K,V> {
                 prevPage.lru.put(key, value);
                 map.put(key, prevPage);
             } else {
-                Page<K,V> newPage = new Page<K,V>(find.prev, find.frequency + 1, find);
+                Page<K,V> newPage = new Page<>(find.prev, find.frequency + 1, find);
                 newPage.lru.put(key, value);
                 map.put(key, newPage);
                 if (find == mostFrequentPage) {
@@ -196,7 +196,7 @@ public class LfuCache<K,V> {
     private static class Page<K,V> {
         private Page<K,V> prev;
         private int frequency;
-        private final LruCache<K,V> lru = new LruCache<K,V>(Integer.MAX_VALUE);
+        private final LruCache<K,V> lru = new LruCache<>(Integer.MAX_VALUE);
         private Page<K,V> next;
         
         private Page(Page<K,V> prev, int frequency, Page<K,V> next) {
