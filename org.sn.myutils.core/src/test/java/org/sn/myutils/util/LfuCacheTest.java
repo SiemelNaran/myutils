@@ -59,7 +59,7 @@ public class LfuCacheTest {
     }
     
     @Test
-    public void testPutAndGet() {
+    void testPutAndGet() {
         LfuCache<String, String> cache = new LfuCache<>(3);
         assertEquals(Collections.emptyList(), getListForTesting(cache));
         
@@ -107,7 +107,7 @@ public class LfuCacheTest {
     }
     
     @Test
-    public void testRemoveLeastFrequentThenRemoveAllOneByOne() {
+    void testRemoveLeastFrequentThenRemoveAllOneByOne() {
         LfuCache<String, String> cache = new LfuCache<>(3);
         cache.put("one", "1");
         cache.put("two", "2");
@@ -129,7 +129,7 @@ public class LfuCacheTest {
     }
     
     @Test
-    public void testRemoveMostFrequent() {
+    void testRemoveMostFrequent() {
         LfuCache<String, String> cache = new LfuCache<>(3);
         cache.put("one", "1");
         cache.put("two", "2");
@@ -142,7 +142,7 @@ public class LfuCacheTest {
     }
     
     @Test
-    public void testIncreaseFrequencyOfMiddlePage() {
+    void testIncreaseFrequencyOfMiddlePage() {
         LfuCache<String, String> cache = new LfuCache<>(4);
         cache.put("one", "1");
         for (int i = 0; i < 3; i++) {
@@ -168,7 +168,7 @@ public class LfuCacheTest {
     }
     
     @Test
-    public void testRemoveMiddlePage() {
+    void testRemoveMiddlePage() {
         LfuCache<String, String> cache = new LfuCache<>(3);
         cache.put("one", "1");
         cache.put("two", "2");
@@ -182,7 +182,7 @@ public class LfuCacheTest {
     }
     
     @Test
-    public void testGetAndPutBothIncreaseFrequencyTheSameWay() {
+    void testGetAndPutBothIncreaseFrequencyTheSameWay() {
         LfuCache<String, String> cache = new LfuCache<>(3);
         cache.put("one", "1");
         cache.put("two", "2");

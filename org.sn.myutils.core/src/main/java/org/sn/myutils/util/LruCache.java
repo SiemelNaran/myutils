@@ -148,22 +148,11 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
 
     /**
      * Tells if the given key is in the cache.
-     * Does not move the element to most recently used, unlike LinkedHashMap.
+     * Does not move the element to most recently used.
      */
     @Override
     public boolean containsKey(Object key) {
         return map.containsKey(key);
-    }
-
-    /**
-     * Tells if the given value is in the cache.
-     * Does not move the element to most recently used, just like LinkedHashMap.
-     */
-    @Override
-    public boolean containsValue(Object value) {
-        return map.entrySet()
-                  .stream()
-                  .anyMatch(entry -> Objects.equals(value, entry.getValue().value));
     }
 
     /**

@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
+import java.util.stream.Collectors;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -270,7 +271,43 @@ public class LruCacheTest {
         
         return list;
     }
-    
+
+    ////////////////////////////////////////////////////////////////////////////////////
+
+    /**
+     * Test to compare LinkedHashMap to LruCache.
+     *
+     * @see LinkedHashMapTest#testBasic() 
+     */
+    @Test
+    void testBasic() {
+        Map<String, String> cache = new LruCache<>(3);
+        assertNull(cache.put("one", "1"));
+        assertNull(cache.put("two", "2"));
+        assertNull(cache.put("three", "3"));
+        assertThat(getListFromIterator(cache), Matchers.contains("three=3", "two=2", "one=1"));
+
+        assertEquals("1", cache.get("one"));
+        assertThat(getListFromIterator(cache), Matchers.contains("one=1", "three=3", "two=2"));
+
+        assertNull(cache.put("four", "4"));
+        assertThat(getListFromIterator(cache), Matchers.contains("four=4", "one=1", "three=3"));
+
+        assertTrue(cache.containsKey("three"));
+        assertNull(cache.put("five", "5"));
+        assertThat(getListFromIterator(cache), Matchers.contains("five=5", "four=4", "one=1"));
+
+        assertTrue(cache.containsValue("1"));
+        assertNull(cache.put("six", "6"));
+        assertThat(getListFromIterator(cache), Matchers.contains("six=6", "five=5", "four=4"));
+    }
+
+    private static List<String> getListFromIterator(Map<String, String> map) {
+        return map.entrySet().stream().map(Map.Entry::toString).collect(Collectors.toList());
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////
+
     //@Test
     void testCompareToLinkedHashMap() {
         {
