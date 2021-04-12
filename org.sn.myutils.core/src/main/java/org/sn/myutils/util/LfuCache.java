@@ -1,9 +1,15 @@
 package org.sn.myutils.util;
 
+import java.util.AbstractMap;
+import java.util.AbstractSet;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Set;
+import org.sn.myutils.annotations.NotNull;
 import org.sn.myutils.annotations.NotThreadSafe;
 
 
@@ -32,7 +38,7 @@ import org.sn.myutils.annotations.NotThreadSafe;
  * the place after which to insert D as its frequency is less than A but greater than B, C, D.
  */
 @NotThreadSafe
-public class LfuCache<K,V> {
+public class LfuCache<K,V> extends AbstractMap<K,V> {
     
     private final int maxSize;
     private Page<K,V> mostFrequentPage;
@@ -45,7 +51,7 @@ public class LfuCache<K,V> {
     
     private static int checkMaxSize(int maxSize) {
         if (maxSize < 2) {
-            throw new IllegalArgumentException(Integer.toString(maxSize));
+            throw new IllegalArgumentException("maxSize must be greater than or equal to 2: " + maxSize);
         }
         return maxSize;
     }
@@ -55,7 +61,8 @@ public class LfuCache<K,V> {
      * If inserting, if the cache is full, remove the least frequently used element,
      * but not the element just added.
      */
-    public void put(K key, V value) {
+    @Override
+    public V put(K key, V value) {
         if (map.size() == 0) {
             assert mostFrequentPage == null;
             assert leastFrequentPage == null;
@@ -63,6 +70,7 @@ public class LfuCache<K,V> {
             leastFrequentPage = mostFrequentPage;
             map.put(key, mostFrequentPage);
             mostFrequentPage.lru.put(key, value);
+            return null;
         } else {
             assert mostFrequentPage != null;
             assert leastFrequentPage != null;
@@ -84,8 +92,11 @@ public class LfuCache<K,V> {
                 }
                 leastFrequentPage.lru.put(key, value);
                 map.put(key, leastFrequentPage);
+                return null;
             } else {
+                V oldVal = find.lru.get(key);
                 increaseFrequency(find, key, value);
+                return oldVal;
             }
         }
     }
@@ -119,32 +130,49 @@ public class LfuCache<K,V> {
      * Get an element from the cache, returning null if the element is not found.
      * If an element is found, this increases its frequency of use.
      */
-    public V get(K key) {
+    @Override
+    @SuppressWarnings("unchecked")
+    public V get(Object key) {
         Page<K,V> find = map.get(key);
         if (find == null) {
             return null;
         } else {
             V value = find.lru.get(key);
-            increaseFrequency(find, key, value);
+            increaseFrequency(find, (K) key, value);
             return value;
         }
     }
-    
-    private void increaseFrequency(Page<K,V> find, K key, V value) {
+
+    /**
+     * Increase the frequency of a key that is already in the cache.
+     * This means moving it to a new page,
+     * or increasing the frequency property of the page if it is the only key in that page and it is possible to do so.
+     *
+     * @param find the page holding the key-newValue pair
+     * @param key the key
+     * @param newValue the new newValue for the key
+     * @return the previous value and new page
+     */
+    @SuppressWarnings("checkstyle:VariableDeclarationUsageDistance")
+    private IncreaseFrequencyResult<K, V> increaseFrequency(Page<K,V> find, K key, V newValue) {
         if (find.frequency == Integer.MAX_VALUE) {
             normalize();
         }
+        final IncreaseFrequencyResult<K, V> result;
         if (find.lru.size() == 1 && (find.prev == null || find.prev.frequency >= find.frequency + 2)) {
+            var oldValue = find.lru.put(key, newValue);
             find.frequency++;
+            result = new IncreaseFrequencyResult<>(oldValue, find);
         } else {
             find.lru.remove(key);
             if (find.prev != null && find.prev.frequency == find.frequency + 1) {
                 Page<K,V> prevPage = find.prev;
-                prevPage.lru.put(key, value);
+                var oldValue = prevPage.lru.put(key, newValue);
                 map.put(key, prevPage);
+                result = new IncreaseFrequencyResult<>(oldValue, prevPage);
             } else {
                 Page<K,V> newPage = new Page<>(find.prev, find.frequency + 1, find);
-                newPage.lru.put(key, value);
+                var oldValue = newPage.lru.put(key, newValue); // checkstyle:VariableDeclarationUsageDistance
                 map.put(key, newPage);
                 if (find == mostFrequentPage) {
                     mostFrequentPage = newPage;
@@ -152,8 +180,20 @@ public class LfuCache<K,V> {
                     find.prev.next = newPage;
                 }
                 find.prev = newPage;
+                result = new IncreaseFrequencyResult<>(oldValue, newPage);
             }
             unlinkPageIfEmpty(find);
+        }
+        return result;
+    }
+
+    private static class IncreaseFrequencyResult<K, V> {
+        private final V oldValue;
+        private final Page<K, V> newPage;
+
+        private IncreaseFrequencyResult(V oldValue, Page<K, V> newPage) {
+            this.oldValue = oldValue;
+            this.newPage = newPage;
         }
     }
     
@@ -167,32 +207,174 @@ public class LfuCache<K,V> {
     /**
      * Remove an item from the cache.
      */
-    public V remove(K key) {
+    @Override
+    public V remove(Object key) {
         Page<K,V> find = map.get(key);
         if (find == null) {
             return null;
         } else {
-            V value = find.lru.remove(key);
-            map.remove(key);
-            unlinkPageIfEmpty(find);
-            return value;
+            return internalRemove(find, key);
         }
     }
-    
-    /**
-     * The size of the cache.
-     */
-    public int size() {
-        return map.size();
+
+    private V internalRemove(Page<K,V> find, Object key) {
+        V value = find.lru.remove(key);
+        map.remove(key);
+        unlinkPageIfEmpty(find);
+        return value;
     }
-    
+
     /**
-     * Tell if the cache empty.
+     * Tells if the given key is in the cache.
+     * Does not move the element to most recently used, unlike LinkedHashMap.
      */
-    public boolean isEmpty() {
-        return size() == 0;
+    @Override
+    public boolean containsKey(Object key) {
+        return map.containsKey(key);
     }
-    
+
+    /**
+     * Tells if the given value is in the cache.
+     * Does not move the element to most recently used, just like LinkedHashMap.
+     */
+    @Override
+    public boolean containsValue(Object value) {
+        return map.entrySet()
+                  .stream()
+                  .anyMatch(pageEntry -> pageEntry.getValue().lru.containsValue(value));
+    }
+
+    /**
+     * Empty out the cache.
+     */
+    @Override
+    public void clear() {
+        mostFrequentPage = null;
+        leastFrequentPage = null;
+        map.clear();
+    }
+
+    /**
+     * Return all entries in the map, in no particular order unlike LinkedHashMap.
+     */
+    @Override
+    public @NotNull Set<Entry<K, V>> entrySet() {
+        return new AbstractSet<>() {
+            @Override
+            public int size() {
+                return map.size();
+            }
+
+            @Override
+            public Iterator<Entry<K, V>> iterator() {
+                return new LfuCacheIterator();
+            }
+
+            @Override
+            public void clear() {
+                LfuCache.this.clear();
+            }
+        };
+    }
+
+    private class LfuCacheIterator implements Iterator<Entry<K, V>> {
+        private Iterator<Entry<K, V>> pageIter;
+        private Page<K, V> nextPage;
+        private Entry<K, V> lastEntry;
+
+        LfuCacheIterator() {
+            this.nextPage = LfuCache.this.mostFrequentPage;
+            if (this.nextPage != null) {
+                advancePage();
+            }
+        }
+
+        private void advancePage() {
+            pageIter = nextPage.lru.entrySet().iterator(); // each page has at least one entry
+            nextPage = nextPage.next;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return pageIter.hasNext() || nextPage != null;
+        }
+
+        @Override
+        public Entry<K, V> next() {
+            if (pageIter.hasNext()) {
+                var page = nextPage != null ? nextPage.prev : LfuCache.this.leastFrequentPage;
+                lastEntry = pageIter.next();
+                return new LfuCacheEntry(page, lastEntry);
+            }
+            if (nextPage !=  null) {
+                var page = nextPage;
+                advancePage();
+                lastEntry = pageIter.next();
+                return new LfuCacheEntry(page, lastEntry);
+            }
+            throw new NoSuchElementException();
+        }
+
+        @Override
+        public void remove() {
+            if (lastEntry == null) {
+                throw new IllegalStateException();
+            }
+            var page = nextPage != null ? nextPage.prev : LfuCache.this.leastFrequentPage;
+            LfuCache.this.internalRemove(page, lastEntry.getKey());
+            lastEntry = null;
+        }
+    }
+
+    private class LfuCacheEntry implements Entry<K, V> {
+        private Page<K,V> page;
+        private Entry<K, V> inner;
+
+        private LfuCacheEntry(Page<K, V> page, Entry<K, V> inner) {
+            this.page = page;
+            this.inner = inner;
+        }
+
+        @Override
+        public K getKey() {
+            return inner.getKey();
+        }
+
+        @Override
+        public V getValue() {
+            return inner.getValue();
+        }
+
+        @Override
+        public V setValue(V newValue) {
+            var pojo = LfuCache.this.increaseFrequency(page, inner.getKey(), newValue);
+            this.page = pojo.newPage;
+            this.inner = pojo.newPage.lru.entrySet().iterator().next(); // won't throw as each page has at least one element
+            return pojo.oldValue;
+        }
+
+        @Override
+        public String toString() {
+            return inner.toString();
+        }
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public boolean equals(Object thatObject) {
+            if (!(thatObject instanceof LfuCache.LfuCacheEntry)) {
+                return false;
+            }
+            LfuCacheEntry that = (LfuCacheEntry) thatObject;
+            return this.inner.equals(that.inner);
+        }
+
+        @Override
+        public int hashCode() {
+            return inner.hashCode();
+        }
+    }
+
+
     private static class Page<K,V> {
         private Page<K,V> prev;
         private int frequency;

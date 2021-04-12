@@ -50,7 +50,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
     
     private static int checkMaxSize(int maxSize) {
         if (maxSize < 1) {
-            throw new IllegalArgumentException("maxSize must be greater than or equal to one: " + maxSize);
+            throw new IllegalArgumentException("maxSize must be greater than or equal to 1: " + maxSize);
         }
         return maxSize;
     }
