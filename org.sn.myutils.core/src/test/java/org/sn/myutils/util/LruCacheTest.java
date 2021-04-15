@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
+import java.util.Random;
 import java.util.stream.Collectors;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
@@ -308,31 +309,45 @@ public class LruCacheTest {
 
     ////////////////////////////////////////////////////////////////////////////////////
 
-    //@Test
+    @Test
     void testCompareToLinkedHashMap() {
+        final int maxSize = 25_000;
+        final int numIterations = 25_000_000;
+        Random random = new Random();
+        int randomIntRange = 1_000;
+        final long linkedHashMapTime;
+        final long lruCacheTime;
+
         {
             Instant startTime = Instant.now();
-            LinkedHashMap<String, String> cache = new LinkedHashMap<>() {
+            LinkedHashMap<String, String> cache = new LinkedHashMap<>(400_000, 0.75f, true) {
                 private static final long serialVersionUID = 1L;
 
                 @Override
                 protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
-                    return size() > 1024;
+                    return size() > maxSize;
                 }
             };
-            for (int i = 0; i < 16777216; i++) {
-                cache.put(Integer.toString(i), "value " + i);
+            for (int i = 0; i < numIterations; i++) {
+                cache.put(Integer.toString(random.nextInt(randomIntRange)), "value " + i);
             }
-            System.out.println("LinkedHashMap: " + Duration.between(startTime, Instant.now()).toMillis());
+            linkedHashMapTime = Duration.between(startTime, Instant.now()).toMillis();
+            System.out.println("size=" + cache.size()); // to avoid warning "Contents of collection 'cache' are updated, but never queried"
+            System.out.println("LinkedHashMap: " + linkedHashMapTime);
         }
         
         {
             Instant startTime = Instant.now();
-            LruCache<String, String> cache = new LruCache<>(1024);
-            for (int i = 0; i < 16777216; i++) {
-                cache.put(Integer.toString(i), "value " + i);
+            LruCache<String, String> cache = new LruCache<>(maxSize);
+            for (int i = 0; i < numIterations; i++) {
+                cache.put(Integer.toString(random.nextInt(randomIntRange)), "value " + i);
             }
-            System.out.println("LruCache: " + Duration.between(startTime, Instant.now()).toMillis());
+            lruCacheTime = Duration.between(startTime, Instant.now()).toMillis();
+            System.out.println("size=" + cache.size()); // to avoid warning "Contents of collection 'cache' are updated, but never queried"
+            System.out.println("LruCache: " + lruCacheTime);
         }
+
+        double percentFaster = (((double)linkedHashMapTime - lruCacheTime) / linkedHashMapTime) * 100;
+        System.out.println(percentFaster + " percent faster");
     }
 }

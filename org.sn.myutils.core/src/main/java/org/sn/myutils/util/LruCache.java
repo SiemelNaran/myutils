@@ -16,16 +16,18 @@ import org.sn.myutils.annotations.NotThreadSafe;
 
 /**
  * An implementation of LRU (least recently used) cache.
+ * Items most recently inserted, updated, or accessed are moved to the top of the map, whereas older items are evicted.
  * In practice, prefer to use LinkedHashMap because it is a standard class.
+ *
+ * <p>On my Mac 2.3 GHz 8-Core Intel Core I9
+ * LruCache is between 14% faster to 6% slower than LinkedHashMap with access order.
  * 
- * <p>Two new things in this class as compared to LinkedHashMap:
+ * <p>One new thing in this class as compared to LinkedHashMap:
  * - A function removeOldest to remove the oldest entry now.
  *   For example LruCache is used in LfuCache, where items fetched with the same
  *   frequency are stored in a LruCache, and when an item is to be evicted,
  *   the least recently used item in the bucket with the lowest frequency is evicted.
- * - LinkedHashMap's internal map is a HashMap of key to value,
- *   whereas for LruCache it is a HashMap of key to node.
- * 
+ *
  * <p>This implementation maintains a linked list of all the key-value pairs,
  * with the most recently used at the head of the list.
  * There is also a map of key to the linked list node.
