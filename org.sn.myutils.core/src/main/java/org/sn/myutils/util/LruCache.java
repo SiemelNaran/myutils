@@ -20,7 +20,7 @@ import org.sn.myutils.annotations.NotThreadSafe;
  * In practice, prefer to use LinkedHashMap because it is a standard class.
  *
  * <p>On my Mac 2.3 GHz 8-Core Intel Core I9
- * LruCache is between 14% faster to 6% slower than LinkedHashMap with access order.
+ * LruCache is between 15% to 2% faster than LinkedHashMap with access order.
  * 
  * <p>One new thing in this class as compared to LinkedHashMap:
  * - A function removeOldest to remove the oldest entry now.
@@ -73,7 +73,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
         } else {
             assert newestNode != null;
             assert oldestNode != null;
-            Node<K,V> find = map.get(key);
+            Node<K, V> find = map.get(key);
             if (find == null) {
                 newestNode = new Node<>(null, key, value, newestNode);
                 newestNode.next.prev = newestNode;
@@ -97,7 +97,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
      */
     @Override
     public V get(Object key) {
-        Node<K,V> find = map.get(key);
+        Node<K, V> find = map.get(key);
         if (find == null) {
             return null;
         } else {
@@ -106,7 +106,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
         }
     }
 
-    private void moveToFront(Node<K,V> find) {
+    private void moveToFront(Node<K, V> find) {
         if (find.prev != null) {
             find.prev.next = find.next;
             if (find.next != null) {
@@ -128,11 +128,11 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
      */
     @Override
     public V remove(Object key) {
-        Node<K,V> find = map.get(key);
+        Node<K, V> find = map.get(key);
         return internalRemove(find);
     }
     
-    private V internalRemove(Node<K,V> find) {
+    private V internalRemove(Node<K, V> find) {
         if (find == null) {
             return null;
         } else {
@@ -282,7 +282,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
      * @throws NullPointerException if map is empty
      */
     public K removeOldest() {
-        Node<K,V> removedNode = oldestNode;
+        Node<K, V> removedNode = oldestNode;
         map.remove(removedNode.key);
         oldestNode = removedNode.prev;
         if (oldestNode != null) {
@@ -293,13 +293,13 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
         return removedNode.key;
     }
     
-    private static class Node<K,V> {
-        private Node<K,V> prev;
+    private static class Node<K, V> {
+        private Node<K, V> prev;
         private final K key;
         private V value;
-        private Node<K,V> next;
+        private Node<K, V> next;
         
-        private Node(Node<K,V> prev, K key, V value, Node<K,V> next) {
+        private Node(Node<K, V> prev, K key, V value, Node<K, V> next) {
             this.prev = prev;
             this.key = key;
             this.value = value;
@@ -309,7 +309,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
     
     List<String> getCacheForTesting() {
         List<String> cache = new ArrayList<>(map.size());
-        for (Node<K,V> node = newestNode; node != null; node = node.next) {
+        for (Node<K, V> node = newestNode; node != null; node = node.next) {
             cache.add(node.key.toString() + "=" + node.value.toString());
         }
         return cache;
@@ -317,7 +317,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
     
     List<String> getReverseCacheForTesting() {
         List<String> reverseCache = new ArrayList<>(map.size());
-        for (Node<K,V> node = oldestNode; node != null; node = node.prev) {
+        for (Node<K, V> node = oldestNode; node != null; node = node.prev) {
             reverseCache.add(node.key.toString() + "=" + node.value.toString());
         }
         return reverseCache;

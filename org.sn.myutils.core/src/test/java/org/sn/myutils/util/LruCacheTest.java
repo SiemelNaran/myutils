@@ -313,8 +313,8 @@ public class LruCacheTest {
     void testCompareToLinkedHashMap() {
         final int maxSize = 25_000;
         final int numIterations = 25_000_000;
-        Random random = new Random();
         int randomIntRange = 1_000;
+        long randomSeed = new Random().nextLong();
         final long linkedHashMapTime;
         final long lruCacheTime;
 
@@ -328,6 +328,7 @@ public class LruCacheTest {
                     return size() > maxSize;
                 }
             };
+            Random random = new Random(randomSeed);
             for (int i = 0; i < numIterations; i++) {
                 cache.put(Integer.toString(random.nextInt(randomIntRange)), "value " + i);
             }
@@ -339,6 +340,7 @@ public class LruCacheTest {
         {
             Instant startTime = Instant.now();
             LruCache<String, String> cache = new LruCache<>(maxSize);
+            Random random = new Random(randomSeed);
             for (int i = 0; i < numIterations; i++) {
                 cache.put(Integer.toString(random.nextInt(randomIntRange)), "value " + i);
             }

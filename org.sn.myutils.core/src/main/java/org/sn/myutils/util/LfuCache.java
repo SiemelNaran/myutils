@@ -38,12 +38,12 @@ import org.sn.myutils.annotations.NotThreadSafe;
  * the place after which to insert D as its frequency is less than A but greater than B, C, D.
  */
 @NotThreadSafe
-public class LfuCache<K,V> extends AbstractMap<K,V> {
+public class LfuCache<K, V> extends AbstractMap<K, V> {
     
     private final int maxSize;
-    private Page<K,V> mostFrequentPage;
-    private Page<K,V> leastFrequentPage;
-    private final Map<K, Page<K,V>> map = new HashMap<>();
+    private Page<K, V> mostFrequentPage;
+    private Page<K, V> leastFrequentPage;
+    private final Map<K, Page<K, V>> map = new HashMap<>();
     
     public LfuCache(int maxSize) {
         this.maxSize = checkMaxSize(maxSize);
@@ -74,7 +74,7 @@ public class LfuCache<K,V> extends AbstractMap<K,V> {
         } else {
             assert mostFrequentPage != null;
             assert leastFrequentPage != null;
-            Page<K,V> find = map.get(key);
+            Page<K, V> find = map.get(key);
             if (find == null) {
                 if (map.size() == maxSize) {
                     K evictedKey = leastFrequentPage.lru.removeOldest();
@@ -86,7 +86,7 @@ public class LfuCache<K,V> extends AbstractMap<K,V> {
                 }
                 if (leastFrequentPage.frequency > 1) {
                     // create a new leastFrequentPage
-                    Page<K,V> newPage = new Page<>(leastFrequentPage, 1, null);
+                    Page<K, V> newPage = new Page<>(leastFrequentPage, 1, null);
                     leastFrequentPage.next = newPage;
                     leastFrequentPage = newPage;
                 }
@@ -109,7 +109,7 @@ public class LfuCache<K,V> extends AbstractMap<K,V> {
      * <p>If this page is the most frequent or least frequent page,
      * those member variables will be updated.
      */
-    private void unlinkPageIfEmpty(Page<K,V> page) {
+    private void unlinkPageIfEmpty(Page<K, V> page) {
         if (page.lru.isEmpty()) {
             if (page.prev != null) {
                 page.prev.next = page.next;
@@ -133,7 +133,7 @@ public class LfuCache<K,V> extends AbstractMap<K,V> {
     @Override
     @SuppressWarnings("unchecked")
     public V get(Object key) {
-        Page<K,V> find = map.get(key);
+        Page<K, V> find = map.get(key);
         if (find == null) {
             return null;
         } else {
@@ -154,7 +154,7 @@ public class LfuCache<K,V> extends AbstractMap<K,V> {
      * @return the previous value and new page
      */
     @SuppressWarnings("checkstyle:VariableDeclarationUsageDistance")
-    private IncreaseFrequencyResult<K, V> increaseFrequency(Page<K,V> find, K key, V newValue) {
+    private IncreaseFrequencyResult<K, V> increaseFrequency(Page<K, V> find, K key, V newValue) {
         if (find.frequency == Integer.MAX_VALUE) {
             normalize();
         }
@@ -166,12 +166,12 @@ public class LfuCache<K,V> extends AbstractMap<K,V> {
         } else {
             find.lru.remove(key);
             if (find.prev != null && find.prev.frequency == find.frequency + 1) {
-                Page<K,V> prevPage = find.prev;
+                Page<K, V> prevPage = find.prev;
                 var oldValue = prevPage.lru.put(key, newValue);
                 map.put(key, prevPage);
                 result = new IncreaseFrequencyResult<>(oldValue, prevPage);
             } else {
-                Page<K,V> newPage = new Page<>(find.prev, find.frequency + 1, find);
+                Page<K, V> newPage = new Page<>(find.prev, find.frequency + 1, find);
                 var oldValue = newPage.lru.put(key, newValue); // checkstyle:VariableDeclarationUsageDistance
                 map.put(key, newPage);
                 if (find == mostFrequentPage) {
@@ -209,7 +209,7 @@ public class LfuCache<K,V> extends AbstractMap<K,V> {
      */
     @Override
     public V remove(Object key) {
-        Page<K,V> find = map.get(key);
+        Page<K, V> find = map.get(key);
         if (find == null) {
             return null;
         } else {
@@ -217,7 +217,7 @@ public class LfuCache<K,V> extends AbstractMap<K,V> {
         }
     }
 
-    private V internalRemove(Page<K,V> find, Object key) {
+    private V internalRemove(Page<K, V> find, Object key) {
         V value = find.lru.remove(key);
         map.remove(key);
         unlinkPageIfEmpty(find);
@@ -327,7 +327,7 @@ public class LfuCache<K,V> extends AbstractMap<K,V> {
     }
 
     private class LfuCacheEntry implements Entry<K, V> {
-        private Page<K,V> page;
+        private Page<K, V> page;
         private Entry<K, V> inner;
 
         private LfuCacheEntry(Page<K, V> page, Entry<K, V> inner) {
@@ -375,13 +375,13 @@ public class LfuCache<K,V> extends AbstractMap<K,V> {
     }
 
 
-    private static class Page<K,V> {
-        private Page<K,V> prev;
+    private static class Page<K, V> {
+        private Page<K, V> prev;
         private int frequency;
-        private final LruCache<K,V> lru = new LruCache<>(Integer.MAX_VALUE);
-        private Page<K,V> next;
+        private final LruCache<K, V> lru = new LruCache<>(Integer.MAX_VALUE);
+        private Page<K, V> next;
         
-        private Page(Page<K,V> prev, int frequency, Page<K,V> next) {
+        private Page(Page<K, V> prev, int frequency, Page<K, V> next) {
             this.prev = prev;
             this.frequency = frequency;
             this.next = next;
@@ -390,7 +390,7 @@ public class LfuCache<K,V> extends AbstractMap<K,V> {
     
     List<String> getCacheForTesting() {
         List<String> cache = new ArrayList<>(size());
-        for (Page<K,V> page = mostFrequentPage; page != null; page = page.next) {
+        for (Page<K, V> page = mostFrequentPage; page != null; page = page.next) {
             for (String elem: page.lru.getCacheForTesting()) {
                 cache.add(page.frequency + ":" + elem);
             }
@@ -400,7 +400,7 @@ public class LfuCache<K,V> extends AbstractMap<K,V> {
     
     List<String> getReverseCacheForTesting() {
         List<String> cache = new ArrayList<>(size());
-        for (Page<K,V> page = leastFrequentPage; page != null; page = page.prev) {
+        for (Page<K, V> page = leastFrequentPage; page != null; page = page.prev) {
             for (String elem: page.lru.getReverseCacheForTesting()) {
                 cache.add(page.frequency + ":" + elem);
             }
@@ -410,7 +410,7 @@ public class LfuCache<K,V> extends AbstractMap<K,V> {
     
     List<Integer> getSizesForTesting() {
         List<Integer> sizes = new ArrayList<>(size());
-        for (Page<K,V> page = leastFrequentPage; page != null; page = page.prev) {
+        for (Page<K, V> page = leastFrequentPage; page != null; page = page.prev) {
             sizes.add(page.lru.size());
         }
         return sizes;
