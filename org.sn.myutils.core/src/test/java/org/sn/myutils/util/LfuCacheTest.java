@@ -13,6 +13,8 @@ import static org.sn.myutils.testutils.TestUtil.assertExceptionFromCallable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.ConcurrentModificationException;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -20,6 +22,7 @@ import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.sn.myutils.testutils.TestUtil;
 
 
 public class LfuCacheTest {
@@ -277,8 +280,8 @@ public class LfuCacheTest {
             assertException(iter::remove, IllegalStateException.class);
             Map.Entry<String, String> entryTwo = iter.next();
             Map.Entry<String, String> entryFour = iter.next();
-            entryFour.setValue("44");
-            entryFour.setValue("444");
+            assertEquals("4", entryFour.setValue("44"));
+            assertEquals("44", entryFour.setValue("444"));
             Map.Entry<String, String> entryOne = iter.next();
             assertFalse(iter.hasNext());
             List<String> keys = new ArrayList<>();
@@ -313,6 +316,41 @@ public class LfuCacheTest {
             assertNotSame(entryFour, anotherEntryFour);
             assertEquals(entryFour.hashCode(), anotherEntryFour.hashCode());
             assertEquals(entryFour, anotherEntryFour);
+        }
+    }
+
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ValueSource(strings = {"getMostFrequent", "get", "putCurrentBucket1", "putCurrentBucket2", "putAnotherBucket", "remove"})
+    void testIteratorFailFast(String method) {
+        LfuCache<String, String> cache = new LfuCache<>(4);
+        assertTrue(cache.isEmpty());
+        assertNull(cache.put("one", "1"));
+        assertNull(cache.put("two", "2"));
+        assertNull(cache.put("three", "3"));
+        assertNull(cache.put("four", "4"));
+        assertEquals("3", cache.get("three"));
+        assertEquals("3", cache.get("three"));
+        assertEquals("2", cache.get("two"));
+        assertEquals(4, cache.size());
+        assertEquals(4, cache.entrySet().size());
+        assertEquals(Arrays.asList("3:three=3", "2:two=2", "1:four=4", "1:one=1"), getListForTesting(cache));
+        Iterator<Map.Entry<String, String>> iter = cache.entrySet().iterator();
+        assertTrue(iter.hasNext());
+        switch (method) {
+            case "getMostFrequent": cache.get("three"); break;
+            case "get": cache.get("two"); break;
+            case "putCurrentBucket1": cache.put("two", "22"); break; // internal iterator is pointing to the frequency=3 bucket, so change this bucket
+            case "putCurrentBucket2": cache.put("three", "33"); break; // internal iterator is pointing to the frequency=3 bucket, so change this bucket
+            case "putAnotherBucket": cache.put("five", "5"); break;
+            case "remove": cache.remove("three"); break;
+            default: throw new UnsupportedOperationException();
+        }
+        if (method.equals("putAnotherBucket")) {
+            assertTrue(iter.hasNext());
+            assertEquals("3", iter.next().getValue());
+        } else {
+            assertExceptionFromCallable(iter::hasNext, ConcurrentModificationException.class);
+            assertExceptionFromCallable(iter::next, ConcurrentModificationException.class);
         }
     }
 }

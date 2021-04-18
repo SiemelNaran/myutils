@@ -11,6 +11,7 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 import org.sn.myutils.annotations.NotNull;
 import org.sn.myutils.annotations.NotThreadSafe;
+import org.sn.myutils.annotations.Nullable;
 
 
 /**
@@ -95,7 +96,7 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
                 return null;
             } else {
                 V oldVal = find.lru.get(key);
-                increaseFrequency(find, key, value);
+                increaseFrequency(find, key, value, null);
                 return oldVal;
             }
         }
@@ -138,7 +139,7 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
             return null;
         } else {
             V value = find.lru.get(key);
-            increaseFrequency(find, (K) key, value);
+            increaseFrequency(find, (K) key, value, null);
             return value;
         }
     }
@@ -151,28 +152,48 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
      * @param find the page holding the key-newValue pair
      * @param key the key
      * @param newValue the new newValue for the key
-     * @return the previous value and new page
+     * @param lfuCacheEntry null when directly removing element from LfuCache, or the entry when called from LfuCacheEntry.setValue
+     * @return the previous value and new page, if any
      */
-    @SuppressWarnings("checkstyle:VariableDeclarationUsageDistance")
-    private IncreaseFrequencyResult<K, V> increaseFrequency(Page<K, V> find, K key, V newValue) {
+    //@SuppressWarnings("checkstyle:VariableDeclarationUsageDistance")
+    private IncreaseFrequencyResult<K, V> increaseFrequency(Page<K, V> find,
+                                                            K key,
+                                                            V newValue,
+                                                            @Nullable LfuCacheEntry lfuCacheEntry) {
         if (find.frequency == Integer.MAX_VALUE) {
             normalize();
         }
         final IncreaseFrequencyResult<K, V> result;
         if (find.lru.size() == 1 && (find.prev == null || find.prev.frequency >= find.frequency + 2)) {
-            var oldValue = find.lru.put(key, newValue);
+            // this is only item in page and previous page, if any, has frequency that is 2 or more than this one
+            // so just increase the frequency of this page
+            V oldValue;
+            if (lfuCacheEntry == null) {
+                oldValue = find.lru.put(key, newValue);
+            } else {
+                oldValue = lfuCacheEntry.lruCacheEntry.setValue(newValue);
+            }
             find.frequency++;
-            result = new IncreaseFrequencyResult<>(oldValue, find);
+            result = new IncreaseFrequencyResult<>(oldValue, null);
         } else {
-            find.lru.remove(key);
+            V oldValue;
+            if (lfuCacheEntry == null) {
+                oldValue = find.lru.remove(key);
+            } else {
+                oldValue = lfuCacheEntry.lruCacheEntry.getValue(); // LruCacheEntry does not move element to top of LruCache
+                lfuCacheEntry.pageIter.remove();
+            }
             if (find.prev != null && find.prev.frequency == find.frequency + 1) {
+                // move element to previous page, whose frequency is 1 more than this page
                 Page<K, V> prevPage = find.prev;
-                var oldValue = prevPage.lru.put(key, newValue);
+                prevPage.lru.put(key, newValue);
                 map.put(key, prevPage);
                 result = new IncreaseFrequencyResult<>(oldValue, prevPage);
             } else {
+                // create a new page in between the previous page and this one
+                // and move the element to that page
                 Page<K, V> newPage = new Page<>(find.prev, find.frequency + 1, find);
-                var oldValue = newPage.lru.put(key, newValue); // checkstyle:VariableDeclarationUsageDistance
+                newPage.lru.put(key, newValue); // checkstyle:VariableDeclarationUsageDistance
                 map.put(key, newPage);
                 if (find == mostFrequentPage) {
                     mostFrequentPage = newPage;
@@ -188,8 +209,8 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
     }
 
     private static class IncreaseFrequencyResult<K, V> {
-        private final V oldValue;
-        private final Page<K, V> newPage;
+        private final @Nullable V oldValue;
+        private final @Nullable Page<K, V> newPage;
 
         private IncreaseFrequencyResult(V oldValue, Page<K, V> newPage) {
             this.oldValue = oldValue;
@@ -213,15 +234,15 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
         if (find == null) {
             return null;
         } else {
-            return internalRemove(find, key);
+            V oldValue = find.lru.remove(key);
+            finishRemove(find, key);
+            return oldValue;
         }
     }
 
-    private V internalRemove(Page<K, V> find, Object key) {
-        V value = find.lru.remove(key);
+    private void finishRemove(Page<K, V> find, Object key) {
         map.remove(key);
         unlinkPageIfEmpty(find);
-        return value;
     }
 
     /**
@@ -304,13 +325,13 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
             if (pageIter.hasNext()) {
                 var page = nextPage != null ? nextPage.prev : LfuCache.this.leastFrequentPage;
                 lastEntry = pageIter.next();
-                return new LfuCacheEntry(page, lastEntry);
+                return new LfuCacheEntry(page, pageIter, lastEntry);
             }
             if (nextPage !=  null) {
                 var page = nextPage;
                 advancePage();
                 lastEntry = pageIter.next();
-                return new LfuCacheEntry(page, lastEntry);
+                return new LfuCacheEntry(page, pageIter, lastEntry);
             }
             throw new NoSuchElementException();
         }
@@ -321,41 +342,47 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
                 throw new IllegalStateException();
             }
             var page = nextPage != null ? nextPage.prev : LfuCache.this.leastFrequentPage;
-            LfuCache.this.internalRemove(page, lastEntry.getKey());
+            pageIter.remove();
+            LfuCache.this.finishRemove(page, lastEntry.getKey());
             lastEntry = null;
         }
     }
 
     private class LfuCacheEntry implements Entry<K, V> {
         private Page<K, V> page;
-        private Entry<K, V> inner;
+        private Iterator<Entry<K, V>> pageIter; // this is an LruCacheIterator
+        private Entry<K, V> lruCacheEntry;
 
-        private LfuCacheEntry(Page<K, V> page, Entry<K, V> inner) {
+        private LfuCacheEntry(Page<K, V> page, Iterator<Entry<K, V>> pageIter, Entry<K, V> lruCacheEntry) {
             this.page = page;
-            this.inner = inner;
+            this.pageIter = pageIter;
+            this.lruCacheEntry = lruCacheEntry;
         }
 
         @Override
         public K getKey() {
-            return inner.getKey();
+            return lruCacheEntry.getKey();
         }
 
         @Override
         public V getValue() {
-            return inner.getValue();
+            return lruCacheEntry.getValue();
         }
 
         @Override
         public V setValue(V newValue) {
-            var pojo = LfuCache.this.increaseFrequency(page, inner.getKey(), newValue);
-            this.page = pojo.newPage;
-            this.inner = pojo.newPage.lru.entrySet().iterator().next(); // won't throw as each page has at least one element
+            var pojo = LfuCache.this.increaseFrequency(page, lruCacheEntry.getKey(), newValue, this);
+            if (pojo.newPage != null) {
+                this.page = pojo.newPage;
+                this.pageIter = this.page.lru.entrySet().iterator();
+                this.lruCacheEntry = this.pageIter.next(); // won't throw as each page has at least one element
+            }
             return pojo.oldValue;
         }
 
         @Override
         public String toString() {
-            return inner.toString();
+            return lruCacheEntry.toString();
         }
 
         @SuppressWarnings("unchecked")
@@ -365,12 +392,12 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
                 return false;
             }
             LfuCacheEntry that = (LfuCacheEntry) thatObject;
-            return this.inner.equals(that.inner);
+            return this.lruCacheEntry.equals(that.lruCacheEntry);
         }
 
         @Override
         public int hashCode() {
-            return inner.hashCode();
+            return lruCacheEntry.hashCode();
         }
     }
 

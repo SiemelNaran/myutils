@@ -15,6 +15,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.ConcurrentModificationException;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +28,7 @@ import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.sn.myutils.testutils.TestUtil;
 
 
 public class LruCacheTest {
@@ -222,8 +225,8 @@ public class LruCacheTest {
             assertException(iter::remove, IllegalStateException.class);
             Entry<String, String> entryThree = iter.next();
             Entry<String, String> entryFour = iter.next();
-            entryFour.setValue("44");
-            entryFour.setValue("444");
+            assertEquals("4", entryFour.setValue("44"));
+            assertEquals("44", entryFour.setValue("444"));
             Entry<String, String> entryOne = iter.next();
             assertFalse(iter.hasNext());
             List<String> keys = new ArrayList<>();
@@ -259,7 +262,30 @@ public class LruCacheTest {
             assertEquals(entryFour, anotherEntryFour);
         }
     }
-    
+
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ValueSource(strings = {"getLatest", "get", "put", "remove"})
+    void testIteratorFailFast(String method) {
+        LruCache<String, String> cache = new LruCache<>(4);
+        assertTrue(cache.isEmpty());
+        assertNull(cache.put("one", "1"));
+        assertNull(cache.put("two", "2"));
+        assertNull(cache.put("three", "3"));
+        assertNull(cache.put("four", "4"));
+        assertEquals(Arrays.asList("four=4", "three=3", "two=2", "one=1"), getListForTesting(cache));
+        Iterator<Entry<String, String>> iter = cache.entrySet().iterator();
+        assertTrue(iter.hasNext());
+        switch (method) {
+            case "getLatest": cache.get("four"); break;
+            case "get": cache.get("three"); break;
+            case "put": cache.put("five", "5"); break;
+            case "remove": cache.remove("four"); break;
+            default: throw new UnsupportedOperationException();
+        }
+        assertExceptionFromCallable(iter::hasNext, ConcurrentModificationException.class);
+        assertExceptionFromCallable(iter::next, ConcurrentModificationException.class);
+    }
+
     private static List<String> getListForTesting(LruCache<String,String> cache) {
         List<String> list = cache.getCacheForTesting();
         
@@ -277,6 +303,7 @@ public class LruCacheTest {
 
     /**
      * Test to compare LinkedHashMap to LruCache.
+     * In LruCache, iteration order is most recently accessed or written to least recent.
      *
      * @see LinkedHashMapTest#testBasic() 
      */
@@ -309,6 +336,10 @@ public class LruCacheTest {
 
     ////////////////////////////////////////////////////////////////////////////////////
 
+    /**
+     * This test has no assertions.
+     * It just compare the speed of LinkedHashMap with constructor argument accessOrder=true to LruCache.
+     */
     @Test
     void testCompareToLinkedHashMap() {
         final int maxSize = 25_000;

@@ -3,6 +3,7 @@ package org.sn.myutils.util;
 import java.util.AbstractMap;
 import java.util.AbstractSet;
 import java.util.ArrayList;
+import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -39,6 +40,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
     private Node<K, V> newestNode;
     private Node<K, V> oldestNode;
     private final Map<K, Node<K, V>> map = new HashMap<>();
+    private int modCount;
 
     /**
      * Create an LRU cache holding a certain number of elements.
@@ -69,6 +71,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
             newestNode = new Node<>(null, key, value, null);
             oldestNode = newestNode;
             map.put(key, newestNode);
+            modCount++;
             return null;
         } else {
             assert newestNode != null;
@@ -79,13 +82,15 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
                 newestNode.next.prev = newestNode;
                 map.put(key, newestNode);
                 if (map.size() > maxSize) {
-                    removeOldest();
+                    removeOldest(); // increases modCount
+                } else {
+                    modCount++;
                 }
                 return null;
             } else {
                 V oldValue = find.value;
                 find.value = value;
-                moveToFront(find);
+                moveToFront(find); // increases modCount
                 return oldValue;
             }
         }
@@ -101,7 +106,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
         if (find == null) {
             return null;
         } else {
-            moveToFront(find);
+            moveToFront(find); // increases modCount
             return find.value;
         }
     }
@@ -121,6 +126,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
             newestNode.prev = find;
             newestNode = find;
         }
+        modCount++;
     }
     
     /**
@@ -134,9 +140,10 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
     
     private V internalRemove(Node<K, V> find) {
         if (find == null) {
+            modCount++;
             return null;
         } else {
-            moveToFront(find);
+            moveToFront(find); // increases modCount
             newestNode = newestNode.next;
             if (newestNode != null) {
                 newestNode.prev = null;
@@ -165,6 +172,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
         newestNode = null;
         oldestNode = null;
         map.clear();
+        modCount++;
     }
 
     /**
@@ -189,10 +197,11 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
             }
         };
     }
-    
+
     private class LruCacheIterator implements Iterator<Entry<K, V>> {
         private Node<K, V> nextNode;
         private Node<K, V> currentNode;
+        private int expectedModCount = LruCache.this.modCount;
 
         LruCacheIterator() {
             this.nextNode = LruCache.this.newestNode;
@@ -200,11 +209,13 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
 
         @Override
         public boolean hasNext() {
+            throwConcurrentModificationExceptionIfNecessary();
             return nextNode != null;
         }
 
         @Override
         public Entry<K, V> next() {
+            throwConcurrentModificationExceptionIfNecessary();
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
@@ -213,63 +224,77 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
             nextNode = currentNode.next;
             return result;
         }
-        
+
         @Override
         public void remove() {
             if (currentNode == null) {
                 throw new IllegalStateException();
             }
+            throwConcurrentModificationExceptionIfNecessary();
             LruCache.this.internalRemove(currentNode);
+            expectedModCount++;
             currentNode = null;
         }
-    }
 
-    private class LruCacheEntry implements Entry<K, V> {
-        private final Node<K, V> node;
-        
-        private LruCacheEntry(Node<K, V> node) {
-            this.node = node;
-        }
-        
-        @Override
-        public K getKey() {
-            return node.key;
-        }
-
-        @Override
-        public V getValue() {
-            return node.value;
-        }
-
-        @Override
-        public V setValue(V newValue) {
-            V old = getValue();
-            node.value = newValue;
-            LruCache.this.moveToFront(node);
-            return old;
-        }
-        
-        @Override
-        public String toString() {
-            return getKey() + "=" + getValue();
-        }
-        
-        @SuppressWarnings("unchecked")
-        @Override
-        public boolean equals(Object thatObject) {
-            if (!(thatObject instanceof LruCache.LruCacheEntry)) {
-                return false;
+        private void throwConcurrentModificationExceptionIfNecessary() {
+            if (LruCache.this.modCount != expectedModCount) {
+                throw new ConcurrentModificationException();
             }
-            LruCacheEntry that = (LruCacheEntry) thatObject;
-            return Objects.equals(this.getKey(), that.getKey()) && Objects.equals(this.getValue(), that.getValue());
         }
-        
-        @Override
-        public int hashCode() {
-            return Objects.hash(getKey(), getValue());
+
+        private class LruCacheEntry implements Entry<K, V> {
+            private final Node<K, V> node;
+
+            private LruCacheEntry(Node<K, V> node) {
+                this.node = node;
+            }
+
+            /**
+             * Does not move element to top of LruCache.
+             */
+            @Override
+            public K getKey() {
+                return node.key;
+            }
+
+            /**
+             * Does not move element to top of LruCache.
+             */
+            @Override
+            public V getValue() {
+                return node.value;
+            }
+
+            @Override
+            public V setValue(V newValue) {
+                final V old = node.value;
+                node.value = newValue;
+                LruCache.this.moveToFront(node);
+                LruCacheIterator.this.expectedModCount++;
+                return old;
+            }
+
+            @Override
+            public String toString() {
+                return getKey() + "=" + getValue();
+            }
+
+            @SuppressWarnings("unchecked")
+            @Override
+            public boolean equals(Object thatObject) {
+                if (!(thatObject instanceof LruCache.LruCacheIterator.LruCacheEntry)) {
+                    return false;
+                }
+                LruCacheEntry that = (LruCacheEntry) thatObject;
+                return Objects.equals(this.getKey(), that.getKey()) && Objects.equals(this.getValue(), that.getValue());
+            }
+
+            @Override
+            public int hashCode() {
+                return Objects.hash(getKey(), getValue());
+            }
         }
     }
-    
 
     /**
      * Remove oldest node.
@@ -290,6 +315,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
         } else {
             newestNode = null;
         }
+        modCount++;
         return removedNode.key;
     }
     
