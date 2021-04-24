@@ -319,6 +319,35 @@ public class LfuCacheTest {
         }
     }
 
+    @Test
+    void testEntrySet2() {
+        LfuCache<String, String> cache = new LfuCache<>(4);
+        assertTrue(cache.isEmpty());
+        assertNull(cache.put("one", "1"));
+        assertNull(cache.put("two", "2"));
+        assertNull(cache.put("three", "3"));
+        assertNull(cache.put("four", "4"));
+        assertEquals("3", cache.get("three"));
+        assertEquals("3", cache.get("three"));
+        assertEquals("2", cache.get("two"));
+        assertEquals(4, cache.size());
+        assertEquals(4, cache.entrySet().size());
+        assertEquals(Arrays.asList("3:three=3", "2:two=2", "1:four=4", "1:one=1"), getListForTesting(cache));
+
+        var iter = cache.entrySet().iterator();
+        assertTrue(iter.hasNext());
+        iter.next();
+        iter.next();
+        Map.Entry<String, String> entryFour = iter.next();
+        Map.Entry<String, String> entryOne = iter.next();
+        entryFour.setValue("44");
+        assertEquals(Arrays.asList("3:three=3", "2:four=44", "2:two=2", "1:one=1"), getListForTesting(cache));
+        entryOne.setValue("11");
+        assertEquals(Arrays.asList("3:three=3", "2:one=11", "2:four=44", "2:two=2"), getListForTesting(cache));
+        entryFour.setValue("444");
+        assertEquals(Arrays.asList("3:four=444", "3:three=3", "2:one=11", "2:two=2"), getListForTesting(cache));
+    }
+
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(strings = {"getMostFrequent", "get", "putCurrentBucket1", "putCurrentBucket2", "putAnotherBucket", "remove"})
     void testIteratorFailFast(String method) {

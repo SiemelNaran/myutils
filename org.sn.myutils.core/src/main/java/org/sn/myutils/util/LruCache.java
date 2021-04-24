@@ -180,65 +180,117 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
      */
     @Override
     public @NotNull Set<Map.Entry<K, V>> entrySet() {
-        return new AbstractSet<>() {
-            @Override
-            public int size() {
-                return map.size();
-            }
-
-            @Override
-            public Iterator<Entry<K, V>> iterator() {
-                return new LruCacheIterator();
-            }
-
-            @Override
-            public void clear() {
-                LruCache.this.clear();
-            }
-        };
+        return new LruCacheEntrySet();
     }
 
-    private class LruCacheIterator implements Iterator<Entry<K, V>> {
-        private Node<K, V> nextNode;
-        private Node<K, V> currentNode;
+    class LruCacheEntrySet extends AbstractSet<Map.Entry<K, V>> {
+        @Override
+        public int size() {
+            return map.size();
+        }
+
+        @Override
+        public Iterator<Entry<K, V>> iterator() {
+            return newConcurrentModificationHelper().createNew();
+        }
+
+        ConcurrentModificationManager newConcurrentModificationHelper() {
+            return new ConcurrentModificationManager();
+        }
+
+        @Override
+        public void clear() {
+            LruCache.this.clear();
+        }
+    }
+
+    /**
+     * This is a package private helper class that serves as the base of the iterator.
+     * It is for use for LfuCache, which is basically a list of LruCache's, in order to allow different instances to share the same modification count.
+     *
+     * <p>The EntrySet returned by LfuCache's iterator holds a LruCacheIterator, which is a pointer to the element in the LruCache.
+     * This is needed for setValue to work properly.
+     * As LruCacheIterator is a nested class of this class, all these LruCacheIterator (inside the LfuCacheEntrySet) share the same expected modification count.
+     */
+    final class ConcurrentModificationManager {
         private int expectedModCount = LruCache.this.modCount;
-
-        LruCacheIterator() {
-            this.nextNode = LruCache.this.newestNode;
-        }
-
-        @Override
-        public boolean hasNext() {
-            throwConcurrentModificationExceptionIfNecessary();
-            return nextNode != null;
-        }
-
-        @Override
-        public Entry<K, V> next() {
-            throwConcurrentModificationExceptionIfNecessary();
-            if (!hasNext()) {
-                throw new NoSuchElementException();
-            }
-            currentNode = nextNode;
-            var result = new LruCacheEntry(currentNode);
-            nextNode = currentNode.next;
-            return result;
-        }
-
-        @Override
-        public void remove() {
-            if (currentNode == null) {
-                throw new IllegalStateException();
-            }
-            throwConcurrentModificationExceptionIfNecessary();
-            LruCache.this.internalRemove(currentNode);
-            expectedModCount++;
-            currentNode = null;
-        }
 
         private void throwConcurrentModificationExceptionIfNecessary() {
             if (LruCache.this.modCount != expectedModCount) {
                 throw new ConcurrentModificationException();
+            }
+        }
+
+        private void incrementExpectedModCount() {
+            expectedModCount++;
+        }
+
+        /**
+         * Create a new iterator pointing to the newest node.
+         */
+        LruCacheIterator createNew() {
+            return new LruCacheIterator(LruCache.this.newestNode, null);
+        }
+
+        /**
+         * Create a new iterator pointing to the current element for LfuCacheEntry.
+         * This is so that 'this' iterator can continue iterating,
+         * while the new iterator holds a pointer to the current element.
+         */
+        private LruCacheIterator createSnapshot(LruCacheIterator source) {
+            return new LruCacheIterator(source.nextNode, source.currentNode);
+        }
+
+        final class LruCacheIterator implements Iterator<Entry<K, V>> {
+            private Node<K, V> nextNode;
+            private Node<K, V> currentNode;
+
+            LruCacheIterator(Node<K, V> nextNode, Node<K, V> currentNode) {
+                this.nextNode = nextNode;
+                this.currentNode = currentNode;
+            }
+
+            LruCacheIterator snapshot() {
+                return ConcurrentModificationManager.this.createSnapshot(this);
+            }
+
+            @Override
+            public boolean hasNext() {
+                throwConcurrentModificationExceptionIfNecessary();
+                return nextNode != null;
+            }
+
+            @Override
+            public LruCacheEntry next() {
+                throwConcurrentModificationExceptionIfNecessary();
+                if (!hasNext()) {
+                    throw new NoSuchElementException();
+                }
+                currentNode = nextNode;
+                var result = new LruCacheEntry(currentNode);
+                nextNode = currentNode.next;
+                return result;
+            }
+
+            @Override
+            public void remove() {
+                if (currentNode == null) {
+                    throw new IllegalStateException();
+                }
+                throwConcurrentModificationExceptionIfNecessary();
+                LruCache.this.internalRemove(currentNode);
+                incrementExpectedModCount();
+                currentNode = null;
+            }
+
+            /**
+             * Used by LfuCache to increase the mod count.
+             * It is called from LfuCacheEntry::setValue.
+             * LfuCache may operate directly on the LruCache (i.e. calling put, remove),
+             * so call this function to keep the expected mod count of the iterator in sync.
+             */
+            void packagePrivateIncrementExpectedModCount() {
+                incrementExpectedModCount();
             }
         }
 
@@ -270,7 +322,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
                 final V old = node.value;
                 node.value = newValue;
                 LruCache.this.moveToFront(node);
-                LruCacheIterator.this.expectedModCount++;
+                incrementExpectedModCount();
                 return old;
             }
 
@@ -282,7 +334,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
             @SuppressWarnings("unchecked")
             @Override
             public boolean equals(Object thatObject) {
-                if (!(thatObject instanceof LruCache.LruCacheIterator.LruCacheEntry)) {
+                if (!(thatObject instanceof LruCache.ConcurrentModificationManager.LruCacheEntry)) {
                     return false;
                 }
                 LruCacheEntry that = (LruCacheEntry) thatObject;

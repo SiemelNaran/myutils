@@ -96,7 +96,7 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
                 return null;
             } else {
                 V oldVal = find.lru.get(key);
-                increaseFrequency(find, key, value, null);
+                increaseFrequency(find, key, value);
                 return oldVal;
             }
         }
@@ -139,7 +139,7 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
             return null;
         } else {
             V value = find.lru.get(key);
-            increaseFrequency(find, (K) key, value, null);
+            increaseFrequency(find, (K) key, value);
             return value;
         }
     }
@@ -152,14 +152,11 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
      * @param find the page holding the key-newValue pair
      * @param key the key
      * @param newValue the new newValue for the key
-     * @param lfuCacheEntry null when directly removing element from LfuCache, or the entry when called from LfuCacheEntry.setValue
      * @return the previous value and new page, if any
      */
-    //@SuppressWarnings("checkstyle:VariableDeclarationUsageDistance")
     private IncreaseFrequencyResult<K, V> increaseFrequency(Page<K, V> find,
                                                             K key,
-                                                            V newValue,
-                                                            @Nullable LfuCacheEntry lfuCacheEntry) {
+                                                            V newValue) {
         if (find.frequency == Integer.MAX_VALUE) {
             normalize();
         }
@@ -168,32 +165,23 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
             // this is only item in page and previous page, if any, has frequency that is 2 or more than this one
             // so just increase the frequency of this page
             V oldValue;
-            if (lfuCacheEntry == null) {
-                oldValue = find.lru.put(key, newValue);
-            } else {
-                oldValue = lfuCacheEntry.lruCacheEntry.setValue(newValue);
-            }
+            oldValue = find.lru.put(key, newValue);
             find.frequency++;
-            result = new IncreaseFrequencyResult<>(oldValue, null);
+            result = new IncreaseFrequencyResult<>(oldValue, null, false);
         } else {
             V oldValue;
-            if (lfuCacheEntry == null) {
-                oldValue = find.lru.remove(key);
-            } else {
-                oldValue = lfuCacheEntry.lruCacheEntry.getValue(); // LruCacheEntry does not move element to top of LruCache
-                lfuCacheEntry.pageIter.remove();
-            }
+            oldValue = find.lru.remove(key);
             if (find.prev != null && find.prev.frequency == find.frequency + 1) {
                 // move element to previous page, whose frequency is 1 more than this page
                 Page<K, V> prevPage = find.prev;
                 prevPage.lru.put(key, newValue);
                 map.put(key, prevPage);
-                result = new IncreaseFrequencyResult<>(oldValue, prevPage);
+                result = new IncreaseFrequencyResult<>(oldValue, prevPage, false);
             } else {
                 // create a new page in between the previous page and this one
                 // and move the element to that page
                 Page<K, V> newPage = new Page<>(find.prev, find.frequency + 1, find);
-                newPage.lru.put(key, newValue); // checkstyle:VariableDeclarationUsageDistance
+                newPage.lru.put(key, newValue);
                 map.put(key, newPage);
                 if (find == mostFrequentPage) {
                     mostFrequentPage = newPage;
@@ -201,7 +189,7 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
                     find.prev.next = newPage;
                 }
                 find.prev = newPage;
-                result = new IncreaseFrequencyResult<>(oldValue, newPage);
+                result = new IncreaseFrequencyResult<>(oldValue, newPage, true);
             }
             unlinkPageIfEmpty(find);
         }
@@ -211,10 +199,12 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
     private static class IncreaseFrequencyResult<K, V> {
         private final @Nullable V oldValue;
         private final @Nullable Page<K, V> newPage;
+        private final boolean isPageNewlyCreated;
 
-        private IncreaseFrequencyResult(V oldValue, Page<K, V> newPage) {
+        private IncreaseFrequencyResult(V oldValue, Page<K, V> newPage, boolean isPageNewlyCreated) {
             this.oldValue = oldValue;
             this.newPage = newPage;
+            this.isPageNewlyCreated = isPageNewlyCreated;
         }
     }
     
@@ -288,7 +278,7 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
 
             @Override
             public Iterator<Entry<K, V>> iterator() {
-                return new LfuCacheIterator();
+                return new ConcurrentModificationSuperManager().createNew();
             }
 
             @Override
@@ -298,106 +288,130 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
         };
     }
 
-    private class LfuCacheIterator implements Iterator<Entry<K, V>> {
-        private Iterator<Entry<K, V>> pageIter;
-        private Page<K, V> nextPage;
-        private Entry<K, V> lastEntry;
+    private class ConcurrentModificationSuperManager {
+        private final Map<Page<K, V>, LruCache<K, V>.ConcurrentModificationManager> managers = new HashMap<>();
 
-        LfuCacheIterator() {
-            this.nextPage = LfuCache.this.mostFrequentPage;
-            if (this.nextPage != null) {
-                advancePage();
+        private LfuCacheIterator createNew() {
+            return new LfuCacheIterator();
+        }
+
+        private @NotNull LruCache<K, V>.ConcurrentModificationManager lookupConcurrentModificationManager(Page<K, V> page) {
+            return managers.computeIfAbsent(
+                page,
+                unused -> {
+                    var entrySet = (LruCache<K, V>.LruCacheEntrySet) page.lru.entrySet();
+                    return entrySet.newConcurrentModificationHelper();
+                });
+        }
+
+        private class LfuCacheIterator implements Iterator<Entry<K, V>> {
+            private LruCache<K, V>.ConcurrentModificationManager.LruCacheIterator pageIter;
+            private Page<K, V> nextPage;
+            private Entry<K, V> lastEntry;
+
+            LfuCacheIterator() {
+                this.nextPage = LfuCache.this.mostFrequentPage;
+                if (this.nextPage != null) {
+                    advancePage();
+                }
             }
-        }
 
-        private void advancePage() {
-            pageIter = nextPage.lru.entrySet().iterator(); // each page has at least one entry
-            nextPage = nextPage.next;
-        }
+            private void advancePage() {
+                pageIter = lookupConcurrentModificationManager(nextPage).createNew();
+                nextPage = nextPage.next;
+            }
 
-        @Override
-        public boolean hasNext() {
-            return pageIter.hasNext() || nextPage != null;
-        }
+            @Override
+            public boolean hasNext() {
+                return pageIter.hasNext() || nextPage != null;
+            }
 
-        @Override
-        public Entry<K, V> next() {
-            if (pageIter.hasNext()) {
+            @Override
+            public LfuCacheEntry next() {
+                if (pageIter.hasNext()) {
+                    var page = nextPage != null ? nextPage.prev : LfuCache.this.leastFrequentPage;
+                    lastEntry = pageIter.next();
+                    return new LfuCacheEntry(page, pageIter, lastEntry);
+                }
+                if (nextPage != null) {
+                    var page = nextPage;
+                    advancePage();
+                    lastEntry = pageIter.next();
+                    return new LfuCacheEntry(page, pageIter, lastEntry);
+                }
+                throw new NoSuchElementException();
+            }
+
+            @Override
+            public void remove() {
+                if (lastEntry == null) {
+                    throw new IllegalStateException();
+                }
                 var page = nextPage != null ? nextPage.prev : LfuCache.this.leastFrequentPage;
-                lastEntry = pageIter.next();
-                return new LfuCacheEntry(page, pageIter, lastEntry);
+                pageIter.remove();
+                LfuCache.this.finishRemove(page, lastEntry.getKey());
+                lastEntry = null;
             }
-            if (nextPage !=  null) {
-                var page = nextPage;
-                advancePage();
-                lastEntry = pageIter.next();
-                return new LfuCacheEntry(page, pageIter, lastEntry);
+        }
+
+        private class LfuCacheEntry implements Entry<K, V> {
+            private Page<K, V> page;
+            private LruCache<K, V>.ConcurrentModificationManager.LruCacheIterator pageIter;
+            private Entry<K, V> lruCacheEntry;
+
+            private LfuCacheEntry(Page<K, V> page,
+                                  LruCache<K, V>.ConcurrentModificationManager.LruCacheIterator pageIter,
+                                  Entry<K, V> lruCacheEntry) {
+                this.page = page;
+                this.pageIter = pageIter.snapshot();
+                this.lruCacheEntry = lruCacheEntry;
             }
-            throw new NoSuchElementException();
-        }
 
-        @Override
-        public void remove() {
-            if (lastEntry == null) {
-                throw new IllegalStateException();
+            @Override
+            public K getKey() {
+                return lruCacheEntry.getKey();
             }
-            var page = nextPage != null ? nextPage.prev : LfuCache.this.leastFrequentPage;
-            pageIter.remove();
-            LfuCache.this.finishRemove(page, lastEntry.getKey());
-            lastEntry = null;
-        }
-    }
 
-    private class LfuCacheEntry implements Entry<K, V> {
-        private Page<K, V> page;
-        private Iterator<Entry<K, V>> pageIter; // this is an LruCacheIterator
-        private Entry<K, V> lruCacheEntry;
-
-        private LfuCacheEntry(Page<K, V> page, Iterator<Entry<K, V>> pageIter, Entry<K, V> lruCacheEntry) {
-            this.page = page;
-            this.pageIter = pageIter;
-            this.lruCacheEntry = lruCacheEntry;
-        }
-
-        @Override
-        public K getKey() {
-            return lruCacheEntry.getKey();
-        }
-
-        @Override
-        public V getValue() {
-            return lruCacheEntry.getValue();
-        }
-
-        @Override
-        public V setValue(V newValue) {
-            var pojo = LfuCache.this.increaseFrequency(page, lruCacheEntry.getKey(), newValue, this);
-            if (pojo.newPage != null) {
-                this.page = pojo.newPage;
-                this.pageIter = this.page.lru.entrySet().iterator();
-                this.lruCacheEntry = this.pageIter.next(); // won't throw as each page has at least one element
+            @Override
+            public V getValue() {
+                return lruCacheEntry.getValue();
             }
-            return pojo.oldValue;
-        }
 
-        @Override
-        public String toString() {
-            return lruCacheEntry.toString();
-        }
-
-        @SuppressWarnings("unchecked")
-        @Override
-        public boolean equals(Object thatObject) {
-            if (!(thatObject instanceof LfuCache.LfuCacheEntry)) {
-                return false;
+            @Override
+            public V setValue(V newValue) {
+                var pojo = LfuCache.this.increaseFrequency(page, lruCacheEntry.getKey(), newValue);
+                this.pageIter.packagePrivateIncrementExpectedModCount();
+                if (pojo.newPage != null) {
+                    // the element has been moved to a new page
+                    this.page = pojo.newPage;
+                    this.pageIter = lookupConcurrentModificationManager(this.page).createNew();
+                    if (!pojo.isPageNewlyCreated) {
+                        this.pageIter.packagePrivateIncrementExpectedModCount();
+                    }
+                    this.lruCacheEntry = this.pageIter.next(); // won't throw as each page has at least one element
+                }
+                return pojo.oldValue;
             }
-            LfuCacheEntry that = (LfuCacheEntry) thatObject;
-            return this.lruCacheEntry.equals(that.lruCacheEntry);
-        }
 
-        @Override
-        public int hashCode() {
-            return lruCacheEntry.hashCode();
+            @Override
+            public String toString() {
+                return lruCacheEntry.toString();
+            }
+
+            @SuppressWarnings("unchecked")
+            @Override
+            public boolean equals(Object thatObject) {
+                if (!(thatObject instanceof LfuCache.ConcurrentModificationSuperManager.LfuCacheEntry)) {
+                    return false;
+                }
+                LfuCacheEntry that = (LfuCacheEntry) thatObject;
+                return this.lruCacheEntry.equals(that.lruCacheEntry);
+            }
+
+            @Override
+            public int hashCode() {
+                return lruCacheEntry.hashCode();
+            }
         }
     }
 

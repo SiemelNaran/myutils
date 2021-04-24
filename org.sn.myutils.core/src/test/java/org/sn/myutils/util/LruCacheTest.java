@@ -263,6 +263,34 @@ public class LruCacheTest {
         }
     }
 
+    @Test
+    void testEntrySet2() {
+        LruCache<String, String> cache = new LruCache<>(4);
+        assertTrue(cache.isEmpty());
+        assertNull(cache.put("one", "1"));
+        assertNull(cache.put("two", "2"));
+        assertNull(cache.put("three", "3"));
+        assertNull(cache.put("four", "4"));
+        assertEquals("3", cache.get("three"));
+        assertEquals("3", cache.get("three"));
+        assertEquals("2", cache.get("two"));
+        assertEquals(4, cache.size());
+        assertEquals(4, cache.entrySet().size());
+        assertEquals(Arrays.asList("two=2", "three=3", "four=4", "one=1"), getListForTesting(cache));
+
+        var iter = cache.entrySet().iterator();
+        assertTrue(iter.hasNext());
+        iter.next();
+        Entry<String, String> entryThree = iter.next();
+        Entry<String, String> entryFour = iter.next();
+        entryThree.setValue("33");
+        assertEquals(Arrays.asList("three=33", "two=2", "four=4", "one=1"), getListForTesting(cache));
+        entryFour.setValue("44");
+        assertEquals(Arrays.asList("four=44", "three=33", "two=2", "one=1"), getListForTesting(cache));
+        entryThree.setValue("333");
+        assertEquals(Arrays.asList("three=333", "four=44", "two=2", "one=1"), getListForTesting(cache));
+    }
+
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(strings = {"getLatest", "get", "put", "remove"})
     void testIteratorFailFast(String method) {
