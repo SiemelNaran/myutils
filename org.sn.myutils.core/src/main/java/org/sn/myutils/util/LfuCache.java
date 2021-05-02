@@ -157,11 +157,14 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
     private IncreaseFrequencyResult<K, V> increaseFrequency(Page<K, V> find,
                                                             K key,
                                                             V newValue) {
-        if (find.frequency == Integer.MAX_VALUE) {
-            normalize();
-        }
         final IncreaseFrequencyResult<K, V> result;
-        if (find.lru.size() == 1 && (find.prev == null || find.prev.frequency >= find.frequency + 2)) {
+        if (find.frequency == Integer.MAX_VALUE) {
+            // this page has the maximum frequency, so just set the new value
+            // without increasing the frequency of this page
+            V oldValue;
+            oldValue = find.lru.put(key, newValue);
+            result = new IncreaseFrequencyResult<>(oldValue, null, false);
+        } else if (find.lru.size() == 1 && (find.prev == null || find.prev.frequency >= find.frequency + 2)) {
             // this is only item in page and previous page, if any, has frequency that is 2 or more than this one
             // so just increase the frequency of this page
             V oldValue;
@@ -206,13 +209,6 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
             this.newPage = newPage;
             this.isPageNewlyCreated = isPageNewlyCreated;
         }
-    }
-    
-    /**
-     * What to do when one of the pages has frequency equal to the maximum value.
-     */
-    private void normalize() {
-        throw new IllegalStateException();
     }
     
     /**

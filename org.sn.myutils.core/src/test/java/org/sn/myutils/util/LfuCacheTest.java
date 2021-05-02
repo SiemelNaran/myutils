@@ -60,7 +60,39 @@ public class LfuCacheTest {
         assertTrue(cache.containsValue("4"));
         assertEquals(Arrays.asList("1:four=4", "1:three=3", "1:two=2"), getListForTesting(cache));
     }
-    
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testMaxFrequency() throws ClassNotFoundException, NoSuchFieldException, IllegalAccessException {
+        var mapField = LfuCache.class.getDeclaredField("map");
+        Class<?> pageClass = Class.forName("org.sn.myutils.util.LfuCache$Page");
+        var frequencyField = pageClass.getDeclaredField("frequency");
+        mapField.setAccessible(true);
+        frequencyField.setAccessible(true);
+
+        LfuCache<String, String> cache = new LfuCache<>(3);
+        cache.put("one", "1");
+        cache.put("two", "2");
+        cache.put("three", "3");
+        cache.get("three");
+        cache.get("two");
+        cache.get("one");
+        cache.get("one");
+        assertEquals(Arrays.asList("3:one=1", "2:two=2", "2:three=3"), getListForTesting(cache));
+
+        // change frequency of one=1 from 3 to INTEGER_MAXVALUE
+        var map = (Map<String, Object>) mapField.get(cache);
+        var page = map.get("one");
+        frequencyField.set(page, Integer.MAX_VALUE);
+        assertEquals(Arrays.asList("2147483647:one=1", "2:two=2", "2:three=3"), getListForTesting(cache));
+
+        cache.get("one");
+        assertEquals(Arrays.asList("2147483647:one=1", "2:two=2", "2:three=3"), getListForTesting(cache));
+
+        cache.put("four", "4");
+        assertEquals(Arrays.asList("2147483647:one=1", "2:two=2", "1:four=4"), getListForTesting(cache));
+    }
+
     @Test
     void testPutAndGet() {
         LfuCache<String, String> cache = new LfuCache<>(3);
