@@ -300,14 +300,14 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
                 page,
                 unused -> {
                     var entrySet = (LruCache<K, V>.LruCacheEntrySet) page.lru.entrySet();
-                    return entrySet.newConcurrentModificationHelper();
+                    return entrySet.newConcurrentModificationManager();
                 });
         }
 
         private class LfuCacheIterator implements Iterator<Entry<K, V>> {
             private LruCache<K, V>.ConcurrentModificationManager.LruCacheIterator pageIter;
             private Page<K, V> nextPage;
-            private Entry<K, V> lastEntry;
+            private LruCache<K, V>.ConcurrentModificationManager.LruCacheEntry lastEntry;
 
             LfuCacheIterator() {
                 this.nextPage = LfuCache.this.mostFrequentPage;
@@ -331,13 +331,13 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
                 if (pageIter.hasNext()) {
                     var page = nextPage != null ? nextPage.prev : LfuCache.this.leastFrequentPage;
                     lastEntry = pageIter.next();
-                    return new LfuCacheEntry(page, pageIter, lastEntry);
+                    return new LfuCacheEntry(page, lastEntry);
                 }
                 if (nextPage != null) {
                     var page = nextPage;
                     advancePage();
                     lastEntry = pageIter.next();
-                    return new LfuCacheEntry(page, pageIter, lastEntry);
+                    return new LfuCacheEntry(page, lastEntry);
                 }
                 throw new NoSuchElementException();
             }
@@ -356,14 +356,10 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
 
         private class LfuCacheEntry implements Entry<K, V> {
             private Page<K, V> page;
-            private LruCache<K, V>.ConcurrentModificationManager.LruCacheIterator pageIter;
-            private Entry<K, V> lruCacheEntry;
+            private LruCache<K, V>.ConcurrentModificationManager.LruCacheEntry lruCacheEntry;
 
-            private LfuCacheEntry(Page<K, V> page,
-                                  LruCache<K, V>.ConcurrentModificationManager.LruCacheIterator pageIter,
-                                  Entry<K, V> lruCacheEntry) {
+            private LfuCacheEntry(Page<K, V> page, LruCache<K, V>.ConcurrentModificationManager.LruCacheEntry lruCacheEntry) {
                 this.page = page;
-                this.pageIter = pageIter.snapshot();
                 this.lruCacheEntry = lruCacheEntry;
             }
 
@@ -380,15 +376,15 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
             @Override
             public V setValue(V newValue) {
                 var pojo = LfuCache.this.increaseFrequency(page, lruCacheEntry.getKey(), newValue);
-                this.pageIter.packagePrivateIncrementExpectedModCount();
+                lruCacheEntry.concurrentModificationManager().incrementExpectedModCount();
                 if (pojo.newPage != null) {
                     // the element has been moved to a new page
                     this.page = pojo.newPage;
-                    this.pageIter = lookupConcurrentModificationManager(this.page).createNew();
+                    LruCache<K, V>.@NotNull ConcurrentModificationManager manager = lookupConcurrentModificationManager(this.page);
                     if (!pojo.isPageNewlyCreated) {
-                        this.pageIter.packagePrivateIncrementExpectedModCount();
+                        manager.incrementExpectedModCount();
                     }
-                    this.lruCacheEntry = this.pageIter.next(); // won't throw as each page has at least one element
+                    lruCacheEntry = manager.createNew().next();
                 }
                 return pojo.oldValue;
             }

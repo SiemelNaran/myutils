@@ -217,6 +217,13 @@ public class LruCacheTest {
         }
 
         {
+            var iter = (LruCache<String, String>.ConcurrentModificationManager.LruCacheIterator) cache.entrySet().iterator();
+            var lruCacheEntry = iter.next();
+            lruCacheEntry.concurrentModificationManager().incrementExpectedModCount();
+            assertExceptionFromCallable(() -> lruCacheEntry.setValue("22"), ConcurrentModificationException.class);
+        }
+
+        {
             var iter = cache.entrySet().iterator();
             assertTrue(iter.hasNext());
             assertException(iter::remove, IllegalStateException.class);

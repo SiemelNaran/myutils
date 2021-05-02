@@ -346,6 +346,10 @@ public class LfuCacheTest {
         assertEquals(Arrays.asList("3:three=3", "2:one=11", "2:four=44", "2:two=2"), getListForTesting(cache));
         entryFour.setValue("444");
         assertEquals(Arrays.asList("3:four=444", "3:three=3", "2:one=11", "2:two=2"), getListForTesting(cache));
+        entryFour.setValue("4444");
+        assertEquals(Arrays.asList("4:four=4444", "3:three=3", "2:one=11", "2:two=2"), getListForTesting(cache));
+        entryFour.setValue("44444");
+        assertEquals(Arrays.asList("5:four=44444", "3:three=3", "2:one=11", "2:two=2"), getListForTesting(cache));
     }
 
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)

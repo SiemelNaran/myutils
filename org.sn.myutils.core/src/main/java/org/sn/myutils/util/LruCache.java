@@ -179,7 +179,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
      * Return all entries in the map, in no particular order unlike LinkedHashMap.
      */
     @Override
-    public @NotNull Set<Map.Entry<K, V>> entrySet() {
+    public @NotNull LruCacheEntrySet entrySet() {
         return new LruCacheEntrySet();
     }
 
@@ -191,10 +191,10 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
 
         @Override
         public Iterator<Entry<K, V>> iterator() {
-            return newConcurrentModificationHelper().createNew();
+            return newConcurrentModificationManager().createNew();
         }
 
-        ConcurrentModificationManager newConcurrentModificationHelper() {
+        ConcurrentModificationManager newConcurrentModificationManager() {
             return new ConcurrentModificationManager();
         }
 
@@ -221,7 +221,16 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
             }
         }
 
-        private void incrementExpectedModCount() {
+
+        /**
+         * Increment the iterators modification count.
+         * This happens after a call to remove or setValue.
+         *
+         * <p>Also called from by LfuCache::setValue to increase the mod count.
+         * LfuCache::setEntry operates directly on the LruCache (i.e. calling put, remove),
+         * so call this function to keep the expected mod count of the iterator in sync.
+         */
+        void incrementExpectedModCount() {
             expectedModCount++;
         }
 
@@ -232,15 +241,6 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
             return new LruCacheIterator(LruCache.this.newestNode, null);
         }
 
-        /**
-         * Create a new iterator pointing to the current element for LfuCacheEntry.
-         * This is so that 'this' iterator can continue iterating,
-         * while the new iterator holds a pointer to the current element.
-         */
-        private LruCacheIterator createSnapshot(LruCacheIterator source) {
-            return new LruCacheIterator(source.nextNode, source.currentNode);
-        }
-
         final class LruCacheIterator implements Iterator<Entry<K, V>> {
             private Node<K, V> nextNode;
             private Node<K, V> currentNode;
@@ -248,10 +248,6 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
             LruCacheIterator(Node<K, V> nextNode, Node<K, V> currentNode) {
                 this.nextNode = nextNode;
                 this.currentNode = currentNode;
-            }
-
-            LruCacheIterator snapshot() {
-                return ConcurrentModificationManager.this.createSnapshot(this);
             }
 
             @Override
@@ -282,19 +278,9 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
                 incrementExpectedModCount();
                 currentNode = null;
             }
-
-            /**
-             * Used by LfuCache to increase the mod count.
-             * It is called from LfuCacheEntry::setValue.
-             * LfuCache may operate directly on the LruCache (i.e. calling put, remove),
-             * so call this function to keep the expected mod count of the iterator in sync.
-             */
-            void packagePrivateIncrementExpectedModCount() {
-                incrementExpectedModCount();
-            }
         }
 
-        private class LruCacheEntry implements Entry<K, V> {
+        final class LruCacheEntry implements Entry<K, V> {
             private final Node<K, V> node;
 
             private LruCacheEntry(Node<K, V> node) {
@@ -319,6 +305,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
 
             @Override
             public V setValue(V newValue) {
+                throwConcurrentModificationExceptionIfNecessary();
                 final V old = node.value;
                 node.value = newValue;
                 LruCache.this.moveToFront(node);
@@ -344,6 +331,10 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
             @Override
             public int hashCode() {
                 return Objects.hash(getKey(), getValue());
+            }
+
+            ConcurrentModificationManager concurrentModificationManager() {
+                return ConcurrentModificationManager.this;
             }
         }
     }
