@@ -25,10 +25,35 @@ module YourModule {
 
 - *AdaptingIterator*: Class to map the value returned by an iterator into another value. Use only if stream() with map() is not possible.
 
-- *PageList*: Class representing an array as an array of pages.
-    - Inserting an element in the middle of the array is fast as we only have to insert an element in one page.
-    - There is also a specialization of binary search in MoreCollections.
-    - PageList is just an interface.  There are two types of page lists: ArrayPageList and LinkedListPageList, meaning that each page is either an ArrayList or a LinkedList.
+- *LfuCache*: An implementation of least frequently used cache.
+    - Implements the Map interface.
+    - In this implementation, an LfuCache is a series of LruCaches, with each LruCache representing items of a particular frequency.
+      When an element is evicted from the cache, the least frequently used element is evicted, but if two elements have the same frequency, then the least recently used one is evicted.
+    - Iteration via entrySet().iterator() iterates over elements in a definite order: most frequently used to least frequently used.`
+```
+    var cache = new LfuCache<String, String>(3);
+    cache.put("one", "1");
+    assertEquals("1", cache.get("one")); // now "one" has frequency 2 as it has been used twice
+    cache.put("two", "2");
+    cache.put("three", "3");
+    cache.put("four", "4")); // evicts "two"
+    assertNull(cache.get("two");
+    assertEquals("3", cache.get("three")); // now "three" is most recently used in page of frequency 2, and "one" is least recently used in that page, and "four" is only element in page of frequency 1
+```
+
+- *LruCache*: An implementation of least recently used cache, similar to LinkedHashMap with accessOrder=true.
+    - Implements the Map interface.
+    - When an element is evicted from the cache, the least recently used element is evicted.
+    - Iteration via entrySet().iterator() iterates over elements in a definite order: most recently used to least recently used.`
+```
+    var cache = new LruCache<String, String>(3);
+    cache.put("one", "1");
+    cache.put("two", "2");
+    cache.put("three", "3");
+    cache.put("four", "4")); // evicts "one"
+    assertNull(cache.get("one"));
+    assertEquals("2", cache.get("two")); // now "two" is most recently used, "four" is next, and "three" is least recently used
+```
 
 - *MoreCollections*: Various enhancements to java.util.Collections.
     - There is a binary search function to search a list, but applying a function to each element.
@@ -48,6 +73,11 @@ module YourModule {
     multimap.put(new Key("key"), new Value(5));
     multimap.put(new Key("key"), new Value(7));
 ```
+
+- *PageList*: Class representing an array as an array of pages.
+    - Inserting an element in the middle of the array is fast as we only have to insert an element in one page.
+    - There is also a specialization of binary search in MoreCollections.
+    - PageList is just an interface.  There are two types of page lists: ArrayPageList and LinkedListPageList, meaning that each page is either an ArrayList or a LinkedList.
 
 - *RewindableIterator*: An iterator that has a rewind function to let you go back one element.
 It does not let you rewind any number of times, as that would basically be a list iterator.
