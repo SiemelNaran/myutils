@@ -267,6 +267,16 @@ public class LruCacheTest {
             assertNotSame(entryFour, anotherEntryFour);
             assertEquals(entryFour.hashCode(), anotherEntryFour.hashCode());
             assertEquals(entryFour, anotherEntryFour);
+            
+            LruCache<String, String> cache2 = new LruCache<>(1);
+            cache2.put("four", "444");
+            Entry<String, String> entryFourFromCache2 = cache2.entrySet().iterator().next();
+            assertEquals(entryFour, entryFourFromCache2);
+            
+            LruCache<String, String> cache3 = new LruCache<>(1);
+            cache3.put("four", "newvalue");
+            Entry<String, String> entryFourFromCache3 = cache3.entrySet().iterator().next();
+            assertNotEquals(entryFour, entryFourFromCache3);
         }
     }
 
@@ -317,7 +327,7 @@ public class LruCacheTest {
             case "remove": cache.remove("four"); break;
             default: throw new UnsupportedOperationException();
         }
-        assertExceptionFromCallable(iter::hasNext, ConcurrentModificationException.class);
+        assertTrue(iter.hasNext());
         assertExceptionFromCallable(iter::next, ConcurrentModificationException.class);
     }
 
@@ -374,6 +384,8 @@ public class LruCacheTest {
     /**
      * This test has no assertions.
      * It just compare the speed of LinkedHashMap with constructor argument accessOrder=true to LruCache.
+     * 
+     * @see LruCache for comment on performance.
      */
     @Test
     void testCompareToLinkedHashMap() {

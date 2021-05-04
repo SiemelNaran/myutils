@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Set;
 import org.sn.myutils.annotations.NotNull;
 import org.sn.myutils.annotations.NotThreadSafe;
 
@@ -110,7 +111,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
         }
     }
 
-    private void moveToFront(Node<K, V> find) {
+    private void moveToFront(@NotNull Node<K, V> find) {
         if (find.prev != null) {
             find.prev.next = find.next;
             if (find.next != null) {
@@ -125,7 +126,9 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
             newestNode.prev = find;
             newestNode = find;
         }
-        modCount++;
+        // always increase modCount even if item is already first
+        // in order to catch intermittent errors (i.e. moveToFront sometimes results in ConcurrentModificationException)
+        modCount++; 
     }
     
     /**
@@ -139,6 +142,8 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
     
     private V internalRemove(Node<K, V> find) {
         if (find == null) {
+            // always increase modCount even if item not present
+            // in order to catch intermittent errors (i.e. internalRemove sometimes results in ConcurrentModificationException)
             modCount++;
             return null;
         } else {
@@ -178,7 +183,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
      * Return all entries in the map, in no particular order unlike LinkedHashMap.
      */
     @Override
-    public @NotNull LruCacheEntrySet entrySet() {
+    public @NotNull Set<Map.Entry<K, V>> entrySet() {
         return new LruCacheEntrySet();
     }
 
@@ -205,11 +210,8 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
 
     /**
      * This is a package private helper class that serves as the base of the iterator.
-     * It is for use for LfuCache, which is basically a list of LruCache's, in order to allow different instances to share the same modification count.
-     *
-     * <p>The EntrySet returned by LfuCache's iterator holds a LruCacheIterator, which is a pointer to the element in the LruCache.
-     * This is needed for setValue to work properly.
-     * As LruCacheIterator is a nested class of this class, all these LruCacheIterator (inside the LfuCacheEntrySet) share the same expected modification count.
+     * It is for use for LfuCache, which is basically a list of LruCache's,
+     * in order to allow different instances of LfuCacheEntry to share the same concurrent modification count.
      */
     final class ConcurrentModificationManager {
         private int expectedModCount = LruCache.this.modCount;
@@ -244,14 +246,13 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
             private Node<K, V> nextNode;
             private Node<K, V> currentNode;
 
-            LruCacheIterator(Node<K, V> nextNode, Node<K, V> currentNode) {
+            private LruCacheIterator(Node<K, V> nextNode, Node<K, V> currentNode) {
                 this.nextNode = nextNode;
                 this.currentNode = currentNode;
             }
 
             @Override
             public boolean hasNext() {
-                throwConcurrentModificationExceptionIfNecessary();
                 return nextNode != null;
             }
 

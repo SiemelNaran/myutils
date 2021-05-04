@@ -28,7 +28,7 @@ import org.sn.myutils.annotations.Nullable;
  * But it's a slow O(1) as there are 2 lookups.
  * 
  * <p>It is also possible to simply have a linked list with the most frequent nodes
- * at the head of the list, similar to the implementation of LRUCache but with the
+ * at the head of the list, similar to the implementation of LruCache but with the
  * Node class having an extra member variable 'frequency'.
  * 
  * <p>Fetching an item could then be O(N) because we have to scan the nodes leftwards
@@ -272,6 +272,12 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
                 return map.size();
             }
 
+            /**
+             * {@inheritdoc}
+             * 
+             * <p>The space complexity of the iterator is O(N) because the iterator stores the a pointer to the concurrent modification count of each LruCache iterator.
+             * This is so that when we move an item to the next page, we reuse the instance of concurrent modification count applicable to that page.
+             */
             @Override
             public Iterator<Entry<K, V>> iterator() {
                 return new ConcurrentModificationSuperManager().createNew();
@@ -319,21 +325,23 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
 
             @Override
             public boolean hasNext() {
-                return pageIter.hasNext() || nextPage != null;
+                return pageIter != null && (pageIter.hasNext() || nextPage != null);
             }
 
             @Override
             public LfuCacheEntry next() {
-                if (pageIter.hasNext()) {
-                    var page = nextPage != null ? nextPage.prev : LfuCache.this.leastFrequentPage;
-                    lastEntry = pageIter.next();
-                    return new LfuCacheEntry(page, lastEntry);
-                }
-                if (nextPage != null) {
-                    var page = nextPage;
-                    advancePage();
-                    lastEntry = pageIter.next();
-                    return new LfuCacheEntry(page, lastEntry);
+                if (pageIter != null) {
+                    if (pageIter.hasNext()) {
+                        var page = nextPage != null ? nextPage.prev : LfuCache.this.leastFrequentPage;
+                        lastEntry = pageIter.next();
+                        return new LfuCacheEntry(page, lastEntry);
+                    }
+                    if (nextPage != null) {
+                        var page = nextPage;
+                        advancePage();
+                        lastEntry = pageIter.next();
+                        return new LfuCacheEntry(page, lastEntry);
+                    }
                 }
                 throw new NoSuchElementException();
             }

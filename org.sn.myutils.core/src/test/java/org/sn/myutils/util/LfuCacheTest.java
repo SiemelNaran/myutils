@@ -310,7 +310,9 @@ public class LfuCacheTest {
             iter.next();
             iter.remove(); // remove "three"
             assertException(iter::remove, IllegalStateException.class);
+            assertTrue(iter.hasNext());
             Map.Entry<String, String> entryTwo = iter.next();
+            assertTrue(iter.hasNext());
             Map.Entry<String, String> entryFour = iter.next();
             assertEquals("4", entryFour.setValue("44"));
             assertEquals("44", entryFour.setValue("444"));
@@ -349,6 +351,17 @@ public class LfuCacheTest {
             assertEquals(entryFour.hashCode(), anotherEntryFour.hashCode());
             assertEquals(entryFour, anotherEntryFour);
         }
+        
+        {
+            // verify removing last item
+            var iter = cache.entrySet().iterator();
+            iter.next();
+            iter.next();
+            iter.next();
+            iter.remove();
+            assertException(iter::remove, IllegalStateException.class);
+            assertEquals(Arrays.asList("3:four=444", "2:two=2"), getListForTesting(cache));
+        }
     }
 
     @Test
@@ -384,6 +397,15 @@ public class LfuCacheTest {
         assertEquals(Arrays.asList("5:four=44444", "3:three=3", "2:one=11", "2:two=2"), getListForTesting(cache));
     }
 
+    @Test
+    void testEntrySet3() {
+        LfuCache<String, String> cache = new LfuCache<>(4);
+        assertTrue(cache.isEmpty());
+        var iter = cache.entrySet().iterator();
+        assertFalse(iter.hasNext());
+        assertExceptionFromCallable(iter::next, NoSuchElementException.class);
+    }
+
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(strings = {"getMostFrequent", "get", "putCurrentBucket1", "putCurrentBucket2", "putAnotherBucket", "remove"})
     void testIteratorFailFast(String method) {
@@ -414,7 +436,7 @@ public class LfuCacheTest {
             assertTrue(iter.hasNext());
             assertEquals("3", iter.next().getValue());
         } else {
-            assertExceptionFromCallable(iter::hasNext, ConcurrentModificationException.class);
+            assertTrue(iter.hasNext());
             assertExceptionFromCallable(iter::next, ConcurrentModificationException.class);
         }
     }
