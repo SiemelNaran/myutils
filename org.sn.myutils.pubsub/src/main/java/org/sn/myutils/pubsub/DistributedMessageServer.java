@@ -597,11 +597,30 @@ public class DistributedMessageServer implements Shutdowneable {
 
         /**
          * This function is used to send saved messages to a client.
+         *
+         * <p>Messages are saved sorted by server index.
+         * To find messages between the given server indices, the current implementation searches all messages from start to end
+         * till it finds the one whose index is equal to or just less than lowerBoundInclusive.
+         * So the running time to find the first record is is O(N).
+         * Future implementations may use binary search to reduce the time to O(lg(N)).
+         *
+         * <p>The implementation then scans each record from here till and returns it if it falls within the given client timestamps.
+         * It stops scanning when the record's server index is larger than lowerBoundInclusive.
+         * So the running time to return all records is O(N).
          * 
+         * <p>To find all records between two client timestamps, the client will usually pass in lowerBoundInclusive as null and upperBoundInclusive as MAX_VALUE,
+         * so the time to find the first record is still O(N) even if binary search were used.
+         * Since messages with increasing client timestamp typically have an increasing server index,
+         * a future implementation may use binary search to find the message whose client timestamp is equal to or just greater than minClientTimestamp.
+         *
+         * <p>Because some messages may be received out of order, a message with a higher server index may have a smaller client timestamp,
+         * and so this approach risks not finding all messages.
+         * But maybe that's a fact of life, though the implementation could scan a few records to the left or right to try to find more records that match.
+         *
          * @param clientMachine the client to send messages to
          * @param topics null means send messages for all topics, otherwise send messages only for these topics
          * @param minClientTimestamp find messages on or after this client timestamp
-         * @param maxClientTimestamp find messages on or before this client timestamp
+         * @param maxClientTimestamp find messages on or before this client timestamp (can be Long.MAX_VALUE)
          * @param lowerBoundInclusive send messages from this point. If null, calculate lowerBoundInclusive as the current server index the client is on plus one.
          * @param upperBoundInclusive send messages till this point
          * @param callback function that sends messages
@@ -1347,7 +1366,7 @@ public class DistributedMessageServer implements Shutdowneable {
             /*forceLogging*/ true);
     }
 
-    private void download(@Nonnull String trigger,
+    private void download(@NotNull String trigger,
                           ClientMachine clientMachine,
                           Collection<String> topics,
                           long minClientTimestamp,
@@ -1587,4 +1606,3 @@ public class DistributedMessageServer implements Shutdowneable {
         }
     }
 }
-

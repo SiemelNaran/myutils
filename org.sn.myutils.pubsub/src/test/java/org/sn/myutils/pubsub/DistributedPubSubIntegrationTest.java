@@ -16,7 +16,6 @@ import static org.sn.myutils.testutils.TestUtil.countElementsInListByType;
 import static org.sn.myutils.testutils.TestUtil.sleep;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.lang.System.Logger.Level;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -740,7 +739,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         } else if (method.equals("ByClientTimestamp")) {
             download = new DownloadByClientTimestamp();
         } else {
-            throw new UnsupportedEncodingException(method);
+            throw new UnsupportedOperationException(method);
         }
 
         download.downloadFullRange(List.of("hello", "world"));

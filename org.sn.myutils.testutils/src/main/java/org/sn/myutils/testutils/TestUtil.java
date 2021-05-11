@@ -49,7 +49,7 @@ public class TestUtil {
     /**
      * Return the larger of two elements.
      * If they are the same value, return the first one.
-     * This is just like Math.min.
+     * This is just like Math.max.
      */
     public static <T extends Comparable<T>> T max(T first, T second) {
         return first.compareTo(second) >= 0 ? first : second;
