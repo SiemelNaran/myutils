@@ -327,7 +327,7 @@ public class DistributedSocketPubSub extends PubSub {
     
     private void onMessageServerConnected(SocketAddress messageServer, ClientAccepted clientAccepted) {
         try {
-            LOGGER.log(Level.INFO, "Connected: clientMachine={0}, messageServer={1}", machineId, messageServer);
+            LOGGER.log(Level.INFO, "Connected: clientMachine={0}, messageServer={1}, clientAccepted={2}", machineId, messageServer, clientAccepted.toLoggingString());
             if (messageServerConnectionListener.isSendAllPublishersAndSubscribers()) {
                 doSendAllPublishersAndSubscribers(messageServer);
             }
@@ -392,12 +392,12 @@ public class DistributedSocketPubSub extends PubSub {
      * The server does not retain messages forever, so it may not find the oldest messages.
      * 
      * @param topics the topics to download
-     * @param startIndexInclusive the start index. Use 0 or 1 for no minimum.
+     * @param startIndexInclusive the start index. Use ServerIndex.MIN_VALUE for no minimum.
      * @param endIndexInclusive the end index. Use ServerIndex.MAX_VALUE for no maximum.
      * @see DistributedMessageServer#DistributedMessageServer(SocketAddress, java.util.Map) for the number of messages of each RetentionPriority to remember
      * @see RetentionPriority
      */
-    public void downloadByServerId(Collection<String> topics, ServerIndex startIndexInclusive, ServerIndex endIndexInclusive) {
+    public void downloadByServerId(Collection<String> topics, @NotNull ServerIndex startIndexInclusive, @NotNull ServerIndex endIndexInclusive) {
         messageWriter.queueSendDownloadByServerId(topics, startIndexInclusive, endIndexInclusive);
     }
 
@@ -406,7 +406,7 @@ public class DistributedSocketPubSub extends PubSub {
      * The server does not retain messages forever, so it may not find the oldest messages.
      *
      * @param topics the topics to download
-     * @param startInclusive the start client time.
+     * @param startInclusive the start client time. Use 0 for no minimum.
      * @param endInclusive the end client time. Use Long.MAX_VALUE for no maximum.
      * @see DistributedMessageServer#DistributedMessageServer(SocketAddress, java.util.Map) for the number of messages of each RetentionPriority to remember
      * @see RetentionPriority

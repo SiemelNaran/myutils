@@ -67,7 +67,7 @@ public interface MessageClasses {
         }
 
         long getServerTimestamp() {
-            return serverTimestamp; // COVERAGE: missed
+            return serverTimestamp;
         }
 
         @Override
@@ -593,20 +593,20 @@ public interface MessageClasses {
     class DownloadPublishedMessagesByServerId extends DownloadPublishedMessages<DownloadPublishedMessagesByServerId> {
         private static final long serialVersionUID = 1L;
         
-        private final ServerIndex startServerIndexInclusive;
-        private final ServerIndex endServerIndexInclusive;
+        private final @NotNull ServerIndex startServerIndexInclusive;
+        private final @NotNull ServerIndex endServerIndexInclusive;
 
-        public DownloadPublishedMessagesByServerId(Collection<String> topics, ServerIndex startServerIndexInclusive, ServerIndex endServerIndexInclusive) {
+        public DownloadPublishedMessagesByServerId(Collection<String> topics, @NotNull ServerIndex startServerIndexInclusive, @NotNull ServerIndex endServerIndexInclusive) {
             super(topics);
             this.startServerIndexInclusive = startServerIndexInclusive;
             this.endServerIndexInclusive = endServerIndexInclusive;
         }
         
-        ServerIndex getStartServerIndexInclusive() {
+        @NotNull ServerIndex getStartServerIndexInclusive() {
             return startServerIndexInclusive;
         }
         
-        ServerIndex getEndServerIndexInclusive() {
+        @NotNull ServerIndex getEndServerIndexInclusive() {
             return endServerIndexInclusive;
         }
 

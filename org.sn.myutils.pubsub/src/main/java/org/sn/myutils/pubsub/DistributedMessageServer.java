@@ -604,8 +604,8 @@ public class DistributedMessageServer implements Shutdowneable {
          * So the running time to find the first record is is O(N).
          * Future implementations may use binary search to reduce the time to O(lg(N)).
          *
-         * <p>The implementation then scans each record from here till and returns it if it falls within the given client timestamps.
-         * It stops scanning when the record's server index is larger than lowerBoundInclusive.
+         * <p>The implementation then scans each record from here till and returns it if it falls within the given client timestamp range.
+         * It stops scanning when the record's server index is larger than upperBoundInclusive.
          * So the running time to return all records is O(N).
          * 
          * <p>To find all records between two client timestamps, the client will usually pass in lowerBoundInclusive as null and upperBoundInclusive as MAX_VALUE,
@@ -619,7 +619,7 @@ public class DistributedMessageServer implements Shutdowneable {
          *
          * @param clientMachine the client to send messages to
          * @param topics null means send messages for all topics, otherwise send messages only for these topics
-         * @param minClientTimestamp find messages on or after this client timestamp
+         * @param minClientTimestamp find messages on or after this client timestamp (can be 0)
          * @param maxClientTimestamp find messages on or before this client timestamp (can be Long.MAX_VALUE)
          * @param lowerBoundInclusive send messages from this point. If null, calculate lowerBoundInclusive as the current server index the client is on plus one.
          * @param upperBoundInclusive send messages till this point
@@ -631,7 +631,7 @@ public class DistributedMessageServer implements Shutdowneable {
                              long minClientTimestamp,
                              long maxClientTimestamp,
                              @Nullable ServerIndex lowerBoundInclusive,
-                             ServerIndex upperBoundInclusive,
+                             @NotNull ServerIndex upperBoundInclusive,
                              Consumer<PublishMessage> callback,
                              @Nullable Consumer<PubSubException> errorCallback) {
             BiFunction<String, TopicInfo, TopicInfo> checkClientSubscribedToTopic = (topic, info) -> {
@@ -1372,7 +1372,7 @@ public class DistributedMessageServer implements Shutdowneable {
                           long minClientTimestamp,
                           long maxClientTimestamp,
                           @Nullable ServerIndex lowerBoundInclusive,
-                          ServerIndex upperBoundInclusive,
+                          @NotNull ServerIndex upperBoundInclusive,
                           @Nullable Consumer<PubSubException> errorCallback,
                           boolean forceLogging) {
         int numMessages = publishersAndSubscribers.forSavedMessages(

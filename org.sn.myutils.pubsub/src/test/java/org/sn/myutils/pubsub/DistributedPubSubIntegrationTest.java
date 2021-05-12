@@ -619,11 +619,11 @@ public class DistributedPubSubIntegrationTest extends TestBase {
             if (message instanceof PublishMessage) {
                 PublishMessage publishMessage = (PublishMessage) message;
                 if (publishMessage.getMessage().toString().equals("CloneableString:banana")) {
-                    // the idea is to capture the server id of the first banana so that we can test downloaad within range
+                    // the idea is to capture the server id of the first banana so that we can test download within range
                     serverIndexBanana.updateAndGet(current -> TestUtil.min(current, publishMessage.getRelayFields().getServerIndex()));
                 }
                 if (publishMessage.getMessage().toString().equals("CloneableString:carrot")) {
-                    // the idea is to capture the server id of the last carrot so that we can test downloaad within range
+                    // the idea is to capture the server id of the last carrot so that we can test download within range
                     serverIndexCarrot.updateAndGet(current -> TestUtil.max(current, publishMessage.getRelayFields().getServerIndex()));
                 }
             }
