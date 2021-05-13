@@ -72,5 +72,5 @@ rm -rfv ../myutils/.idea/
 ### Custom NotNull
 
 Go to IntelliJ IDEA -> Preferences -> Editor -> Inspections -> @NotNull/@Nullable problems -> Configure Annotations<br/>
-Add `org.sn.myutils.annotations.NotNullable` to Nullable annotations<br/>
+Add `org.sn.myutils.annotations.Nullable` to Nullable annotations<br/>
 Add `org.sn.myutils.annotations.NotNull` to NotNull annotations

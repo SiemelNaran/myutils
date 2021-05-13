@@ -37,6 +37,24 @@ public class TestUtil {
         return runnable -> new Thread(runnable, "thread" + Character.toString(threadNumber.getAndIncrement() + 'A'));
     }
 
+    /**
+     * Return the smaller of two elements.
+     * If they are the same value, return the first one.
+     * This is just like Math.min.
+     */
+    public static <T extends Comparable<T>> T min(T first, T second) {
+        return first.compareTo(second) <= 0 ? first : second;
+    }
+
+    /**
+     * Return the larger of two elements.
+     * If they are the same value, return the first one.
+     * This is just like Math.max.
+     */
+    public static <T extends Comparable<T>> T max(T first, T second) {
+        return first.compareTo(second) >= 0 ? first : second;
+    }
+
 
     /**
      * Same as Thread.sleep, except throws a RuntimeException instead of InterruptedException.

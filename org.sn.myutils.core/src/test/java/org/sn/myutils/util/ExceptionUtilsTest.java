@@ -15,5 +15,6 @@ public class ExceptionUtilsTest {
         assertEquals(RuntimeException.class, ExceptionUtils.unwrapCompletionException(new RuntimeException(ioe)).getClass());
         assertEquals(IOException.class, ExceptionUtils.unwrapCompletionException(new CompletionException(ioe)).getClass());
         assertEquals(IOException.class, ExceptionUtils.unwrapCompletionException(new ExecutionException(ioe)).getClass());
+        assertEquals(IOException.class, ExceptionUtils.unwrapCompletionException(new CompletionException(new ExecutionException(ioe))).getClass());
     }
 }

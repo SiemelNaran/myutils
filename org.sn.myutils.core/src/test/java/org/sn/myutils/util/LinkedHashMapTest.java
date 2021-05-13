@@ -20,6 +20,8 @@ public class LinkedHashMapTest {
     @Test
     void testBasic() {
         Map<String, String> cache = new LinkedHashMap<>(15, 0.75f, true) {
+            private static final long serialVersionUID = 1L;
+
             @Override
             protected boolean removeEldestEntry(Map.Entry<String, String> oldest) {
                 return size() > 3;
