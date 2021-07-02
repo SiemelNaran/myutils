@@ -7,19 +7,23 @@
 function showUsage()
 {
     echo ""
-    echo Usage: findTodo.sh [-h] -c category [folders]
+    echo Usage: findTodo.sh [-h] -c category [-s subcategory] [-e extension]* [folders]
     echo "   Find TODO lines in folders for a specified category."
     echo "   The result will be sorted by subcategory."
     echo "      -h : show help and exit"
     echo "      -c category : the category to search for, use . for all categories"
-    echo "      -folders: the folders to search for space separated, missing means the current folder"
+    echo "      -s subcategory: the subcategory to search for"
+    echo "      -e extension: only search files with this extension for example -e java, may be repeated"
+    echo "      folders: the folders to search for space separated, missing means the current folder"
     echo ""
 }
 
-CATEGORY=0
+CATEGORY=
+SUBCATEGORY=
+EXTENSION_ARGS=
 SEARCH_FOLDERS=.
 
-while getopts "hc:" opt; do
+while getopts "hc:s:e:" opt; do
     case $opt in
      h)
          showUsage
@@ -27,6 +31,12 @@ while getopts "hc:" opt; do
          ;;
      c)
          CATEGORY="$OPTARG"
+         ;;
+     s)
+         SUBCATEGORY="$OPTARG"
+         ;;
+     e)
+         EXTENSION_ARGS="$EXTENSION_ARGS --include *.$OPTARG"
          ;;
      \?)
          showUsage >&2
@@ -43,27 +53,33 @@ if [ -z "$CATEGORY" ]; then
     echo category is required
     showUsage >&2
     exit 1
+elif [ "$CATEGORY" = "." ]; then
+    CATEGORY="\w+"
+    CATEGORY1="\\\w+"
+else
+    CATEGORY1="$CATEGORY"
+fi
+
+if [ -z "$SUBCATEGORY" ]; then
+    SUBCATEGORY="\w+"
+    SUBCATEGORY1="\\\w+"
+else
+    SUBCATEGORY1="$SUBCATEGORY"
 fi
 
 if [ -z "$SEARCH_FOLDERS" ]; then
     SEARCH_FOLDERS=.
 fi
 
-echo SEARCH_FOLDERS=$SEARCH_FOLDERS
-
 # GREPTEXT is the text to search for using grep
 # REGEX is a regular expression with capturing group 1 as the category, and capturing group 2 as the sub-category
+GREPTEXT="TODO: $CATEGORY: $SUBCATEGORY"
+REGEX=".*TODO: ($CATEGORY1): ($SUBCATEGORY1).*"
 
-if [ "$CATEGORY" = "." ]; then
-    GREPTEXT="TODO: "
-    REGEX="TODO: (\\\w+): (\\\w+)"
-else
-    GREPTEXT="TODO: $CATEGORY"
-    REGEX=".*TODO: ($CATEGORY): (\\\w+).*"
-fi
+echo SEARCH_FOLDERS=$SEARCH_FOLDERS
 
 set -o pipefail
 
-grep -Hnr "$GREPTEXT" $SEARCH_FOLDERS | gawk -v REGEX="$REGEX" '{ print gensub(REGEX, "\\1.\\2", "1") " @ " $0 }'
+grep -EHnr $EXTENSION_ARGS "$GREPTEXT" $SEARCH_FOLDERS | gawk -v REGEX="$REGEX" '{ print gensub(REGEX, "\\1.\\2", "1") " @ " $0 }'
 
 exit $?
