@@ -14,6 +14,7 @@ function showUsage()
     echo "      -c category : the category to search for, use . for all categories"
     echo "      -s subcategory: the subcategory to search for"
     echo "      -e extension: only search files with this extension for example -e java, may be repeated"
+    echo "      -v verbose: if present turn on verbose mode"
     echo "      folders: the folders to search for space separated, missing means the current folder"
     echo ""
 }
@@ -21,9 +22,10 @@ function showUsage()
 CATEGORY=
 SUBCATEGORY=
 EXTENSION_ARGS=
+VERBOSE=0
 SEARCH_FOLDERS=.
 
-while getopts "hc:s:e:" opt; do
+while getopts "hc:s:e:v" opt; do
     case $opt in
      h)
          showUsage
@@ -37,6 +39,9 @@ while getopts "hc:s:e:" opt; do
          ;;
      e)
          EXTENSION_ARGS="$EXTENSION_ARGS --include *.$OPTARG"
+         ;;
+     v)
+         VERBOSE=1
          ;;
      \?)
          showUsage >&2
@@ -76,10 +81,17 @@ fi
 GREPTEXT="TODO: $CATEGORY: $SUBCATEGORY"
 REGEX=".*TODO: ($CATEGORY1): ($SUBCATEGORY1).*"
 
-echo SEARCH_FOLDERS=$SEARCH_FOLDERS
+if [ $VERBOSE -ne 0 ]; then
+    echo SEARCH_FOLDERS=$SEARCH_FOLDERS
+fi
 
 set -o pipefail
 
+if [ $VERBOSE -ne 0 ]; then
+   set -x
+fi
 grep -EHnr $EXTENSION_ARGS "$GREPTEXT" $SEARCH_FOLDERS | gawk -v REGEX="$REGEX" '{ print gensub(REGEX, "\\1.\\2", "1") " @ " $0 }'
+EXITCODE=$?
+set +x
 
-exit $?
+exit $EXITCODE
