@@ -52,7 +52,6 @@ done
 shift $((OPTIND-1))
 
 SEARCH_FOLDERS=$*
-shift 1
 
 if [ -z "$CATEGORY" ]; then
     echo category is required
