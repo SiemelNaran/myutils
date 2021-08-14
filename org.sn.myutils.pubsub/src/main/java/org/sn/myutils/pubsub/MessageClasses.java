@@ -749,7 +749,7 @@ public interface MessageClasses {
     /**
      * Relay messages with a topic.
      */
-    abstract class RelayTopicMessageBase extends RelayMessageBase implements TopicMessageBase {
+    public abstract class RelayTopicMessageBase extends RelayMessageBase implements TopicMessageBase {
         private static final long serialVersionUID = 1L;
 
         private final @NotNull String topic;

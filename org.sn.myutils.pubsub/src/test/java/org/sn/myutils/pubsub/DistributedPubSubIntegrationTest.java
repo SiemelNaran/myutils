@@ -27,10 +27,12 @@ import java.nio.channels.NetworkChannel;
 import java.nio.channels.SocketChannel;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +52,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.hamcrest.Matchers;
@@ -72,6 +75,7 @@ import org.sn.myutils.pubsub.MessageClasses.MessageBase;
 import org.sn.myutils.pubsub.MessageClasses.PublishMessage;
 import org.sn.myutils.pubsub.MessageClasses.RelayFields;
 import org.sn.myutils.pubsub.MessageClasses.RelayMessageBase;
+import org.sn.myutils.pubsub.MessageClasses.RelayTopicMessageBase;
 import org.sn.myutils.pubsub.MessageClasses.TopicMessageBase;
 import org.sn.myutils.pubsub.PubSub.Publisher;
 import org.sn.myutils.pubsub.PubSub.Subscriber;
@@ -1303,6 +1307,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                 ServerIndex serverIndex = PubSubUtils.extractServerIndex(message);
                 serverIndexesOfPublishMessageReceivedInClient2.add(serverIndex);
             }
+            return true;
         });
         startFutures.add(client2.startAsync());
         client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a")));
@@ -1416,6 +1421,116 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         
         assertEquals(6, centralServer.getCountValidTypesReceived()); // +0 = invalid message not valid
         assertEquals(9, centralServer.getCountTypesSent()); // +2 = InvalidRelayMessage, InvalidRelayMessage
+    }
+    
+    /**
+     * In this test the client receives the same message twice.
+     * The client has been modified to save the ids of the message it has received.
+     * Ensure that the client ignores the second message.
+     */
+    @Test
+    void testClientIgnoresMessagesAlreadyProcessed() throws IOException {
+        List<String> words = Collections.synchronizedList(new ArrayList<>());
+        List<CompletableFuture<Void>> startFutures = new ArrayList<>();
+        
+        var centralServer = createServer(Map.of(RetentionPriority.HIGH, 2, RetentionPriority.MEDIUM, 3));
+        startFutures.add(centralServer.start());
+        
+        var client1 = createClient(PubSub.defaultQueueCreator(),
+                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                   "client1",
+                                   31001
+        );
+        startFutures.add(client1.startAsync());
+
+        var client2 = createClient(PubSub.defaultQueueCreator(),
+                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                   "client2",
+                                   31002
+        );
+        startFutures.add(client2.startAsync());
+        
+        class SaveMessageIdsListener {
+            private static final int MAX_IDS_TO_SAVE = 5;
+            private final Deque<ServerIndex> messagesIdsProcessed = new ArrayDeque<>();
+            private boolean allowIfDownload;
+            
+            void setAllowIfDownload(boolean allowIfDownload) {
+                this.allowIfDownload = allowIfDownload;
+            }
+            
+            public boolean handle(MessageBase message) {
+                if (message instanceof RelayTopicMessageBase) {
+                    return handleRelayTopic((RelayTopicMessageBase) message);
+                } else {
+                    return true;
+                }
+            }
+
+            private boolean handleRelayTopic(RelayTopicMessageBase message) {
+                RelayTopicMessageBase relay = (RelayTopicMessageBase) message;
+                ServerIndex serverIndex = relay.getRelayFields().getServerIndex();
+                if (messagesIdsProcessed.stream()
+                                        .filter(messageId -> messageId.equals(serverIndex))
+                                        .findFirst()
+                                        .isPresent()) {
+                    if (allowIfDownload && message.isDownload()) {
+                        return true;
+                    } else {
+                        LOGGER.log(Level.WARNING,
+                                   "Duplicate relay message received: clientMachine={0}, messageClass={1}, serverIndex={2}",
+                                   client2.getMachineId(), message.getClass().getSimpleName(), serverIndex);
+                        return false;
+                    }
+                } else {
+                    if (messagesIdsProcessed.size() >= MAX_IDS_TO_SAVE) {
+                        messagesIdsProcessed.removeFirst();
+                    }
+                    messagesIdsProcessed.add(relay.getRelayFields().getServerIndex());
+                    return true;
+                }
+            }
+        }
+        
+        var saveMessageIdsListener = new SaveMessageIdsListener();
+        client2.setMessageReceivedListener(saveMessageIdsListener::handle);
+
+        waitFor(startFutures);
+        
+        Publisher helloPublisher1 = client1.createPublisher("hello", CloneableString.class);
+        client1.subscribe("hello", "ClientOneSubscriber", CloneableString.class, str -> words.add(str.append("-s1-hello")));
+        client2.subscribe("hello", "ClientTwo_HelloSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a-hello")));
+        client2.subscribe("hello", "ClientTwo_HelloSubscriber_Second", CloneableString.class, str -> words.add(str.append("-s2b-hello")));
+
+        // publish messages
+        helloPublisher1.publish(new CloneableString("apple"));
+        helloPublisher1.publish(new CloneableString("banana"));
+
+        // because SubscriberAdded commands are received in a random order, subscriber1 may be added after subscriber2
+        // so sort elements 0 and 1, elements 2 and 3, etc
+        // this still proves that ImportantTwo sent first, then ImportantThree, then banana, then carrot, then dragonfruit
+        sleep(250); // time to let messages be sent to client2
+        words.subList(0, 2).sort(Comparator.naturalOrder());
+        words.subList(2, 4).sort(Comparator.naturalOrder());
+        System.out.println("words (unsorted): actual=" + words);
+        assertThat(words, Matchers.contains("apple-s2a-hello", "apple-s2b-hello", "banana-s2a-hello", "banana-s2b-hello"));
+
+        // download all messages and verify that messages that have already been downloaded are ignored
+        words.clear();
+        client2.downloadByServerId(List.of("hello"), ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE);
+        sleep(250); // time to let messages be sent to client2
+        System.out.println("words (unsorted) after download 1: actual=" + words);
+        assertThat(words, Matchers.empty());
+
+        // download all messages and verify that messages that have already been downloaded are allowed as they arise from download
+        saveMessageIdsListener.setAllowIfDownload(true);
+        words.clear();
+        client2.downloadByServerId(List.of("hello"), ServerIndex.MIN_VALUE, ServerIndex.MAX_VALUE);
+        sleep(250); // time to let messages be sent to client2
+        words.subList(0, 2).sort(Comparator.naturalOrder());
+        words.subList(2, 4).sort(Comparator.naturalOrder());
+        System.out.println("words (unsorted) after download 2: actual=" + words);
+        assertThat(words, Matchers.contains("apple-s2a-hello", "apple-s2b-hello", "banana-s2a-hello", "banana-s2b-hello"));
     }
     
     /**
@@ -2288,7 +2403,7 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
     private final List<String> sendFailures = Collections.synchronizedList(new ArrayList<>());
     private String securityKey;
     private boolean enableTamperServerIndex;
-    private Consumer<MessageBase> messageReceivedListener;
+    private Function<MessageBase, Boolean> messageReceivedListener;
  
     public TestDistributedSocketPubSub(int numInMemoryHandlers,
                                        Supplier<Queue<Subscriber>> queueCreator,
@@ -2320,7 +2435,7 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
         enableTamperServerIndex = true;        
     }
     
-    void setMessageReceivedListener(Consumer<MessageBase> listener) {
+    void setMessageReceivedListener(Function<MessageBase, Boolean> listener) {
         if (this.messageReceivedListener != null) {
             throw new IllegalStateException("too many listeners");
         }
@@ -2376,12 +2491,13 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
     }
     
     @Override
-    protected void onMessageReceived(MessageBase message) {
-        super.onMessageReceived(message);
+    protected boolean onMessageReceived(MessageBase message) {
+        boolean ok = super.onMessageReceived(message);
         typesReceived.add(message.getClass().getSimpleName());
         if (messageReceivedListener != null) {
-            messageReceivedListener.accept(message);
+            ok &= messageReceivedListener.apply(message);
         }
+        return ok;
     }
 
     @Override
