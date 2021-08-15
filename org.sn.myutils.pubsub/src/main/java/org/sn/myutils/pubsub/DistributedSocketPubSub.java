@@ -664,7 +664,7 @@ public class DistributedSocketPubSub extends PubSub {
             var channel = getInternalSocketChannel(messageServer);
             while (channel.isConnected()) {
                 try {
-                    MessageBaseWrapper wrapper = (MessageBaseWrapper) socketTransformer.readMessageFromSocket(channel);
+                    MessageBaseWrapper wrapper = socketTransformer.readMessageFromSocket(channel);
                     LOGGER.log(
                         Level.TRACE,
                         () -> String.format("Received message from server: clientMachine=%s, %s",

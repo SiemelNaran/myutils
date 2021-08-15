@@ -2385,9 +2385,9 @@ class TestDistributedMessageServer extends DistributedMessageServer {
     }
     
     @Override
-    protected void onSendMessageFailed(MessageBase message, Throwable e) {
-        super.onSendMessageFailed(message, e);
-        sendFailures.add(message.getClass().getSimpleName() + ": " + e.getMessage());
+    protected void onSendMessageFailed(MessageBaseWrapper wrapper, Throwable e) {
+        super.onSendMessageFailed(wrapper, e);
+        sendFailures.add(wrapper.getMessage().getClass().getSimpleName() + ": " + e.getMessage());
     }
     
     int getCountValidTypesReceived() {
@@ -2589,7 +2589,7 @@ class TestSocketTransformer extends SocketTransformer {
     }
 
     @Override
-    public MessageBase readMessageFromSocket(SocketChannel channel) throws IOException {
+    public MessageBaseWrapper readMessageFromSocket(SocketChannel channel) throws IOException {
         if (++readCount <= readFailCount) {
             throw new IOException("TestSocketTransformer read failure");
         }
@@ -2597,13 +2597,13 @@ class TestSocketTransformer extends SocketTransformer {
     }
 
     @Override
-    public CompletionStage<Void> writeMessageToSocketAsync(MessageBase message, short maxLength, AsynchronousSocketChannel channel) throws IOException {
-        if (message.getClass().getSimpleName().equals(writeFailCountType)) {
+    public CompletionStage<Void> writeMessageToSocketAsync(MessageBaseWrapper wrapper, short maxLength, AsynchronousSocketChannel channel) throws IOException {
+        if (wrapper.getMessage().getClass().getSimpleName().equals(writeFailCountType)) {
             if (++writeCount <= writeFailCount) {
                 return CompletableFuture.failedFuture(new IOException("TestSocketTransformer write failure"));
             }
         }
-        return super.writeMessageToSocketAsync(message, maxLength, channel);
+        return super.writeMessageToSocketAsync(wrapper, maxLength, channel);
     }
 
     @Override

@@ -50,9 +50,12 @@ public interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return "class=" + getClass().getSimpleName();
+            return classType(this);
         }
-        
+    }
+    
+    private static <T> String classType(T message) {
+        return "class=" + message.getClass().getSimpleName();
     }
     
     //////////////////////////////////////////////////////////////////////
@@ -398,33 +401,6 @@ public interface MessageClasses {
     }
 
     
-    //////////////////////////////////////////////////////////////////////
-    // Wrapper for server generated messages
-    
-    /**
-     * Class wrapping a MessageBase with additional information that is not intended to be saved.
-     * All messages sent from server to client are of type MessageBaseWrapper.
-     * All messages sent from client to server are of type ClientGeneratedMessage.
-     */
-    public class MessageBaseWrapper extends MessageBaseLoggingString {
-        private static final long serialVersionUID = 1L;
-        
-        private final @NotNull MessageBase message;
-
-        MessageBaseWrapper(@NotNull MessageBase message) {
-            this.message = message;
-        }
-        
-        public @NotNull MessageBase getMessage() {
-            return message;
-        }
-        
-        @Override
-        public String toLoggingString() {
-            return super.toLoggingString() + " [" + message.toLoggingString() + "]";
-        }
-    }
-
     //////////////////////////////////////////////////////////////////////
     // Client generated messages
     
@@ -865,6 +841,33 @@ public interface MessageClasses {
         }
     }
     
+    //////////////////////////////////////////////////////////////////////
+    // Wrapper for server generated messages
+    
+    /**
+     * Class wrapping a MessageBase with additional information that is not intended to be saved.
+     * All messages sent from server to client are of type MessageBaseWrapper.
+     * All messages sent from client to server are of type ClientGeneratedMessage.
+     */
+    public class MessageBaseWrapper implements Serializable, LoggingString {
+        private static final long serialVersionUID = 1L;
+        
+        private final @NotNull MessageBase message;
+
+        MessageBaseWrapper(@NotNull MessageBase message) {
+            this.message = message;
+        }
+        
+        public @NotNull MessageBase getMessage() {
+            return message;
+        }
+        
+        @Override
+        public String toLoggingString() {
+            return classType(this) + " [" + message.toLoggingString() + "]";
+        }
+    }
+
     /**
      * Class wrapping a RelayMessageBase with additional information, used when sending a message from server to client.
      * The field download is the true if this message is being sent as a result of download,
