@@ -64,12 +64,12 @@ import org.sn.myutils.pubsub.MessageClasses.FetchPublisher;
 import org.sn.myutils.pubsub.MessageClasses.Identification;
 import org.sn.myutils.pubsub.MessageClasses.InvalidRelayMessage;
 import org.sn.myutils.pubsub.MessageClasses.MessageBase;
-import org.sn.myutils.pubsub.MessageClasses.MessageBaseWrapper;
+import org.sn.myutils.pubsub.MessageClasses.MessageWrapper;
 import org.sn.myutils.pubsub.MessageClasses.PublishMessage;
 import org.sn.myutils.pubsub.MessageClasses.PublisherCreated;
 import org.sn.myutils.pubsub.MessageClasses.RelayFields;
 import org.sn.myutils.pubsub.MessageClasses.RelayMessageBase;
-import org.sn.myutils.pubsub.MessageClasses.RelayMessageBaseWrapper;
+import org.sn.myutils.pubsub.MessageClasses.RelayMessageWrapper;
 import org.sn.myutils.pubsub.MessageClasses.RelayTopicMessageBase;
 import org.sn.myutils.pubsub.MessageClasses.RemoveSubscriber;
 import org.sn.myutils.pubsub.MessageClasses.RemoveSubscriberFailed;
@@ -200,13 +200,13 @@ public class DistributedMessageServer implements Shutdowneable {
          */
         static class WriteManager {
             private final AtomicBoolean writeLock = new AtomicBoolean();
-            private final Queue<MessageBaseWrapper> writeQueue = new LinkedList<>();
+            private final Queue<MessageWrapper> writeQueue = new LinkedList<>();
 
             /**
              * Acquire a write lock on this channel.
              * But if it is not available, add the message to send to the write queue.
              */
-            synchronized boolean acquireWriteLock(@NotNull MessageBaseWrapper wrapper) {
+            synchronized boolean acquireWriteLock(@NotNull MessageWrapper wrapper) {
                 boolean acquired = writeLock.compareAndSet(false, true);
                 if (!acquired) {
                     writeQueue.add(wrapper);
@@ -219,7 +219,7 @@ public class DistributedMessageServer implements Shutdowneable {
              * If the write queue is not empty, return the head of it and keep the write lock held.
              * If it is empty, release the lock.
              */
-            @Nullable synchronized MessageBaseWrapper returnHeadOfHeadQueueOrReleaseLock() {
+            @Nullable synchronized MessageWrapper returnHeadOfHeadQueueOrReleaseLock() {
                 var nextMessage = writeQueue.poll();
                 if (nextMessage == null) {
                     writeLock.set(false);            
@@ -1175,7 +1175,9 @@ public class DistributedMessageServer implements Shutdowneable {
         
         String reason = canSubscribe(subscriberInfo);
         if (reason != null) {
-            wrapAndSend(new AddSubscriberFailed(ErrorMessageEnum.CANNOT_SUBSCRIBE.format(subscriberInfo.getTopic(), subscriberInfo.getSubscriberName(), reason), topic, subscriberName),
+            wrapAndSend(new AddSubscriberFailed(ErrorMessageEnum.CANNOT_SUBSCRIBE.format(subscriberInfo.getTopic(), subscriberInfo.getSubscriberName(), reason),
+                                                topic,
+                                                subscriberName),
                         clientMachine,
                         0);
             return;
@@ -1231,7 +1233,9 @@ public class DistributedMessageServer implements Shutdowneable {
 
         String reason = canSubscribe(subscriberInfo);
         if (reason != null) {
-            wrapAndSend(new RemoveSubscriberFailed(ErrorMessageEnum.CANNOT_SUBSCRIBE.format(subscriberInfo.getTopic(), subscriberInfo.getSubscriberName(), reason), topic, subscriberName),
+            wrapAndSend(new RemoveSubscriberFailed(ErrorMessageEnum.CANNOT_SUBSCRIBE.format(subscriberInfo.getTopic(), subscriberInfo.getSubscriberName(), reason),
+                                                   topic,
+                                                   subscriberName),
                         clientMachine,
                         0);
             return;
@@ -1389,7 +1393,7 @@ public class DistributedMessageServer implements Shutdowneable {
             maxClientTimestamp,
             lowerBoundInclusive, 
             upperBoundInclusive,
-            publishMessage -> send(new RelayMessageBaseWrapper(publishMessage, download), clientMachine, 0),
+            publishMessage -> send(new RelayMessageWrapper(publishMessage, download), clientMachine, 0),
             errorCallback);
         if (numMessages != 0 || forceLogging) {
             LOGGER.log(Level.INFO, String.format("Download messages to client: clientMachine=%s, trigger=%s,  numMessagesDownloaded=%d",
@@ -1411,10 +1415,10 @@ public class DistributedMessageServer implements Shutdowneable {
     }
     
     private void wrapAndSend(MessageBase message, ClientMachine clientMachine, int retry) {
-        send(new MessageBaseWrapper(message), clientMachine, retry);
+        send(new MessageWrapper(message), clientMachine, retry);
     }
     
-    private void send(MessageBaseWrapper wrapper, ClientMachine clientMachine, int retry) {
+    private void send(MessageWrapper wrapper, ClientMachine clientMachine, int retry) {
         if (clientMachine.getWriteManager().acquireWriteLock(wrapper)) {
             internalSend(wrapper, clientMachine, retry);
         }
@@ -1425,7 +1429,7 @@ public class DistributedMessageServer implements Shutdowneable {
      * If we are already writing another message to the client machine, the message to added to a queue.
      * Upon sending a message, this function sends the first of any queued messages by calling itself.
      */
-    private void internalSend(MessageBaseWrapper wrapper, ClientMachine clientMachine, int retry) {
+    private void internalSend(MessageWrapper wrapper, ClientMachine clientMachine, int retry) {
         try {
             socketTransformer.writeMessageToSocketAsync(wrapper, Short.MAX_VALUE, clientMachine.getChannel())
                              .thenAcceptAsync(unused -> afterMessageSent(clientMachine, wrapper), channelExecutor)
@@ -1439,7 +1443,7 @@ public class DistributedMessageServer implements Shutdowneable {
         }
     }
     
-    private void afterMessageSent(ClientMachine clientMachine, MessageBaseWrapper wrapper) {
+    private void afterMessageSent(ClientMachine clientMachine, MessageWrapper wrapper) {
         LOGGER.log(
             Level.TRACE,
             () -> String.format("Sent message to client: clientMachine=%s, %s",
@@ -1448,7 +1452,7 @@ public class DistributedMessageServer implements Shutdowneable {
         onMessageSent(wrapper);
     }
     
-    private Void retrySend(MessageBaseWrapper wrapper, ClientMachine clientMachine, int retry, Throwable throwable) {
+    private Void retrySend(MessageWrapper wrapper, ClientMachine clientMachine, int retry, Throwable throwable) {
         Throwable e = ExceptionUtils.unwrapCompletionException(throwable);
         boolean retryDone = retry >= MAX_RETRIES || SocketTransformer.isClosed(e) || e instanceof RuntimeException || e instanceof Error;
         Level level = retryDone ? Level.WARNING : Level.TRACE;
@@ -1513,7 +1517,7 @@ public class DistributedMessageServer implements Shutdowneable {
      * Override this function to do something before sending a message.
      * For example, the unit tests override this to record the number of messages sent.
      */
-    protected void onMessageSent(MessageBaseWrapper wrapper) {
+    protected void onMessageSent(MessageWrapper wrapper) {
     }
 
     /**
@@ -1530,7 +1534,7 @@ public class DistributedMessageServer implements Shutdowneable {
      * Override this function to do something when sending a message failed.
      * For example, the unit tests override this to record the failures.
      */
-    protected void onSendMessageFailed(MessageBaseWrapper message, Throwable e) {
+    protected void onSendMessageFailed(MessageWrapper message, Throwable e) {
     }
     
     protected final Stream<ClientMachine> getRemoteClientsStream() {

@@ -72,11 +72,11 @@ import org.sn.myutils.pubsub.InMemoryPubSubIntegrationTest.CloneableString;
 import org.sn.myutils.pubsub.MessageClasses.AddOrRemoveSubscriber;
 import org.sn.myutils.pubsub.MessageClasses.CreatePublisher;
 import org.sn.myutils.pubsub.MessageClasses.MessageBase;
-import org.sn.myutils.pubsub.MessageClasses.MessageBaseWrapper;
+import org.sn.myutils.pubsub.MessageClasses.MessageWrapper;
 import org.sn.myutils.pubsub.MessageClasses.PublishMessage;
 import org.sn.myutils.pubsub.MessageClasses.RelayFields;
 import org.sn.myutils.pubsub.MessageClasses.RelayMessageBase;
-import org.sn.myutils.pubsub.MessageClasses.RelayMessageBaseWrapper;
+import org.sn.myutils.pubsub.MessageClasses.RelayMessageWrapper;
 import org.sn.myutils.pubsub.MessageClasses.TopicMessageBase;
 import org.sn.myutils.pubsub.PubSub.Publisher;
 import org.sn.myutils.pubsub.PubSub.Subscriber;
@@ -1462,10 +1462,10 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                 this.allowIfDownload = allowIfDownload;
             }
             
-            public boolean handle(MessageBaseWrapper wrapper) {
+            public boolean handle(MessageWrapper wrapper) {
                 boolean isDownload;
-                if (wrapper instanceof RelayMessageBaseWrapper) {
-                    isDownload = ((RelayMessageBaseWrapper) wrapper).isDownload();
+                if (wrapper instanceof RelayMessageWrapper) {
+                    isDownload = ((RelayMessageWrapper) wrapper).isDownload();
                 } else {
                     isDownload = false;
                 }
@@ -1976,7 +1976,6 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals("CreatePublisher=1, Identification=1", client1.getTypesSent());
         assertEquals("AddSubscriber=1, Identification=1", client2.getTypesSent());
         assertEquals("AddSubscriber=1, CreatePublisher=1, Identification=2", centralServer.getValidTypesReceived());
-// FAILURE:
         assertEquals("ClientAccepted=2, PublisherCreated=1, SubscriberAdded=1", centralServer.getTypesSent()); // CreatePublisher=1 not present
         assertEquals("ClientAccepted=1, PublisherCreated=1", client1.getTypesReceived());
         assertEquals("ClientAccepted=1, SubscriberAdded=1", client2.getTypesReceived()); // CreatePublisher=1 not present
@@ -2312,7 +2311,7 @@ class TestDistributedMessageServer extends DistributedMessageServer {
     private final List<String> typesSent = Collections.synchronizedList(new ArrayList<>());
     private final List<String> sendFailures = Collections.synchronizedList(new ArrayList<>());
     private String securityKey;
-    private Consumer<MessageBaseWrapper> messageSentListener;
+    private Consumer<MessageWrapper> messageSentListener;
 
     public TestDistributedMessageServer(SocketAddress messageServer,
                                         Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
@@ -2329,7 +2328,7 @@ class TestDistributedMessageServer extends DistributedMessageServer {
         securityKey = key;
     }
 
-    void setMessageSentListener(Consumer<MessageBaseWrapper> listener) {
+    void setMessageSentListener(Consumer<MessageWrapper> listener) {
         if (this.messageSentListener != null) {
             throw new IllegalStateException("too many listeners");
         }
@@ -2370,7 +2369,7 @@ class TestDistributedMessageServer extends DistributedMessageServer {
     }
     
     @Override
-    protected void onMessageSent(MessageBaseWrapper wrapper) {
+    protected void onMessageSent(MessageWrapper wrapper) {
         super.onMessageSent(wrapper);
         typesSent.add(wrapper.getMessage().getClass().getSimpleName());
         if (messageSentListener != null) {
@@ -2385,7 +2384,7 @@ class TestDistributedMessageServer extends DistributedMessageServer {
     }
     
     @Override
-    protected void onSendMessageFailed(MessageBaseWrapper wrapper, Throwable e) {
+    protected void onSendMessageFailed(MessageWrapper wrapper, Throwable e) {
         super.onSendMessageFailed(wrapper, e);
         sendFailures.add(wrapper.getMessage().getClass().getSimpleName() + ": " + e.getMessage());
     }
@@ -2422,7 +2421,7 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
     private final List<String> sendFailures = Collections.synchronizedList(new ArrayList<>());
     private String securityKey;
     private boolean enableTamperServerIndex;
-    private Function<MessageBaseWrapper, Boolean> messageReceivedListener;
+    private Function<MessageWrapper, Boolean> messageReceivedListener;
  
     public TestDistributedSocketPubSub(int numInMemoryHandlers,
                                        Supplier<Queue<Subscriber>> queueCreator,
@@ -2454,7 +2453,7 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
         enableTamperServerIndex = true;        
     }
     
-    void setMessageReceivedListener(Function<MessageBaseWrapper, Boolean> listener) {
+    void setMessageReceivedListener(Function<MessageWrapper, Boolean> listener) {
         if (this.messageReceivedListener != null) {
             throw new IllegalStateException("too many listeners");
         }
@@ -2510,7 +2509,7 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
     }
     
     @Override
-    protected boolean onMessageReceived(MessageBaseWrapper wrapper) {
+    protected boolean onMessageReceived(MessageWrapper wrapper) {
         boolean ok = super.onMessageReceived(wrapper);
         typesReceived.add(wrapper.getMessage().getClass().getSimpleName());
         if (messageReceivedListener != null) {
@@ -2589,7 +2588,7 @@ class TestSocketTransformer extends SocketTransformer {
     }
 
     @Override
-    public MessageBaseWrapper readMessageFromSocket(SocketChannel channel) throws IOException {
+    public MessageWrapper readMessageFromSocket(SocketChannel channel) throws IOException {
         if (++readCount <= readFailCount) {
             throw new IOException("TestSocketTransformer read failure");
         }
@@ -2597,7 +2596,7 @@ class TestSocketTransformer extends SocketTransformer {
     }
 
     @Override
-    public CompletionStage<Void> writeMessageToSocketAsync(MessageBaseWrapper wrapper, short maxLength, AsynchronousSocketChannel channel) throws IOException {
+    public CompletionStage<Void> writeMessageToSocketAsync(MessageWrapper wrapper, short maxLength, AsynchronousSocketChannel channel) throws IOException {
         if (wrapper.getMessage().getClass().getSimpleName().equals(writeFailCountType)) {
             if (++writeCount <= writeFailCount) {
                 return CompletableFuture.failedFuture(new IOException("TestSocketTransformer write failure"));

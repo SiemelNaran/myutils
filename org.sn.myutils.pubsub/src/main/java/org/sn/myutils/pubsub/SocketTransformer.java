@@ -20,7 +20,7 @@ import java.nio.channels.SocketChannel;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import org.sn.myutils.pubsub.MessageClasses.MessageBase;
-import org.sn.myutils.pubsub.MessageClasses.MessageBaseWrapper;
+import org.sn.myutils.pubsub.MessageClasses.MessageWrapper;
 
 
 class SocketTransformer {
@@ -69,14 +69,14 @@ class SocketTransformer {
      * @return a MessageBase
      * @throws IOException if there was an IOException or the class not found or does not inherit from MessageBase
      */
-    public MessageBaseWrapper readMessageFromSocket(SocketChannel channel) throws IOException {
+    public MessageWrapper readMessageFromSocket(SocketChannel channel) throws IOException {
         ByteBuffer lengthBuffer = ByteBuffer.allocate(Short.BYTES);
         readAllBytes(channel, lengthBuffer);
         short length = lengthBuffer.getShort();
         
         ByteBuffer messageBuffer = ByteBuffer.allocate(length);
         readAllBytes(channel, messageBuffer);
-        return byteBufferToMessage(messageBuffer, MessageBaseWrapper.class);
+        return byteBufferToMessage(messageBuffer, MessageWrapper.class);
     }
     
     
@@ -102,7 +102,7 @@ class SocketTransformer {
      * @throws IllegalArgumentException if the message is too long
      * @throws IOException if there was an IOException writing to the object output stream or to the socket
      */
-    public CompletionStage<Void> writeMessageToSocketAsync(MessageBaseWrapper message, short maxLength, AsynchronousSocketChannel channel) throws IOException {
+    public CompletionStage<Void> writeMessageToSocketAsync(MessageWrapper message, short maxLength, AsynchronousSocketChannel channel) throws IOException {
         CompletableFuture<Void> futureMessage = new CompletableFuture<>();
         var byteBuffers = new MessageAsByteBuffers(message, maxLength); 
         channel.write(byteBuffers.lengthBuffer, NULL, new CompletionHandler<>() {

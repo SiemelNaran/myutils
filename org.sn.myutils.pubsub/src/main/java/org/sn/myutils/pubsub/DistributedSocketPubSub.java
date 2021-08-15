@@ -61,7 +61,7 @@ import org.sn.myutils.pubsub.MessageClasses.FetchPublisher;
 import org.sn.myutils.pubsub.MessageClasses.Identification;
 import org.sn.myutils.pubsub.MessageClasses.InvalidRelayMessage;
 import org.sn.myutils.pubsub.MessageClasses.MessageBase;
-import org.sn.myutils.pubsub.MessageClasses.MessageBaseWrapper;
+import org.sn.myutils.pubsub.MessageClasses.MessageWrapper;
 import org.sn.myutils.pubsub.MessageClasses.PublishMessage;
 import org.sn.myutils.pubsub.MessageClasses.PublisherCreated;
 import org.sn.myutils.pubsub.MessageClasses.RelayFields;
@@ -664,7 +664,7 @@ public class DistributedSocketPubSub extends PubSub {
             var channel = getInternalSocketChannel(messageServer);
             while (channel.isConnected()) {
                 try {
-                    MessageBaseWrapper wrapper = socketTransformer.readMessageFromSocket(channel);
+                    MessageWrapper wrapper = socketTransformer.readMessageFromSocket(channel);
                     LOGGER.log(
                         Level.TRACE,
                         () -> String.format("Received message from server: clientMachine=%s, %s",
@@ -1241,7 +1241,7 @@ public class DistributedSocketPubSub extends PubSub {
      * 
      * @return true if this message is valid
      */
-    protected boolean onMessageReceived(MessageBaseWrapper wrapper) {
+    protected boolean onMessageReceived(MessageWrapper wrapper) {
         return true;
     }
     

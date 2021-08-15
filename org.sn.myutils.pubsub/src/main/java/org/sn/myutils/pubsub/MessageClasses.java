@@ -849,12 +849,12 @@ public interface MessageClasses {
      * All messages sent from server to client are of type MessageBaseWrapper.
      * All messages sent from client to server are of type ClientGeneratedMessage.
      */
-    public class MessageBaseWrapper implements Serializable, LoggingString {
+    public class MessageWrapper implements Serializable, LoggingString {
         private static final long serialVersionUID = 1L;
         
         private final @NotNull MessageBase message;
 
-        MessageBaseWrapper(@NotNull MessageBase message) {
+        MessageWrapper(@NotNull MessageBase message) {
             this.message = message;
         }
         
@@ -873,12 +873,12 @@ public interface MessageClasses {
      * The field download is the true if this message is being sent as a result of download,
      * or false otherwise.
      */
-    public class RelayMessageBaseWrapper extends MessageBaseWrapper {
+    public class RelayMessageWrapper extends MessageWrapper {
         private static final long serialVersionUID = 1L;
         
         private final boolean download;
 
-        RelayMessageBaseWrapper(@NotNull RelayMessageBase relayMessage, boolean download) {
+        RelayMessageWrapper(@NotNull RelayMessageBase relayMessage, boolean download) {
             super(relayMessage);
             this.download = download;
         }
