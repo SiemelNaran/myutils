@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import org.sn.myutils.annotations.NotNull;
+import org.sn.myutils.annotations.Nullable;
 
 
 /**
@@ -45,10 +46,15 @@ public interface MessageClasses {
         boolean isResend();
     }
     
-    private static String classType(MessageBase message) {
-        return "class=" + message.getClass().getSimpleName();
+    abstract class MessageBaseLoggingString implements MessageBase {
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        public String toLoggingString() {
+            return "class=" + getClass().getSimpleName();
+        }
+        
     }
-    
     
     //////////////////////////////////////////////////////////////////////
     // Server generated messages
@@ -57,7 +63,7 @@ public interface MessageClasses {
      * Messages originating from server and sent to client.
      * Required field serverTimestamp, which is the time the server generated the message.
      */
-    abstract class ServerGeneratedMessage implements MessageBase {
+    public abstract class ServerGeneratedMessage extends MessageBaseLoggingString {
         private static final long serialVersionUID = 1L;
 
         private final long serverTimestamp;
@@ -72,7 +78,7 @@ public interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return classType(this) + ", serverTimestamp=" + serverTimestamp;
+            return super.toLoggingString() + ", serverTimestamp=" + serverTimestamp;
         }
     }
     
@@ -80,7 +86,7 @@ public interface MessageClasses {
      * Class sent by server when it receives an invalid message.
      * Required field failedClientIndex, which identifies the message which failed, indicating to the client that it should resend this message;
      */
-    abstract class AbstractInvalidMessage extends ServerGeneratedMessage {
+    public abstract class AbstractInvalidMessage extends ServerGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
         private final Class<? extends MessageBase> classOfMessage;
@@ -109,7 +115,7 @@ public interface MessageClasses {
      * Class sent by server when it receives an object type it does not know how to handle.
      * This could happen if the client and server are on different versions.
      */
-    class UnsupportedMessage extends AbstractInvalidMessage {
+    public class UnsupportedMessage extends AbstractInvalidMessage {
         private static final long serialVersionUID = 1L;
 
         UnsupportedMessage(Class<? extends MessageBase> classOfMessage, Long failedClientIndex) {
@@ -120,7 +126,7 @@ public interface MessageClasses {
     /**
      * Class sent by server to client to request identification.
      */
-    class RequestIdentification extends AbstractInvalidMessage {
+    public class RequestIdentification extends AbstractInvalidMessage {
         private static final long serialVersionUID = 1L;
         
         RequestIdentification(Class<? extends MessageBase> classOfMessage, Long failedClientIndex) {
@@ -131,7 +137,7 @@ public interface MessageClasses {
     /**
      * Class sent by server to tell client to start read and write threads.
      */
-    class ClientAccepted extends ServerGeneratedMessage {
+    public class ClientAccepted extends ServerGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
         private final CentralServerId centralServerId;
@@ -153,7 +159,7 @@ public interface MessageClasses {
     /**
      * Class sent by server to tell client that it failed to start.
      */
-    class ClientRejected extends ServerGeneratedMessage {
+    public class ClientRejected extends ServerGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
         private final CentralServerId centralServerId;
@@ -186,7 +192,7 @@ public interface MessageClasses {
      * Class sent by server to tell client that a message it sent sent is invalid.
      * Required field error, which is the error message.
      */
-    class InvalidMessage extends ServerGeneratedMessage {
+    public class InvalidMessage extends ServerGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
         private final @NotNull String error;
@@ -233,7 +239,7 @@ public interface MessageClasses {
     /**
      * Class to notify the client that adding a subscriber failed.
      */
-    class AddSubscriberFailed extends AddOrRemoveSubscriberFailed {
+    public class AddSubscriberFailed extends AddOrRemoveSubscriberFailed {
         private static final long serialVersionUID = 1L;
         
         AddSubscriberFailed(@NotNull String error, String topic, String subscriberName) {
@@ -244,7 +250,7 @@ public interface MessageClasses {
     /**
      * Class to notify the client that removing a subscriber failed.
      */
-    class RemoveSubscriberFailed extends AddOrRemoveSubscriberFailed {
+    public class RemoveSubscriberFailed extends AddOrRemoveSubscriberFailed {
         private static final long serialVersionUID = 1L;
         
         RemoveSubscriberFailed(@NotNull String error, String topic, String subscriberName) {
@@ -258,7 +264,7 @@ public interface MessageClasses {
      * For example, this could happen if client sends a message to server that server already processed.
      * Required fields failedClientIndex, which identifies the message.
      */
-    class InvalidRelayMessage extends InvalidMessage {
+    public class InvalidRelayMessage extends InvalidMessage {
         private static final long serialVersionUID = 1L;
         
         private final long failedClientIndex;
@@ -281,7 +287,7 @@ public interface MessageClasses {
     /**
      * Class to notify the client that creating a publisher failed.
      */
-    class CreatePublisherFailed extends InvalidRelayMessage {
+    public class CreatePublisherFailed extends InvalidRelayMessage {
         private static final long serialVersionUID = 1L;
         
         private final String topic;
@@ -300,7 +306,7 @@ public interface MessageClasses {
     /**
      * Class sent by server to tell client that an action like CreatePublisher or AddSubscriber worked.
      */
-    class AbstractConfirmAction extends ServerGeneratedMessage {
+    public class AbstractConfirmAction extends ServerGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
         AbstractConfirmAction() {
@@ -310,7 +316,7 @@ public interface MessageClasses {
     /**
      * Class sent by server to tell client that CreatePublisher worked.
      */
-    class PublisherCreated extends AbstractConfirmAction {
+    public class PublisherCreated extends AbstractConfirmAction {
         private static final long serialVersionUID = 1L;
         
         private final String topic;
@@ -338,7 +344,7 @@ public interface MessageClasses {
     /**
      * Class sent by server to tell client that subscribe worked.
      */
-    class SubscriberAdded extends AbstractConfirmAction {
+    public class SubscriberAdded extends AbstractConfirmAction {
         private static final long serialVersionUID = 1L;
         
         private final String topic;
@@ -367,7 +373,7 @@ public interface MessageClasses {
     /**
      * Class sent by server to tell client that unsubscribe worked.
      */
-    class SubscriberRemoved extends AbstractConfirmAction {
+    public class SubscriberRemoved extends AbstractConfirmAction {
         private static final long serialVersionUID = 1L;
         
         private final String topic;
@@ -392,6 +398,34 @@ public interface MessageClasses {
         }
     }
 
+    
+    //////////////////////////////////////////////////////////////////////
+    // Wrapper for server generated messages
+    
+    /**
+     * Class wrapping a MessageBase with additional information that is not intended to be saved.
+     * All messages sent from server to client are of type MessageBaseWrapper.
+     * All messages sent from client to server are of type ClientGeneratedMessage.
+     */
+    public class MessageBaseWrapper extends MessageBaseLoggingString {
+        private static final long serialVersionUID = 1L;
+        
+        private final @NotNull MessageBase message;
+
+        MessageBaseWrapper(@NotNull MessageBase message) {
+            this.message = message;
+        }
+        
+        public @NotNull MessageBase getMessage() {
+            return message;
+        }
+        
+        @Override
+        public String toLoggingString() {
+            return super.toLoggingString() + " [" + message.toLoggingString() + "]";
+        }
+    }
+
     //////////////////////////////////////////////////////////////////////
     // Client generated messages
     
@@ -399,7 +433,7 @@ public interface MessageClasses {
      * Messages originating from client and sent to server, which they may be relayed to other clients.
      * Required field clientTimestamp, which is the time the client sent the message.
      */
-    abstract class ClientGeneratedMessage implements MessageBase {
+    abstract class ClientGeneratedMessage extends MessageBaseLoggingString {
         private static final long serialVersionUID = 1L;
         
         private final long clientTimestamp;
@@ -423,7 +457,7 @@ public interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return classType(this) + ", clientTimestamp=" + clientTimestamp + ", customProperties.size=" + (customProperties != null ? customProperties.size() : 0);
+            return super.toLoggingString() + ", clientTimestamp=" + clientTimestamp + ", customProperties.size=" + (customProperties != null ? customProperties.size() : 0);
         }
     }
 
@@ -432,7 +466,7 @@ public interface MessageClasses {
      * Sent when client first connects to server.
      * Required field machineId, which must be unique across all machines.
      */
-    class Identification extends ClientGeneratedMessage {
+    public class Identification extends ClientGeneratedMessage {
         private static final long serialVersionUID = 1L;
         
         private final ClientMachineId machineId;
@@ -507,7 +541,7 @@ public interface MessageClasses {
      * Required field shouldTryDownload.
      * Required field isResend (true if server died and client is resending its addSubscriber commands).
      */
-    class AddSubscriber extends AddOrRemoveSubscriber implements Resendable {
+    public class AddSubscriber extends AddOrRemoveSubscriber implements Resendable {
         private static final long serialVersionUID = 1L;
         
         private final boolean tryDownload;
@@ -538,7 +572,7 @@ public interface MessageClasses {
      * Class to notify the server that we are unsubscribing from a particular topic.
      * No new required fields.
      */
-    class RemoveSubscriber extends AddOrRemoveSubscriber {
+    public class RemoveSubscriber extends AddOrRemoveSubscriber {
         private static final long serialVersionUID = 1L;
         
         public RemoveSubscriber(String topic, String subscriberName) {
@@ -551,7 +585,7 @@ public interface MessageClasses {
      * Required field topic.
      * The response is a CreatePublisher command.
      */
-    class FetchPublisher extends ClientGeneratedTopicMessage {
+    public class FetchPublisher extends ClientGeneratedTopicMessage {
         private static final long serialVersionUID = 1L;
         
         public FetchPublisher(String topic) {
@@ -590,7 +624,7 @@ public interface MessageClasses {
      *
      * <p>Here the client is downloading messages within an id range.
      */
-    class DownloadPublishedMessagesByServerId extends DownloadPublishedMessages<DownloadPublishedMessagesByServerId> {
+    public class DownloadPublishedMessagesByServerId extends DownloadPublishedMessages<DownloadPublishedMessagesByServerId> {
         private static final long serialVersionUID = 1L;
         
         private final @NotNull ServerIndex startServerIndexInclusive;
@@ -632,7 +666,7 @@ public interface MessageClasses {
      *
      * <p>Here the client is downloading messages within an id range.
      */
-    class DownloadPublishedMessagesByClientTimestamp extends DownloadPublishedMessages<DownloadPublishedMessagesByClientTimestamp> {
+    public class DownloadPublishedMessagesByClientTimestamp extends DownloadPublishedMessages<DownloadPublishedMessagesByClientTimestamp> {
         private static final long serialVersionUID = 1L;
 
         private final long startInclusive;
@@ -676,7 +710,7 @@ public interface MessageClasses {
      * May not correlate with serverTimestamp.
      * Required field sourceMachineId, which is the client machine that sent the message.
      */
-    class RelayFields implements Serializable {
+    public class RelayFields implements Serializable {
         private static final long serialVersionUID = 1L;
         
         private final long serverTimestamp;
@@ -715,7 +749,7 @@ public interface MessageClasses {
      * Optional field relayFields, which is null when the client has not yet sent the message to the server, and not null once the server processes it.
      * It is unique across messages in all machines.
      */
-    abstract class RelayMessageBase extends ClientGeneratedMessage {
+    public abstract class RelayMessageBase extends ClientGeneratedMessage {
         private static final long serialVersionUID = 1L;
 
         private final long clientIndex;
@@ -775,7 +809,7 @@ public interface MessageClasses {
      * Sent to a client when they subscribe to a topic,
      * or when they issue the FetchPublisher command.
      */
-    class CreatePublisher extends RelayTopicMessageBase implements Resendable {
+    public class CreatePublisher extends RelayTopicMessageBase implements Resendable {
         private static final long serialVersionUID = 1L;
         
         private final @NotNull Class<?> publisherClass;
@@ -806,7 +840,7 @@ public interface MessageClasses {
     /**
      * Action representing the publisher.publish command.
      */
-    class PublishMessage extends RelayTopicMessageBase {
+    public class PublishMessage extends RelayTopicMessageBase {
         private static final long serialVersionUID = 1L;
         
         private final @NotNull CloneableObject<?> message;
@@ -830,5 +864,35 @@ public interface MessageClasses {
         public String toLoggingString() {
             return super.toLoggingString() + ", message.estimateBytes=" + message.getNumBytes() + ", retentionPriority=" + priority;
         }
-    } 
+    }
+    
+    /**
+     * Class wrapping a RelayMessageBase with additional information, used when sending a message from server to client.
+     * The field download is the true if this message is being sent as a result of download,
+     * or false otherwise.
+     */
+    public class RelayMessageBaseWrapper extends MessageBaseWrapper {
+        private static final long serialVersionUID = 1L;
+        
+        private final boolean download;
+
+        RelayMessageBaseWrapper(@NotNull RelayMessageBase relayMessage, boolean download) {
+            super(relayMessage);
+            this.download = download;
+        }
+        
+        @Override
+        public @NotNull RelayMessageBase getMessage() {
+            return (@NotNull RelayMessageBase) super.getMessage();
+        }
+        
+        public boolean isDownload() {
+            return download;
+        }
+        
+        @Override
+        public String toLoggingString() {
+            return super.toLoggingString() + " [download=" + download + "]";
+        }
+    }
 }

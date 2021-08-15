@@ -61,6 +61,7 @@ import org.sn.myutils.pubsub.MessageClasses.FetchPublisher;
 import org.sn.myutils.pubsub.MessageClasses.Identification;
 import org.sn.myutils.pubsub.MessageClasses.InvalidRelayMessage;
 import org.sn.myutils.pubsub.MessageClasses.MessageBase;
+import org.sn.myutils.pubsub.MessageClasses.MessageBaseWrapper;
 import org.sn.myutils.pubsub.MessageClasses.PublishMessage;
 import org.sn.myutils.pubsub.MessageClasses.PublisherCreated;
 import org.sn.myutils.pubsub.MessageClasses.RelayFields;
@@ -663,51 +664,15 @@ public class DistributedSocketPubSub extends PubSub {
             var channel = getInternalSocketChannel(messageServer);
             while (channel.isConnected()) {
                 try {
-                    MessageBase message = socketTransformer.readMessageFromSocket(channel);
+                    MessageBaseWrapper wrapper = (MessageBaseWrapper) socketTransformer.readMessageFromSocket(channel);
                     LOGGER.log(
                         Level.TRACE,
                         () -> String.format("Received message from server: clientMachine=%s, %s",
                                             DistributedSocketPubSub.this.machineId,
-                                            message.toLoggingString()));
-                    DistributedSocketPubSub.this.onMessageReceived(message);
-
-                    if (message instanceof CreatePublisher) {
-                        // we are receiving a CreatePublisher from the server in response to a client.subscribe
-                        handleCreatePublisher((CreatePublisher) message);
-                    } else if (message instanceof CreatePublisherFailed) {
-                        handleCreatePublisherFailed((CreatePublisherFailed) message);
-                    } else if (message instanceof PublisherCreated) {
-                        // we are receiving a PublisherCreated from the server in response to a client.createPublisher
-                        handlePublisherCreated((PublisherCreated) message);
-                    } else if (message instanceof SubscriberAdded) {
-                        handleSubscriberAdded((SubscriberAdded) message);
-                    } else if (message instanceof AddSubscriberFailed) {
-                        handleAddSubscriberFailed((AddSubscriberFailed) message);
-                    } else if (message instanceof SubscriberRemoved) {
-                        handleSubscriberRemoved((SubscriberRemoved) message);
-                    } else if (message instanceof RemoveSubscriberFailed) {
-                        handleRemoveSubscriberFailed((RemoveSubscriberFailed) message);
-                    } else if (message instanceof PublishMessage) {
-                        PublishMessage publishMessage = (PublishMessage) message;
-                        String topic = publishMessage.getTopic();
-                        threadLocalRemoteRelayMessage.set(publishMessage);
-                        Publisher publisher = DistributedSocketPubSub.this.getPublisher(topic);
-                        if (publisher == null) {
-                            publisher = DistributedSocketPubSub.this.dormantInfoMap.get(topic).getDormantPublisher();
-                        }
-                        publisher.publish(publishMessage.getMessage());
-                    } else if (message instanceof InvalidRelayMessage) {
-                        InvalidRelayMessage invalid = (InvalidRelayMessage) message;
-                        LOGGER.log(Level.WARNING, invalid.getError());
-                    } else if (message instanceof ClientAccepted) {
-                        ClientAccepted clientAccepted = (ClientAccepted) message;
-                        DistributedSocketPubSub.this.onMessageServerConnected(messageServer, clientAccepted);
-                    } else if (message instanceof ClientRejected) {
-                        ClientRejected clientRejected = (ClientRejected) message;
-                        DistributedSocketPubSub.this.onMessageServerFailedToConnect(messageServer, clientRejected);
-                    } else {
-                        LOGGER.log(Level.WARNING, "Unrecognized object type received: clientMachine={0}, messageClass={1}",
-                                   DistributedSocketPubSub.this.machineId, message.getClass().getSimpleName());
+                                            wrapper.toLoggingString()));
+                    boolean ok = DistributedSocketPubSub.this.onMessageReceived(wrapper);
+                    if (ok) {
+                        processMessage(messageServer, wrapper.getMessage());
                     }
                 } catch (IOException e) {
                     if (e instanceof EOFException) {
@@ -736,6 +701,47 @@ public class DistributedSocketPubSub extends PubSub {
         }
     }
     
+    private void processMessage(SocketAddress messageServer, MessageBase message) {
+        if (message instanceof CreatePublisher) {
+            // we are receiving a CreatePublisher from the server in response to a client.subscribe
+            handleCreatePublisher((CreatePublisher) message);
+        } else if (message instanceof CreatePublisherFailed) {
+            handleCreatePublisherFailed((CreatePublisherFailed) message);
+        } else if (message instanceof PublisherCreated) {
+            // we are receiving a PublisherCreated from the server in response to a client.createPublisher
+            handlePublisherCreated((PublisherCreated) message);
+        } else if (message instanceof SubscriberAdded) {
+            handleSubscriberAdded((SubscriberAdded) message);
+        } else if (message instanceof AddSubscriberFailed) {
+            handleAddSubscriberFailed((AddSubscriberFailed) message);
+        } else if (message instanceof SubscriberRemoved) {
+            handleSubscriberRemoved((SubscriberRemoved) message);
+        } else if (message instanceof RemoveSubscriberFailed) {
+            handleRemoveSubscriberFailed((RemoveSubscriberFailed) message);
+        } else if (message instanceof PublishMessage) {
+            PublishMessage publishMessage = (PublishMessage) message;
+            String topic = publishMessage.getTopic();
+            threadLocalRemoteRelayMessage.set(publishMessage);
+            Publisher publisher = DistributedSocketPubSub.this.getPublisher(topic);
+            if (publisher == null) {
+                publisher = DistributedSocketPubSub.this.dormantInfoMap.get(topic).getDormantPublisher();
+            }
+            publisher.publish(publishMessage.getMessage());
+        } else if (message instanceof InvalidRelayMessage) {
+            InvalidRelayMessage invalid = (InvalidRelayMessage) message;
+            LOGGER.log(Level.WARNING, invalid.getError());
+        } else if (message instanceof ClientAccepted) {
+            ClientAccepted clientAccepted = (ClientAccepted) message;
+            DistributedSocketPubSub.this.onMessageServerConnected(messageServer, clientAccepted);
+        } else if (message instanceof ClientRejected) {
+            ClientRejected clientRejected = (ClientRejected) message;
+            DistributedSocketPubSub.this.onMessageServerFailedToConnect(messageServer, clientRejected);
+        } else {
+            LOGGER.log(Level.WARNING, "Unrecognized object type received: clientMachine={0}, messageClass={1}",
+                       DistributedSocketPubSub.this.machineId, message.getClass().getSimpleName());
+        }
+    }
+
     private void doRestart(SocketAddress messageServer) {
         try {
             var localAddress = messageServerLookup.getLocalAddress(messageServer);
@@ -1235,7 +1241,7 @@ public class DistributedSocketPubSub extends PubSub {
      * 
      * @return true if this message is valid
      */
-    protected boolean onMessageReceived(MessageBase message) {
+    protected boolean onMessageReceived(MessageBaseWrapper wrapper) {
         return true;
     }
     
