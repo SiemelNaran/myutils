@@ -620,7 +620,8 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         );
         AtomicReference<ServerIndex> serverIndexBanana = new AtomicReference<>(ServerIndex.MAX_VALUE); // index of first banana
         AtomicReference<ServerIndex> serverIndexCarrot = new AtomicReference<>(ServerIndex.MIN_VALUE); // index of last carrot
-        centralServer.setMessageSentListener(message -> {
+        centralServer.setMessageSentListener(wrapper -> {
+            var message = wrapper.getMessage();
             if (message instanceof PublishMessage) {
                 PublishMessage publishMessage = (PublishMessage) message;
                 if (publishMessage.getMessage().toString().equals("CloneableString:banana")) {
@@ -796,8 +797,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         Object endInclusive = download instanceof DownloadByServerId ? serverIndexCarrot.get() : timeJustBeforeSendDragonfruit;
         download.downloadWithinRange(List.of("world"), startInclusive, endInclusive);
         sleep(250); // time to let messages be sent to client2
-        System.out.println("after client2 downloads a second time within limited time range: actual=" + words);
-// FAILURE
+        System.out.println("after client2 downloads a second time within a limited range: actual=" + words);
         assertThat(words,
                    Matchers.contains("banana-s2-world", "carrot-s2-world"));
         assertEquals(19, client1.getCountTypesSent());
@@ -2312,7 +2312,7 @@ class TestDistributedMessageServer extends DistributedMessageServer {
     private final List<String> typesSent = Collections.synchronizedList(new ArrayList<>());
     private final List<String> sendFailures = Collections.synchronizedList(new ArrayList<>());
     private String securityKey;
-    private Consumer<MessageBase> messageSentListener;
+    private Consumer<MessageBaseWrapper> messageSentListener;
 
     public TestDistributedMessageServer(SocketAddress messageServer,
                                         Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
@@ -2329,7 +2329,7 @@ class TestDistributedMessageServer extends DistributedMessageServer {
         securityKey = key;
     }
 
-    void setMessageSentListener(Consumer<MessageBase> listener) {
+    void setMessageSentListener(Consumer<MessageBaseWrapper> listener) {
         if (this.messageSentListener != null) {
             throw new IllegalStateException("too many listeners");
         }
