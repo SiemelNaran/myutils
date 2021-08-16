@@ -1427,7 +1427,11 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     }
     
     /**
-     * In this test the client receives the same message twice.
+     * This test demonstrates modifying the client to keep track pf messages received,
+     * so that if by chance the server sends the same message twice,
+     * the client will ignore the second time.
+     *
+     * <p>In this test the client receives the same message twice.
      * The client has been modified to save the ids of the message it has received.
      * Ensure that the client ignores the second message.
      */
