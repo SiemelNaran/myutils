@@ -45,10 +45,18 @@ public interface MessageClasses {
         boolean isResend();
     }
     
-    private static String classType(MessageBase message) {
-        return "class=" + message.getClass().getSimpleName();
+    abstract class MessageBaseLoggingString implements MessageBase {
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        public String toLoggingString() {
+            return classType(this);
+        }
     }
     
+    private static <T> String classType(T message) {
+        return "class=" + message.getClass().getSimpleName();
+    }
     
     //////////////////////////////////////////////////////////////////////
     // Server generated messages
@@ -57,7 +65,7 @@ public interface MessageClasses {
      * Messages originating from server and sent to client.
      * Required field serverTimestamp, which is the time the server generated the message.
      */
-    abstract class ServerGeneratedMessage implements MessageBase {
+    abstract class ServerGeneratedMessage extends MessageBaseLoggingString {
         private static final long serialVersionUID = 1L;
 
         private final long serverTimestamp;
@@ -72,7 +80,7 @@ public interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return classType(this) + ", serverTimestamp=" + serverTimestamp;
+            return super.toLoggingString() + ", serverTimestamp=" + serverTimestamp;
         }
     }
     
@@ -392,6 +400,7 @@ public interface MessageClasses {
         }
     }
 
+    
     //////////////////////////////////////////////////////////////////////
     // Client generated messages
     
@@ -399,7 +408,7 @@ public interface MessageClasses {
      * Messages originating from client and sent to server, which they may be relayed to other clients.
      * Required field clientTimestamp, which is the time the client sent the message.
      */
-    abstract class ClientGeneratedMessage implements MessageBase {
+    abstract class ClientGeneratedMessage extends MessageBaseLoggingString {
         private static final long serialVersionUID = 1L;
         
         private final long clientTimestamp;
@@ -423,7 +432,7 @@ public interface MessageClasses {
 
         @Override
         public String toLoggingString() {
-            return classType(this) + ", clientTimestamp=" + clientTimestamp + ", customProperties.size=" + (customProperties != null ? customProperties.size() : 0);
+            return super.toLoggingString() + ", clientTimestamp=" + clientTimestamp + ", customProperties.size=" + (customProperties != null ? customProperties.size() : 0);
         }
     }
 
@@ -830,5 +839,62 @@ public interface MessageClasses {
         public String toLoggingString() {
             return super.toLoggingString() + ", message.estimateBytes=" + message.getNumBytes() + ", retentionPriority=" + priority;
         }
-    } 
+    }
+    
+    //////////////////////////////////////////////////////////////////////
+    // Wrapper for server generated messages
+    
+    /**
+     * Class wrapping a MessageBase with additional information that is not intended to be saved.
+     * All messages sent from server to client are of type MessageBaseWrapper.
+     * All messages sent from client to server are of type ClientGeneratedMessage.
+     */
+    class MessageWrapper implements Serializable, LoggingString {
+        private static final long serialVersionUID = 1L;
+        
+        private final @NotNull MessageBase message;
+
+        MessageWrapper(@NotNull MessageBase message) {
+            this.message = message;
+        }
+        
+        public @NotNull MessageBase getMessage() {
+            return message;
+        }
+        
+        @Override
+        public String toLoggingString() {
+            return classType(this) + " [" + message.toLoggingString() + "]";
+        }
+    }
+
+    /**
+     * Class wrapping a RelayMessageBase with additional information, used when sending a message from server to client.
+     * The field download is the true if this message is being sent as a result of download,
+     * or false otherwise.
+     */
+    class RelayMessageWrapper extends MessageWrapper {
+        private static final long serialVersionUID = 1L;
+        
+        private final boolean download;
+
+        RelayMessageWrapper(@NotNull RelayMessageBase relayMessage, boolean download) {
+            super(relayMessage);
+            this.download = download;
+        }
+        
+        @Override
+        public @NotNull RelayMessageBase getMessage() {
+            return (@NotNull RelayMessageBase) super.getMessage();
+        }
+        
+        public boolean isDownload() {
+            return download;
+        }
+        
+        @Override
+        public String toLoggingString() {
+            return super.toLoggingString() + " [download=" + download + "]";
+        }
+    }
 }

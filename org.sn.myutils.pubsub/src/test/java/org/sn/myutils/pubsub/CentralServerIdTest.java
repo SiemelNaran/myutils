@@ -14,7 +14,7 @@ public class CentralServerIdTest {
     @Test
     void test() {
         CentralServerId centralServerId = new CentralServerId(1595660400000L);
-        System.out.println(centralServerId.toString());
+        System.out.println(centralServerId);
         assertEquals("17384c57580", centralServerId.toString());
         
         assertEquals(-2067434112, centralServerId.intValue());
@@ -38,11 +38,11 @@ public class CentralServerIdTest {
     @Test
     void testDefaultFromNow() throws InterruptedException {
         CentralServerId centralServerId1 = CentralServerId.createDefaultFromNow();
-        System.out.println(centralServerId1.toString());
+        System.out.println(centralServerId1);
         
         Thread.sleep(1);
         CentralServerId centralServerId2 = CentralServerId.createDefaultFromNow();
-        System.out.println(centralServerId2.toString());
+        System.out.println(centralServerId2);
         
         assertThat(centralServerId2, Matchers.greaterThan(centralServerId1));
     }

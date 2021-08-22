@@ -20,6 +20,7 @@ import java.nio.channels.SocketChannel;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import org.sn.myutils.pubsub.MessageClasses.MessageBase;
+import org.sn.myutils.pubsub.MessageClasses.MessageWrapper;
 
 
 class SocketTransformer {
@@ -29,7 +30,7 @@ class SocketTransformer {
         private final ByteBuffer lengthBuffer = ByteBuffer.allocate(2);
         private final ByteBuffer messageBuffer;
 
-        MessageAsByteBuffers(MessageBase message, short maxLength) throws IOException {
+        <T> MessageAsByteBuffers(T message, short maxLength) throws IOException {
             messageBuffer = messageToByteBuffer(message, maxLength);
             lengthBuffer.putShort((short) messageBuffer.limit());
             lengthBuffer.flip();
@@ -68,14 +69,14 @@ class SocketTransformer {
      * @return a MessageBase
      * @throws IOException if there was an IOException or the class not found or does not inherit from MessageBase
      */
-    public MessageBase readMessageFromSocket(SocketChannel channel) throws IOException {
+    public MessageWrapper readMessageFromSocket(SocketChannel channel) throws IOException {
         ByteBuffer lengthBuffer = ByteBuffer.allocate(Short.BYTES);
         readAllBytes(channel, lengthBuffer);
         short length = lengthBuffer.getShort();
         
         ByteBuffer messageBuffer = ByteBuffer.allocate(length);
         readAllBytes(channel, messageBuffer);
-        return byteBufferToMessage(messageBuffer);
+        return byteBufferToMessage(messageBuffer, MessageWrapper.class);
     }
     
     
@@ -101,7 +102,7 @@ class SocketTransformer {
      * @throws IllegalArgumentException if the message is too long
      * @throws IOException if there was an IOException writing to the object output stream or to the socket
      */
-    public CompletionStage<Void> writeMessageToSocketAsync(MessageBase message, short maxLength, AsynchronousSocketChannel channel) throws IOException {
+    public CompletionStage<Void> writeMessageToSocketAsync(MessageWrapper message, short maxLength, AsynchronousSocketChannel channel) throws IOException {
         CompletableFuture<Void> futureMessage = new CompletableFuture<>();
         var byteBuffers = new MessageAsByteBuffers(message, maxLength); 
         channel.write(byteBuffers.lengthBuffer, NULL, new CompletionHandler<>() {
@@ -159,7 +160,7 @@ class SocketTransformer {
                             }
                             try {
                                 messageBuffer.flip();
-                                MessageBase message = byteBufferToMessage(messageBuffer);
+                                MessageBase message = byteBufferToMessage(messageBuffer, MessageBase.class);
                                 futureMessage.complete(message);
                             } catch (IOException | RuntimeException | Error e) {
                                 futureMessage.completeExceptionally(e);
@@ -186,7 +187,7 @@ class SocketTransformer {
         return futureMessage;
     }
     
-    private static ByteBuffer messageToByteBuffer(MessageBase message, int maxLength) throws IOException {
+    private static <T> ByteBuffer messageToByteBuffer(T message, int maxLength) throws IOException {
         ObjectOutputStream oos = null;
         try {
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -202,12 +203,24 @@ class SocketTransformer {
         }
     }
 
-    private static MessageBase byteBufferToMessage(ByteBuffer buffer) throws IOException {
+    /**
+     * Convert a byte buffer into T using Java serialization.
+     * 
+     * @param T is either MessageBase.class or MessageBaseWrapper.class
+     * @throws ClassCastException if buffer translates into an object other than T or one derived from it.
+     */
+    @SuppressWarnings("unchecked")
+    private static <T> T byteBufferToMessage(ByteBuffer buffer, Class<T> clazz) throws IOException {
         ObjectInputStream ois = null;
         try {
             ByteArrayInputStream bis = new ByteArrayInputStream(buffer.array());
             ois = new ObjectInputStream(bis);
-            return (MessageBase) ois.readObject();
+            Object obj = ois.readObject();
+            if (clazz.isInstance(obj)) {
+                return (T) obj;
+            } else {
+                throw new ClassCastException(); 
+            }
         } catch (ClassNotFoundException | InvalidClassException | StreamCorruptedException | OptionalDataException | ClassCastException e) {
             throw new IOException(e);
         } finally {

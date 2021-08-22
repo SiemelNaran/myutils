@@ -106,6 +106,7 @@ class PubSubUtils {
         }
         try {
             executor.shutdownNow();
+            //noinspection ResultOfMethodCallIgnored
             executor.awaitTermination(100, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | RuntimeException | Error ignored) {
         }
@@ -128,7 +129,7 @@ class PubSubUtils {
      */
     static long computeExponentialBackoff(long base, int retryNumber, int capRetries) {
         int count = Math.min(retryNumber,  capRetries) - 1;
-        return base * (1 << count);
+        return base * (1L << count);
     }
     
     /**
