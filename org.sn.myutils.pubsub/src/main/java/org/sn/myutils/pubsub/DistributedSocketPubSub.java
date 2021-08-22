@@ -41,6 +41,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -130,7 +131,8 @@ public class DistributedSocketPubSub extends PubSub {
     private final ExecutorService channelExecutor = Executors.newCachedThreadPool(createThreadFactory("DistributedSocketPubSub", true)); // one write thread, multiple read threads
     private final ScheduledExecutorService retryExecutor = Executors.newScheduledThreadPool(1, createThreadFactory("DistributedSocketPubSub.Retry", true));
     private final MessageWriter messageWriter;
-    private final AtomicLong localMaxMessage = new AtomicLong();
+    private final AtomicLong localClientIndex = new AtomicLong();
+    private final AtomicInteger localCommandIndex = new AtomicInteger();
     private final Map<String /*topic*/, CompletableFuture<Publisher>> fetchPublisherMap = new HashMap<>();
     private final Cleanable cleanable;
     private final MessageServerConnectionListener messageServerConnectionListener = new MessageServerConnectionListener();
@@ -564,7 +566,7 @@ public class DistributedSocketPubSub extends PubSub {
         }
 
         void queueSendAddSubscriber(long createdAtTimestamp, @NotNull String topic, @NotNull String subscriberName, boolean isResend) {
-            var addSubscriber = new AddSubscriber(createdAtTimestamp, topic, subscriberName, true, isResend);
+            var addSubscriber = new AddSubscriber(createdAtTimestamp, topic, subscriberName, localCommandIndex.incrementAndGet(), true, isResend);
             Map<String, String> customProperties = new LinkedHashMap<>();
             DistributedSocketPubSub.this.addCustomPropertiesForAddSubscriber(customProperties, topic, subscriberName);
             addSubscriber.setCustomProperties(customProperties);
@@ -572,7 +574,7 @@ public class DistributedSocketPubSub extends PubSub {
         }
 
         void queueSendRemoveSubscriber(@NotNull String topic, @NotNull String subscriberName) {
-            var removeSubscriber = new RemoveSubscriber(topic, subscriberName);
+            var removeSubscriber = new RemoveSubscriber(topic, subscriberName, localCommandIndex.incrementAndGet());
             Map<String, String> customProperties = new LinkedHashMap<>();
             DistributedSocketPubSub.this.addCustomPropertiesForRemoveSubscriber(customProperties, topic, subscriberName);
             removeSubscriber.setCustomProperties(customProperties);
@@ -580,7 +582,7 @@ public class DistributedSocketPubSub extends PubSub {
         }
 
         void queueSendCreatePublisher(long createdAtTimestamp, @NotNull String topic, @NotNull Class<?> publisherClass, RelayFields relayFields, boolean isResend) {
-            var createPublisher = new CreatePublisher(createdAtTimestamp, localMaxMessage.incrementAndGet(), topic, publisherClass, isResend);
+            var createPublisher = new CreatePublisher(createdAtTimestamp, localClientIndex.incrementAndGet(), topic, publisherClass, isResend);
             createPublisher.setRelayFields(relayFields);
             Map<String, String> customProperties = new LinkedHashMap<>();
             DistributedSocketPubSub.this.addCustomPropertiesForCreatePublisher(customProperties, topic);
@@ -589,20 +591,20 @@ public class DistributedSocketPubSub extends PubSub {
         }
 
         void queueSendPublishMessage(@NotNull String topic, @NotNull CloneableObject<?> message, RetentionPriority priority) {
-            var publishMessage = new PublishMessage(localMaxMessage.incrementAndGet(), topic, message, priority);
+            var publishMessage = new PublishMessage(localClientIndex.incrementAndGet(), topic, message, priority);
             internalPutMessage(publishMessage);
         }
 
         void queueSendDownloadByServerId(Collection<String> topics, ServerIndex startIndexInclusive, ServerIndex endIndexInclusive) {
-            internalPutDownloadMessages(new DownloadPublishedMessagesByServerId(topics, startIndexInclusive, endIndexInclusive));
+            internalPutDownloadMessages(new DownloadPublishedMessagesByServerId(localCommandIndex.incrementAndGet(), topics, startIndexInclusive, endIndexInclusive));
         }
 
         void queueSendDownloadByClientTimestamp(Collection<String> topics, long startInclusive, long endInclusive) {
-            internalPutDownloadMessages(new DownloadPublishedMessagesByClientTimestamp(topics, startInclusive, endInclusive));
+            internalPutDownloadMessages(new DownloadPublishedMessagesByClientTimestamp(localCommandIndex.incrementAndGet(), topics, startInclusive, endInclusive));
         }
 
         void queueSendFetchPublisher(String topic) {
-            internalPutMessage(new FetchPublisher(topic));
+            internalPutMessage(new FetchPublisher(topic, localCommandIndex.incrementAndGet()));
         }
         
         void queueSendDeferredMessages(SocketAddress messageServer) {
