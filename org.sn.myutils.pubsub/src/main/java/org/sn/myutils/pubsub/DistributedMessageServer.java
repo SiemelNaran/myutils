@@ -1031,7 +1031,7 @@ public class DistributedMessageServer implements Shutdowneable {
                            String.format("Unsupported message from client: clientMachine=%s, %s",
                                          clientMachine,
                                          message.toLoggingString()));
-                DistributedMessageServer.this.wrapAndSend(new UnsupportedMessage(message.getClass(), extractClientIndex(message)), clientMachine, 0);
+                DistributedMessageServer.this.wrapAndSend(new UnsupportedMessage(message.getClass(), extractClientIndex(message)), clientMachine);
             }
             return clientMachine;
         }
@@ -1077,7 +1077,7 @@ public class DistributedMessageServer implements Shutdowneable {
         if (findClientMachineByChannel(channel) != null) {
             var clientRejected = new ClientRejected(maxMessage.get().extractCentralServerId(), ErrorMessageEnum.CHANNEL_ALREADY_REGISTERED.format(getRemoteAddress(channel)));
             LOGGER.log(Level.ERROR, clientRejected.toLoggingString());
-            wrapAndSend(clientRejected, ClientMachine.unregistered(channel), 0);
+            wrapAndSend(clientRejected, ClientMachine.unregistered(channel));
             return;
         }
         ClientMachine existingClientMachine = findClientMachineByMachineId(identification.getMachineId());
@@ -1086,7 +1086,7 @@ public class DistributedMessageServer implements Shutdowneable {
                                                     ErrorMessageEnum.DUPLICATE_CLIENT_MACHINE_ID.format(identification.getMachineId(),
                                                                                                         getRemoteAddress(existingClientMachine.getChannel())));
             LOGGER.log(Level.ERROR, clientRejected.toLoggingString());
-            wrapAndSend(clientRejected, ClientMachine.unregistered(channel), 0);
+            wrapAndSend(clientRejected, ClientMachine.unregistered(channel));
             return;
         }
         
@@ -1095,7 +1095,7 @@ public class DistributedMessageServer implements Shutdowneable {
         clientMachines.add(clientMachine);
         LOGGER.log(Level.INFO, "Added client machine: clientMachine={0}, clientAddress={1}", clientMachine.getMachineId(), getRemoteAddress(channel));
         var clientAccepted = new ClientAccepted(maxMessage.get().extractCentralServerId());
-        wrapAndSend(clientAccepted, clientMachine, 0);
+        wrapAndSend(clientAccepted, clientMachine);
     }
     
     /**
@@ -1165,7 +1165,7 @@ public class DistributedMessageServer implements Shutdowneable {
     private void handleFetchPublisher(ClientMachine clientMachine, String topic) {
         CreatePublisher createPublisher = publishersAndSubscribers.maybeAddNotifyClient(topic, clientMachine.getMachineId());
         if (createPublisher != null) {
-            wrapAndSend(createPublisher, clientMachine, 0);
+            wrapAndSend(createPublisher, clientMachine);
         }
     }
     
@@ -1178,8 +1178,8 @@ public class DistributedMessageServer implements Shutdowneable {
             wrapAndSend(new AddSubscriberFailed(ErrorMessageEnum.CANNOT_SUBSCRIBE.format(subscriberInfo.getTopic(), subscriberInfo.getSubscriberName(), reason),
                                                 topic,
                                                 subscriberName),
-                        clientMachine,
-                        0);
+                        clientMachine
+            );
             return;
         }
 
@@ -1201,14 +1201,14 @@ public class DistributedMessageServer implements Shutdowneable {
                        "Added subscriber : topic={0}, subscriberName={1}, clientMachine={2}, sendingPublisher={3}, doDownload={4}",
                        topic, subscriberName, clientMachine.getMachineId(), sendingPublisher, doDownload);
             if (!subscriberInfo.isResend()) {
-                wrapAndSend(new SubscriberAdded(topic, subscriberName), clientMachine, 0);
+                wrapAndSend(new SubscriberAdded(topic, subscriberName), clientMachine);
             }
             if (sendingPublisher) {
-                wrapAndSend(addSubscriberResult.getCreatePublisher(), clientMachine, 0);
+                wrapAndSend(addSubscriberResult.getCreatePublisher(), clientMachine);
             }
             if (doDownload) {
                 download("handleAddSubscriber",
-                         false,
+                         /*downloadClientCommandIndex*/ null,
                          clientMachine,
                          Collections.singletonList(topic),
                          clientTimestamp,
@@ -1236,13 +1236,13 @@ public class DistributedMessageServer implements Shutdowneable {
             wrapAndSend(new RemoveSubscriberFailed(ErrorMessageEnum.CANNOT_SUBSCRIBE.format(subscriberInfo.getTopic(), subscriberInfo.getSubscriberName(), reason),
                                                    topic,
                                                    subscriberName),
-                        clientMachine,
-                        0);
+                        clientMachine
+            );
             return;
         }
 
         publishersAndSubscribers.removeSubscriberEndpoint(topic, clientMachine.getMachineId(), subscriberName);
-        wrapAndSend(new SubscriberRemoved(topic, subscriberName), clientMachine, 0);
+        wrapAndSend(new SubscriberRemoved(topic, subscriberName), clientMachine);
         LOGGER.log(Level.INFO, "Removed subscriber : topic={0} subscriberName={1} clientMachine={2}", topic, subscriberName, clientMachine.getMachineId());
     }
 
@@ -1266,8 +1266,8 @@ public class DistributedMessageServer implements Shutdowneable {
             wrapAndSend(new CreatePublisherFailed(ErrorMessageEnum.CANNOT_CREATE_PUBLISHER.format(topic, reason),
                                                   createPublisher.getClientIndex(),
                                                   topic),
-                 clientMachine,
-                 0);
+                 clientMachine
+            );
             return;
         }
         
@@ -1298,7 +1298,7 @@ public class DistributedMessageServer implements Shutdowneable {
             }
             Runnable finalizerAction;
             if (!createPublisher.isResend()) {
-                finalizerAction = () -> wrapAndSend(new PublisherCreated(createPublisher.getTopic(), createPublisher.getRelayFields()), clientMachine, 0);
+                finalizerAction = () -> wrapAndSend(new PublisherCreated(createPublisher.getTopic(), createPublisher.getRelayFields()), clientMachine);
             } else {
                 finalizerAction = null;
             }
@@ -1312,7 +1312,7 @@ public class DistributedMessageServer implements Shutdowneable {
             // relay CreatePublisher to clients subscribed to this topic
             return params -> {
                 ClientMachine clientMachine = lookupClientMachine(params.getClientMachineId());
-                wrapAndSend(relay, clientMachine, 0);
+                wrapAndSend(relay, clientMachine);
             };
         } else {
             // client is resending publisher after a server restart
@@ -1323,10 +1323,10 @@ public class DistributedMessageServer implements Shutdowneable {
             return params -> {
                 if (params.getMinClientTimestamp() == null) {
                     // this block called for clients just wanting notification of a publisher
-                    wrapAndSend(relay, lookupClientMachine(params.getClientMachineId()), 0);
+                    wrapAndSend(relay, lookupClientMachine(params.getClientMachineId()));
                 } else {
                     download("handleCreatePublisher",
-                             false,
+                             null,
                              lookupClientMachine(params.getClientMachineId()),
                              Collections.singletonList(relay.getTopic()),
                              params.getMinClientTimestamp(),
@@ -1343,7 +1343,7 @@ public class DistributedMessageServer implements Shutdowneable {
     private void handlePublishMessage(PublishMessage relay) {
         Consumer<SubscriberParamsForCallback> relayAction = params -> {
             var otherClientMachine = lookupClientMachine(params.getClientMachineId());
-            wrapAndSend(relay, otherClientMachine, 0);
+            wrapAndSend(relay, otherClientMachine);
         };
         publishersAndSubscribers.saveMessage(relay, relayAction);
     }
@@ -1351,33 +1351,33 @@ public class DistributedMessageServer implements Shutdowneable {
     private void handleDownload(ClientMachine clientMachine, DownloadPublishedMessagesByServerId download) {
         download(
             "downloadByServerId",
-            true,
+            download.getCommandIndex(),
             clientMachine,
             download.getTopics(),
             Long.MIN_VALUE /*minClientTimestamp*/,
             Long.MAX_VALUE /*maxClientTimestamp*/,
             download.getStartServerIndexInclusive(),
             download.getEndServerIndexInclusive(),
-            exception -> wrapAndSend(exception.toInvalidMessage(), clientMachine, 0),
+            exception -> wrapAndSend(exception.toInvalidMessage(), clientMachine),
             /*forceLogging*/ true);
     }
 
     private void handleDownload(ClientMachine clientMachine, DownloadPublishedMessagesByClientTimestamp download) {
         download(
             "downloadByClientTimestamp",
-            true,
+            download.getCommandIndex(),
             clientMachine,
             download.getTopics(),
             download.getStartInclusive() /*minClientTimestamp*/,
             download.getEndInclusive() /*maxClientTimestamp*/,
             ServerIndex.MIN_VALUE,
             ServerIndex.MAX_VALUE,
-            exception -> wrapAndSend(exception.toInvalidMessage(), clientMachine, 0),
+            exception -> wrapAndSend(exception.toInvalidMessage(), clientMachine),
             /*forceLogging*/ true);
     }
 
     private void download(@NotNull String trigger,
-                          boolean download,
+                          @Nullable Integer downloadCommandIndex,
                           ClientMachine clientMachine,
                           Collection<String> topics,
                           long minClientTimestamp,
@@ -1393,7 +1393,7 @@ public class DistributedMessageServer implements Shutdowneable {
             maxClientTimestamp,
             lowerBoundInclusive, 
             upperBoundInclusive,
-            publishMessage -> send(new RelayMessageWrapper(publishMessage, download), clientMachine, 0),
+            publishMessage -> send(new RelayMessageWrapper(publishMessage, downloadCommandIndex), clientMachine, 0),
             errorCallback);
         if (numMessages != 0 || forceLogging) {
             LOGGER.log(Level.INFO, String.format("Download messages to client: clientMachine=%s, trigger=%s,  numMessagesDownloaded=%d",
@@ -1406,16 +1406,16 @@ public class DistributedMessageServer implements Shutdowneable {
     private void sendRequestIdentification(AsynchronousSocketChannel channel, MessageBase message) {
         ClientMachine clientMachine = ClientMachine.unregistered(channel);
         RequestIdentification request = new RequestIdentification(message.getClass(), extractClientIndex(message));
-        wrapAndSend(request, clientMachine, 0);
+        wrapAndSend(request, clientMachine);
     }
 
     private void sendInvalidRelayMessage(ClientMachine clientMachine, RelayMessageBase relayMessage, String error) {
         InvalidRelayMessage invalid = new InvalidRelayMessage(error, relayMessage.getClientIndex());
-        wrapAndSend(invalid, clientMachine, 0);
+        wrapAndSend(invalid, clientMachine);
     }
     
-    private void wrapAndSend(MessageBase message, ClientMachine clientMachine, int retry) {
-        send(new MessageWrapper(message), clientMachine, retry);
+    private void wrapAndSend(MessageBase message, ClientMachine clientMachine) {
+        send(new MessageWrapper(message), clientMachine, 0);
     }
     
     private void send(MessageWrapper wrapper, ClientMachine clientMachine, int retry) {

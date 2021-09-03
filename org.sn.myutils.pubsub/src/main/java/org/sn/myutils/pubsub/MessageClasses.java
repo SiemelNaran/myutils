@@ -403,7 +403,17 @@ public interface MessageClasses {
     
     //////////////////////////////////////////////////////////////////////
     // Client generated messages
-    
+
+    /**
+     * The base class of all client generated messages that perform a one time command.
+     */
+    interface ClientCommand {
+        /**
+         * A unique number identifying the command.
+         */
+        int getCommandIndex();
+    }
+
     /**
      * Messages originating from client and sent to server, which they may be relayed to other clients.
      * Required field clientTimestamp, which is the time the client sent the message.
@@ -486,18 +496,32 @@ public interface MessageClasses {
         }
     }
 
+    abstract class ClientGeneratedTopicMessageCommand extends ClientGeneratedTopicMessage implements ClientCommand {
+        private final int commandIndex;
+
+        public ClientGeneratedTopicMessageCommand(Long clientTimestamp, String topic, int commandIndex) {
+            super(clientTimestamp, topic);
+            this.commandIndex = commandIndex;
+        }
+
+        @Override
+        public int getCommandIndex() {
+            return commandIndex;
+        }
+    }
+
     /**
      * Class to notify the server that we are subscribing to or unsubscribing from a particular topic,
      * so that it sends or stops sending us messages published to this topic.
      * Required fields topic and subscriberName.
      */
-    abstract class AddOrRemoveSubscriber extends ClientGeneratedTopicMessage {
+    abstract class AddOrRemoveSubscriber extends ClientGeneratedTopicMessageCommand {
         private static final long serialVersionUID = 1L;
         
         private final String subscriberName;
 
-        public AddOrRemoveSubscriber(Long clientTimestamp, String topic, String subscriberName) {
-            super(clientTimestamp, topic);
+        public AddOrRemoveSubscriber(Long clientTimestamp, String topic, String subscriberName, int commandIndex) {
+            super(clientTimestamp, topic, commandIndex);
             this.subscriberName = subscriberName;
         }
         
@@ -522,8 +546,8 @@ public interface MessageClasses {
         private final boolean tryDownload;
         private final boolean isResend;
         
-        public AddSubscriber(long createdAtTimestamp, String topic, String subscriberName, boolean tryDownload, boolean isResend) {
-            super(createdAtTimestamp, topic, subscriberName);
+        public AddSubscriber(long createdAtTimestamp, String topic, String subscriberName, int commandIndex, boolean tryDownload, boolean isResend) {
+            super(createdAtTimestamp, topic, subscriberName, commandIndex);
             this.tryDownload = tryDownload;
             this.isResend = isResend;
         }
@@ -550,8 +574,8 @@ public interface MessageClasses {
     class RemoveSubscriber extends AddOrRemoveSubscriber {
         private static final long serialVersionUID = 1L;
         
-        public RemoveSubscriber(String topic, String subscriberName) {
-            super(null, topic, subscriberName);
+        public RemoveSubscriber(String topic, String subscriberName, int commandIndex) {
+            super(null, topic, subscriberName, commandIndex);
         }
     }
     
@@ -560,11 +584,11 @@ public interface MessageClasses {
      * Required field topic.
      * The response is a CreatePublisher command.
      */
-    class FetchPublisher extends ClientGeneratedTopicMessage {
+    class FetchPublisher extends ClientGeneratedTopicMessageCommand {
         private static final long serialVersionUID = 1L;
         
-        public FetchPublisher(String topic) {
-            super(null, topic);
+        public FetchPublisher(String topic, int commandIndex) {
+            super(null, topic, commandIndex);
         }
     }
 
@@ -572,13 +596,15 @@ public interface MessageClasses {
      * Class sent by client to download published messages even if they have already been sent to the client.
      * The server will send a PublishMessage for each object that it has in its cache.
      */
-    abstract class DownloadPublishedMessages<DownloadType extends DownloadPublishedMessages<DownloadType>> extends ClientGeneratedMessage {
+    abstract class DownloadPublishedMessages<DownloadType extends DownloadPublishedMessages<DownloadType>> extends ClientGeneratedMessage implements ClientCommand {
         private static final long serialVersionUID = 1L;
 
+        private final int commandIndex;
         private final Collection<String> topics;
 
-        public DownloadPublishedMessages(Collection<String> topics) {
+        public DownloadPublishedMessages(int commandIndex, Collection<String> topics) {
             super(null);
+            this.commandIndex = commandIndex;
             this.topics = topics;
         }
 
@@ -589,6 +615,11 @@ public interface MessageClasses {
         @Override
         public String toLoggingString() {
             return super.toLoggingString() + ", topics=" + topics;
+        }
+
+        @Override
+        public int getCommandIndex() {
+            return commandIndex;
         }
 
         abstract DownloadType cloneTo(Collection<String> topicsSublist);
@@ -605,8 +636,8 @@ public interface MessageClasses {
         private final @NotNull ServerIndex startServerIndexInclusive;
         private final @NotNull ServerIndex endServerIndexInclusive;
 
-        public DownloadPublishedMessagesByServerId(Collection<String> topics, @NotNull ServerIndex startServerIndexInclusive, @NotNull ServerIndex endServerIndexInclusive) {
-            super(topics);
+        public DownloadPublishedMessagesByServerId(int commandIndex, Collection<String> topics, @NotNull ServerIndex startServerIndexInclusive, @NotNull ServerIndex endServerIndexInclusive) {
+            super(commandIndex, topics);
             this.startServerIndexInclusive = startServerIndexInclusive;
             this.endServerIndexInclusive = endServerIndexInclusive;
         }
@@ -632,7 +663,7 @@ public interface MessageClasses {
         @Override
         DownloadPublishedMessagesByServerId cloneTo(Collection<String> topicsSublist) {
             assert getTopics().containsAll(topicsSublist);
-            return new DownloadPublishedMessagesByServerId(topicsSublist, startServerIndexInclusive, endServerIndexInclusive);
+            return new DownloadPublishedMessagesByServerId(getCommandIndex(), topicsSublist, startServerIndexInclusive, endServerIndexInclusive);
         }
     }
 
@@ -647,8 +678,8 @@ public interface MessageClasses {
         private final long startInclusive;
         private final long endInclusive;
 
-        public DownloadPublishedMessagesByClientTimestamp(Collection<String> topics, long startInclusive, long endInclusive) {
-            super(topics);
+        public DownloadPublishedMessagesByClientTimestamp(int commandIndex, Collection<String> topics, long startInclusive, long endInclusive) {
+            super(commandIndex, topics);
             this.startInclusive = startInclusive;
             this.endInclusive = endInclusive;
         }
@@ -674,7 +705,7 @@ public interface MessageClasses {
         @Override
         DownloadPublishedMessagesByClientTimestamp cloneTo(Collection<String> topicsSublist) {
             assert getTopics().containsAll(topicsSublist);
-            return new DownloadPublishedMessagesByClientTimestamp(topicsSublist, startInclusive, endInclusive);
+            return new DownloadPublishedMessagesByClientTimestamp(getCommandIndex(), topicsSublist, startInclusive, endInclusive);
         }
     }
 
@@ -876,11 +907,11 @@ public interface MessageClasses {
     class RelayMessageWrapper extends MessageWrapper {
         private static final long serialVersionUID = 1L;
         
-        private final boolean download;
+        private final Integer downloadCommandIndex;
 
-        RelayMessageWrapper(@NotNull RelayMessageBase relayMessage, boolean download) {
+        RelayMessageWrapper(@NotNull RelayMessageBase relayMessage, Integer downloadCommandIndex) {
             super(relayMessage);
-            this.download = download;
+            this.downloadCommandIndex = downloadCommandIndex;
         }
         
         @Override
@@ -888,13 +919,13 @@ public interface MessageClasses {
             return (@NotNull RelayMessageBase) super.getMessage();
         }
         
-        public boolean isDownload() {
-            return download;
+        public Integer getDownloadCommandIndex() {
+            return downloadCommandIndex;
         }
         
         @Override
         public String toLoggingString() {
-            return super.toLoggingString() + " [download=" + download + "]";
+            return super.toLoggingString() + " [downloadCommandIndex=" + downloadCommandIndex + "]";
         }
     }
 }

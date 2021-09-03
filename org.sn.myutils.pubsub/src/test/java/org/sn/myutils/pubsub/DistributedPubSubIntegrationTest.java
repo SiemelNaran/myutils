@@ -1469,7 +1469,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
             public boolean handle(MessageWrapper wrapper) {
                 boolean isDownload;
                 if (wrapper instanceof RelayMessageWrapper) {
-                    isDownload = ((RelayMessageWrapper) wrapper).isDownload();
+                    isDownload = ((RelayMessageWrapper) wrapper).getDownloadCommandIndex() != null;
                 } else {
                     isDownload = false;
                 }
@@ -1849,7 +1849,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         }
     }
     
-    private static class BogusMessage implements MessageClasses.TopicMessageBase {
+    private static class BogusMessage implements TopicMessageBase {
         private static final long serialVersionUID = 1L;
 
         @Override
