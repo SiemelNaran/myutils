@@ -636,7 +636,10 @@ public interface MessageClasses {
         private final @NotNull ServerIndex startServerIndexInclusive;
         private final @NotNull ServerIndex endServerIndexInclusive;
 
-        public DownloadPublishedMessagesByServerId(int commandIndex, Collection<String> topics, @NotNull ServerIndex startServerIndexInclusive, @NotNull ServerIndex endServerIndexInclusive) {
+        public DownloadPublishedMessagesByServerId(int commandIndex,
+                                                   Collection<String> topics,
+                                                   @NotNull ServerIndex startServerIndexInclusive,
+                                                   @NotNull ServerIndex endServerIndexInclusive) {
             super(commandIndex, topics);
             this.startServerIndexInclusive = startServerIndexInclusive;
             this.endServerIndexInclusive = endServerIndexInclusive;
@@ -678,7 +681,10 @@ public interface MessageClasses {
         private final long startInclusive;
         private final long endInclusive;
 
-        public DownloadPublishedMessagesByClientTimestamp(int commandIndex, Collection<String> topics, long startInclusive, long endInclusive) {
+        public DownloadPublishedMessagesByClientTimestamp(int commandIndex,
+                                                          Collection<String> topics,
+                                                          long startInclusive,
+                                                          long endInclusive) {
             super(commandIndex, topics);
             this.startInclusive = startInclusive;
             this.endInclusive = endInclusive;

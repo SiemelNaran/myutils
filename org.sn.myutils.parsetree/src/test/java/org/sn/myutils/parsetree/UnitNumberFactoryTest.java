@@ -110,10 +110,9 @@ public class UnitNumberFactoryTest {
         
         @Override
         public boolean equals(Object thatObject) {
-            if (!(thatObject instanceof USD)) {
+            if (!(thatObject instanceof USD that)) {
                 return false;
             }
-            USD that = (USD) thatObject;
             return Objects.equals(this.rawvalue(), that.rawvalue());
         }
         
@@ -137,10 +136,9 @@ public class UnitNumberFactoryTest {
         
         @Override
         public boolean equals(Object thatObject) {
-            if (!(thatObject instanceof EUR)) {
+            if (!(thatObject instanceof EUR that)) {
                 return false;
             }
-            EUR that = (EUR) thatObject;
             return Objects.equals(this.rawvalue(), that.rawvalue());
         }
         

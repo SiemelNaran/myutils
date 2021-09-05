@@ -27,7 +27,6 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.sn.myutils.testutils.TestUtil;
 import org.sn.myutils.util.concurrent.SerializableScheduledExecutorService.RecreateRunnableFailedException;
@@ -156,7 +155,7 @@ public class SerializableScheduledExecutorServiceTest {
             assertEquals(Arrays.asList(1, 2, 2, 2),
                          TestRunnablesWithDefaultConstructor.numbers.stream()
                                                                     .map(AtomicInteger::get)
-                                                                    .collect(Collectors.toList()));
+                                                                    .toList());
             assertEquals(2, unfinishedRunnables.size()); // returns the cancelled tasks
             
             UnfinishedTasks unfinishedTasks = service.exportUnfinishedTasks();
@@ -168,7 +167,7 @@ public class SerializableScheduledExecutorServiceTest {
                                         .sorted(Comparator.comparing(TaskInfo::getInitialDelayInNanos))
                                         .map(TaskInfo::getUnderlyingClass)
                                         .map(Class::getSimpleName)
-                                        .collect(Collectors.toList()));
+                                        .toList());
             
             ObjectOutputStream oos = new ObjectOutputStream(bos);
             oos.writeObject(unfinishedTasks);
@@ -179,7 +178,7 @@ public class SerializableScheduledExecutorServiceTest {
         assertEquals(Arrays.asList(1, 2, 2, 2),
                      TestRunnablesWithDefaultConstructor.numbers.stream()
                                                                 .map(AtomicInteger::get)
-                                                                .collect(Collectors.toList()));
+                                                                .toList());
         
         {
             ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
@@ -201,7 +200,7 @@ public class SerializableScheduledExecutorServiceTest {
             assertEquals(Arrays.asList(2, 3, 3, 2),
                          TestRunnablesWithDefaultConstructor.numbers.stream()
                                                                     .map(AtomicInteger::get)
-                                                                    .collect(Collectors.toList()));
+                                                                    .toList());
             assertEquals(0, unfinishedRunnables.size());
             
             UnfinishedTasks unfinishedTasks = service.exportUnfinishedTasks();
@@ -264,7 +263,7 @@ public class SerializableScheduledExecutorServiceTest {
             recurringFuture70.cancel(false);
 
             List<Runnable> unfinishedRunnables = service.shutdownNow();
-            assertEquals(Arrays.asList(1, 2, 2, 2), TestSerializableRunnable.numbers.stream().map(AtomicInteger::get).collect(Collectors.toList()));
+            assertEquals(Arrays.asList(1, 2, 2, 2), TestSerializableRunnable.numbers.stream().map(AtomicInteger::get).toList());
             assertEquals(2, unfinishedRunnables.size()); // returns the cancelled tasks
             
             UnfinishedTasks unfinishedTasks = service.exportUnfinishedTasks();
@@ -277,7 +276,7 @@ public class SerializableScheduledExecutorServiceTest {
                                    .map(TaskInfo::getSerializableRunnable)
                                    .map(serializableRunnable -> (TestSerializableRunnable) serializableRunnable)
                                    .map(TestSerializableRunnable::getIndex)
-                                   .collect(Collectors.toList()));
+                                   .toList());
 
             ObjectOutputStream oos = new ObjectOutputStream(bos);
             oos.writeObject(unfinishedTasks);
@@ -285,7 +284,7 @@ public class SerializableScheduledExecutorServiceTest {
         }
         
         Thread.sleep(1000);
-        assertEquals(Arrays.asList(1, 2, 2, 2), TestSerializableRunnable.numbers.stream().map(AtomicInteger::get).collect(Collectors.toList()));
+        assertEquals(Arrays.asList(1, 2, 2, 2), TestSerializableRunnable.numbers.stream().map(AtomicInteger::get).toList());
         
         {
             ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray()));
@@ -304,7 +303,7 @@ public class SerializableScheduledExecutorServiceTest {
             // runnable4: 1670 was cancelled above
 
             List<Runnable> unfinishedRunnables = service.shutdownNow();
-            assertEquals(Arrays.asList(2, 3, 3, 2), TestSerializableRunnable.numbers.stream().map(AtomicInteger::get).collect(Collectors.toList()));
+            assertEquals(Arrays.asList(2, 3, 3, 2), TestSerializableRunnable.numbers.stream().map(AtomicInteger::get).toList());
             assertEquals(0, unfinishedRunnables.size());
             
             UnfinishedTasks unfinishedTasks = service.exportUnfinishedTasks();
@@ -400,7 +399,7 @@ public class SerializableScheduledExecutorServiceTest {
                                    .filter(Objects::nonNull)
                                    .map(serializableCallable -> (TestSerializableCallable) serializableCallable)
                                    .map(TestSerializableCallable::getLocal)
-                                   .collect(Collectors.toList()));
+                                   .toList());
 
             ObjectOutputStream oos = new ObjectOutputStream(bos);
             oos.writeObject(unfinishedTasks);
@@ -665,7 +664,7 @@ public class SerializableScheduledExecutorServiceTest {
                                  recreateRunnableFailedException.getFailedClasses().stream()
                                           .map(Class::getSimpleName)
                                           .sorted()
-                                          .collect(Collectors.toList()));
+                                          .toList());
                 });
         }
     }

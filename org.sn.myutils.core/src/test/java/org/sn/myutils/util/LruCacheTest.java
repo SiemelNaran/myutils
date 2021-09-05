@@ -23,7 +23,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Random;
-import java.util.stream.Collectors;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -376,7 +375,7 @@ public class LruCacheTest {
     }
 
     private static List<String> getListFromIterator(Map<String, String> map) {
-        return map.entrySet().stream().map(Map.Entry::toString).collect(Collectors.toList());
+        return map.entrySet().stream().map(Map.Entry::toString).toList();
     }
 
     ////////////////////////////////////////////////////////////////////////////////////

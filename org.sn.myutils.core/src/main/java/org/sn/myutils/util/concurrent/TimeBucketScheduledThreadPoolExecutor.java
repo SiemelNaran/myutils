@@ -794,10 +794,9 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
 
         @Override
         public boolean equals(Object thatObject) {
-            if (!(thatObject instanceof TimeBucket)) {
+            if (!(thatObject instanceof TimeBucket that)) {
                 return false;
             }
-            TimeBucket that = (TimeBucket) thatObject;
             return this.startInclusiveMillis == that.startInclusiveMillis;
         }
 

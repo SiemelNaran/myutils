@@ -295,8 +295,7 @@ class JsonComparator {
      * For all other cases return true.
      */
     private static boolean isNotDefaultValue(JsonNode node) {
-        if (node instanceof BooleanNode) {
-            BooleanNode booleanNode = (BooleanNode) node;
+        if (node instanceof BooleanNode booleanNode) {
             return booleanNode.asBoolean();
         }
         return true;

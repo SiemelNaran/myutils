@@ -601,8 +601,7 @@ public class InMemoryPubSubIntegrationTest {
         var mySubscriptionMessageExceptionHandler = new InMemoryPubSub.SubscriptionMessageExceptionHandler() {
             @Override
             public void handleException(PubSub.Subscriber subscriber, CloneableObject<?> message, Throwable e) {
-                if (message instanceof TestEvent) {
-                    TestEvent event = (TestEvent) message;
+                if (message instanceof TestEvent event) {
                     event.incrementRetryCount();
                 }
                 words.add(subscriber.getSubscriberName() + "-" + message.getClass().getSimpleName() + " : " + e.getMessage());
@@ -637,8 +636,7 @@ public class InMemoryPubSubIntegrationTest {
         var mySubscriptionMessageExceptionHandler = new InMemoryPubSub.SubscriptionMessageExceptionHandler() {
             @Override
             public void handleException(PubSub.Subscriber subscriber, CloneableObject<?> message, Throwable e) {
-                if (message instanceof TestEvent) {
-                    TestEvent event = (TestEvent) message;
+                if (message instanceof TestEvent event) {
                     event.incrementRetryCount();
                 }
                 words.add(subscriber.getSubscriberName() + "-" + message.getClass().getSimpleName() + " : " + e.getMessage());

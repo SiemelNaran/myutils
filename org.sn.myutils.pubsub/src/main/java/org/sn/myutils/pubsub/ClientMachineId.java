@@ -19,11 +19,10 @@ public final class ClientMachineId implements java.io.Serializable, Comparable<C
     
     @Override
     public boolean equals(Object thatObject) {
-        if (!(thatObject instanceof ClientMachineId)) {
+        if (!(thatObject instanceof ClientMachineId that)) {
             return false;
         }
-        
-        ClientMachineId that = (ClientMachineId) thatObject;
+
         return this.value.equals(that.value);
     }
     

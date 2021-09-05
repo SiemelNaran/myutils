@@ -31,10 +31,9 @@ public class ServerIndex extends Number implements Comparable<ServerIndex> {
 
     @Override
     public boolean equals(Object thatObject) {
-        if (!(thatObject instanceof ServerIndex)) {
+        if (!(thatObject instanceof ServerIndex that)) {
             return false;
         }
-        ServerIndex that = (ServerIndex) thatObject;
         return this.value.equals(that.value);
     }
     

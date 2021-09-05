@@ -142,10 +142,10 @@ class SerializableLambdaUtils {
 
         @SuppressWarnings("rawtypes")
         private Callable<?> recreateCallable() throws RecreateRunnableFailedException {
-            if (serializableRunnable instanceof AdaptSerializableCallable) {
-                return ((AdaptSerializableCallable) serializableRunnable).callable;
-            } else if (serializableRunnable instanceof AdaptSerializableCallableClass) {
-                Class<? extends Callable> callableClass = ((AdaptSerializableCallableClass) serializableRunnable).clazz;
+            if (serializableRunnable instanceof AdaptSerializableCallable adapt) {
+                return adapt.callable;
+            } else if (serializableRunnable instanceof AdaptSerializableCallableClass adapt) {
+                Class<? extends Callable> callableClass = adapt.clazz;
                 try {
                     return callableClass.getDeclaredConstructor().newInstance();
                 } catch (Exception e) {
@@ -161,10 +161,10 @@ class SerializableLambdaUtils {
                 @Override
                 public Class<?> getUnderlyingClass() {
                     if (serializableRunnable != null) {
-                        if (serializableRunnable instanceof AdaptSerializableCallable) {
-                            return ((AdaptSerializableCallable) serializableRunnable).callable.getClass();
-                        } else if (serializableRunnable instanceof AdaptSerializableCallableClass) {
-                            return ((AdaptSerializableCallableClass) serializableRunnable).clazz;
+                        if (serializableRunnable instanceof AdaptSerializableCallable adapt) {
+                            return adapt.callable.getClass();
+                        } else if (serializableRunnable instanceof AdaptSerializableCallableClass adapt) {
+                            return adapt.clazz;
                         } else {
                             return serializableRunnable.getClass();
                         }
@@ -181,8 +181,8 @@ class SerializableLambdaUtils {
                 @Override
                 public SerializableCallable<?> getSerializableCallable() {
                     if (serializableRunnable != null) {
-                        if (serializableRunnable instanceof AdaptSerializableCallable) {
-                            return ((AdaptSerializableCallable) serializableRunnable).callable;
+                        if (serializableRunnable instanceof AdaptSerializableCallable adapt) {
+                            return adapt.callable;
                         }
                     }
                     return null;
@@ -229,8 +229,8 @@ class SerializableLambdaUtils {
     }
 
     static RunnableInfo computeRunnableInfo(Runnable command, long initialDelay, long period, TimeUnit unit, System.Logger.Level logIfCannotSerializeLevel) {
-        if (command instanceof SerializableRunnable) {
-            return new RunnableInfo(new TimeInfo(initialDelay, period, unit), (SerializableRunnable) command);
+        if (command instanceof SerializableRunnable serializableRunnable) {
+            return new RunnableInfo(new TimeInfo(initialDelay, period, unit), serializableRunnable);
         } else {
             Class<? extends Runnable> clazz = command.getClass();
             if (!clazz.isLocalClass()) {
@@ -253,8 +253,8 @@ class SerializableLambdaUtils {
 
     @SuppressWarnings("rawtypes")
     static <V> RunnableInfo computeRunnableInfo(Callable<V> callable, long initialDelay, TimeUnit unit, System.Logger.Level logIfCannotSerializeLevel) {
-        if (callable instanceof SerializableCallable) {
-            SerializableRunnable command = new AdaptSerializableCallable((SerializableCallable<V>) callable);
+        if (callable instanceof SerializableCallable<V> serializableCallable) {
+            SerializableRunnable command = new AdaptSerializableCallable(serializableCallable);
             return new RunnableInfo(new TimeInfo(initialDelay, 0, unit), command);
         } else {
             Class<? extends Callable> clazz = callable.getClass();

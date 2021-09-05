@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 
@@ -48,6 +47,6 @@ public class LinkedHashMapTest {
     }
 
     private static List<String> getListFromIterator(Map<String, String> map) {
-        return map.entrySet().stream().map(Map.Entry::toString).collect(Collectors.toList());
+        return map.entrySet().stream().map(Map.Entry::toString).toList();
     }
 }

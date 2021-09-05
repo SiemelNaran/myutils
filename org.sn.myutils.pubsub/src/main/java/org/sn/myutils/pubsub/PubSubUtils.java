@@ -150,16 +150,14 @@ class PubSubUtils {
     }
     
     static Long extractClientIndex(MessageBase message) {
-        if (message instanceof RelayMessageBase) {
-            RelayMessageBase action = (RelayMessageBase) message;
+        if (message instanceof RelayMessageBase action) {
             return action.getClientIndex();
         }
         return null;
     }
 
     static @Nullable ServerIndex extractServerIndex(MessageBase message) {
-        if (message instanceof RelayMessageBase) {
-            RelayMessageBase action = (RelayMessageBase) message;
+        if (message instanceof RelayMessageBase action) {
             return action.getRelayFields().getServerIndex(); // may throw NullPointerException
         }
         return null;

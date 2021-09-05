@@ -101,8 +101,7 @@ public class MoreExecutors {
      * @see TestScheduledThreadPoolExecutor#advanceTime(long, TimeUnit)
      */
     public static void advanceTime(ScheduledExecutorService service, long time, TimeUnit unit) {
-        if (service instanceof TestScheduledThreadPoolExecutor) {
-            TestScheduledThreadPoolExecutor testService = (TestScheduledThreadPoolExecutor) service;
+        if (service instanceof TestScheduledThreadPoolExecutor testService) {
             testService.advanceTime(time, unit);
         } else {
             long millis = unit.toMillis(time);
@@ -121,8 +120,7 @@ public class MoreExecutors {
      * If called for a thread spawned from the regular java.util.concurrent.ScheduledThreadPoolExecutor or such then return System.currentTimeMillis().
      */
     public static long currentTimeMillis(ScheduledExecutorService service) {
-        if (service instanceof TestScheduledThreadPoolExecutor) {
-            TestScheduledThreadPoolExecutor testService = (TestScheduledThreadPoolExecutor) service; 
+        if (service instanceof TestScheduledThreadPoolExecutor testService) {
             return testService.currentTimeMillis();
         } else {
             return System.currentTimeMillis();

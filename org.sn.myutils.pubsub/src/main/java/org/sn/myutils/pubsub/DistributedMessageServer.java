@@ -46,7 +46,6 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.sn.myutils.annotations.NotNull;
 import org.sn.myutils.annotations.Nullable;
@@ -183,10 +182,9 @@ public class DistributedMessageServer implements Shutdowneable {
         
         @Override
         public boolean equals(Object thatObject) {
-            if (!(thatObject instanceof ClientMachine)) {
+            if (!(thatObject instanceof ClientMachine that)) {
                 return false;
             }
-            ClientMachine that = (ClientMachine) thatObject;
             return this.machineId.equals(that.machineId);
         }
 
@@ -649,7 +647,7 @@ public class DistributedMessageServer implements Shutdowneable {
             try {
                 List<TopicInfo> infos = topics.stream()
                                               .map(topic -> checkClientSubscribedToTopic.apply(topic, topicMap.get(topic)))
-                                              .collect(Collectors.toList());
+                                              .toList();
                 
                 // lock all topics
                 infos.forEach(info -> {
@@ -759,10 +757,9 @@ public class DistributedMessageServer implements Shutdowneable {
         
         @Override
         public boolean equals(Object thatObject) {
-            if (!(thatObject instanceof SubscriberEndpoint)) {
+            if (!(thatObject instanceof SubscriberEndpoint that)) {
                 return false;
             }
-            SubscriberEndpoint that = (SubscriberEndpoint) thatObject;
             return this.clientMachineId.equals(that.clientMachineId) && this.subscriberName.equals(that.subscriberName);
         }
         
@@ -961,14 +958,13 @@ public class DistributedMessageServer implements Shutdowneable {
             ClientMachine clientMachine = null;
             boolean unhandled = false;
             if (message instanceof ClientGeneratedMessage) {
-                if (message instanceof Identification) {
+                if (message instanceof Identification identification) {
                     LOGGER.log(
                         Level.TRACE,
                         () -> String.format("Received message from client: clientAddress=%s, %s",
                                             getRemoteAddress(channel),
                                             message.toLoggingString()));
                     onValidMessageReceived(message);
-                    Identification identification = (Identification) message;
                     DistributedMessageServer.this.addIfNotPresent(identification, channel);
                 } else {
                     clientMachine = findClientMachineByChannel(channel);
@@ -984,36 +980,34 @@ public class DistributedMessageServer implements Shutdowneable {
                             onValidMessageReceived(message);
                         };
                         
-                        if (message instanceof RelayMessageBase
+                        if (message instanceof RelayMessageBase relayMessage
                                     && ((RelayMessageBase) message).getRelayFields() != null
                                     && (!(message instanceof Resendable) || !((Resendable)message).isResend())) {
-                            RelayMessageBase relayMessage = (RelayMessageBase) message;
                             DistributedMessageServer.this.sendInvalidRelayMessage(clientMachine,
                                                                                   relayMessage,
                                                                                   ErrorMessageEnum.MESSAGE_ALREADY_PROCESSED.format(relayMessage.getClientIndex()));
-                        } else if (message instanceof FetchPublisher) {
+                        } else if (message instanceof FetchPublisher fetchPublisher) {
                             logging.run();
-                            DistributedMessageServer.this.handleFetchPublisher(clientMachine, ((FetchPublisher) message).getTopic());
-                        } else if (message instanceof AddSubscriber) {
+                            DistributedMessageServer.this.handleFetchPublisher(clientMachine, fetchPublisher.getTopic());
+                        } else if (message instanceof AddSubscriber addSubscriber) {
                             logging.run();
-                            DistributedMessageServer.this.handleAddSubscriber(clientMachine, (AddSubscriber) message);
-                        } else if (message instanceof RemoveSubscriber) {
+                            DistributedMessageServer.this.handleAddSubscriber(clientMachine, addSubscriber);
+                        } else if (message instanceof RemoveSubscriber removeSubscriber) {
                             logging.run();
-                            DistributedMessageServer.this.handleRemoveSubscriber(clientMachine, (RemoveSubscriber) message);
-                        } else if (message instanceof RelayMessageBase) {
-                            RelayMessageBase relay = (RelayMessageBase) message;
+                            DistributedMessageServer.this.handleRemoveSubscriber(clientMachine, removeSubscriber);
+                        } else if (message instanceof RelayMessageBase relay) {
                             if (relay.getRelayFields() == null) {
                                 ServerIndex nextServerId = maxMessage.updateAndGet(ServerIndex::increment);
                                 relay.setRelayFields(new RelayFields(System.currentTimeMillis(), nextServerId, clientMachine.getMachineId()));
                             }
                             logging.run();
                             DistributedMessageServer.this.handleRelayMessage(clientMachine, relay);
-                        } else if (message instanceof DownloadPublishedMessagesByServerId) {
+                        } else if (message instanceof DownloadPublishedMessagesByServerId downloadPublishedMessagesByServerId) {
                             logging.run();
-                            DistributedMessageServer.this.handleDownload(clientMachine, (DownloadPublishedMessagesByServerId) message);
-                        } else if (message instanceof DownloadPublishedMessagesByClientTimestamp) {
+                            DistributedMessageServer.this.handleDownload(clientMachine, downloadPublishedMessagesByServerId);
+                        } else if (message instanceof DownloadPublishedMessagesByClientTimestamp downloadPublishedMessagesByClientTimestamp) {
                             logging.run();
-                            DistributedMessageServer.this.handleDownload(clientMachine, (DownloadPublishedMessagesByClientTimestamp) message);
+                            DistributedMessageServer.this.handleDownload(clientMachine, downloadPublishedMessagesByClientTimestamp);
                         } else {
                             unhandled = true;
                         }
@@ -1248,10 +1242,10 @@ public class DistributedMessageServer implements Shutdowneable {
 
     private void handleRelayMessage(@NotNull ClientMachine clientMachine, RelayMessageBase relay) {
         if (relay instanceof RelayTopicMessageBase) {
-            if (relay instanceof CreatePublisher) {
-                handleCreatePublisher(clientMachine, (CreatePublisher) relay);
-            } else if (relay instanceof PublishMessage) {
-                handlePublishMessage((PublishMessage) relay);
+            if (relay instanceof CreatePublisher createPublisher) {
+                handleCreatePublisher(clientMachine, createPublisher);
+            } else if (relay instanceof PublishMessage publishMessage) {
+                handlePublishMessage(publishMessage);
             } else {
                 throw new UnsupportedOperationException();
             }

@@ -96,8 +96,7 @@ public class Iterables {
      */
     public static <T> List<T> substring(Iterable<T> word, int start) {
         int capacity;
-        if (word instanceof List) {
-            List<T> list = (List<T>) word;
+        if (word instanceof List<T> list) {
             capacity = list.size();
         } else {
             capacity = 10;
@@ -111,9 +110,7 @@ public class Iterables {
 
     public static <T> List<T> concatenate(Iterable<T> first, Iterable<T> second) {
         int capacity;
-        if (first instanceof List && second instanceof List) {
-            List<T> firstList = (List<T>) first;
-            List<T> secondList = (List<T>) second;
+        if (first instanceof List<T> firstList && second instanceof List<T> secondList) {
             capacity = firstList.size() + secondList.size();
         } else {
             capacity = 10;
@@ -139,8 +136,7 @@ public class Iterables {
         if (offset < 0) {
             throw new IndexOutOfBoundsException("offset is negative: offset=" + offset);
         }
-        if (word instanceof List) {
-            List<T> list = (List<T>) word;
+        if (word instanceof List<T> list) {
             return list.listIterator(offset);
         } else {
             Iterator<T> iter = word.iterator();

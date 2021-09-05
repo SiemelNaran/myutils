@@ -396,11 +396,11 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
 
             // invokeAll and invokeAny continue to work even when executor is shut down:
             List<Future<String>> result = service.invokeAll(List.of(new MyCallable("hello"), new MyCallable("world")));
-            assertThat(result.stream().map(Future::isDone).collect(Collectors.toList()), Matchers.contains(true, true));
-            assertThat(result.stream().map(TestUtil::join).collect(Collectors.toList()), Matchers.contains("hello", "world"));
+            assertThat(result.stream().map(Future::isDone).toList(), Matchers.contains(true, true));
+            assertThat(result.stream().map(TestUtil::join).toList(), Matchers.contains("hello", "world"));
             result = service.invokeAll(List.of(new MyCallable("hello"), new MyCallable("world")), 100, TimeUnit.MILLISECONDS);
-            assertThat(result.stream().map(Future::isDone).collect(Collectors.toList()), Matchers.contains(true, true));
-            assertThat(result.stream().map(TestUtil::join).collect(Collectors.toList()), Matchers.contains("hello", "world"));
+            assertThat(result.stream().map(Future::isDone).toList(), Matchers.contains(true, true));
+            assertThat(result.stream().map(TestUtil::join).toList(), Matchers.contains("hello", "world"));
             String anyString = service.invokeAny(List.of(new MyCallable("hello"), new MyCallable("world")));
             assertThat(anyString, Matchers.oneOf("hello", "world"));
             anyString = service.invokeAny(List.of(new MyCallable("hello"), new MyCallable("world")), 100, TimeUnit.MILLISECONDS);

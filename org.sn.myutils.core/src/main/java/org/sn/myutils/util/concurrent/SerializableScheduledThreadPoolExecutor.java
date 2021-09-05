@@ -74,18 +74,16 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
         ArrayList<RunnableInfo> tasks = new ArrayList<>();
         for (Iterator<Runnable> iter = runnables.iterator(); iter.hasNext(); ) {
             Runnable runnable = iter.next();
-            if (runnable instanceof RunnableScheduledFuture) {
-                RunnableScheduledFuture<?> standardRunnable = (RunnableScheduledFuture<?>) runnable;
+            if (runnable instanceof RunnableScheduledFuture<?> standardRunnable) {
                 if (standardRunnable.isCancelled()) {
                     continue;
                 }
             }
                 
-            if (!(runnable instanceof DecoratedRunnableScheduledFuture)) {
+            if (!(runnable instanceof DecoratedRunnableScheduledFuture<?> decoratedRunnable)) {
                 continue;
             }
-            
-            DecoratedRunnableScheduledFuture<?> decoratedRunnable = (DecoratedRunnableScheduledFuture<?>) runnable;
+
             RunnableInfo runnableInfo = decoratedRunnable.getRunnableInfo();
             if (runnableInfo != null) {
                 TimeInfo timeInfo = runnableInfo.getTimeInfo();
@@ -203,8 +201,7 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
     
     @Override
     protected void afterExecute(Runnable runnable, Throwable throwable) {
-        if (runnable instanceof DecoratedRunnableScheduledFuture) {
-            DecoratedRunnableScheduledFuture<?> decoratedRunnable = (DecoratedRunnableScheduledFuture<?>) runnable;
+        if (runnable instanceof DecoratedRunnableScheduledFuture<?> decoratedRunnable) {
             if (decoratedRunnable.isDone()) {
                 RunnableInfo runnableInfo = decoratedRunnable.getRunnableInfo();
                 if (runnableInfo != null) {

@@ -116,11 +116,9 @@ public class ExpressionParser {
                         
                     } else if (incomplete != null) {
                         ParseNode node = readExpression(token);
-                        if (incomplete instanceof UnaryOperatorNode) {
-                            UnaryOperatorNode incompleteAsUnaryOperator = (UnaryOperatorNode) incomplete;
+                        if (incomplete instanceof UnaryOperatorNode incompleteAsUnaryOperator) {
                             incompleteAsUnaryOperator.setNode(node);
-                        } else if (incomplete instanceof BinaryOperatorNode) {
-                            BinaryOperatorNode incompleteAsBinaryOperator = (BinaryOperatorNode) incomplete;
+                        } else if (incomplete instanceof BinaryOperatorNode incompleteAsBinaryOperator) {
                             incompleteAsBinaryOperator.setRight(node);
                         } else {
                             throw new UnsupportedOperationException(incomplete.getClass().getName());
@@ -129,13 +127,12 @@ public class ExpressionParser {
                         
                     } else {
                         BinaryOperatorNode nodeAsBinaryOperator = (BinaryOperatorNode) constructNodeFromToken(token, ParseMode.ONLY_BINARY_OPERATORS);
-                        if (tree instanceof BinaryOperatorNode
+                        if (tree instanceof BinaryOperatorNode treeAsBinaryNode
                                 && !((BinaryOperatorNode) tree).isAtomic()
                                 && ((BinaryOperatorNode) tree).getPrecedence() < nodeAsBinaryOperator.getPrecedence()) {
                             // we just read an operator that has higher precedence
                             // so rearrange the nodes such that the right node of the current tree (say a PLUS node)
                             // becomes the left node of the operator we just read (say a TIMES node)
-                            BinaryOperatorNode treeAsBinaryNode = (BinaryOperatorNode) tree;
                             ParseNode oldRight = treeAsBinaryNode.getRight();
                             nodeAsBinaryOperator.setLeft(oldRight);
                             treeAsBinaryNode.setRight(nodeAsBinaryOperator);
@@ -176,8 +173,8 @@ public class ExpressionParser {
                 if (parenthesisLevel > oldLevel) {
                     throw new ParseException("missing close parenthesis", endOfLastToken); // handles case: (2 + 3
                 }
-                if (tree instanceof BinaryOperatorNode) {
-                    ((BinaryOperatorNode) tree).setAtomic();
+                if (tree instanceof BinaryOperatorNode binaryOperatorNode) {
+                    binaryOperatorNode.setAtomic();
                 }
                 return tree;
             } else {
@@ -223,8 +220,7 @@ public class ExpressionParser {
     
     
     private static OperatorNode isIncomplete(ParseNode node) {
-        if (node instanceof OperatorNode) {
-            OperatorNode operator = (OperatorNode) node;
+        if (node instanceof OperatorNode operator) {
             if (!operator.isComplete()) {
                 return operator;
             }
