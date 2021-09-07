@@ -77,26 +77,24 @@ public abstract class BinaryOperatorNode implements OperatorNode {
     public void reduce(Listener listener) {
         listener.startBinaryOperator(this);
         switch (listener.characteristics().binaryOperatorPosition()) {
-            case OPERATOR_FIRST:
+            case OPERATOR_FIRST -> {
                 listener.acceptBinaryOperator(this);
                 left.reduce(listener);
                 listener.nextBinaryOperatorArgument(this);
                 right.reduce(listener);
-                break;
-            case OPERATOR_MIDDLE:
+            }
+            case OPERATOR_MIDDLE -> {
                 left.reduce(listener);
                 listener.acceptBinaryOperator(this);
                 listener.nextBinaryOperatorArgument(this);
                 right.reduce(listener);
-                break;
-            case OPERATOR_LAST:
+            }
+            case OPERATOR_LAST -> {
                 left.reduce(listener);
                 listener.nextBinaryOperatorArgument(this);
                 right.reduce(listener);
                 listener.acceptBinaryOperator(this);
-                break;
-            default:
-                throw new UnsupportedOperationException();
+            }
         }
         listener.endBinaryOperator(this);
     }

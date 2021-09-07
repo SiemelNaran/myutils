@@ -1,5 +1,6 @@
 package org.sn.myutils.util;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -19,6 +20,7 @@ import org.sn.myutils.annotations.NotThreadSafe;
 @NotThreadSafe
 public class ArrayListPageList<E> extends AbstractPageList<E> implements PageList<E>, RandomAccess, Serializable {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     ArrayListPageList() {
@@ -39,17 +41,17 @@ public class ArrayListPageList<E> extends AbstractPageList<E> implements PageLis
     
     @Override
     protected Page<E> createNewEmptyPage(int startIndex) {
-        return new ArrayListPage<E>(startIndex);
+        return new ArrayListPage<>(startIndex);
     }
 
     @Override
     protected Page<E> createNewPageByCopyingSublist(int startIndex, List<E> subListToCopy) {
-        return new ArrayListPage<E>(startIndex, new ArrayList<E>(subListToCopy));
+        return new ArrayListPage<>(startIndex, new ArrayList<>(subListToCopy));
     }
 
     @Override
     protected ArrayListPageList<E> createNewPageList() {
-        return new ArrayListPageList<E>(preferredMaxPageSize, maxPageSize);
+        return new ArrayListPageList<>(preferredMaxPageSize, maxPageSize);
     }
 
     @Override
@@ -58,10 +60,11 @@ public class ArrayListPageList<E> extends AbstractPageList<E> implements PageLis
     }
     
     protected static class ArrayListPage<E> extends Page<E> {
+        @Serial
         private static final long serialVersionUID = 1L;
         
         private ArrayListPage(int startIndex) {
-            super(startIndex, new ArrayList<E>());
+            super(startIndex, new ArrayList<>());
         }
         
         private ArrayListPage(int startIndex, List<E> list) {

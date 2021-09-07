@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
 
+@SuppressWarnings("ResultOfMethodCallIgnored")
 public class HashLocksTest {
     @Test
     @SuppressWarnings("checkstyle:indentation") // for argument2 to function HashLocks.create

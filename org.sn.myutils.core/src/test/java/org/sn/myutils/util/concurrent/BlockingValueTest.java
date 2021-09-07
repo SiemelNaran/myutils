@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.sn.myutils.testutils.TestUtil;
 
 
+@SuppressWarnings("ResultOfMethodCallIgnored")
 class BlockingValueTest {
     @Test
     void testGetAndSet() throws InterruptedException {

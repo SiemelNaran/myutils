@@ -93,7 +93,7 @@ public class WeightedRandom implements Supplier<Integer> {
         //                                     INT_RANGE/10*9 + INT_MIN,
         //                                     INT_RANGE/10*10 + INT_MIN // = INT_MAX
         //                                    ] 
-        List<Integer> positions = new ArrayList<Integer>(numWeights);
+        List<Integer> positions = new ArrayList<>(numWeights);
         positions.add(Integer.MIN_VALUE);
         double currentSum = 0;
         for (int i = 0; i < numWeights - 1 - numTrailingZeroes; i++) {

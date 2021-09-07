@@ -11,13 +11,13 @@ public interface ParseNode {
      * of the bind variables. For example in <code>if(a + b, "trueResult", "falseResult")</code>
      * there is an error because the first argument to function <code>if</code> should be a boolean.
      * If the first argument were <code>a > b</code> then the expression is valid, and checkVal
-     * would return Strring.class.
+     * would return String.class.
      * 
      * <p>checkEval could be implemented via reduce instead.
      * 
      * @param scopeTypes the type of all identifiers in this scope
      * @return the type of the return value
-     * @throws myutils.util.parsetree.TypeException if there is an error. This is a runtime exception.
+     * @throws org.sn.myutils.parsetree.TypeException if there is an error. This is a runtime exception.
      */
     Class<?> checkEval(Map<String, Class<?>> scopeTypes) throws org.sn.myutils.parsetree.TypeException;
     
@@ -28,7 +28,7 @@ public interface ParseNode {
      * 
      * @param scope the value of all identifiers in this scope
      * @return the return value
-     * @throws myutils.util.parsetree.EvalException if there is an error. This is a runtime exception.
+     * @throws org.sn.myutils.parsetree.EvalException if there is an error. This is a runtime exception.
      */
     Object eval(Map<String, Object> scope) throws org.sn.myutils.parsetree.EvalException;
 
@@ -38,7 +38,7 @@ public interface ParseNode {
     void reduce(Listener listener);
     
     @SuppressWarnings("checkstyle:RightCurlyAlone")
-    public interface Listener {
+    interface Listener {
         /**
          * The characteristics of the listener, such as the order in which operators and nodes should
          * be visited.
@@ -139,9 +139,8 @@ public interface ParseNode {
         default void endIdentifier(IdentifierNode identifier) { }
         
         
-        public interface Characteristics {
-            
-            static final Characteristics DEFAULT_CHARACTERISTICS = new Characteristics() {
+        interface Characteristics {
+            Characteristics DEFAULT_CHARACTERISTICS = new Characteristics() {
                 @Override
                 public UnaryOperatorPosition unaryOperatorPosition() {
                     return UnaryOperatorPosition.OPERATOR_FIRST;

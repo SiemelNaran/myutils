@@ -2,6 +2,7 @@ package org.sn.myutils.util;
 
 import static java.lang.Math.min;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.AbstractList;
 import java.util.ArrayList;
@@ -33,13 +34,14 @@ import org.sn.myutils.util.MoreCollections.FindWhich;
  */
 @NotThreadSafe
 public abstract class AbstractPageList<E> extends AbstractList<E> implements PageList<E>, RandomAccess, Serializable {
+    @Serial
     private static final long serialVersionUID = 1L;
     private static final int DEFAULT_PREFERRED_MAX_PAGE_SIZE = 50;
     private static final int DEFAULT_MAX_PAGE_SIZE = 100;
 
     protected final int preferredMaxPageSize;
     protected final int maxPageSize;
-    private transient int modCount = 0;
+    private transient int modCount;
     private int size;
     private final ArrayList<Page<E>> pages = new ArrayList<>(); // sorted by Page.startIndex
     
@@ -407,7 +409,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
         spliceHandler.onComplete(outputSize);
         
         // remove pages from the appropriate pages from this, and update the indices of this
-        pages.subList(removeFrom, removeTo).clear();;
+        pages.subList(removeFrom, removeTo).clear();
         updateIndices(removeFrom, -outputSize);
     }
     
@@ -455,7 +457,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
     @Override
     public Spliterator<E> spliterator() {
         int averagePageSize = pages.size() > 0 ? size / pages.size() : 1; 
-        return new PageListSpliterator<E>(modCount, averagePageSize, pages.spliterator());
+        return new PageListSpliterator<>(modCount, averagePageSize, pages.spliterator());
     }
 
     @Override
@@ -547,6 +549,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
     }
     
     protected static class Page<E> implements Serializable {
+        @Serial
         private static final long serialVersionUID = 1L;
         
         private int startIndex;
@@ -650,7 +653,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
             this.expectedModCount = AbstractPageList.this.modCount;
         }
 
-        private final ListIterator<E> getIteratorOfPage(int elementInPageIndex) {
+        private ListIterator<E> getIteratorOfPage(int elementInPageIndex) {
             Page<E> page;
             try {
                 page = pages.get(pageIndex);
@@ -664,14 +667,10 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
             int newPageIndex = pageIndex + pageDelta;
             Page<E> page = pages.get(newPageIndex); // never throws because newPageIndex always in [0, pages.size)
             pageIndex = newPageIndex;
-            switch (direction) {
-                case FORWARD:
-                    return page.list.listIterator();
-                case BACKWARD:
-                    return page.list.listIterator(page.list.size());
-                default:
-                    throw new UnsupportedOperationException();
-            }
+            return switch (direction) {
+                case FORWARD -> page.list.listIterator();
+                case BACKWARD -> page.list.listIterator(page.list.size());
+            };
         }
         
         final void checkForComodification() {
@@ -793,7 +792,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
             if (split == null) {
                 return null;
             }
-            return new PageListSpliterator<E>(expectedModCount, averagePageSize, split);
+            return new PageListSpliterator<>(expectedModCount, averagePageSize, split);
         }
 
         @Override

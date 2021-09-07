@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 
 public class ArrayListIteratorTest {
     @Test
-    void testListIteratorRemoveAdd() throws Exception {
+    void testListIteratorRemoveAdd() {
         List<Integer> list = new ArrayList<>();
         IntStream.range(1, 7).forEach(list::add);
         assertEquals("[1, 2, 3, 4, 5, 6]", list.toString());
@@ -91,9 +91,9 @@ public class ArrayListIteratorTest {
         assertFalse(listIter.hasPrevious());
         assertEquals(0, listIter.nextIndex());
         assertEquals(-1, listIter.previousIndex());
-        assertException(() -> listIter.next(), NoSuchElementException.class);
-        assertException(() -> listIter.previous(), NoSuchElementException.class);
-        assertException(() -> listIter.remove(), IllegalStateException.class);
+        assertException(listIter::next, NoSuchElementException.class);
+        assertException(listIter::previous, NoSuchElementException.class);
+        assertException(listIter::remove, IllegalStateException.class);
                
         listIter.add(100);
         assertEquals("[100]", list.toString());
@@ -110,7 +110,7 @@ public class ArrayListIteratorTest {
         listIter.add(500);
         assertEquals("[100, 200, 300, 400, 500]", list.toString());
         
-        assertException(() -> listIter.remove(), IllegalStateException.class);
+        assertException(listIter::remove, IllegalStateException.class);
         assertEquals("[100, 200, 300, 400, 500]", list.toString());
         
         assertEquals(500, listIter.previous().intValue());

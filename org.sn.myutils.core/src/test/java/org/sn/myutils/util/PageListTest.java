@@ -188,13 +188,13 @@ public class PageListTest {
             assertEquals("0[1,2,3] * 3[4,5,6] * 6[7,8,9] * 9[10,11,12] * 12[13,14,15]", extract(list));
             assertEqualsByGetAndIterAndStream("1,2,3,4,5,6,7,8,9,10,11,12,13,14,15", list);
             
-            list.addAll(4, Arrays.asList(0));
+            list.addAll(4, Collections.singletonList(0));
             assertEquals("0[1,2,3] * 3[4,0,5,6] * 7[7,8,9] * 10[10,11,12] * 13[13,14,15]", extract(list));
             
-            list.addAll(4, Arrays.asList(1));
+            list.addAll(4, Collections.singletonList(1));
             assertEquals("0[1,2,3] * 3[4,1,0,5,6] * 8[7,8,9] * 11[10,11,12] * 14[13,14,15]", extract(list));
             
-            list.addAll(4, Arrays.asList(2));
+            list.addAll(4, Collections.singletonList(2));
             assertEquals("0[1,2,3] * 3[4,2] * 5[1,0,5,6] * 9[7,8,9] * 12[10,11,12] * 15[13,14,15]", extract(list));
         });
     }
@@ -380,7 +380,7 @@ public class PageListTest {
                 assertEquals(15, listIter.nextIndex());
                 assertFalse(listIter.hasNext());
                 assertTrue(listIter.hasPrevious());
-                assertException(() -> listIter.next(), NoSuchElementException.class);
+                assertException(listIter::next, NoSuchElementException.class);
             }        
             
             {
@@ -395,7 +395,7 @@ public class PageListTest {
                 assertEquals(-1, listIter.previousIndex());
                 assertFalse(listIter.hasPrevious());
                 assertTrue(listIter.hasNext());
-                assertException(() -> listIter.previous(), NoSuchElementException.class);
+                assertException(listIter::previous, NoSuchElementException.class);
             }
         });
     }
@@ -426,12 +426,12 @@ public class PageListTest {
             
             {
                 ListIterator<Integer> listIter = list.listIterator(3);
-                assertException(() -> listIter.remove(), IllegalStateException.class);
+                assertException(listIter::remove, IllegalStateException.class);
                 
                 assertEquals(4, listIter.next().intValue());
                 listIter.remove();
                 assertEquals("0[1,2,3] * 3[5,6] * 5[7,8,9] * 8[10,11,12] * 11[13,14,15]", extract(list));
-                assertException(() -> listIter.remove(), IllegalStateException.class);
+                assertException(listIter::remove, IllegalStateException.class);
                 
                 assertEquals(5, listIter.next().intValue());
                 listIter.remove();
@@ -549,9 +549,9 @@ public class PageListTest {
             assertFalse(listIter.hasPrevious());
             assertEquals(0, listIter.nextIndex());
             assertEquals(-1, listIter.previousIndex());
-            assertException(() -> listIter.next(), NoSuchElementException.class);
-            assertException(() -> listIter.previous(), NoSuchElementException.class);
-            assertException(() -> listIter.remove(), IllegalStateException.class);
+            assertException(listIter::next, NoSuchElementException.class);
+            assertException(listIter::previous, NoSuchElementException.class);
+            assertException(listIter::remove, IllegalStateException.class);
                    
             listIter.add(100);
             assertEquals("0[100]", extract(list));
@@ -568,7 +568,7 @@ public class PageListTest {
             listIter.add(500);
             assertEquals("0[100,200,300] * 3[400,500]", extract(list));
             
-            assertException(() -> listIter.remove(), IllegalStateException.class);
+            assertException(listIter::remove, IllegalStateException.class);
             assertEquals("0[100,200,300] * 3[400,500]", extract(list));
             
             assertEquals(500, listIter.previous().intValue());
@@ -604,13 +604,13 @@ public class PageListTest {
             {
                 ListIterator<Integer> listIter = list.listIterator();
                 list.add(11);
-                assertException(() -> listIter.hasNext(), ConcurrentModificationException.class); // AbstractList.Itr.hasNext() does not throw
-                assertException(() -> listIter.next(), ConcurrentModificationException.class);
-                assertException(() -> listIter.remove(), ConcurrentModificationException.class); // AbstractList.Itr.remove() would throw IllegalStateException first
-                assertException(() -> listIter.hasPrevious(), ConcurrentModificationException.class); // AbstractList.Itr.hasPrevious() does not throw
-                assertException(() -> listIter.previous(), ConcurrentModificationException.class);
-                assertException(() -> listIter.nextIndex(), ConcurrentModificationException.class); // AbstractList.Itr.nextIndex() does not throw
-                assertException(() -> listIter.previousIndex(), ConcurrentModificationException.class); // AbstractList.Itr.previousIndex() does not throw
+                assertException(listIter::hasNext, ConcurrentModificationException.class); // AbstractList.Itr.hasNext() does not throw
+                assertException(listIter::next, ConcurrentModificationException.class);
+                assertException(listIter::remove, ConcurrentModificationException.class); // AbstractList.Itr.remove() would throw IllegalStateException first
+                assertException(listIter::hasPrevious, ConcurrentModificationException.class); // AbstractList.Itr.hasPrevious() does not throw
+                assertException(listIter::previous, ConcurrentModificationException.class);
+                assertException(listIter::nextIndex, ConcurrentModificationException.class); // AbstractList.Itr.nextIndex() does not throw
+                assertException(listIter::previousIndex, ConcurrentModificationException.class); // AbstractList.Itr.previousIndex() does not throw
                 assertException(() -> listIter.set(99), ConcurrentModificationException.class); // AbstractList.Itr.set(element) would throw IllegalStateException first
                 assertException(() -> listIter.add(99), ConcurrentModificationException.class);
             }
@@ -688,13 +688,11 @@ public class PageListTest {
             AtomicInteger sum = new AtomicInteger();
             
             Thread thread1 = new Thread(() -> {
-                while (iter1.tryAdvance(val -> sum.addAndGet(val))) {
-                    ;
+                while (iter1.tryAdvance(sum::addAndGet)) {
                 }
             });
             Thread thread2 = new Thread(() -> {
-                while (iter2.tryAdvance(val -> sum.addAndGet(val))) {
-                    ;
+                while (iter2.tryAdvance(sum::addAndGet)) {
                 }
             });
             
@@ -752,8 +750,8 @@ public class PageListTest {
 
             List<NamedFunction<Integer, Integer>> functions = Arrays.asList
                 (
-                    new NamedFunction<Integer, Integer>("Collections.binarySearch", val -> Collections.binarySearch(list, val)),
-                    new NamedFunction<Integer, Integer>("MoreCollections.binarySearch", val -> MoreCollections.binarySearch(list, val))
+                        new NamedFunction<>("Collections.binarySearch", val -> Collections.binarySearch(list, val)),
+                    new NamedFunction<>("MoreCollections.binarySearch", val -> MoreCollections.binarySearch(list, val))
                 );
 
             for (NamedFunction<Integer, Integer> function: functions) {
@@ -874,7 +872,7 @@ public class PageListTest {
             int size = 0;
             for (Object page: pages) {
                 List<Object> list = (List<Object>) listField.get(page);
-                assertTrue(!list.isEmpty(), "page must not be empty");
+                assertFalse(list.isEmpty(), "page must not be empty");
                 size += list.size();
                 result.add(page.toString().replaceAll(" ",  ""));
             }
@@ -893,8 +891,8 @@ public class PageListTest {
     
     private static String listToStringByGet(List<Integer> list) {
         StringJoiner result = new StringJoiner(",");
-        for (int i = 0; i < list.size(); i++) {
-            result.add(Integer.toString(list.get(i)));
+        for (Integer integer : list) {
+            result.add(Integer.toString(integer));
         }
         return result.toString();
     }

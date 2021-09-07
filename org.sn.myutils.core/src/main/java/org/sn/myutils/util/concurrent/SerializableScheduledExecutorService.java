@@ -1,5 +1,6 @@
 package org.sn.myutils.util.concurrent;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.Collections;
@@ -129,6 +130,7 @@ public interface SerializableScheduledExecutorService extends ScheduledExecutorS
      * Checked exception that is thrown when import fails.
      */
     class RecreateRunnableFailedException extends Exception {
+        @Serial
         private static final long serialVersionUID = 1L;
         private static final String UNABLE_TO_RECREATE = "Unable to recreate ";
 

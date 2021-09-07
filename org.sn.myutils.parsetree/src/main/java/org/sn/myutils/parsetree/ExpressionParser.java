@@ -1,5 +1,6 @@
 package org.sn.myutils.parsetree;
 
+import java.io.Serial;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.text.ParseException;
@@ -19,8 +20,7 @@ import org.sn.myutils.util.SimpleStringTokenizerFactory.Token;
 
 
 public class ExpressionParser {
-    private static final IntPredicate SKIP_CHARACTERS
-    = codePoint -> Character.isWhitespace(codePoint);
+    private static final IntPredicate SKIP_CHARACTERS = Character::isWhitespace;
 
     private static final List<String> BASIC_SYMBOLS
         = Arrays.asList("(", ")", "[", "]", "{", "}", ",", ";");
@@ -281,6 +281,7 @@ public class ExpressionParser {
     }
     
     public static class InvalidTokenException extends RuntimeException {
+        @Serial
         private static final long serialVersionUID = 1L;
         
         private InvalidTokenException(String message) {
@@ -289,10 +290,10 @@ public class ExpressionParser {
     }
     
     public static class Builder {
-        private Map<String, Constructor<? extends BinaryOperatorNode>> binaryOperators = new HashMap<>();
-        private Map<String, Constructor<? extends UnaryOperatorNode>> unaryOperators = new HashMap<>();
+        private final Map<String, Constructor<? extends BinaryOperatorNode>> binaryOperators = new HashMap<>();
+        private final Map<String, Constructor<? extends UnaryOperatorNode>> unaryOperators = new HashMap<>();
         private StringCase functionCase = null;
-        private Map<String, Constructor<? extends FunctionNode>> functions = new HashMap<>();
+        private final Map<String, Constructor<? extends FunctionNode>> functions = new HashMap<>();
         private NumberFactory numberFactory = DefaultNumberFactory.DEFAULT_NUMBER_FACTORY;
         
         /**
@@ -376,7 +377,7 @@ public class ExpressionParser {
             }
         }
 
-        private static boolean verifyOperatorValid(String oper) {
+        private static void verifyOperatorValid(String oper) {
             int len = oper.length();
             for (int i = 0; i < len; i++) {
                 char c = oper.charAt(i);
@@ -397,10 +398,9 @@ public class ExpressionParser {
                     throw new InvalidOperatorException(oper, c);
                 }
             }
-            return true;
         }
         
-        private static boolean verifyFunctionNameValid(String oper) {
+        private static void verifyFunctionNameValid(String oper) {
             int len = oper.length();
             if (!Character.isLetter(oper.charAt(0))) {
                 throw new InvalidOperatorException(oper, oper.charAt(0));                
@@ -411,7 +411,6 @@ public class ExpressionParser {
                     throw new InvalidOperatorException(oper, c);
                 }
             }
-            return true;
         }
         
         public Builder setNumberFactory(NumberFactory numberFactory) {
@@ -436,6 +435,7 @@ public class ExpressionParser {
         }
         
         public static class BuilderException extends RuntimeException {
+            @Serial
             private static final long serialVersionUID = 1L;
 
             private BuilderException(String message) {
@@ -448,6 +448,7 @@ public class ExpressionParser {
         }
         
         public static class InvalidOperatorException extends BuilderException {
+            @Serial
             private static final long serialVersionUID = 1L;
 
             private InvalidOperatorException(String oper, char invalidChar) {

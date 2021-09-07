@@ -11,6 +11,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.Serial;
 import java.lang.System.Logger.Level;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
@@ -34,6 +35,7 @@ import org.sn.myutils.util.concurrent.SerializableScheduledExecutorService.TaskI
 import org.sn.myutils.util.concurrent.SerializableScheduledExecutorService.UnfinishedTasks;
 
 
+@SuppressWarnings("OptionalGetWithoutIsPresent")
 public class SerializableScheduledExecutorServiceTest {
 
     private static List<AtomicInteger> createNumbers(int count) {
@@ -212,6 +214,7 @@ public class SerializableScheduledExecutorServiceTest {
 
     
     private static class TestSerializableRunnable implements SerializableRunnable {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         private static final List<AtomicInteger> numbers = createNumbers(4); 
@@ -328,6 +331,7 @@ public class SerializableScheduledExecutorServiceTest {
     }
 
     private static class TestSerializableCallable implements SerializableCallable<Integer> {
+        @Serial
         private static final long serialVersionUID = 1L;
         private static final AtomicInteger number = new AtomicInteger();
 
@@ -672,6 +676,7 @@ public class SerializableScheduledExecutorServiceTest {
     
     
     private static class TestRunnableThatExceptionsOut implements SerializableRunnable {
+        @Serial
         private static final long serialVersionUID = 1L;
         private static final AtomicInteger staticCounter = new AtomicInteger();
 
@@ -783,6 +788,7 @@ public class SerializableScheduledExecutorServiceTest {
     }
 
     private static class CustomRejectedExecutionException extends RejectedExecutionException {
+        @Serial
         private static final long serialVersionUID = 1;
     }
 }

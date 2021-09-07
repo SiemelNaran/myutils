@@ -1,5 +1,6 @@
 package org.sn.myutils.parsetree;
 
+import java.io.Serial;
 import java.util.Map;
 
 public final class IdentifierNode implements ParseNode {
@@ -68,6 +69,7 @@ public final class IdentifierNode implements ParseNode {
     }
 
     public static class VariableNotFoundTypeException extends EvalException {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         VariableNotFoundTypeException(String identifier) {
@@ -76,6 +78,7 @@ public final class IdentifierNode implements ParseNode {
     }
     
     public static class VariableNotFoundEvalException extends EvalException {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         VariableNotFoundEvalException(String identifier) {

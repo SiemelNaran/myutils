@@ -7,6 +7,7 @@ import static org.sn.myutils.testutils.TestUtil.assertException;
 import static org.sn.myutils.testutils.TestUtil.assertExceptionFromCallable;
 import static org.sn.myutils.testutils.TestUtil.sleep;
 
+import java.io.Serial;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -46,6 +47,7 @@ import org.sn.myutils.testutils.TestUtil;
  * - InMemoryPubSub.java
  * - PubSubUtils.java
  */
+@SuppressWarnings("ResultOfMethodCallIgnored")
 @ExtendWith(LogFailureToConsoleTestWatcher.class)
 public class InMemoryPubSubIntegrationTest {
     long startOfTime;
@@ -78,6 +80,7 @@ public class InMemoryPubSubIntegrationTest {
     ///////////////////////////////////////////////////////////////////////////////////////
 
     public static class CloneableString implements CloneableObject<CloneableString> {
+        @Serial
         private static final long serialVersionUID = 1L;
         
         private String str;
@@ -280,7 +283,7 @@ public class InMemoryPubSubIntegrationTest {
                 CloneableString.class,
                 str -> {
                     System.out.println("currentThread=" + Thread.currentThread().getName() + ", i=" + i);
-                    sleep(20 * i);
+                    sleep(20L * i);
                     String word = str.append("-s" + i);
                     words.add(word);
                     System.out.println("currentThread=" + Thread.currentThread().getName() + ", i=" + i + ", word=" + word);
@@ -317,12 +320,11 @@ public class InMemoryPubSubIntegrationTest {
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(strings = {"default", "priority"})
     void testPrioritySubscribers(String queueType) {
-        Supplier<Queue<PubSub.Subscriber>> queueCreator;
-        switch (queueType) {
-            case "default": queueCreator = PubSub.defaultQueueCreator(); break;
-            case "priority": queueCreator = () -> new PriorityQueue<>(Comparator.comparing(PubSub.Subscriber::getSubscriberName)); break;
-            default: throw new UnsupportedOperationException();
-        }
+        Supplier<Queue<PubSub.Subscriber>> queueCreator = switch (queueType) {
+            case "default" -> PubSub.defaultQueueCreator();
+            case "priority" -> () -> new PriorityQueue<>(Comparator.comparing(Subscriber::getSubscriberName));
+            default -> throw new UnsupportedOperationException();
+        };
         List<String> words = Collections.synchronizedList(new ArrayList<>());
         PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, queueCreator, PubSub.defaultSubscriptionMessageExceptionHandler()));
         PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
@@ -349,15 +351,10 @@ public class InMemoryPubSubIntegrationTest {
         sleep(850); // wait for subscribers to work
         System.out.println(words);
         switch (queueType) {
-            case "default":
-                assertThat(words, Matchers.contains("one-s1", "one-s2", "one-s3", "two-s1", "two-s2", "two-s3", "three-s1", "three-s2", "three-s3"));
-                break;
-            case "priority": 
-                assertThat(words, Matchers.contains("one-s1", "two-s1", "three-s1", "one-s2", "two-s2", "three-s2", "one-s3", "two-s3", "three-s3"));
-                break;
-            default: throw new UnsupportedOperationException();
+            case "default" -> assertThat(words, Matchers.contains("one-s1", "one-s2", "one-s3", "two-s1", "two-s2", "two-s3", "three-s1", "three-s2", "three-s3"));
+            case "priority" -> assertThat(words, Matchers.contains("one-s1", "two-s1", "three-s1", "one-s2", "two-s2", "three-s2", "one-s3", "two-s3", "three-s3"));
+            default -> throw new UnsupportedOperationException();
         }
-        
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////
@@ -366,19 +363,7 @@ public class InMemoryPubSubIntegrationTest {
     public interface Animal {
     }
 
-    public static final class Cat implements Animal, CloneableObject<Cat> {
-        private static final long serialVersionUID = 1L;
-
-        private final int lengthOfTailInInches;
-
-        public Cat(int lengthOfTailInInches) {
-            this.lengthOfTailInInches = lengthOfTailInInches;
-        }
-
-        public int getLengthOfTailInInches() {
-            return lengthOfTailInInches;
-        }
-
+    public record Cat(int lengthOfTailInInches) implements Animal, CloneableObject<Cat> {
         @Override
         public final Cat clone() {
             try {
@@ -389,19 +374,7 @@ public class InMemoryPubSubIntegrationTest {
         }
     }
 
-    public static final class Frog implements Animal, CloneableObject<Frog> {
-        private static final long serialVersionUID = 1L;
-
-        private final int loudnessOfCroak;
-
-        public Frog(int loudnessOfCroak) {
-            this.loudnessOfCroak = loudnessOfCroak;
-        }
-
-        public int getLoudnessOfCroak() {
-            return loudnessOfCroak;
-        }
-
+    public record Frog(int loudnessOfCroak) implements Animal, CloneableObject<Frog> {
         @Override
         public final Frog clone() {
             try {
@@ -417,9 +390,9 @@ public class InMemoryPubSubIntegrationTest {
         List<Integer> words = Collections.synchronizedList(new ArrayList<>());
         PubSub pubSub = new InMemoryPubSub(new PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
         PubSub.Publisher publisher = pubSub.createPublisher("hello", Animal.class);
-        Consumer<Cat> handleCat = cat -> words.add(cat.getLengthOfTailInInches());
+        Consumer<Cat> handleCat = cat -> words.add(cat.lengthOfTailInInches());
         pubSub.subscribe("hello", "CatSubscriber", Cat.class, handleCat);
-        Consumer<Frog> handleFrog = frog -> words.add(frog.getLoudnessOfCroak());
+        Consumer<Frog> handleFrog = frog -> words.add(frog.loudnessOfCroak());
         pubSub.subscribe("hello", "FrogSubscriber", Frog.class, handleFrog);
 
         publisher.publish(new Cat(12));
@@ -434,6 +407,7 @@ public class InMemoryPubSubIntegrationTest {
     // In these classes the base class implements CloneableObject
 
     public abstract static class Base implements CloneableObject<Base> {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         @Override
@@ -447,6 +421,7 @@ public class InMemoryPubSubIntegrationTest {
     }
 
     public static final class Derived1 extends Base {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         private final String string;
@@ -462,6 +437,7 @@ public class InMemoryPubSubIntegrationTest {
     }
 
     public static final class Derived2 extends Base {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         private final int integer;
@@ -567,6 +543,7 @@ public class InMemoryPubSubIntegrationTest {
     }
 
     public static class TestEvent implements CloneableObject<TestEvent> {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         private int retryCount;
@@ -698,6 +675,7 @@ class TestInMemoryPubSub extends InMemoryPubSub {
 }
 
 class TopicRegexException extends PubSubException {
+    @Serial
     private static final long serialVersionUID = 1L;
 
     public TopicRegexException(String topic, String regex) {

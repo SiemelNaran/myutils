@@ -122,6 +122,7 @@ public class StackTraces {
             for (StackTraceElement parentElem: parentStackTrace) {
                 if (currentElem.equals(parentElem)) {
                     done = true;
+                    break;
                 }
             }
             currentFiltered.add(currentElem);

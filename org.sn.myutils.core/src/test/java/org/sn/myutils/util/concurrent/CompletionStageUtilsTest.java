@@ -47,7 +47,7 @@ public class CompletionStageUtilsTest {
         assertNull(result.get(0));
         assertEquals(2, result.get(1).intValue());
         assertEquals(3, result.get(2).intValue());
-        assertEquals(Arrays.asList("0=my failure"), errors);
+        assertEquals(Collections.singletonList("0=my failure"), errors);
     }
     
     @Test
@@ -63,12 +63,12 @@ public class CompletionStageUtilsTest {
         assertEquals(2, result.size());
         assertEquals(2, result.get(0).intValue());
         assertEquals(3, result.get(1).intValue());
-        assertEquals(Arrays.asList("0=my failure"), errors);
+        assertEquals(Collections.singletonList("0=my failure"), errors);
     }
     
     private static int sleepAndReturn(int seconds, int result) {
         try {
-            Thread.sleep(seconds * 1000);
+            Thread.sleep(seconds * 1000L);
             return result;
         } catch (InterruptedException e) {
             throw new CompletionException(e);
@@ -77,7 +77,7 @@ public class CompletionStageUtilsTest {
 
     private static int sleepAndThrow(int seconds) {
         try {
-            Thread.sleep(seconds * 1000);
+            Thread.sleep(seconds * 1000L);
         } catch (InterruptedException e) {
             throw new CompletionException(e);
         }

@@ -369,8 +369,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
                 }
             }
             for (var task : tasksToRun) {
-                var timeMillis = task.timeMillis;
-                timeOfLastFutureMillis = timeMillis;
+                timeOfLastFutureMillis = task.timeMillis;
                 var future = realExecutor.submit(task);
                 task.setRealFuture(future);
                 futures.add(future);

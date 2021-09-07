@@ -105,7 +105,7 @@ public class MoreExecutors {
             testService.advanceTime(time, unit);
         } else {
             long millis = unit.toMillis(time);
-            int nanos = unit == TimeUnit.NANOSECONDS ? nanos = (int) time % 1_000_000 : 0;
+            int nanos = unit == TimeUnit.NANOSECONDS ? (int) time % 1_000_000 : 0;
             try {
                 Thread.sleep(millis, nanos);
             } catch (InterruptedException e) {

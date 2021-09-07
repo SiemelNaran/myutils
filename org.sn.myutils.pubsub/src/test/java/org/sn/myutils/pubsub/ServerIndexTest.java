@@ -20,7 +20,7 @@ public class ServerIndexTest extends TestBase {
         System.out.println(value.toString(16));
 
         ServerIndex serverIndex = new ServerIndex(new CentralServerId(1595660400000L));
-        System.out.println(serverIndex.toString());
+        System.out.println(serverIndex);
         assertThat(serverIndex.toString(), Matchers.endsWith("0000000000000000")); // 16 0's
         // timestamps in 2020 are 13 digits decimal, or 11 digits in hex.
         // the largest 11 digit hex number is 0xfffffffffff or 2527-06-23-06:20:44 TZ

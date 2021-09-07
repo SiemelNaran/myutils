@@ -18,6 +18,7 @@ import org.sn.myutils.parsetree.ParseNode.Listener;
 import org.sn.myutils.parsetree.UnitNumberFactory.UnitPosition;
 
 
+@SuppressWarnings("OptionalGetWithoutIsPresent")
 public class ExpressionParserTest {
     @Test
     void testEvaluate() throws ParseException {
@@ -89,6 +90,7 @@ public class ExpressionParserTest {
         assertEquals(Integer.valueOf(1_003_002), evaluate("2m+3km+x", scope));
     }
     
+    @Test
     @SuppressWarnings({"checkstyle:EmptyLineSeparator", "checkstyle:RightCurlyAlone", "checkstyle:NeedBraces"})
     void testReduce1() throws ParseException {
         ParseNode tree = PARSER.parse("2+x*-y");
@@ -147,11 +149,11 @@ public class ExpressionParserTest {
             @Override public void endIdentifier(IdentifierNode identifier) { }
             
             private String map(String identifier) {
-                switch (identifier) {
-                    case "x": return "a";
-                    case "y": return "b";
-                    default: throw new UnsupportedOperationException(identifier);
-                }
+                return switch (identifier) {
+                    case "x" -> "a";
+                    case "y" -> "b";
+                    default -> throw new UnsupportedOperationException(identifier);
+                };
             }
         };
         
@@ -228,7 +230,7 @@ public class ExpressionParserTest {
         
         /**
          * This listener evaluates the parse tree using stacks.
-         * 
+         *
          * <p>We can use this approach to build a JOOQ where clause -- that is, to reduce the expression
          * to a org.jooq.Condition.
          */
@@ -273,9 +275,9 @@ public class ExpressionParserTest {
                 int second = values.pop();
                 int first = values.pop();
                 switch (binaryOperators.pop()) {
-                    case "+": values.push(first + second); break;
-                    case "*": values.push(first * second); break;
-                    default: throw new UnsupportedOperationException();
+                    case "+" -> values.push(first + second);
+                    case "*" -> values.push(first * second);
+                    default -> throw new UnsupportedOperationException();
                 }
             }
             
@@ -287,9 +289,10 @@ public class ExpressionParserTest {
             @Override
             public void endUnaryOperator(UnaryOperatorNode operator) {
                 int value = values.pop();
-                switch (unaryOperators.pop()) {
-                    case "-": values.push(-value); break;
-                    default: throw new UnsupportedOperationException();
+                if ("-".equals(unaryOperators.pop())) {
+                    values.push(-value);
+                } else {
+                    throw new UnsupportedOperationException();
                 }
             }
             
@@ -300,14 +303,12 @@ public class ExpressionParserTest {
             
             @Override
             public void endFunction(FunctionNode function) {
-                switch (functions.pop()) {
-                    case "min":
-                        int first = values.pop();
-                        int second = values.pop();
-                        values.push(Math.min(first, second));
-                        break;
-                    default:
-                        throw new UnsupportedOperationException();
+                if ("min".equals(functions.pop())) {
+                    int first = values.pop();
+                    int second = values.pop();
+                    values.push(Math.min(first, second));
+                } else {
+                    throw new UnsupportedOperationException();
                 }
             }
                     
@@ -322,12 +323,12 @@ public class ExpressionParserTest {
             }
             
             private int map(String identifier) {
-                switch (identifier) {
-                    case "x": return 1;
-                    case "y": return 2;
-                    case "z": return 3;
-                    default: throw new UnsupportedOperationException(identifier);
-                }
+                return switch (identifier) {
+                    case "x" -> 1;
+                    case "y" -> 2;
+                    case "z" -> 3;
+                    default -> throw new UnsupportedOperationException(identifier);
+                };
             }
             
         }
@@ -370,7 +371,7 @@ public class ExpressionParserTest {
                                                                          .build();
     
     private static Integer multiplyTimesOneThousand(Number number) {
-        return ((Integer) number).intValue() * 1000;
+        return number.intValue() * 1000;
     }
     
     private static final ExpressionParser PARSER = ExpressionParser.builder()
@@ -560,7 +561,7 @@ public class ExpressionParserTest {
         
         @Override
         protected int doApply(Stream<Integer> values) {
-            return values.collect(Collectors.maxBy(Comparator.<Integer>naturalOrder()))
+            return values.max(Comparator.naturalOrder())
                          .get();
         }
     }
@@ -583,7 +584,7 @@ public class ExpressionParserTest {
 
         @Override
         protected int doApply(Stream<Integer> values) {
-            return values.collect(Collectors.minBy(Comparator.<Integer>naturalOrder()))
+            return values.min(Comparator.naturalOrder())
                          .get();
         }
     }

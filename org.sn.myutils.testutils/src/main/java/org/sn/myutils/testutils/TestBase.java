@@ -33,7 +33,7 @@ public abstract class TestBase {
     static void printAllTestsFinished() {
         System.out.println("--------------------------------------------------------------------------------");
         System.out.println("all tests finished"
-                                   + "(" + Duration.between(startOfClass, Instant.now()).toMillis() + "ms)");;
+                                   + "(" + Duration.between(startOfClass, Instant.now()).toMillis() + "ms)");
     }
     
     @BeforeEach

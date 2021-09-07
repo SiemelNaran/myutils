@@ -13,14 +13,14 @@ public class DefaultNumberFactoryTest {
     void testDefaultNumberFactory() {
         NumberFactory factory = DefaultNumberFactory.DEFAULT_NUMBER_FACTORY;
         
-        assertEquals(Integer.valueOf(33), factory.fromString("33"));
-        assertEquals(Integer.valueOf(33), factory.fromString("+33"));
-        assertEquals(Integer.valueOf(-33), factory.fromString("-33"));
-        assertEquals(Long.valueOf(12345678901L), factory.fromString("12345678901"));
+        assertEquals(33, factory.fromString("33"));
+        assertEquals(33, factory.fromString("+33"));
+        assertEquals(-33, factory.fromString("-33"));
+        assertEquals(12345678901L, factory.fromString("12345678901"));
         
-        assertEquals(Double.valueOf(33.7), factory.fromString("33.7"));
-        assertEquals(Double.valueOf(33.7), factory.fromString("+33.7"));
-        assertEquals(Double.valueOf(-33.7), factory.fromString("-33.7"));
+        assertEquals(33.7, factory.fromString("33.7"));
+        assertEquals(33.7, factory.fromString("+33.7"));
+        assertEquals(-33.7, factory.fromString("-33.7"));
         
         assertException(() -> factory.fromString("++33"), NumberFormatException.class);
     }
@@ -31,14 +31,14 @@ public class DefaultNumberFactoryTest {
                                                     .setIntegerPolicy(DefaultNumberFactory.IntegerPolicy.PREFER_LONG)
                                                     .build();
         
-        assertEquals(Long.valueOf(33), factory.fromString("33"));
-        assertEquals(Long.valueOf(33), factory.fromString("+33"));
-        assertEquals(Long.valueOf(-33), factory.fromString("-33"));
-        assertEquals(Long.valueOf(12345678901L), factory.fromString("12345678901"));
+        assertEquals(33L, factory.fromString("33"));
+        assertEquals(33L, factory.fromString("+33"));
+        assertEquals((long) -33, factory.fromString("-33"));
+        assertEquals(12345678901L, factory.fromString("12345678901"));
         
-        assertEquals(Double.valueOf(33.7), factory.fromString("33.7"));
-        assertEquals(Double.valueOf(33.7), factory.fromString("+33.7"));
-        assertEquals(Double.valueOf(-33.7), factory.fromString("-33.7"));
+        assertEquals(33.7, factory.fromString("33.7"));
+        assertEquals(33.7, factory.fromString("+33.7"));
+        assertEquals(-33.7, factory.fromString("-33.7"));
     }
     
     @Test

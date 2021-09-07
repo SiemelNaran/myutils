@@ -264,12 +264,12 @@ public class SimpleStringTokenizerFactory {
                     }
                 } else {
                     switch (c) {
-                        case 'n': token.append('\n'); break;
-                        case 'r': token.append('\r'); break;
-                        case 't': token.append('\t'); break;
-                        case 'f': token.append('\f'); break;
-                        case 'b': token.append('\b'); break;
-                        default: token.appendCodePoint(c);
+                        case 'n' -> token.append('\n');
+                        case 'r' -> token.append('\r');
+                        case 't' -> token.append('\t');
+                        case 'f' -> token.append('\f');
+                        case 'b' -> token.append('\b');
+                        default -> token.appendCodePoint(c);
                     }
                     escapeMode = false;
                 }

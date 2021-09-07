@@ -51,16 +51,14 @@ public abstract class UnaryOperatorNode implements OperatorNode {
     public final void reduce(Listener listener) {
         listener.startUnaryOperator(this);
         switch (listener.characteristics().unaryOperatorPosition()) {
-            case OPERATOR_FIRST:
+            case OPERATOR_FIRST -> {
                 listener.acceptUnaryOperator(this);
                 node.reduce(listener);
-                break;
-            case OPERATOR_LAST:
+            }
+            case OPERATOR_LAST -> {
                 node.reduce(listener);
                 listener.acceptUnaryOperator(this);
-                break;
-            default:
-                throw new UnsupportedOperationException();
+            }
         }
         listener.endUnaryOperator(this);
     }

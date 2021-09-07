@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 
 
+@SuppressWarnings("ResultOfMethodCallIgnored")
 public class PriorityThreadPoolExecutorTest {
     long startOfTime;
 
@@ -139,8 +140,8 @@ public class PriorityThreadPoolExecutorTest {
                 logString("end");
                 messages.add("end thread with priority " + currentThread.getPriority());
             } catch (RuntimeException | Error e) {
-                logString("caught exception " + e.toString());
-                messages.add("thread with priority " + currentThread.getPriority() + " encountered exception " + e.toString());
+                logString("caught exception " + e);
+                messages.add("thread with priority " + currentThread.getPriority() + " encountered exception " + e);
             }
         }
         
@@ -152,8 +153,8 @@ public class PriorityThreadPoolExecutorTest {
                 logString("end");
                 messages.add("end thread with priority " + currentThread.getPriority());
             } catch (RuntimeException | Error e) {
-                logString("caught exception " + e.toString());
-                messages.add("thread with priority " + currentThread.getPriority() + " encountered exception " + e.toString());
+                logString("caught exception " + e);
+                messages.add("thread with priority " + currentThread.getPriority() + " encountered exception " + e);
             }
             return Integer.toString(Thread.currentThread().getPriority()) + Thread.currentThread().getPriority();
         }

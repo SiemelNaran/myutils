@@ -1,5 +1,6 @@
 package org.sn.myutils.util.concurrent;
 
+import java.io.Serial;
 import java.lang.System.Logger.Level;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
@@ -288,6 +289,7 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
     
     
     static class UnfinishedTasksImpl implements UnfinishedTasks {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         private final ArrayList<RunnableInfo> runnableInfos;

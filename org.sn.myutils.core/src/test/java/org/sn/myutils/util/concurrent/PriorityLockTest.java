@@ -40,6 +40,7 @@ import org.sn.myutils.util.concurrent.PriorityLock.PriorityLockNamedParams;
 
 
 @ExtendWith(LogFailureToConsoleTestWatcher.class)
+@SuppressWarnings("ResultOfMethodCallIgnored")
 public class PriorityLockTest extends TestBase {
     /**
      * This test shows that ReentrantLock does not run threads with the highest priority first.
@@ -100,8 +101,8 @@ public class PriorityLockTest extends TestBase {
         PriorityLock.PriorityLockCondition condition = priorityLock.newCondition();
         System.out.println(priorityLock);
         System.out.println(condition);
-        assertThat(priorityLock.toString(), Matchers.matchesRegex("^org.sn.myutils.util.concurrent.PriorityLock@[a-f0-9]+ levels=\\[0,0,0,0,0,0,0,0,0,1\\]$"));
-        assertThat(condition.toString(), Matchers.matchesRegex("^org.sn.myutils.util.concurrent.PriorityLock\\$PriorityLockCondition@[a-f0-9]+ levels=\\[0,0,0,0,0,0,0,0,0,0\\], signalCount=0$"));
+        assertThat(priorityLock.toString(), Matchers.matchesRegex("^org.sn.myutils.util.concurrent.PriorityLock@[a-f0-9]+ levels=\\[0,0,0,0,0,0,0,0,0,1]$"));
+        assertThat(condition.toString(), Matchers.matchesRegex("^org.sn.myutils.util.concurrent.PriorityLock\\$PriorityLockCondition@[a-f0-9]+ levels=\\[0,0,0,0,0,0,0,0,0,0], signalCount=0$"));
         assertEquals(10, priorityLock.highestPriorityThread());
         assertNull(condition.highestPriorityThread());
     }
@@ -836,6 +837,7 @@ public class PriorityLockTest extends TestBase {
     }
 
 
+    @SuppressWarnings("unused") // used in @MethodSource
     private static Stream<Arguments> provideArgsFor_testLockExceptionOnLock() {
         return Stream.of(Arguments.of(DoThreadLock.class, false),
                          Arguments.of(DoThreadLockInterruptibly.class, false),
@@ -1093,6 +1095,7 @@ public class PriorityLockTest extends TestBase {
     }
 
     
+    @SuppressWarnings("unused") // used in @MethodSource
     private static Stream<Arguments> provideArgsFor_testSignalAllAndAddWaiters() {
         return Stream.of(Arguments.of(DoThreadLock.class, 2000L),
                          Arguments.of(DoThreadLock.class, 1000L),
@@ -1876,7 +1879,7 @@ public class PriorityLockTest extends TestBase {
 
 
 
-    
+    @SuppressWarnings("unused") // used in @MethodSource
     private static Stream<Arguments> provideArgsFor_testAwaitException3() {
         return Stream.of(Arguments.of(DoThreadLock.class, false),
                          Arguments.of(DoThreadLock.class, false),

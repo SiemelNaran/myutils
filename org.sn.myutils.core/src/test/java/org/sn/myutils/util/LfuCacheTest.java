@@ -424,13 +424,13 @@ public class LfuCacheTest {
         Iterator<Map.Entry<String, String>> iter = cache.entrySet().iterator();
         assertTrue(iter.hasNext());
         switch (method) {
-            case "getMostFrequent": cache.get("three"); break;
-            case "get": cache.get("two"); break;
-            case "putCurrentBucket1": cache.put("two", "22"); break; // internal iterator is pointing to the frequency=3 bucket, so change this bucket
-            case "putCurrentBucket2": cache.put("three", "33"); break; // internal iterator is pointing to the frequency=3 bucket, so change this bucket
-            case "putAnotherBucket": cache.put("five", "5"); break;
-            case "remove": cache.remove("three"); break;
-            default: throw new UnsupportedOperationException();
+            case "getMostFrequent" -> cache.get("three");
+            case "get" -> cache.get("two");
+            case "putCurrentBucket1" -> cache.put("two", "22"); // internal iterator is pointing to the frequency=3 bucket, so change this bucket
+            case "putCurrentBucket2" -> cache.put("three", "33"); // internal iterator is pointing to the frequency=3 bucket, so change this bucket
+            case "putAnotherBucket" -> cache.put("five", "5");
+            case "remove" -> cache.remove("three");
+            default -> throw new UnsupportedOperationException();
         }
         if (method.equals("putAnotherBucket")) {
             assertTrue(iter.hasNext());

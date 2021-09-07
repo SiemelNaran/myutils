@@ -26,6 +26,7 @@ import org.junit.jupiter.params.provider.ValueSource;
  * The purpose of these tests are to show how ReentrantLock works in special circumstances,
  * as the behavior of PriorityLock is based on ReentrantLock.
  */
+@SuppressWarnings("ResultOfMethodCallIgnored")
 public class ReentrantLockTest {
     private long startOfTime;
     
@@ -67,15 +68,9 @@ public class ReentrantLockTest {
                 logStringPlus(reentrantLock, "about to lock");
                 assertTrue(Thread.currentThread().isInterrupted());
                 switch (lockFunction) {
-                    case "lockInterruptibly":
-                        reentrantLock.lockInterruptibly();
-                        break;
-                    case "lock":
-                        reentrantLock.lock();
-                        break;
-
-                    default:
-                        throw new UnsupportedOperationException();
+                    case "lockInterruptibly" -> reentrantLock.lockInterruptibly();
+                    case "lock" -> reentrantLock.lock();
+                    default -> throw new UnsupportedOperationException();
                 }
                 if ("lock".equals(lockFunction)) {
                     threadStillInterrupted.set(Thread.currentThread().isInterrupted());
@@ -93,15 +88,12 @@ public class ReentrantLockTest {
         executor.awaitTermination(10, TimeUnit.SECONDS);
 
         switch (lockFunction) {
-            case "lockInterruptibly":
+            case "lockInterruptibly" -> {
                 assertTrue(interruptedExceptionThrown.get());
                 assertFalse(threadStillInterrupted.get());
-                break;
-            case "lock":
-                assertTrue(threadStillInterrupted.get());
-                break;
-            default:
-                throw new UnsupportedOperationException();
+            }
+            case "lock" -> assertTrue(threadStillInterrupted.get());
+            default -> throw new UnsupportedOperationException();
         }
     }
 
@@ -134,7 +126,7 @@ public class ReentrantLockTest {
                 sleep(1000);
                 logStringPlus(reentrantLock, "end thread 1");
             } catch (InterruptedException e) {
-                logStringPlus(reentrantLock, "caught " + e.toString());
+                logStringPlus(reentrantLock, "caught " + e);
             } finally {
                 logStringPlus(reentrantLock, "running assertions in thread 1");
                 assertTrue(reentrantLock.isLocked());
@@ -154,7 +146,7 @@ public class ReentrantLockTest {
                 sleep(1000);
                 logStringPlus(reentrantLock, "end thread 2");
             } catch (InterruptedException e) {
-                logStringPlus(reentrantLock, "caught " + e.toString());
+                logStringPlus(reentrantLock, "caught " + e);
             } finally {
                 reentrantLock.unlock();
                 logStringPlus(reentrantLock, "unlock in thread 2");
@@ -193,7 +185,7 @@ public class ReentrantLockTest {
                 sleep(1000);
                 logStringPlus(reentrantLock, "end thread 1");
             } catch (InterruptedException e) {
-                logStringPlus(reentrantLock, "caught " + e.toString());
+                logStringPlus(reentrantLock, "caught " + e);
             } finally {
                 logStringPlus(reentrantLock, "running assertions in thread 1");
                 assertTrue(reentrantLock.isLocked());
@@ -214,7 +206,7 @@ public class ReentrantLockTest {
                 logStringPlus(reentrantLock, "no signal sent in thread 2");
                 logStringPlus(reentrantLock, "end thread 2");
             } catch (InterruptedException e) {
-                logStringPlus(reentrantLock, "caught " + e.toString());
+                logStringPlus(reentrantLock, "caught " + e);
             } finally {
                 reentrantLock.unlock();
                 logStringPlus(reentrantLock, "unlock in thread 2");
@@ -258,7 +250,7 @@ public class ReentrantLockTest {
                 sleep(1000);
                 logStringPlus(reentrantLock, "end thread 1");
             } catch (InterruptedException e) {
-                logStringPlus(reentrantLock, "caught " + e.toString());
+                logStringPlus(reentrantLock, "caught " + e);
             } finally {
                 logStringPlus(reentrantLock, "running assertions in thread 1");
                 assertTrue(reentrantLock.isLocked());
@@ -280,7 +272,7 @@ public class ReentrantLockTest {
                 condition.signal();
                 logStringPlus(reentrantLock, "end thread 2");
             } catch (InterruptedException e) {
-                logStringPlus(reentrantLock, "caught " + e.toString());
+                logStringPlus(reentrantLock, "caught " + e);
             } finally {
                 reentrantLock.unlock();
                 logStringPlus(reentrantLock, "unlock in thread 2");

@@ -51,6 +51,7 @@ import org.sn.myutils.testutils.TestUtil;
  -Djava.util.logging.config.file=../org.sn.myutils.testutils/target/classes/logging.properties
  * </code>
  */
+@SuppressWarnings("ResultOfMethodCallIgnored")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     private static final List<String> words = Collections.synchronizedList(new ArrayList<>());
@@ -100,10 +101,10 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         @Override
         public String call() {
             if (Thread.currentThread().isInterrupted()) {
-                System.out.println("Interrupted " + toString());
+                System.out.println("Interrupted " + this);
                 return null;
             }
-            System.out.println("Running " + toString());
+            System.out.println("Running " + this);
             words.add(value);
             return value;
         }
@@ -352,7 +353,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     }
 
     /**
-     * The purpose of this test is to get code coverage for the funtions which just forward to the internal executor,
+     * The purpose of this test is to get code coverage for the functions which just forward to the internal executor,
      * such as execute, submit, invokeAll, etc.
      */
     @Test

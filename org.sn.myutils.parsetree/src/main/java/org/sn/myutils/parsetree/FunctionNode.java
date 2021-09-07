@@ -58,16 +58,14 @@ public abstract class FunctionNode implements ParseNode {
     public void reduce(Listener listener) {
         listener.startFunction(this);
         switch (listener.characteristics().functionPosition()) {
-            case FUNCTION_FIRST:
+            case FUNCTION_FIRST -> {
                 listener.acceptFunction(this);
                 reduceArgs(listener);
-                break;
-            case FUNCTION_LAST:
+            }
+            case FUNCTION_LAST -> {
                 reduceArgs(listener);
                 listener.acceptFunction(this);
-                break;
-            default:
-                throw new UnsupportedOperationException();
+            }
         }
         listener.endFunction(this);
     }

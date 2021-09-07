@@ -150,7 +150,7 @@ class JsonComparator {
                 compareArrays(path, (ArrayNode) expected, (ArrayNode) actual);
             } else {
                 if (!expected.equals(actual)) {
-                    addError(path, "Expected " + expected.toString() + " but got " + actual.toString());
+                    addError(path, "Expected " + expected + " but got " + actual);
                 }
             }
         }

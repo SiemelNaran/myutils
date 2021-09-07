@@ -15,7 +15,7 @@ import org.junit.platform.launcher.listeners.SummaryGeneratingListener;
  * As running all tests is too long, we use this test runner to run the few tests that lead to the error.
  */
 public class PriorityLockTestRunner {
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) {
         String basename = PriorityLockTest.class.getName();
         LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request().selectors(
                 selectMethod(basename + "#testLockExceptionOnAwait(java.lang.Class)"),

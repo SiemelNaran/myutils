@@ -11,6 +11,7 @@ import static org.sn.myutils.util.concurrent.MoreExecutors.createThreadFactory;
 
 import java.io.EOFException;
 import java.io.IOException;
+import java.io.Serial;
 import java.lang.System.Logger.Level;
 import java.lang.ref.Cleaner.Cleanable;
 import java.net.ConnectException;
@@ -215,6 +216,7 @@ public class DistributedSocketPubSub extends PubSub {
     }
     
     public static class StartException extends PubSubException {
+        @Serial
         private static final long serialVersionUID = 1L;
         
         private final Map<SocketAddress, Throwable> exceptions;

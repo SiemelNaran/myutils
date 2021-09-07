@@ -107,6 +107,7 @@ import org.sn.myutils.util.ExceptionUtils;
 -Djava.util.logging.config.file=../org.sn.myutils.testutils/target/classes/logging.properties
  * </code>
  */
+@SuppressWarnings("ResultOfMethodCallIgnored")
 @ExtendWith(LogFailureToConsoleTestWatcher.class)
 public class DistributedPubSubIntegrationTest extends TestBase {
     private static final System.Logger LOGGER = System.getLogger(DistributedPubSubIntegrationTest.class.getName());
@@ -2177,6 +2178,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     }
     
     @Test
+    @SuppressWarnings("OptionalGetWithoutIsPresent")
     void codeCoverageForSubscriberEndpoint() throws NoSuchMethodException, SecurityException, InstantiationException, IllegalAccessException, IllegalArgumentException, InvocationTargetException {
         Class<?> subscriberEndpointClass = Arrays.stream(DistributedMessageServer.class.getDeclaredClasses()).filter(clazz -> clazz.getSimpleName().equals("SubscriberEndpoint")).findFirst().get();
         Constructor<?> constructor = subscriberEndpointClass.getDeclaredConstructor(ClientMachineId.class, String.class, long.class);

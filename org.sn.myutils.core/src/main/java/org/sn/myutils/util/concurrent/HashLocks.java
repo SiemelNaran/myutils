@@ -1,5 +1,6 @@
 package org.sn.myutils.util.concurrent;
 
+import java.io.Serial;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -66,13 +67,13 @@ public class HashLocks<LockType, LockStatisticsType> {
                       Supplier<LockType> lockCreator,
                       BiFunction<LockType, Set<String>, LockStatisticsType> toLockStatistics,
                       CollisionTracking collisionTracking) {
-        this.locks = new ArrayList<LockType>(hashLocksSize);
+        this.locks = new ArrayList<>(hashLocksSize);
         this.toLockStatistics = toLockStatistics;
         for (int i = 0; i < hashLocksSize; i++) {
             locks.add(lockCreator.get());
         }
         if (collisionTracking != null) {
-            this.collisionTrackingList = new ArrayList<Set<String>>(hashLocksSize);
+            this.collisionTrackingList = new ArrayList<>(hashLocksSize);
             for (int i = 0; i < hashLocksSize; i++) {
                 collisionTrackingList.add(Collections.synchronizedSet(Collections.newSetFromMap(new HashLocksKeyMap(collisionTracking))));
             }
@@ -106,6 +107,7 @@ public class HashLocks<LockType, LockStatisticsType> {
      * Only used when doCollisionTracking is true.
      */
     private static final class HashLocksKeyMap extends LinkedHashMap<String, Boolean> {
+        @Serial
         private static final long serialVersionUID = 1L;
         
         private final CollisionTracking collisionTracking;
@@ -116,24 +118,14 @@ public class HashLocks<LockType, LockStatisticsType> {
 
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, Boolean> eldest) {
-            return size() > collisionTracking.getNumStringsPerHashCode();
+            return size() > collisionTracking.numStringsPerHashCode();
         }
     }
-    
-    
-    public static class CollisionTracking {
-        private final int numStringsPerHashCode;
 
+
+    public record CollisionTracking(int numStringsPerHashCode) {
         public static CollisionTrackingBuilder newBuilder() {
             return new CollisionTrackingBuilder();
-        }
-        
-        private CollisionTracking(int numStringsPerHashCode) {
-            this.numStringsPerHashCode = numStringsPerHashCode;
-        }
-        
-        int getNumStringsPerHashCode() {
-            return numStringsPerHashCode;
         }
     }
     

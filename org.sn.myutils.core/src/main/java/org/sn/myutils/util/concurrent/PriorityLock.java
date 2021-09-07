@@ -1,5 +1,6 @@
 package org.sn.myutils.util.concurrent;
 
+import java.io.Serial;
 import java.lang.System.Logger.Level;
 import java.util.Date;
 import java.util.Objects;
@@ -369,7 +370,7 @@ public class PriorityLock implements Lock {
                         int nextNextDelay = nextDelay < MAX_DELAY_MILLIS ? delay + nextDelay : nextDelay;
                         doAddSignalWaitingThread(priorityLock, priority, nextRetryCount, nextDelay, nextNextDelay);
                     } else {
-                        LOGGER.log(Level.WARNING, "Failed to signal after waiting thread after " + MAX_RETRIES + " attempts: " + e.toString());
+                        LOGGER.log(Level.WARNING, "Failed to signal after waiting thread after " + MAX_RETRIES + " attempts: " + e);
                         ON_FAIL_TO_SIGNAL_WAITING_THREAD.accept(e);
                     }
                 }
@@ -899,7 +900,7 @@ public class PriorityLock implements Lock {
         
         @Override
         public String toString() {
-            return getClass().getName() + "@" + hashCode() + " " + levelManager.toString() + ", signalCount=" + signalCount;
+            return getClass().getName() + "@" + hashCode() + " " + levelManager + ", signalCount=" + signalCount;
         }
         
         public Integer highestPriorityThread() {
@@ -920,6 +921,7 @@ public class PriorityLock implements Lock {
      * but the current thread is not the one with the highest priority.
      */
     public static class MaybeNotHighestThreadAfterAwaitError extends ThreadDeath {
+        @Serial
         private static final long serialVersionUID = 1L;
         
         private MaybeNotHighestThreadAfterAwaitError() {            

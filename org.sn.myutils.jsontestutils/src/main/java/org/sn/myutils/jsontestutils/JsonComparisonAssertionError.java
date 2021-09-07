@@ -1,10 +1,12 @@
 package org.sn.myutils.jsontestutils;
 
+import java.io.Serial;
 import java.util.List;
 import java.util.StringJoiner;
 
 
 public class JsonComparisonAssertionError extends AssertionError {
+    @Serial
     private static final long serialVersionUID = 1;
 
     private final List<String> errors;
