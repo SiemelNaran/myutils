@@ -16,6 +16,7 @@ import static org.sn.myutils.testutils.TestUtil.countElementsInListByType;
 import static org.sn.myutils.testutils.TestUtil.sleep;
 
 import java.io.IOException;
+import java.io.Serial;
 import java.lang.System.Logger.Level;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -1836,6 +1837,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     }
     
     private static class BogusClientGeneratedMessage extends MessageClasses.ClientGeneratedTopicMessage {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         BogusClientGeneratedMessage() {
@@ -1849,6 +1851,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     }
     
     private static class BogusMessage implements TopicMessageBase {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         @Override

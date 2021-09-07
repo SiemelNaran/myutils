@@ -343,13 +343,8 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
             throw new CompletionException(e);
         }
     }
-    
-    private static class AdvanceTimeResult {
-        private final long nanosLeft;
-        
-        AdvanceTimeResult(long nanosLeft) {
-            this.nanosLeft = nanosLeft;
-        }
+
+    private record AdvanceTimeResult(long nanosLeft) {
     }
     
     private synchronized AdvanceTimeResult advanceTimeWithException(long time, @NotNull TimeUnit unit, boolean waitForever) throws InterruptedException {

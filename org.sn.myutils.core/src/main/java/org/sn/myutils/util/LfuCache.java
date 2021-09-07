@@ -199,11 +199,9 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
         return result;
     }
 
-    private static class IncreaseFrequencyResult<K, V> {
-        private final @Nullable V oldValue;
-        private final @Nullable Page<K, V> newPage;
-        private final boolean isPageNewlyCreated;
-
+    private record IncreaseFrequencyResult<K, V>(@Nullable V oldValue,
+                                                 @Nullable LfuCache.Page<K, V> newPage,
+                                                 boolean isPageNewlyCreated) {
         private IncreaseFrequencyResult(V oldValue, Page<K, V> newPage, boolean isPageNewlyCreated) {
             this.oldValue = oldValue;
             this.newPage = newPage;

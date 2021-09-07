@@ -240,21 +240,15 @@ public class DistributedMessageServer implements Shutdowneable {
             private final Collection<SubscriberEndpoint> inactiveSubscriberEndpoints = new HashSet<>();
             private final MostRecentMessages mostRecentMessages;
             private final Queue<DeferredPublishMessage> deferredPublishMessages = new LinkedList<>();
-            
+
             /**
              * This code may be hit if server is restarted.
              * Clients send their CreatePublisher and PublishMessage commands to the server.
              * It is possible that a PublishMessage is received before the publisher/topic is created on the server,
              * so we add the Publish to a deferred list, and publish these messages upon the publisher getting created.
              */
-            private static class DeferredPublishMessage {
-                private final PublishMessage publishMessage;
-                private final Consumer<SubscriberParamsForCallback> relayAction;
-
-                public DeferredPublishMessage(PublishMessage publishMessage, Consumer<SubscriberParamsForCallback> relayAction) {
-                    this.publishMessage = publishMessage;
-                    this.relayAction = relayAction;
-                }
+            private record DeferredPublishMessage(PublishMessage publishMessage,
+                                                  Consumer<SubscriberParamsForCallback> relayAction) {
             }
             
             TopicInfo(String topic, Map<RetentionPriority, Integer> mostRecentMessagesToKeep) {
@@ -299,9 +293,9 @@ public class DistributedMessageServer implements Shutdowneable {
                 // O(1) is possible using HashSet or HashMap lookup as inactiveSubscriberEndpoints is a HashSet
                 for (var iter = info.inactiveSubscriberEndpoints.iterator(); iter.hasNext(); ) {
                     var oldEndpoint = iter.next();
-                    if (oldEndpoint.getSubscriberName().equals(subscriberName) && oldEndpoint.getClientMachineId().equals(clientMachineId)) {
+                    if (oldEndpoint.subscriberName().equals(subscriberName) && oldEndpoint.clientMachineId().equals(clientMachineId)) {
                         iter.remove();
-                        clientTimestamp = oldEndpoint.getClientTimestamp();
+                        clientTimestamp = oldEndpoint.clientTimestamp();
                         break;
                     }
                 }
@@ -324,8 +318,8 @@ public class DistributedMessageServer implements Shutdowneable {
                             + ", subscriberName=" + subscriberName);
                 }
                 info.subscriberEndpoints.add(newEndpoint);
-                info.subscriberEndpoints.sort(Comparator.comparing(SubscriberEndpoint::getClientMachineId)
-                                                        .thenComparing(SubscriberEndpoint::getClientTimestamp));
+                info.subscriberEndpoints.sort(Comparator.comparing(SubscriberEndpoint::clientMachineId)
+                                                        .thenComparing(SubscriberEndpoint::clientTimestamp));
                 
                 // remove client machine from notifyClients as clients who subscribe to a topic are always notified when the publisher is created
                 // running time O(N) where N is the number of clients wanting a notification when the publisher is created
@@ -346,40 +340,21 @@ public class DistributedMessageServer implements Shutdowneable {
             if (info.createPublisher != null && info.createPublisher.getRelayFields().getSourceMachineId().equals(clientMachineId)) {
                 return true;
             }
-            return info.subscriberEndpoints.stream().anyMatch(endpoint -> endpoint.getClientMachineId().equals(clientMachineId));
+            return info.subscriberEndpoints.stream().anyMatch(endpoint -> endpoint.clientMachineId().equals(clientMachineId));
         }
 
-        static class AddSubscriberResult {
-            private final @Nullable CreatePublisher createPublisher;
-            private final boolean clientMachineAlreadySubscribedToTopic;
-            private final long clientTimestamp;
-            
-            private AddSubscriberResult(@Nullable CreatePublisher createPublisher, boolean clientMachineAlreadySubscribedToTopic, long clientTimestamp) {
-                this.createPublisher = createPublisher;
-                this.clientMachineAlreadySubscribedToTopic = clientMachineAlreadySubscribedToTopic;
-                this.clientTimestamp = clientTimestamp;
-            }
-
-            @Nullable CreatePublisher getCreatePublisher() {
-                return createPublisher;
-            }
-
-            boolean isClientMachineAlreadySubscribedToTopic() {
-                return clientMachineAlreadySubscribedToTopic;
-            }
-            
-            long getClientTimestamp() {
-                return clientTimestamp;
-            }
+        private record AddSubscriberResult(@Nullable MessageClasses.CreatePublisher createPublisher,
+                                           boolean clientMachineAlreadySubscribedToTopic,
+                                           long clientTimestamp) {
         }
 
         public void removeSubscriberEndpoint(String topic, ClientMachineId clientMachineId, String subscriberName) {
             TopicInfo info = Objects.requireNonNull(topicMap.get(topic));
             info.lock.lock();
             try {
-                info.subscriberEndpoints.removeIf(subscriberEndpoint -> subscriberEndpoint.getSubscriberName().equals(subscriberName));
-                info.inactiveSubscriberEndpoints.removeIf(endpoint -> endpoint.getClientMachineId().equals(clientMachineId)
-                                                              && endpoint.getSubscriberName().equals(subscriberName));
+                info.subscriberEndpoints.removeIf(subscriberEndpoint -> subscriberEndpoint.subscriberName().equals(subscriberName));
+                info.inactiveSubscriberEndpoints.removeIf(endpoint -> endpoint.clientMachineId().equals(clientMachineId)
+                                                              && endpoint.subscriberName().equals(subscriberName));
                 info.mostRecentMessages.removeClientMachineState(clientMachineId);
             } finally {
                 info.lock.unlock();
@@ -398,7 +373,7 @@ public class DistributedMessageServer implements Shutdowneable {
             info.lock.lock();
             try {
                 if (info.createPublisher == null
-                        && info.subscriberEndpoints.stream().anyMatch(subscriberEndpoint -> subscriberEndpoint.getClientMachineId().equals(clientMachineId))) {
+                        && info.subscriberEndpoints.stream().anyMatch(subscriberEndpoint -> subscriberEndpoint.clientMachineId().equals(clientMachineId))) {
                     return null;
                 }
                 if (info.createPublisher != null) {
@@ -413,15 +388,9 @@ public class DistributedMessageServer implements Shutdowneable {
                 info.lock.unlock();
             }
         }
-        
-        private static final class SavePublisherCallbacks {
-            private final Consumer<SubscriberParamsForCallback> relayAction;
-            private final Runnable finalizerAction;
-            
-            SavePublisherCallbacks(Consumer<SubscriberParamsForCallback> relayAction, Runnable finalizerAction) {
-                this.relayAction = relayAction;
-                this.finalizerAction = finalizerAction;
-            }
+
+        private record SavePublisherCallbacks(Consumer<SubscriberParamsForCallback> relayAction,
+                                              Runnable finalizerAction) {
         }
         
         /**
@@ -473,14 +442,9 @@ public class DistributedMessageServer implements Shutdowneable {
                 saveMessage(deferred.publishMessage, deferred.relayAction);
             }
         }
-        
-        static class CreatePublisherResult {
-            private final @Nullable CreatePublisher alreadyExistsCreatePublisher;
-            
-            private CreatePublisherResult(@Nullable CreatePublisher alreadyExistsCreatePublisher) {
-                this.alreadyExistsCreatePublisher = alreadyExistsCreatePublisher;
-            }
-        } 
+
+        record CreatePublisherResult(@Nullable MessageClasses.CreatePublisher alreadyExistsCreatePublisher) {
+        }
 
         /**
          * A channel has been closed.
@@ -501,7 +465,7 @@ public class DistributedMessageServer implements Shutdowneable {
                     int removeCount = 0;
                     for (var iter = info.subscriberEndpoints.iterator(); iter.hasNext(); ) {
                         var endpoint = iter.next();
-                        if (endpoint.getClientMachineId().equals(clientMachineId)) {
+                        if (endpoint.clientMachineId().equals(clientMachineId)) {
                             iter.remove();
                             removeCount++;
                             info.inactiveSubscriberEndpoints.add(endpoint);
@@ -554,13 +518,13 @@ public class DistributedMessageServer implements Shutdowneable {
                 }
                 ClientMachineId prevClientMachineId = null;
                 for (SubscriberEndpoint subscriberEndpoint : info.subscriberEndpoints) {
-                    if (subscriberEndpoint.getClientMachineId().equals(excludeMachineId)) {
+                    if (subscriberEndpoint.clientMachineId().equals(excludeMachineId)) {
                         continue;
                     }
-                    if (!subscriberEndpoint.getClientMachineId().equals(prevClientMachineId)) {
-                        var params = new SubscriberParamsForCallback(subscriberEndpoint.getClientMachineId(), subscriberEndpoint.getClientTimestamp());
+                    if (!subscriberEndpoint.clientMachineId().equals(prevClientMachineId)) {
+                        var params = new SubscriberParamsForCallback(subscriberEndpoint.clientMachineId(), subscriberEndpoint.clientTimestamp());
                         consumer.accept(params);
-                        prevClientMachineId = subscriberEndpoint.getClientMachineId();
+                        prevClientMachineId = subscriberEndpoint.clientMachineId();
                     }
                 }
     
@@ -582,7 +546,7 @@ public class DistributedMessageServer implements Shutdowneable {
                 if (info.createPublisher != null) {
                     info.mostRecentMessages.save(publishMessage);
                     relayAction = relayAction.andThen(
-                        subscriberParamsForCallback -> info.mostRecentMessages.onMessageRelayed(subscriberParamsForCallback.getClientMachineId(), publishMessage));
+                        subscriberParamsForCallback -> info.mostRecentMessages.onMessageRelayed(subscriberParamsForCallback.clientMachineId(), publishMessage));
                     forClientsSubscribedToPublisher(topic,
                                                     publishMessage.getRelayFields().getSourceMachineId(),
                                                     false,
@@ -703,75 +667,24 @@ public class DistributedMessageServer implements Shutdowneable {
             return count;
         }
     }
-    
+
     /**
      * A struct describing parameters about a subscriber.
      * Used when we fetch subscribers to a topic and want to invoke an action of each them,
      * such as relaying a published message to these subscribers.
      */
-    private static class SubscriberParamsForCallback {
-        private final ClientMachineId clientMachineId;
-        private final Long minClientTimestamp;
-        
-        private SubscriberParamsForCallback(ClientMachineId clientMachineId, Long minClientTimestamp) {
-            this.clientMachineId = clientMachineId;
-            this.minClientTimestamp = minClientTimestamp;
-        }
-
-        ClientMachineId getClientMachineId() {
-            return clientMachineId;
-        }
-
-        Long getMinClientTimestamp() {
-            return minClientTimestamp;
-        }
+    private record SubscriberParamsForCallback(ClientMachineId clientMachineId,
+                                               Long minClientTimestamp) {
     }
-    
+
     /**
      * Class to store what subscribers and client machine has.
      * Unique key is clientMachineId + subscriberName.
      * One client machine can have two subscribers for the same topic.
      */
-    private static final class SubscriberEndpoint {
-        private final ClientMachineId clientMachineId;
-        private final String subscriberName;
-        private final long clientTimestamp;
-
-        private SubscriberEndpoint(ClientMachineId clientMachineId, String subscriberName, long clientTimestamp) {
-            this.clientMachineId = clientMachineId;
-            this.subscriberName = subscriberName;
-            this.clientTimestamp = clientTimestamp;
-        }
-
-        private ClientMachineId getClientMachineId() {
-            return clientMachineId;
-        }
-
-        private String getSubscriberName() {
-            return subscriberName;
-        }
-
-        private long getClientTimestamp() {
-            return clientTimestamp;
-        }
-        
-        @Override
-        public boolean equals(Object thatObject) {
-            if (!(thatObject instanceof SubscriberEndpoint that)) {
-                return false;
-            }
-            return this.clientMachineId.equals(that.clientMachineId) && this.subscriberName.equals(that.subscriberName);
-        }
-        
-        @Override
-        public int hashCode() {
-            return Objects.hash(clientMachineId, subscriberName);
-        }
-        
-        @Override
-        public String toString() {
-            return clientMachineId + "/" + subscriberName;
-        }
+    private record SubscriberEndpoint(ClientMachineId clientMachineId,
+                                      String subscriberName,
+                                      long clientTimestamp) {
     }
 
     /**
@@ -1180,9 +1093,9 @@ public class DistributedMessageServer implements Shutdowneable {
         Consumer<PublishersAndSubscribers.AddSubscriberResult> afterSubscriberAdded = addSubscriberResult -> {
             boolean doDownload = false;
             boolean forceLogging = subscriberInfo.isResend();
-            long clientTimestamp = addSubscriberResult.getClientTimestamp();
+            long clientTimestamp = addSubscriberResult.clientTimestamp();
             boolean sendingPublisher = false;
-            if (addSubscriberResult.getCreatePublisher() != null && !addSubscriberResult.isClientMachineAlreadySubscribedToTopic()) {
+            if (addSubscriberResult.createPublisher() != null && !addSubscriberResult.clientMachineAlreadySubscribedToTopic()) {
                 if (!subscriberInfo.isResend()) {
                     sendingPublisher = true;
                 }
@@ -1198,7 +1111,7 @@ public class DistributedMessageServer implements Shutdowneable {
                 wrapAndSend(new SubscriberAdded(topic, subscriberName), clientMachine);
             }
             if (sendingPublisher) {
-                wrapAndSend(addSubscriberResult.getCreatePublisher(), clientMachine);
+                wrapAndSend(addSubscriberResult.createPublisher(), clientMachine);
             }
             if (doDownload) {
                 download("handleAddSubscriber",
@@ -1305,7 +1218,7 @@ public class DistributedMessageServer implements Shutdowneable {
         if (!isResendPublisher) {
             // relay CreatePublisher to clients subscribed to this topic
             return params -> {
-                ClientMachine clientMachine = lookupClientMachine(params.getClientMachineId());
+                ClientMachine clientMachine = lookupClientMachine(params.clientMachineId());
                 wrapAndSend(relay, clientMachine);
             };
         } else {
@@ -1315,15 +1228,15 @@ public class DistributedMessageServer implements Shutdowneable {
             // and (d) clients send the messages and resend their AddSubscriber and CreatePublisher commands to the server
             // the messages published since the server died (b) need to be sent to all subscribers
             return params -> {
-                if (params.getMinClientTimestamp() == null) {
+                if (params.minClientTimestamp() == null) {
                     // this block called for clients just wanting notification of a publisher
-                    wrapAndSend(relay, lookupClientMachine(params.getClientMachineId()));
+                    wrapAndSend(relay, lookupClientMachine(params.clientMachineId()));
                 } else {
                     download("handleCreatePublisher",
                              null,
-                             lookupClientMachine(params.getClientMachineId()),
+                             lookupClientMachine(params.clientMachineId()),
                              Collections.singletonList(relay.getTopic()),
-                             params.getMinClientTimestamp(),
+                             params.minClientTimestamp(),
                              Long.MAX_VALUE,
                              null /*lowerBoundInclusive*/,
                              ServerIndex.MAX_VALUE,
@@ -1336,7 +1249,7 @@ public class DistributedMessageServer implements Shutdowneable {
     
     private void handlePublishMessage(PublishMessage relay) {
         Consumer<SubscriberParamsForCallback> relayAction = params -> {
-            var otherClientMachine = lookupClientMachine(params.getClientMachineId());
+            var otherClientMachine = lookupClientMachine(params.clientMachineId());
             wrapAndSend(relay, otherClientMachine);
         };
         publishersAndSubscribers.saveMessage(relay, relayAction);

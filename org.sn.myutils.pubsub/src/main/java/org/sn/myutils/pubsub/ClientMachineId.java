@@ -1,5 +1,6 @@
 package org.sn.myutils.pubsub;
 
+import java.io.Serial;
 import java.lang.constant.Constable;
 import java.lang.constant.ConstantDesc;
 import java.lang.invoke.MethodHandles.Lookup;
@@ -9,6 +10,7 @@ import org.sn.myutils.annotations.NotNull;
 
 
 public final class ClientMachineId implements java.io.Serializable, Comparable<ClientMachineId>, CharSequence, Constable, ConstantDesc {
+    @Serial
     private static final long serialVersionUID = 1L;
     
     private final @NotNull String value;

@@ -429,29 +429,13 @@ public class DistributedSocketPubSub extends PubSub {
      * Class representing an action to send all deferred messages to the particular messageServer
      * as that particular messageServer is now connected.
      */
-    private static class SendDeferredMessages implements MessageWriterMessage {
-        private final SocketAddress messageServer;
-
-        public SendDeferredMessages(SocketAddress messageServer) {
-            this.messageServer = messageServer;
-        }
-
-        SocketAddress getMessageServer() {
-            return messageServer;
-        }
+    private record SendDeferredMessages(SocketAddress messageServer) implements MessageWriterMessage {
     }
 
     /**
      * A message and the message server it must be sent to.
      */
-    private static class RegularMessage implements MessageWriterMessage {
-        private final MessageBase message;
-        private final SocketAddress messageServer;
-        
-        RegularMessage(MessageBase message, SocketAddress destination) {
-            this.message = message;
-            this.messageServer = destination;
-        }
+    private record RegularMessage(MessageBase message, SocketAddress messageServer) implements MessageWriterMessage {
     }
     
     /**
@@ -502,7 +486,7 @@ public class DistributedSocketPubSub extends PubSub {
         }
         
         private void handleSendDeferredMessages(SendDeferredMessages sendDeferredMessages) {
-            Deque<RegularMessage> deferredMessages = deferredQueues.remove(sendDeferredMessages.getMessageServer());
+            Deque<RegularMessage> deferredMessages = deferredQueues.remove(sendDeferredMessages.messageServer());
             if (deferredMessages != null) {
                 for (var deferredMessage : deferredMessages) {
                     send(deferredMessage);
@@ -822,16 +806,9 @@ public class DistributedSocketPubSub extends PubSub {
         }
     }
 
-    private static class DeferredMessage {
-        private final CloneableObject<?> message;
-        private final RetentionPriority retentionPriority;
-        private final boolean isRemoteMessage;
-        
-        DeferredMessage(CloneableObject<?> message, RetentionPriority retentionPriority, boolean isRemoteMessage) {
-            this.message = message;
-            this.retentionPriority = retentionPriority;
-            this.isRemoteMessage = isRemoteMessage;
-        }
+    private record DeferredMessage(CloneableObject<?> message,
+                                   RetentionPriority retentionPriority,
+                                   boolean isRemoteMessage) {
     }
 
     /**

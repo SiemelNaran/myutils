@@ -11,6 +11,7 @@ import static org.sn.myutils.testutils.TestUtil.myThreadFactory;
 import static org.sn.myutils.testutils.TestUtil.sleep;
 
 import java.io.IOException;
+import java.io.Serial;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -57,6 +58,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     private Path folder;
 
     private static class MyRunnable implements SerializableRunnable {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         private final String value;
@@ -70,10 +72,10 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         @Override
         public void run() {
             if (Thread.currentThread().isInterrupted()) {
-                System.out.println("Interrupted " + toString());
+                System.out.println("Interrupted " + this);
                 return;
             }
-            System.out.println("Running " + toString());
+            System.out.println("Running " + this);
             words.add(value);
         }
 
@@ -84,6 +86,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     }
 
     private static class MyCallable implements SerializableCallable<String> {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         private final String value;

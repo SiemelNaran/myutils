@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.PrintWriter;
+import java.io.Serial;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -161,6 +162,7 @@ public class StackTraces {
     }
     
     private static class StackTracesCompletionException extends CompletionException {
+        @Serial
         private static final long serialVersionUID = 1L;
         
         private final String calledFrom;

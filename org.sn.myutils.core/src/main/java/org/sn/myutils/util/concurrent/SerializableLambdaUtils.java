@@ -5,6 +5,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.AbstractMap;
 import java.util.concurrent.Callable;
@@ -21,6 +22,7 @@ class SerializableLambdaUtils {
     private static final System.Logger LOGGER = System.getLogger(SerializableLambdaUtils.class.getName());
 
     static final class TimeInfo implements Serializable {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         private long initialDelay;
@@ -70,6 +72,7 @@ class SerializableLambdaUtils {
     }
 
     static class RunnableInfo implements Serializable {
+        @Serial
         private static final long serialVersionUID = 1L;
         private static final byte FLAGS_COMPLETED_EXCEPTIONALLY = 1;
         private static final byte FLAGS_INTERRUPTED = 2;
@@ -278,6 +281,7 @@ class SerializableLambdaUtils {
     }
 
     private static class AdaptSerializableCallable implements SerializableRunnable {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         private final SerializableCallable<?> callable;
@@ -298,6 +302,7 @@ class SerializableLambdaUtils {
 
     @SuppressWarnings("rawtypes")
     private static class AdaptSerializableCallableClass implements SerializableRunnable {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         private final Class<? extends Callable> clazz;

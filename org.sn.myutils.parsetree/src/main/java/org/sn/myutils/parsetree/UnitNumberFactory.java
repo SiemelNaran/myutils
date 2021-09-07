@@ -183,6 +183,8 @@ public class UnitNumberFactory implements NumberFactory {
         
         /**
          * Set the default unit. null means that a unit is required when parsing a number.
+         *
+         * @throws IllegalArgumentException if defaultUnit not found. Be sure to call setDefaultUnit after all addUnit.
          */
         public Builder setDefaultUnit(String defaultUnit) {
             defaultUnit = unitCase.convert(defaultUnit);

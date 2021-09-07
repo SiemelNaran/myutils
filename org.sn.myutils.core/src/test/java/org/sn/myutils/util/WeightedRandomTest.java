@@ -3,6 +3,7 @@ package org.sn.myutils.util;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.sn.myutils.testutils.TestUtil.assertException;
 
+import java.io.Serial;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -137,9 +138,10 @@ public class WeightedRandomTest extends TestBase {
      * but it tests that we remove the weights with trailing zeroes at the end (see testZeroWeight2).
      */
     private static class TestRandom extends Random {
+        @Serial
         private static final long serialVersionUID = 1L;
         
-        private Random internalRandom = new Random();
+        private final Random internalRandom = new Random();
         private boolean returnZero = true;
 
         @Override

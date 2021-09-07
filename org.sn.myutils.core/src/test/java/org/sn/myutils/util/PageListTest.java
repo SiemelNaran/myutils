@@ -757,11 +757,11 @@ public class PageListTest {
                 );
 
             for (NamedFunction<Integer, Integer> function: functions) {
-                System.out.print(list.getClass().getSimpleName() + " + " + function.name + " = ");
+                System.out.print(list.getClass().getSimpleName() + " + " + function.name() + " = ");
                 final long startTime = System.currentTimeMillis();
                 for (int index: indices) {
                     int val = arrayList.get(index);
-                    int findIndex = function.function.apply(val);
+                    int findIndex = function.function().apply(val);
                     assertEquals(index, findIndex);
                 }
                 final long timeTaken = System.currentTimeMillis() - startTime;
@@ -922,14 +922,7 @@ public class PageListTest {
         }
         return output;
     }
-    
-    private static class NamedFunction<T, R> {
-        private final String name;
-        private final Function<T, R> function;
-        
-        NamedFunction(String name, Function<T, R> function) {
-            this.name = name;
-            this.function = function;
-        }
+
+    private record NamedFunction<T, R>(String name, Function<T, R> function) {
     }
 }
