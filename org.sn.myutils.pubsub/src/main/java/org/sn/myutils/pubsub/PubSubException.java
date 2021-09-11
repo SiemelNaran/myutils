@@ -1,8 +1,7 @@
 package org.sn.myutils.pubsub;
 
-import org.sn.myutils.pubsub.MessageClasses.InvalidMessage;
-
 import java.io.Serial;
+import org.sn.myutils.pubsub.MessageClasses.InvalidMessage;
 
 
 public class PubSubException extends RuntimeException {
