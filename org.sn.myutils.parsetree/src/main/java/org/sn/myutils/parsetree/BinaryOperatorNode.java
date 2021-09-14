@@ -95,6 +95,7 @@ public abstract class BinaryOperatorNode implements OperatorNode {
                 right.reduce(listener);
                 listener.acceptBinaryOperator(this);
             }
+            default -> throw new UnsupportedOperationException(); // never hit
         }
         listener.endBinaryOperator(this);
     }

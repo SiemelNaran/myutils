@@ -59,6 +59,7 @@ public abstract class UnaryOperatorNode implements OperatorNode {
                 node.reduce(listener);
                 listener.acceptUnaryOperator(this);
             }
+            default -> throw new UnsupportedOperationException(); // never hit
         }
         listener.endUnaryOperator(this);
     }

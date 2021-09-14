@@ -2011,6 +2011,7 @@ public class PriorityLockTest extends TestBase {
                                 messages.add("about to signalAll in thread with priority " + currentThread.getPriority());
                                 condition.signalAll();
                             }
+                            default -> throw new UnsupportedOperationException(); // never hit
                         }
                     }
                     logString("* end");

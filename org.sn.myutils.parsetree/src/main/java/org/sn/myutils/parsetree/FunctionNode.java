@@ -66,6 +66,7 @@ public abstract class FunctionNode implements ParseNode {
                 reduceArgs(listener);
                 listener.acceptFunction(this);
             }
+            default -> throw new UnsupportedOperationException(); // never hit
         }
         listener.endFunction(this);
     }
