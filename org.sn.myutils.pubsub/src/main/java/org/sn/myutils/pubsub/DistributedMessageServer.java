@@ -293,9 +293,9 @@ public class DistributedMessageServer implements Shutdowneable {
                 // O(1) is possible using HashSet or HashMap lookup as inactiveSubscriberEndpoints is a HashSet
                 for (var iter = info.inactiveSubscriberEndpoints.iterator(); iter.hasNext(); ) {
                     var oldEndpoint = iter.next();
-                    if (oldEndpoint.subscriberName().equals(subscriberName) && oldEndpoint.clientMachineId().equals(clientMachineId)) {
+                    if (oldEndpoint.getSubscriberName().equals(subscriberName) && oldEndpoint.getClientMachineId().equals(clientMachineId)) {
                         iter.remove();
-                        clientTimestamp = oldEndpoint.clientTimestamp();
+                        clientTimestamp = oldEndpoint.getClientTimestamp();
                         break;
                     }
                 }
@@ -318,8 +318,8 @@ public class DistributedMessageServer implements Shutdowneable {
                             + ", subscriberName=" + subscriberName);
                 }
                 info.subscriberEndpoints.add(newEndpoint);
-                info.subscriberEndpoints.sort(Comparator.comparing(SubscriberEndpoint::clientMachineId)
-                                                        .thenComparing(SubscriberEndpoint::clientTimestamp));
+                info.subscriberEndpoints.sort(Comparator.comparing(SubscriberEndpoint::getClientMachineId)
+                                                        .thenComparing(SubscriberEndpoint::getClientTimestamp));
                 
                 // remove client machine from notifyClients as clients who subscribe to a topic are always notified when the publisher is created
                 // running time O(N) where N is the number of clients wanting a notification when the publisher is created
@@ -340,7 +340,7 @@ public class DistributedMessageServer implements Shutdowneable {
             if (info.createPublisher != null && info.createPublisher.getRelayFields().getSourceMachineId().equals(clientMachineId)) {
                 return true;
             }
-            return info.subscriberEndpoints.stream().anyMatch(endpoint -> endpoint.clientMachineId().equals(clientMachineId));
+            return info.subscriberEndpoints.stream().anyMatch(endpoint -> endpoint.getClientMachineId().equals(clientMachineId));
         }
 
         private record AddSubscriberResult(@Nullable MessageClasses.CreatePublisher createPublisher,
@@ -352,9 +352,9 @@ public class DistributedMessageServer implements Shutdowneable {
             TopicInfo info = Objects.requireNonNull(topicMap.get(topic));
             info.lock.lock();
             try {
-                info.subscriberEndpoints.removeIf(subscriberEndpoint -> subscriberEndpoint.subscriberName().equals(subscriberName));
-                info.inactiveSubscriberEndpoints.removeIf(endpoint -> endpoint.clientMachineId().equals(clientMachineId)
-                                                              && endpoint.subscriberName().equals(subscriberName));
+                info.subscriberEndpoints.removeIf(subscriberEndpoint -> subscriberEndpoint.getSubscriberName().equals(subscriberName));
+                info.inactiveSubscriberEndpoints.removeIf(endpoint -> endpoint.getClientMachineId().equals(clientMachineId)
+                                                              && endpoint.getSubscriberName().equals(subscriberName));
                 info.mostRecentMessages.removeClientMachineState(clientMachineId);
             } finally {
                 info.lock.unlock();
@@ -373,7 +373,7 @@ public class DistributedMessageServer implements Shutdowneable {
             info.lock.lock();
             try {
                 if (info.createPublisher == null
-                        && info.subscriberEndpoints.stream().anyMatch(subscriberEndpoint -> subscriberEndpoint.clientMachineId().equals(clientMachineId))) {
+                        && info.subscriberEndpoints.stream().anyMatch(subscriberEndpoint -> subscriberEndpoint.getClientMachineId().equals(clientMachineId))) {
                     return null;
                 }
                 if (info.createPublisher != null) {
@@ -465,7 +465,7 @@ public class DistributedMessageServer implements Shutdowneable {
                     int removeCount = 0;
                     for (var iter = info.subscriberEndpoints.iterator(); iter.hasNext(); ) {
                         var endpoint = iter.next();
-                        if (endpoint.clientMachineId().equals(clientMachineId)) {
+                        if (endpoint.getClientMachineId().equals(clientMachineId)) {
                             iter.remove();
                             removeCount++;
                             info.inactiveSubscriberEndpoints.add(endpoint);
@@ -518,13 +518,13 @@ public class DistributedMessageServer implements Shutdowneable {
                 }
                 ClientMachineId prevClientMachineId = null;
                 for (SubscriberEndpoint subscriberEndpoint : info.subscriberEndpoints) {
-                    if (subscriberEndpoint.clientMachineId().equals(excludeMachineId)) {
+                    if (subscriberEndpoint.getClientMachineId().equals(excludeMachineId)) {
                         continue;
                     }
-                    if (!subscriberEndpoint.clientMachineId().equals(prevClientMachineId)) {
-                        var params = new SubscriberParamsForCallback(subscriberEndpoint.clientMachineId(), subscriberEndpoint.clientTimestamp());
+                    if (!subscriberEndpoint.getClientMachineId().equals(prevClientMachineId)) {
+                        var params = new SubscriberParamsForCallback(subscriberEndpoint.getClientMachineId(), subscriberEndpoint.getClientTimestamp());
                         consumer.accept(params);
-                        prevClientMachineId = subscriberEndpoint.clientMachineId();
+                        prevClientMachineId = subscriberEndpoint.getClientMachineId();
                     }
                 }
     
@@ -680,12 +680,51 @@ public class DistributedMessageServer implements Shutdowneable {
     /**
      * Class to store what subscribers and client machine has.
      * Unique key is clientMachineId + subscriberName.
+     * Cannot make this class a record, because in a record the unique key would be all 3 member variables.
      * One client machine can have two subscribers for the same topic.
      */
-    private record SubscriberEndpoint(ClientMachineId clientMachineId,
-                                      String subscriberName,
-                                      long clientTimestamp) {
-    }
+    private static final class SubscriberEndpoint {
+        private final ClientMachineId clientMachineId;
+        private final String subscriberName;
+        private final long clientTimestamp;
+
+        private SubscriberEndpoint(ClientMachineId clientMachineId, String subscriberName, long clientTimestamp) {
+            this.clientMachineId = clientMachineId;
+            this.subscriberName = subscriberName;
+            this.clientTimestamp = clientTimestamp;
+        }
+
+        private ClientMachineId getClientMachineId() {
+            return clientMachineId;
+        }
+
+        private String getSubscriberName() {
+            return subscriberName;
+        }
+
+        private long getClientTimestamp() {
+            return clientTimestamp;
+        }
+
+        @Override
+        public boolean equals(Object thatObject) {
+            if (!(thatObject instanceof SubscriberEndpoint)) {
+                return false;
+            }
+            SubscriberEndpoint that = (SubscriberEndpoint) thatObject;
+            return this.clientMachineId.equals(that.clientMachineId) && this.subscriberName.equals(that.subscriberName);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(clientMachineId, subscriberName);
+        }
+
+        @Override
+        public String toString() {
+            return clientMachineId + "/" + subscriberName;
+        }
+     }
 
     /**
      * A data structure to store the most recently published messages in memory.
