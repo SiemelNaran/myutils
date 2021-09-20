@@ -94,7 +94,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     public synchronized @NotNull List<Runnable> shutdownNow() {
         List<Runnable> scheduledNotStartedTasks =
                 scheduledTasks.values().stream()
-                                       .flatMap(Collection::stream)
+                                       .<TestScheduledFutureTask<?>>mapMulti((futures, flattener) -> futures.stream().forEach(future -> flattener.accept(future)))
                                        .peek(TestScheduledFutureTask::clearExecutor)
                                        .collect(Collectors.toList());
         scheduledTasks.clear();
