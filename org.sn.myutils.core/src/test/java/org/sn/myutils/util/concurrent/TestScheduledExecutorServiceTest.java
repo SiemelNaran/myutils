@@ -314,25 +314,38 @@ public class TestScheduledExecutorServiceTest extends TestBase {
 
     @Test
     void testScheduleAtFixedRate_TaskTakesLongerThanPeriod_TwoThreads() throws InterruptedException {
-        List<String> words = Collections.synchronizedList(new ArrayList<>());
-        ScheduledExecutorService service = MoreExecutors.newTestScheduledThreadPool(2, myThreadFactory(), getStartOfTest().toEpochMilli());
-        service.scheduleAtFixedRate(() -> addWord(service, words, "fixedRateSlow", 360), 200, 200, TimeUnit.MILLISECONDS);
-        service.scheduleAtFixedRate(() -> addWord(service, words, "fixedRate", 80), 400, 120, TimeUnit.MILLISECONDS);
-        MoreExecutors.advanceTime(service, 1, TimeUnit.SECONDS);
-        System.out.println("actual: " + words);
-        var roundedWords = roundDownToNearestForty(words);
-        System.out.println("actual: " + roundedWords);
+        // for some reason, after upgrading to Java 16, this test fails the first time it runs
+        // the output is ["480:fixedRate", "560:fixedRateSlow", ...]
+
+        doTestScheduleAtFixedRate_TaskTakesLongerThanPeriod_TwoThreads(1);
+        List<String> roundedWords = doTestScheduleAtFixedRate_TaskTakesLongerThanPeriod_TwoThreads(2);
+
         assertThat(roundedWords, Matchers.contains(
-                "480:fixedRate", // realTime = 80ms
+                "480:fixedRate",  // realTime=80ms, then next fixedRatet added to executor
                 "600:fixedRate", // realTime = 160ms
                 "720:fixedRate", // realTime = 240ms
                 "840:fixedRate", // realTime = 320ms
-                "560:fixedRateSlow", // realTime = 360ms
+                "560:fixedRateSlow", // realTime = 360ms , then next fixedRate slow added to executor
                 "960:fixedRate", // realTime = 400ms
                 "1080:fixedRate", // realTime = 480ms
                 "920:fixedRateSlow", // realTime = 720ms
                 "1280:fixedRateSlow" // realTime = 1080ms
         ));
+    }
+
+    private List<String> doTestScheduleAtFixedRate_TaskTakesLongerThanPeriod_TwoThreads(int executionNumber) throws InterruptedException {
+        System.out.println("\nexecutionNumber=" + executionNumber);
+
+        List<String> words = Collections.synchronizedList(new ArrayList<>());
+        ScheduledExecutorService service = MoreExecutors.newTestScheduledThreadPool(2, myThreadFactory(), getStartOfTest().toEpochMilli());
+        service.scheduleAtFixedRate(() -> addWord(service, words, "fixedRateSlow", 360), 200, 200, TimeUnit.MILLISECONDS);
+        service.scheduleAtFixedRate(() -> addWord(service, words, "fixedRate", 80), 400, 120, TimeUnit.MILLISECONDS);
+        MoreExecutors.advanceTime(service, 1, TimeUnit.SECONDS);
+
+        System.out.println("executionNumber=" + executionNumber);
+        System.out.println("actual: " + words);
+        var roundedWords = roundDownToNearestForty(words);
+        System.out.println("actual: " + roundedWords);
 
         assertFalse(service.isShutdown());
         assertFalse(service.isTerminated());
@@ -341,6 +354,8 @@ public class TestScheduledExecutorServiceTest extends TestBase {
         assertTrue(service.awaitTermination(250, TimeUnit.MILLISECONDS));
         assertTrue(service.isShutdown());
         assertTrue(service.isTerminated());
+
+        return roundedWords;
     }
 
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
@@ -471,16 +486,26 @@ public class TestScheduledExecutorServiceTest extends TestBase {
     private void addWord(ScheduledExecutorService baseService, List<String> list, String word) {
         addWord(baseService, list, word, 0);
     }
-    
+
+    /**
+     * Add word to list after realSleepMillis.
+     *
+     * @param service used to get the current time
+     * @param list the list to add the word to
+     * @param word the word to add
+     * @param realSleepMillis wait this amount of milliseconds before adding the word
+     */
     private void addWord(ScheduledExecutorService service, List<String> list, String word, long realSleepMillis) {
         long startTimeMillis = System.currentTimeMillis();
         long timeBeforeSleep = MoreExecutors.currentTimeMillis(service) - getStartOfTest().toEpochMilli();
         try {
-            System.out.println(timeBeforeSleep + ": started " + word + " (realSleepMillis=" + realSleepMillis + ')');
+            long realTime = System.currentTimeMillis() - getStartOfTest().toEpochMilli();
+            System.out.println("fakeTime=" + timeBeforeSleep + "(realTime=" + realTime + "): started " + word + " (realSleepMillis=" + realSleepMillis + ')');
             sleep(realSleepMillis);
             long timeAfterSleep = timeBeforeSleep + realSleepMillis;
+            realTime = System.currentTimeMillis() - getStartOfTest().toEpochMilli();
             list.add(timeAfterSleep + ":" + word);
-            System.out.println(timeAfterSleep + ": added " + word);
+            System.out.println("fakeTime=" + timeAfterSleep + "(realTime=" + realTime + "): added " + word);
         } catch (RuntimeException e) {
             long deltaMillis = System.currentTimeMillis() - startTimeMillis;
             long timeException = deltaMillis - startTimeMillis;
