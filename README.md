@@ -41,7 +41,7 @@ rm -rfv ~/.m2/repository/org/sn/myutils/
 Eclipse IDE
 -----------
 
-Eclipse 2020-03.
+Eclipse 2021-06 (4.20).
 
 Steps:
 - Optional: Ensure that .project and .classpath files are deleleted
@@ -57,7 +57,7 @@ find ../myutils/ -name "*.project" -exec rm -rfv {} \;
 IntelliJ IDE
 ------------
 
-IntelliJ 2020.2.
+IntelliJ 2021.2.
 
 Steps:
 - Optional: Ensure that all .iml and the .idea folder are deleted.
