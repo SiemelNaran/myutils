@@ -203,7 +203,7 @@
             <property name="caseIndent" value="4"/>
             <property name="throwsIndent" value="4"/>
             <property name="lineWrappingIndentation" value="0"/>
-            <property name="arrayInitIndent" value="2"/>
+            <property name="arrayInitIndent" value="8"/>
         </module>
         <module name="AbbreviationAsWordInName">
             <property name="ignoreFinal" value="false"/>
@@ -255,7 +255,7 @@
         </module>
         <module name="JavadocMethod">
             <property name="validateThrows" value="true"/>
-            <property name="scope" value="public"/>
+            <property name="accessModifiers" value="public"/>
             <property name="allowMissingParamTags" value="true"/>
             <property name="allowMissingReturnTag" value="true"/>
             <property name="allowedAnnotations" value="Override, Test"/>

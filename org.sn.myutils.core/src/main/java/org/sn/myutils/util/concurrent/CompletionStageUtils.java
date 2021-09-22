@@ -31,7 +31,7 @@ public class CompletionStageUtils {
         @SuppressWarnings("unchecked")
         CompletableFuture<T>[] originalAsFutures =
                 original.stream()
-                        .map(stage -> stage.toCompletableFuture())
+                        .map(CompletionStage::toCompletableFuture)
                         .toArray(CompletableFuture[]::new);
         CompletionStage<Void> all = CompletableFuture.allOf(originalAsFutures);
         return all.handle((ignore, throwable) -> {
@@ -41,8 +41,7 @@ public class CompletionStageUtils {
                 try {
                     T result = getResult(i, future, errorHandler);
                     results.add(result);
-                } catch (RuntimeException e) {
-                    ;
+                } catch (RuntimeException ignored) {
                 }
             }
             return results;
@@ -54,9 +53,7 @@ public class CompletionStageUtils {
             return future.get();
         } catch (ExecutionException | CompletionException e) {
             return errorHandler.apply(index, getCause(e));
-        } catch (InterruptedException e) {
-            return errorHandler.apply(index, e);
-        } catch (RuntimeException | Error e) {
+        } catch (InterruptedException | RuntimeException | Error e) {
             return errorHandler.apply(index, e);
         }
     }

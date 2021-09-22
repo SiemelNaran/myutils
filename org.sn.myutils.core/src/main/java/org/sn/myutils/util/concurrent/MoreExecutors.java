@@ -101,12 +101,11 @@ public class MoreExecutors {
      * @see TestScheduledThreadPoolExecutor#advanceTime(long, TimeUnit)
      */
     public static void advanceTime(ScheduledExecutorService service, long time, TimeUnit unit) {
-        if (service instanceof TestScheduledThreadPoolExecutor) {
-            TestScheduledThreadPoolExecutor testService = (TestScheduledThreadPoolExecutor) service;
+        if (service instanceof TestScheduledThreadPoolExecutor testService) {
             testService.advanceTime(time, unit);
         } else {
             long millis = unit.toMillis(time);
-            int nanos = unit == TimeUnit.NANOSECONDS ? nanos = (int) time % 1_000_000 : 0;
+            int nanos = unit == TimeUnit.NANOSECONDS ? (int) time % 1_000_000 : 0;
             try {
                 Thread.sleep(millis, nanos);
             } catch (InterruptedException e) {
@@ -121,8 +120,7 @@ public class MoreExecutors {
      * If called for a thread spawned from the regular java.util.concurrent.ScheduledThreadPoolExecutor or such then return System.currentTimeMillis().
      */
     public static long currentTimeMillis(ScheduledExecutorService service) {
-        if (service instanceof TestScheduledThreadPoolExecutor) {
-            TestScheduledThreadPoolExecutor testService = (TestScheduledThreadPoolExecutor) service; 
+        if (service instanceof TestScheduledThreadPoolExecutor testService) {
             return testService.currentTimeMillis();
         } else {
             return System.currentTimeMillis();

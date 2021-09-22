@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 public class ExceptionUtilsTest {
     @Test
-    void testUnwrapCompletionException() throws Exception {
+    void testUnwrapCompletionException() {
         IOException ioe = new IOException("test");
         assertEquals(RuntimeException.class, ExceptionUtils.unwrapCompletionException(new RuntimeException(ioe)).getClass());
         assertEquals(IOException.class, ExceptionUtils.unwrapCompletionException(new CompletionException(ioe)).getClass());

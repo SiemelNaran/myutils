@@ -20,35 +20,9 @@ import org.sn.myutils.testutils.TestBase;
 import org.sn.myutils.testutils.TestUtil;
 
 
+@SuppressWarnings("OptionalGetWithoutIsPresent")
 public class MoreCollectorsTest extends TestBase {
-    static class Person {
-        private final int id;
-        private final String firstName;
-        private final String lastName;
-        private final int ageInSeconds;
-
-        Person(int id, String firstName, String lastName, int ageInSeconds) {
-            this.id = id;
-            this.firstName = firstName;
-            this.lastName = lastName;
-            this.ageInSeconds = ageInSeconds;
-        }
-
-        public int getId() {
-            return id;
-        }
-
-        public String getFirstName() {
-            return firstName;
-        }
-
-        public String getLastName() {
-            return lastName;
-        }
-
-        public int getAgeInSeconds() {
-            return ageInSeconds;
-        }
+    record Person(int id, String firstName, String lastName, int ageInSeconds) {
     }
 
     private static List<Person> generateRandomList(int size, int maxAgeInSeconds) {
@@ -70,9 +44,9 @@ public class MoreCollectorsTest extends TestBase {
     @Test
     void testMinAndMaxBy() {
         List<Person> listPerson = generateRandomList(1_000_000, Math.toIntExact(Duration.ofMinutes(1).toSeconds()));
-        Person personWithMinAge = listPerson.stream().min(Comparator.comparing(Person::getAgeInSeconds)).get();
-        Person personWithMaxAge = listPerson.stream().max(Comparator.comparing(Person::getAgeInSeconds)).get();
-        var result = listPerson.parallelStream().collect(MoreCollectors.minAndMaxBy(Comparator.comparing(Person::getAgeInSeconds))).get();
+        Person personWithMinAge = listPerson.stream().min(Comparator.comparing(Person::ageInSeconds)).get();
+        Person personWithMaxAge = listPerson.stream().max(Comparator.comparing(Person::ageInSeconds)).get();
+        var result = listPerson.parallelStream().collect(MoreCollectors.minAndMaxBy(Comparator.comparing(Person::ageInSeconds))).get();
         assertSame(personWithMinAge, result.getMinValue());
         assertSame(personWithMaxAge, result.getMaxValue());
     }
@@ -80,17 +54,17 @@ public class MoreCollectorsTest extends TestBase {
     @Test
     void testMinAndMaxByParallel() {
         List<Person> listPerson = generateRandomList(1_000_000, Math.toIntExact(Duration.ofDays(365 * 50).toSeconds()));
-        Person personWithMinAge = listPerson.stream().min(Comparator.comparing(Person::getAgeInSeconds)).get();
-        Person personWithMaxAge = listPerson.stream().max(Comparator.comparing(Person::getAgeInSeconds)).get();
-        var result = listPerson.parallelStream().collect(MoreCollectors.minAndMaxBy(Comparator.comparing(Person::getAgeInSeconds))).get();
-        assertEquals(personWithMinAge.getAgeInSeconds(), result.getMinValue().getAgeInSeconds());
-        assertEquals(personWithMaxAge.getAgeInSeconds(), result.getMaxValue().getAgeInSeconds());
+        Person personWithMinAge = listPerson.stream().min(Comparator.comparing(Person::ageInSeconds)).get();
+        Person personWithMaxAge = listPerson.stream().max(Comparator.comparing(Person::ageInSeconds)).get();
+        var result = listPerson.parallelStream().collect(MoreCollectors.minAndMaxBy(Comparator.comparing(Person::ageInSeconds))).get();
+        assertEquals(personWithMinAge.ageInSeconds(), result.getMinValue().ageInSeconds());
+        assertEquals(personWithMaxAge.ageInSeconds(), result.getMaxValue().ageInSeconds());
     }
 
     @Test
     void testMinAndMaxByEmpty() {
         List<Person> listPerson = Collections.emptyList();
-        var result = listPerson.stream().collect(MoreCollectors.minAndMaxBy(Comparator.comparing(Person::getAgeInSeconds)));
+        var result = listPerson.stream().collect(MoreCollectors.minAndMaxBy(Comparator.comparing(Person::ageInSeconds)));
         assertTrue(result.isEmpty());
     }
 
@@ -112,9 +86,9 @@ public class MoreCollectorsTest extends TestBase {
         now = Instant.now();
         PriorityQueue<Person> top;
         if (method.equals("maxBy")) {
-            top = listPerson.stream().collect(MoreCollectors.maxBy(Comparator.comparing(Person::getAgeInSeconds), numElements));
+            top = listPerson.stream().collect(MoreCollectors.maxBy(Comparator.comparing(Person::ageInSeconds), numElements));
         } else {
-            top = listPerson.stream().collect(MoreCollectors.minBy(Comparator.comparing(Person::getAgeInSeconds), numElements));
+            top = listPerson.stream().collect(MoreCollectors.minBy(Comparator.comparing(Person::ageInSeconds), numElements));
         }
         System.out.printf("smartTime=%dms%n", Duration.between(now, Instant.now()).toMillis());
         assertEquals(numElements, top.size());
@@ -123,16 +97,16 @@ public class MoreCollectorsTest extends TestBase {
         now = Instant.now();
         PriorityQueue<Person> topParallel;
         if (method.equals("maxBy")) {
-            topParallel = listPerson.parallelStream().collect(MoreCollectors.maxBy(Comparator.comparing(Person::getAgeInSeconds), numElements));
+            topParallel = listPerson.parallelStream().collect(MoreCollectors.maxBy(Comparator.comparing(Person::ageInSeconds), numElements));
         } else {
-            topParallel = listPerson.parallelStream().collect(MoreCollectors.minBy(Comparator.comparing(Person::getAgeInSeconds), numElements));
+            topParallel = listPerson.parallelStream().collect(MoreCollectors.minBy(Comparator.comparing(Person::ageInSeconds), numElements));
         }
         System.out.printf("smartTimeParallel=%dms%n", Duration.between(now, Instant.now()).toMillis());
         assertEquals(numElements, topParallel.size());
 
         // Use the dumb method, which is to sort the array and keep the last 1000 elements
         now = Instant.now();
-        listPerson.sort(Comparator.comparing(Person::getAgeInSeconds));
+        listPerson.sort(Comparator.comparing(Person::ageInSeconds));
         if (method.equals("maxBy")) {
             listPerson.subList(0, listPerson.size() - numElements).clear();
         } else {
@@ -142,8 +116,8 @@ public class MoreCollectorsTest extends TestBase {
         assertEquals(numElements, listPerson.size());
 
         // compare the values in both arrays
-        int[] smart = top.stream().mapToInt(Person::getAgeInSeconds).sorted().toArray();
-        int[] dumb = listPerson.stream().mapToInt(Person::getAgeInSeconds).toArray();
+        int[] smart = top.stream().mapToInt(Person::ageInSeconds).sorted().toArray();
+        int[] dumb = listPerson.stream().mapToInt(Person::ageInSeconds).toArray();
         assertArrayEquals(smart, dumb);
     }
 }

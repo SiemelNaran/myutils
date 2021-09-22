@@ -13,7 +13,7 @@ import java.util.Iterator;
  */
 public class RewindableIterator<E> implements Iterator<E> {
     public static <E> RewindableIterator<E> from(Iterator<E> iter) {
-        return new RewindableIterator<E>(iter);
+        return new RewindableIterator<>(iter);
     }
 
     private final Iterator<E> iter;

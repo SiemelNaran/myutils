@@ -59,7 +59,7 @@
                         <dependency>
                             <groupId>com.puppycrawl.tools</groupId>
                             <artifactId>checkstyle</artifactId>
-                            <version>8.29</version>
+                            <version>9.0</version>
                         </dependency>
                     </dependencies>
                     <executions>
@@ -86,7 +86,7 @@
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>3.8.0</version>
                     <configuration>
-                        <release>13</release>
+                        <release>16</release>
                         <compilerArgs>
                             <arg>-Xlint:all</arg>
                         </compilerArgs>

@@ -11,6 +11,7 @@ import static org.sn.myutils.testutils.TestUtil.myThreadFactory;
 import static org.sn.myutils.testutils.TestUtil.sleep;
 
 import java.io.IOException;
+import java.io.Serial;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -50,6 +51,7 @@ import org.sn.myutils.testutils.TestUtil;
  -Djava.util.logging.config.file=../org.sn.myutils.testutils/target/classes/logging.properties
  * </code>
  */
+@SuppressWarnings("ResultOfMethodCallIgnored")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     private static final List<String> words = Collections.synchronizedList(new ArrayList<>());
@@ -57,6 +59,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     private Path folder;
 
     private static class MyRunnable implements SerializableRunnable {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         private final String value;
@@ -70,10 +73,10 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         @Override
         public void run() {
             if (Thread.currentThread().isInterrupted()) {
-                System.out.println("Interrupted " + toString());
+                System.out.println("Interrupted " + this);
                 return;
             }
-            System.out.println("Running " + toString());
+            System.out.println("Running " + this);
             words.add(value);
         }
 
@@ -84,6 +87,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     }
 
     private static class MyCallable implements SerializableCallable<String> {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         private final String value;
@@ -97,10 +101,10 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
         @Override
         public String call() {
             if (Thread.currentThread().isInterrupted()) {
-                System.out.println("Interrupted " + toString());
+                System.out.println("Interrupted " + this);
                 return null;
             }
-            System.out.println("Running " + toString());
+            System.out.println("Running " + this);
             words.add(value);
             return value;
         }
@@ -349,7 +353,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     }
 
     /**
-     * The purpose of this test is to get code coverage for the funtions which just forward to the internal executor,
+     * The purpose of this test is to get code coverage for the functions which just forward to the internal executor,
      * such as execute, submit, invokeAll, etc.
      */
     @Test
@@ -396,11 +400,11 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
 
             // invokeAll and invokeAny continue to work even when executor is shut down:
             List<Future<String>> result = service.invokeAll(List.of(new MyCallable("hello"), new MyCallable("world")));
-            assertThat(result.stream().map(Future::isDone).collect(Collectors.toList()), Matchers.contains(true, true));
-            assertThat(result.stream().map(TestUtil::join).collect(Collectors.toList()), Matchers.contains("hello", "world"));
+            assertThat(result.stream().map(Future::isDone).toList(), Matchers.contains(true, true));
+            assertThat(result.stream().map(TestUtil::join).toList(), Matchers.contains("hello", "world"));
             result = service.invokeAll(List.of(new MyCallable("hello"), new MyCallable("world")), 100, TimeUnit.MILLISECONDS);
-            assertThat(result.stream().map(Future::isDone).collect(Collectors.toList()), Matchers.contains(true, true));
-            assertThat(result.stream().map(TestUtil::join).collect(Collectors.toList()), Matchers.contains("hello", "world"));
+            assertThat(result.stream().map(Future::isDone).toList(), Matchers.contains(true, true));
+            assertThat(result.stream().map(TestUtil::join).toList(), Matchers.contains("hello", "world"));
             String anyString = service.invokeAny(List.of(new MyCallable("hello"), new MyCallable("world")));
             assertThat(anyString, Matchers.oneOf("hello", "world"));
             anyString = service.invokeAny(List.of(new MyCallable("hello"), new MyCallable("world")), 100, TimeUnit.MILLISECONDS);

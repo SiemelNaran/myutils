@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.sn.myutils.testutils.TestBase;
 
 
+@SuppressWarnings("ResultOfMethodCallIgnored")
 public class JavaTest extends TestBase {
     /**
      * The purpose of this test is to show that stream iteration can also throw ConcurrentModificationException.

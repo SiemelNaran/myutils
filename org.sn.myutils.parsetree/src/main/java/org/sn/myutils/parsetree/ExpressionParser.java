@@ -1,5 +1,6 @@
 package org.sn.myutils.parsetree;
 
+import java.io.Serial;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.text.ParseException;
@@ -19,8 +20,7 @@ import org.sn.myutils.util.SimpleStringTokenizerFactory.Token;
 
 
 public class ExpressionParser {
-    private static final IntPredicate SKIP_CHARACTERS
-    = codePoint -> Character.isWhitespace(codePoint);
+    private static final IntPredicate SKIP_CHARACTERS = Character::isWhitespace;
 
     private static final List<String> BASIC_SYMBOLS
         = Arrays.asList("(", ")", "[", "]", "{", "}", ",", ";");
@@ -116,11 +116,9 @@ public class ExpressionParser {
                         
                     } else if (incomplete != null) {
                         ParseNode node = readExpression(token);
-                        if (incomplete instanceof UnaryOperatorNode) {
-                            UnaryOperatorNode incompleteAsUnaryOperator = (UnaryOperatorNode) incomplete;
+                        if (incomplete instanceof UnaryOperatorNode incompleteAsUnaryOperator) {
                             incompleteAsUnaryOperator.setNode(node);
-                        } else if (incomplete instanceof BinaryOperatorNode) {
-                            BinaryOperatorNode incompleteAsBinaryOperator = (BinaryOperatorNode) incomplete;
+                        } else if (incomplete instanceof BinaryOperatorNode incompleteAsBinaryOperator) {
                             incompleteAsBinaryOperator.setRight(node);
                         } else {
                             throw new UnsupportedOperationException(incomplete.getClass().getName());
@@ -129,13 +127,12 @@ public class ExpressionParser {
                         
                     } else {
                         BinaryOperatorNode nodeAsBinaryOperator = (BinaryOperatorNode) constructNodeFromToken(token, ParseMode.ONLY_BINARY_OPERATORS);
-                        if (tree instanceof BinaryOperatorNode
+                        if (tree instanceof BinaryOperatorNode treeAsBinaryNode
                                 && !((BinaryOperatorNode) tree).isAtomic()
                                 && ((BinaryOperatorNode) tree).getPrecedence() < nodeAsBinaryOperator.getPrecedence()) {
                             // we just read an operator that has higher precedence
                             // so rearrange the nodes such that the right node of the current tree (say a PLUS node)
                             // becomes the left node of the operator we just read (say a TIMES node)
-                            BinaryOperatorNode treeAsBinaryNode = (BinaryOperatorNode) tree;
                             ParseNode oldRight = treeAsBinaryNode.getRight();
                             nodeAsBinaryOperator.setLeft(oldRight);
                             treeAsBinaryNode.setRight(nodeAsBinaryOperator);
@@ -176,8 +173,8 @@ public class ExpressionParser {
                 if (parenthesisLevel > oldLevel) {
                     throw new ParseException("missing close parenthesis", endOfLastToken); // handles case: (2 + 3
                 }
-                if (tree instanceof BinaryOperatorNode) {
-                    ((BinaryOperatorNode) tree).setAtomic();
+                if (tree instanceof BinaryOperatorNode binaryOperatorNode) {
+                    binaryOperatorNode.setAtomic();
                 }
                 return tree;
             } else {
@@ -223,8 +220,7 @@ public class ExpressionParser {
     
     
     private static OperatorNode isIncomplete(ParseNode node) {
-        if (node instanceof OperatorNode) {
-            OperatorNode operator = (OperatorNode) node;
+        if (node instanceof OperatorNode operator) {
             if (!operator.isComplete()) {
                 return operator;
             }
@@ -285,6 +281,7 @@ public class ExpressionParser {
     }
     
     public static class InvalidTokenException extends RuntimeException {
+        @Serial
         private static final long serialVersionUID = 1L;
         
         private InvalidTokenException(String message) {
@@ -293,10 +290,10 @@ public class ExpressionParser {
     }
     
     public static class Builder {
-        private Map<String, Constructor<? extends BinaryOperatorNode>> binaryOperators = new HashMap<>();
-        private Map<String, Constructor<? extends UnaryOperatorNode>> unaryOperators = new HashMap<>();
+        private final Map<String, Constructor<? extends BinaryOperatorNode>> binaryOperators = new HashMap<>();
+        private final Map<String, Constructor<? extends UnaryOperatorNode>> unaryOperators = new HashMap<>();
         private StringCase functionCase = null;
-        private Map<String, Constructor<? extends FunctionNode>> functions = new HashMap<>();
+        private final Map<String, Constructor<? extends FunctionNode>> functions = new HashMap<>();
         private NumberFactory numberFactory = DefaultNumberFactory.DEFAULT_NUMBER_FACTORY;
         
         /**
@@ -380,7 +377,7 @@ public class ExpressionParser {
             }
         }
 
-        private static boolean verifyOperatorValid(String oper) {
+        private static void verifyOperatorValid(String oper) {
             int len = oper.length();
             for (int i = 0; i < len; i++) {
                 char c = oper.charAt(i);
@@ -401,10 +398,9 @@ public class ExpressionParser {
                     throw new InvalidOperatorException(oper, c);
                 }
             }
-            return true;
         }
         
-        private static boolean verifyFunctionNameValid(String oper) {
+        private static void verifyFunctionNameValid(String oper) {
             int len = oper.length();
             if (!Character.isLetter(oper.charAt(0))) {
                 throw new InvalidOperatorException(oper, oper.charAt(0));                
@@ -415,7 +411,6 @@ public class ExpressionParser {
                     throw new InvalidOperatorException(oper, c);
                 }
             }
-            return true;
         }
         
         public Builder setNumberFactory(NumberFactory numberFactory) {
@@ -440,6 +435,7 @@ public class ExpressionParser {
         }
         
         public static class BuilderException extends RuntimeException {
+            @Serial
             private static final long serialVersionUID = 1L;
 
             private BuilderException(String message) {
@@ -452,6 +448,7 @@ public class ExpressionParser {
         }
         
         public static class InvalidOperatorException extends BuilderException {
+            @Serial
             private static final long serialVersionUID = 1L;
 
             private InvalidOperatorException(String oper, char invalidChar) {

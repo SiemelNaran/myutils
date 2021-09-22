@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.sn.myutils.testutils.TestUtil.myThreadFactory;
 import static org.sn.myutils.testutils.TestUtil.sleep;
 
+import java.io.Serial;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -39,6 +40,7 @@ import org.sn.myutils.util.concurrent.PriorityLock.PriorityLockNamedParams;
 
 
 @ExtendWith(LogFailureToConsoleTestWatcher.class)
+@SuppressWarnings("ResultOfMethodCallIgnored")
 public class PriorityLockTest extends TestBase {
     /**
      * This test shows that ReentrantLock does not run threads with the highest priority first.
@@ -97,10 +99,10 @@ public class PriorityLockTest extends TestBase {
         Thread.currentThread().setPriority(10);
         priorityLock.lock();
         PriorityLock.PriorityLockCondition condition = priorityLock.newCondition();
-        System.out.println(priorityLock.toString());
-        System.out.println(condition.toString());
-        assertThat(priorityLock.toString(), Matchers.matchesRegex("^org.sn.myutils.util.concurrent.PriorityLock@[a-f0-9]+ levels=\\[0,0,0,0,0,0,0,0,0,1\\]$"));
-        assertThat(condition.toString(), Matchers.matchesRegex("^org.sn.myutils.util.concurrent.PriorityLock\\$PriorityLockCondition@[a-f0-9]+ levels=\\[0,0,0,0,0,0,0,0,0,0\\], signalCount=0$"));
+        System.out.println(priorityLock);
+        System.out.println(condition);
+        assertThat(priorityLock.toString(), Matchers.matchesRegex("^org.sn.myutils.util.concurrent.PriorityLock@[a-f0-9]+ levels=\\[0,0,0,0,0,0,0,0,0,1]$"));
+        assertThat(condition.toString(), Matchers.matchesRegex("^org.sn.myutils.util.concurrent.PriorityLock\\$PriorityLockCondition@[a-f0-9]+ levels=\\[0,0,0,0,0,0,0,0,0,0], signalCount=0$"));
         assertEquals(10, priorityLock.highestPriorityThread());
         assertNull(condition.highestPriorityThread());
     }
@@ -250,6 +252,7 @@ public class PriorityLockTest extends TestBase {
     @Test
     void testLockInterruptedThread2() throws InterruptedException {
         class WeirdReentrantLock extends ReentrantLock {
+            @Serial
             private static final long serialVersionUID = 1L;
 
             @Override
@@ -591,8 +594,8 @@ public class PriorityLockTest extends TestBase {
                     priorityLock.unlock();
                 }
             } catch (InterruptedException | RuntimeException | Error e) {
-                logString("caught exception " + e.toString());
-                doThread.getMessages().add("thread with priority " + currentThread.getPriority() + " encountered exception " + e.toString());
+                logString("caught exception " + e);
+                doThread.getMessages().add("thread with priority " + currentThread.getPriority() + " encountered exception " + e);
             }
         }, 300, TimeUnit.MILLISECONDS);
 
@@ -666,8 +669,8 @@ public class PriorityLockTest extends TestBase {
                     priorityLock.unlock();
                 }
             } catch (InterruptedException | RuntimeException | Error e) { // code-coverage: never hit
-                logString("caught exception " + e.toString());
-                doThread.getMessages().add("thread with priority " + currentThread.getPriority() + " encountered exception " + e.toString());
+                logString("caught exception " + e);
+                doThread.getMessages().add("thread with priority " + currentThread.getPriority() + " encountered exception " + e);
             }
         }, 100, TimeUnit.MILLISECONDS);
         executor.schedule(() -> doThread.action(7), 300, TimeUnit.MILLISECONDS);
@@ -834,6 +837,7 @@ public class PriorityLockTest extends TestBase {
     }
 
 
+    @SuppressWarnings("unused") // used in @MethodSource
     private static Stream<Arguments> provideArgsFor_testLockExceptionOnLock() {
         return Stream.of(Arguments.of(DoThreadLock.class, false),
                          Arguments.of(DoThreadLockInterruptibly.class, false),
@@ -1091,6 +1095,7 @@ public class PriorityLockTest extends TestBase {
     }
 
     
+    @SuppressWarnings("unused") // used in @MethodSource
     private static Stream<Arguments> provideArgsFor_testSignalAllAndAddWaiters() {
         return Stream.of(Arguments.of(DoThreadLock.class, 2000L),
                          Arguments.of(DoThreadLock.class, 1000L),
@@ -1874,7 +1879,7 @@ public class PriorityLockTest extends TestBase {
 
 
 
-    
+    @SuppressWarnings("unused") // used in @MethodSource
     private static Stream<Arguments> provideArgsFor_testAwaitException3() {
         return Stream.of(Arguments.of(DoThreadLock.class, false),
                          Arguments.of(DoThreadLock.class, false),
@@ -1996,18 +2001,17 @@ public class PriorityLockTest extends TestBase {
                     }
                     if (signal != null) {
                         switch (signal) {
-                            case SIGNAL:
+                            case SIGNAL -> {
                                 logString("* about to call condition.signal");
                                 messages.add("about to signal in thread with priority " + currentThread.getPriority());
                                 condition.signal();
-                                break;
-                            case SIGNAL_ALL:
+                            }
+                            case SIGNAL_ALL -> {
                                 logString("* about to call condition.signalAll");
                                 messages.add("about to signalAll in thread with priority " + currentThread.getPriority());
                                 condition.signalAll();
-                                break;
-                            default:
-                                throw new UnsupportedOperationException();
+                            }
+                            default -> throw new UnsupportedOperationException(); // never hit
                         }
                     }
                     logString("* end");
@@ -2016,11 +2020,11 @@ public class PriorityLockTest extends TestBase {
                     priorityLock.unlock();
                 }
             } catch (InterruptedException | RuntimeException | Error e) {
-                logString("* caught exception " + e.toString());
+                logString("* caught exception " + e);
                 if (shouldLogCallstack(e)) {
                     e.printStackTrace(System.out);
                 }
-                messages.add("thread with priority " + currentThread.getPriority() + " encountered exception " + e.toString());
+                messages.add("thread with priority " + currentThread.getPriority() + " encountered exception " + e);
             }
         }
 
@@ -2056,20 +2060,20 @@ public class PriorityLockTest extends TestBase {
                     logString("* end");
                     messages.add("end thread with priority " + currentThread.getPriority());
                 } catch (RuntimeException | PriorityLock.MaybeNotHighestThreadAfterAwaitError e) {
-                    logString("* caught exception " + e.toString());
+                    logString("* caught exception " + e);
                     if (shouldLogCallstack(e)) {
                         e.printStackTrace(System.out);
                     }
-                    messages.add("thread with priority " + currentThread.getPriority() + " encountered exception during await " + e.toString());
+                    messages.add("thread with priority " + currentThread.getPriority() + " encountered exception during await " + e);
                 } finally {
                     priorityLock.unlock();
                 }
             } catch (InterruptedException | RuntimeException e) { // CodeCoverage: never hit
-                logString("* caught exception " + e.toString());
+                logString("* caught exception " + e);
                 if (shouldLogCallstack(e)) {
                     e.printStackTrace(System.out);
                 }
-                messages.add("thread with priority " + currentThread.getPriority() + " encountered exception during lock " + e.toString());
+                messages.add("thread with priority " + currentThread.getPriority() + " encountered exception during lock " + e);
             }
         }
         
@@ -2274,15 +2278,18 @@ public class PriorityLockTest extends TestBase {
     }
     
     private static class FailedToAcquireLockException extends RuntimeException implements DoNotLogCallStack {
+        @Serial
         private static final long serialVersionUID = 1L;
     }
 
     private static class AwaitReturnsFalseException extends RuntimeException implements DoNotLogCallStack {
+        @Serial
         private static final long serialVersionUID = 1L;
     }
     
     
     private static class ThrowAtPrioritySevenException extends RuntimeException implements DoNotLogCallStack {        
+        @Serial
         private static final long serialVersionUID = 1L;
         
         ThrowAtPrioritySevenException() {
@@ -2291,6 +2298,7 @@ public class PriorityLockTest extends TestBase {
     }
     
     private static class ThrowAtPrioritySevenLock extends ReentrantLock {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         private final boolean shouldThrow;
@@ -2359,6 +2367,7 @@ public class PriorityLockTest extends TestBase {
     }
 
     private static class ThrowAtPrioritySevenAwait extends ReentrantLock implements DoNotLogCallStack {
+        @Serial
         private static final long serialVersionUID = 1L;
         
         private boolean shouldThrow;

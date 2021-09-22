@@ -1,7 +1,10 @@
 package org.sn.myutils.pubsub;
 
 
+import java.io.Serial;
+
 public class CentralServerId extends Number implements Comparable<CentralServerId> {
+    @Serial
     private static final long serialVersionUID = 1L;
     
     public static CentralServerId createDefaultFromNow() {
@@ -20,10 +23,9 @@ public class CentralServerId extends Number implements Comparable<CentralServerI
     
     @Override
     public boolean equals(Object thatObject) {
-        if (!(thatObject instanceof CentralServerId)) {
+        if (!(thatObject instanceof CentralServerId that)) {
             return false;
         }
-        CentralServerId that = (CentralServerId) thatObject;
         return this.value == that.value;
     }
     

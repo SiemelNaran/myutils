@@ -244,14 +244,9 @@ public class SpaceEfficientTrie<T extends Comparable<T>, U> extends TrieIteratio
             }
         }
 
-        private static class FindInfo<T extends Comparable<T>, U> {
-            private final Map.Entry<Iterable<T>, SpaceEfficientTrieNode<T, U>> entry;
-            private final U oldData;
-
-            private FindInfo(Map.Entry<Iterable<T>, SpaceEfficientTrieNode<T, U>> entry, U oldData) {
-                this.entry = entry;
-                this.oldData = oldData;
-            }
+        private record FindInfo<T extends Comparable<T>, U>(
+                Entry<Iterable<T>, SpaceEfficientTrieNode<T, U>> entry,
+                U oldData) {
         }
     }
 

@@ -31,6 +31,7 @@ import org.sn.myutils.testutils.TestUtil;
 
 
 @ExtendWith(LogFailureToConsoleTestWatcher.class)
+@SuppressWarnings("ResultOfMethodCallIgnored")
 public class TestScheduledExecutorServiceTest extends TestBase {
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
     @ValueSource(strings = { "millis", "nanos" })
@@ -43,17 +44,9 @@ public class TestScheduledExecutorServiceTest extends TestBase {
         service.schedule(() -> addWord(service, words, "carrot"), 2500, TimeUnit.MILLISECONDS);
 
         switch (waitUnit) {
-            case "millis":
-                MoreExecutors.advanceTime(service, 1_000, TimeUnit.MILLISECONDS);
-                break;
-                
-            case "nanos":
-                MoreExecutors.advanceTime(service, 1_003_000_000, TimeUnit.NANOSECONDS);
-                // even for 1_000_100_000 "1000:banana" does not always run
-                break;
-                
-            default:
-                throw new UnsupportedOperationException(waitUnit);
+            case "millis" -> MoreExecutors.advanceTime(service, 1_000, TimeUnit.MILLISECONDS);
+            case "nanos" -> MoreExecutors.advanceTime(service, 1_003_000_000, TimeUnit.NANOSECONDS); // even for 1_000_100_000 "1000:banana" does not always run
+            default -> throw new UnsupportedOperationException(waitUnit);
         }
 
         sleep(250); // wait for futures to finish to prevent ConcurrentModification in call to roundToNearestHundred
@@ -237,7 +230,7 @@ public class TestScheduledExecutorServiceTest extends TestBase {
         service.scheduleWithFixedDelay(() -> addWord(service, words, "fixedDelay", 80), 200, 240, TimeUnit.MILLISECONDS);
         MoreExecutors.advanceTime(service, 1, TimeUnit.SECONDS);
         System.out.println("actual: " + words);
-        var roundedWords = roundDownToNearestFourty(words);
+        var roundedWords = roundDownToNearestForty(words);
         System.out.println("actual: " + roundedWords);
         // first task runs at 200ms, takes 80ms so print 280:fixedDelay
         // second task runs at 280+240ms, takes 80ms, so print 280+240+80=600:fixedDelay
@@ -321,25 +314,38 @@ public class TestScheduledExecutorServiceTest extends TestBase {
 
     @Test
     void testScheduleAtFixedRate_TaskTakesLongerThanPeriod_TwoThreads() throws InterruptedException {
-        List<String> words = Collections.synchronizedList(new ArrayList<>());
-        ScheduledExecutorService service = MoreExecutors.newTestScheduledThreadPool(2, myThreadFactory(), getStartOfTest().toEpochMilli());
-        service.scheduleAtFixedRate(() -> addWord(service, words, "fixedRateSlow", 360), 200, 200, TimeUnit.MILLISECONDS);
-        service.scheduleAtFixedRate(() -> addWord(service, words, "fixedRate", 80), 400, 120, TimeUnit.MILLISECONDS);
-        MoreExecutors.advanceTime(service, 1, TimeUnit.SECONDS);
-        System.out.println("actual: " + words);
-        var roundedWords = roundDownToNearestFourty(words);
-        System.out.println("actual: " + roundedWords);
+        // for some reason, after upgrading to Java 16, this test fails the first time it runs
+        // the output is ["480:fixedRate", "560:fixedRateSlow", ...]
+
+        doTestScheduleAtFixedRate_TaskTakesLongerThanPeriod_TwoThreads(1);
+        List<String> roundedWords = doTestScheduleAtFixedRate_TaskTakesLongerThanPeriod_TwoThreads(2);
+
         assertThat(roundedWords, Matchers.contains(
-                "480:fixedRate", // realTime = 80ms
+                "480:fixedRate",  // realTime=80ms, then next fixedRatet added to executor
                 "600:fixedRate", // realTime = 160ms
                 "720:fixedRate", // realTime = 240ms
                 "840:fixedRate", // realTime = 320ms
-                "560:fixedRateSlow", // realTime = 360ms
+                "560:fixedRateSlow", // realTime = 360ms , then next fixedRate slow added to executor
                 "960:fixedRate", // realTime = 400ms
                 "1080:fixedRate", // realTime = 480ms
                 "920:fixedRateSlow", // realTime = 720ms
                 "1280:fixedRateSlow" // realTime = 1080ms
         ));
+    }
+
+    private List<String> doTestScheduleAtFixedRate_TaskTakesLongerThanPeriod_TwoThreads(int executionNumber) throws InterruptedException {
+        System.out.println("\nexecutionNumber=" + executionNumber);
+
+        List<String> words = Collections.synchronizedList(new ArrayList<>());
+        ScheduledExecutorService service = MoreExecutors.newTestScheduledThreadPool(2, myThreadFactory(), getStartOfTest().toEpochMilli());
+        service.scheduleAtFixedRate(() -> addWord(service, words, "fixedRateSlow", 360), 200, 200, TimeUnit.MILLISECONDS);
+        service.scheduleAtFixedRate(() -> addWord(service, words, "fixedRate", 80), 400, 120, TimeUnit.MILLISECONDS);
+        MoreExecutors.advanceTime(service, 1, TimeUnit.SECONDS);
+
+        System.out.println("executionNumber=" + executionNumber);
+        System.out.println("actual: " + words);
+        var roundedWords = roundDownToNearestForty(words);
+        System.out.println("actual: " + roundedWords);
 
         assertFalse(service.isShutdown());
         assertFalse(service.isTerminated());
@@ -348,6 +354,8 @@ public class TestScheduledExecutorServiceTest extends TestBase {
         assertTrue(service.awaitTermination(250, TimeUnit.MILLISECONDS));
         assertTrue(service.isShutdown());
         assertTrue(service.isTerminated());
+
+        return roundedWords;
     }
 
     @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
@@ -366,7 +374,7 @@ public class TestScheduledExecutorServiceTest extends TestBase {
         assertThat(words, Matchers.empty());
 
         switch (methodSequence) {
-            case "awaitTermination":
+            case "awaitTermination" -> {
                 assertFalse(service.awaitTermination(1110, TimeUnit.MILLISECONDS));
                 assertFalse(service.isShutdown());
                 assertFalse(service.isTerminated());
@@ -381,39 +389,31 @@ public class TestScheduledExecutorServiceTest extends TestBase {
                         "1000:banana"));
                 // "1160:fixedRate" starts at 1100 but does not finish by 1110 so is not printed
                 // also even if you add a Thread.sleep(1000) it does not finish because the thread is interrupted at 1110
-                break;
-                
-            case "shutdown":
+            }
+            case "shutdown" -> {
                 service.shutdown(); // cancels future periodic tasks (default behavior of java.util.concurrent.ScheduledThreadPoolExecutor)
                 assertFalse(service.awaitTermination(1050, TimeUnit.MILLISECONDS));
                 assertTrue(service.isShutdown());
                 assertFalse(service.isTerminated());
                 System.out.println("actual: " + words);
-                assertThat(words, Matchers.contains("300:apple", "300:antelope",  "1000:banana"));
+                assertThat(words, Matchers.contains("300:apple", "300:antelope", "1000:banana"));
                 // if we await for 1000ms then "1000:banana" runs with invokeAll("1000:banana", time=0ms)
                 // and because we wait for 0ms the task does not run
-                break;
-                
-            case "shutdownAll":
+            }
+            case "shutdownAll" -> {
                 List<Runnable> runnables = service.shutdownNow();
-                assertThat(runnables, Matchers.hasSize(5));        
+                assertThat(runnables, Matchers.hasSize(5));
                 assertThat(words, Matchers.empty());
                 assertTrue(service.isShutdown());
                 assertTrue(service.isTerminated());
-                
                 assertTrue(service.awaitTermination(300, TimeUnit.MILLISECONDS));
                 assertThat(words, Matchers.empty()); // proves that none of the terminated runnables ran
-                
                 runnables.forEach(Runnable::run);
                 System.out.println("actual: " + words);
-                assertThat(words, Matchers.contains("300:apple", "300:antelope",  "360:fixedRate", "300:banana", "300:carrot"));
-                
+                assertThat(words, Matchers.contains("300:apple", "300:antelope", "360:fixedRate", "300:banana", "300:carrot"));
                 assertTrue(service.isTerminated()); // proves that periodic runnable did not get added to executor service after completion
-                
-                break;
-                
-            default:
-                throw new UnsupportedOperationException(methodSequence);
+            }
+            default -> throw new UnsupportedOperationException(methodSequence);
         }
     }
     
@@ -448,47 +448,29 @@ public class TestScheduledExecutorServiceTest extends TestBase {
             () -> { addWord(service, words, "apple", 300); return 1; },
             () -> { addWord(service, words, "banana", 0); return 2; },
             () -> { addWord(service, words, "carrot", 500); return 3; });
-        
+
         switch (method) {
-            case "invokeAll":
-            case "invokeAllWithTimeout":
-                List<Future<Integer>> futures;
-                switch (method) {
-                    case "invokeAll":
-                        futures = service.invokeAll(callables);
-                        break;
-                    case "invokeAllWithTimeout":
-                        futures = service.invokeAll(callables, 1, TimeUnit.SECONDS);
-                        break;
-                    default:
-                        throw new UnsupportedOperationException(method);
-                }
+            case "invokeAll", "invokeAllWithTimeout" -> {
+                List<Future<Integer>> futures = switch (method) {
+                    case "invokeAll" -> service.invokeAll(callables);
+                    case "invokeAllWithTimeout" -> service.invokeAll(callables, 1, TimeUnit.SECONDS);
+                    default -> throw new UnsupportedOperationException(method);
+                };
                 System.out.println("actual: " + words);
                 assertThat(words, Matchers.contains("0:banana", "300:apple", "500:carrot"));
                 assertThat(TestUtil.toList(futures), Matchers.contains(1, 2, 3));
-                break;
-                
-            case "invokeAny":
-            case "invokeAnyWithTimeout":
-                int futureValue;
-                switch (method) {
-                    case "invokeAny":
-                        futureValue = service.invokeAny(callables);
-                        break;
-                    case "invokeAnyWithTimeout":
-                        futureValue = service.invokeAny(callables, 1, TimeUnit.SECONDS);
-                        break;
-                    default:
-                        throw new UnsupportedOperationException(method);
-                }
+            }
+            case "invokeAny", "invokeAnyWithTimeout" -> {
+                int futureValue = switch (method) {
+                    case "invokeAny" -> service.invokeAny(callables);
+                    case "invokeAnyWithTimeout" -> service.invokeAny(callables, 1, TimeUnit.SECONDS);
+                    default -> throw new UnsupportedOperationException(method);
+                };
                 System.out.println("actual: " + words);
                 assertThat(words, Matchers.contains("0:banana"));
                 assertEquals(2, futureValue);
-                break;
-                
-            default:
-                throw new UnsupportedOperationException(method);
-
+            }
+            default -> throw new UnsupportedOperationException(method);
         }
     
         assertFalse(service.isShutdown());
@@ -504,16 +486,26 @@ public class TestScheduledExecutorServiceTest extends TestBase {
     private void addWord(ScheduledExecutorService baseService, List<String> list, String word) {
         addWord(baseService, list, word, 0);
     }
-    
+
+    /**
+     * Add word to list after realSleepMillis.
+     *
+     * @param service used to get the current time
+     * @param list the list to add the word to
+     * @param word the word to add
+     * @param realSleepMillis wait this amount of milliseconds before adding the word
+     */
     private void addWord(ScheduledExecutorService service, List<String> list, String word, long realSleepMillis) {
         long startTimeMillis = System.currentTimeMillis();
         long timeBeforeSleep = MoreExecutors.currentTimeMillis(service) - getStartOfTest().toEpochMilli();
         try {
-            System.out.println(timeBeforeSleep + ": started " + word + " (realSleepMillis=" + realSleepMillis + ')');
+            long realTime = System.currentTimeMillis() - getStartOfTest().toEpochMilli();
+            System.out.println("fakeTime=" + timeBeforeSleep + "(realTime=" + realTime + "): started " + word + " (realSleepMillis=" + realSleepMillis + ')');
             sleep(realSleepMillis);
             long timeAfterSleep = timeBeforeSleep + realSleepMillis;
+            realTime = System.currentTimeMillis() - getStartOfTest().toEpochMilli();
             list.add(timeAfterSleep + ":" + word);
-            System.out.println(timeAfterSleep + ": added " + word);
+            System.out.println("fakeTime=" + timeAfterSleep + "(realTime=" + realTime + "): added " + word);
         } catch (RuntimeException e) {
             long deltaMillis = System.currentTimeMillis() - startTimeMillis;
             long timeException = deltaMillis - startTimeMillis;
@@ -541,7 +533,7 @@ public class TestScheduledExecutorServiceTest extends TestBase {
      * Return an array like [360:fixedDelay, 624:fixedDelay, 889:fixedDelay]
      *                   as [360:fixedDelay, 600:fixedDelay, 880:fixedDelay].
      */
-    private List<String> roundDownToNearestFourty(List<String> words) {
+    private List<String> roundDownToNearestForty(List<String> words) {
         List<String> results = new ArrayList<>(words.size());
         for (String word : words) {
             String[] parts = word.split(":");

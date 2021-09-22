@@ -3,11 +3,11 @@ package org.sn.myutils.util;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.sn.myutils.testutils.TestUtil.assertException;
 
+import java.io.Serial;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
-import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.sn.myutils.testutils.LogFailureToConsoleTestWatcher;
@@ -26,7 +26,7 @@ public class WeightedRandomTest extends TestBase {
             int value = random.get();
             hits[value] = hits[value] + 1;
         }
-        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)numRandoms).collect(Collectors.toList());
+        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)numRandoms).toList();
         System.out.println("ratios=" + ratios);
         assertEquals(0.7, ratios.get(0), 0.01);
         assertEquals(0.2, ratios.get(1), 0.01);
@@ -43,7 +43,7 @@ public class WeightedRandomTest extends TestBase {
             int value = random.get();
             hits[value] = hits[value] + 1;
         }
-        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)numRandoms).collect(Collectors.toList());
+        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)numRandoms).toList();
         System.out.println("ratios=" + ratios);
         assertEquals(0.7, ratios.get(0), 0.01);
         assertEquals(0.25, ratios.get(1), 0.01);
@@ -60,7 +60,7 @@ public class WeightedRandomTest extends TestBase {
             int value = random.get();
             hits[value] = hits[value] + 1;
         }
-        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)numRandoms).collect(Collectors.toList());
+        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)numRandoms).toList();
         System.out.println("ratios=" + ratios);
         assertEquals(0.7, ratios.get(3), 0.01);
         assertEquals(0.2, ratios.get(9), 0.01);
@@ -97,7 +97,7 @@ public class WeightedRandomTest extends TestBase {
             int value = random.get();
             hits[value] = hits[value] + 1;
         }
-        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)numRandoms).collect(Collectors.toList());
+        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)numRandoms).toList();
         System.out.println("ratios=" + ratios);
         assertEquals(0.5, ratios.get(0), 0.01);
         assertEquals(0.5, ratios.get(1), 0.01);
@@ -119,7 +119,7 @@ public class WeightedRandomTest extends TestBase {
             int value = random.get();
             hits[value] = hits[value] + 1;
         }
-        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)numRandoms).collect(Collectors.toList());
+        List<Double> ratios = Arrays.stream(hits).mapToObj(hit -> (double)hit / (double)numRandoms).toList();
         System.out.println("ratios=" + ratios);
         assertEquals(0.5, ratios.get(9), 0.01);
         assertEquals(0.5, ratios.get(10), 0.01);
@@ -138,9 +138,10 @@ public class WeightedRandomTest extends TestBase {
      * but it tests that we remove the weights with trailing zeroes at the end (see testZeroWeight2).
      */
     private static class TestRandom extends Random {
+        @Serial
         private static final long serialVersionUID = 1L;
         
-        private Random internalRandom = new Random();
+        private final Random internalRandom = new Random();
         private boolean returnZero = true;
 
         @Override

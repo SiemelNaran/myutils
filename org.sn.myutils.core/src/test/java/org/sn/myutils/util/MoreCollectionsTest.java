@@ -16,38 +16,29 @@ import org.sn.myutils.util.MoreCollections.FindWhich;
 
 
 public class MoreCollectionsTest {
-    
-    private static class Room {
-        private final int floor;
-        
-        Room(int floor) {
-            this.floor = floor;
-        }
-        
-        int getFloor() {
-            return floor;
-        }
+
+    private record Room(int floor) {
     }
     
     private enum BinarySearchCaller {
         OBJECT {
             @Override
             int call(List<Room> rooms, int findValue, FindWhich findWhich) {
-                return MoreCollections.binarySearch(rooms, 0, rooms.size(), Room::getFloor, findValue, findWhich);
+                return MoreCollections.binarySearch(rooms, 0, rooms.size(), Room::floor, findValue, findWhich);
             }
         },
         
         INT {
             @Override
             int call(List<Room> rooms, int findValue, FindWhich findWhich) {
-                return MoreCollections.binarySearchInt(rooms, 0, rooms.size(), Room::getFloor, findValue, findWhich);
+                return MoreCollections.binarySearchInt(rooms, 0, rooms.size(), Room::floor, findValue, findWhich);
             }
         },
         
         LONG {
             @Override
             int call(List<Room> rooms, int findValue, FindWhich findWhich) {
-                return MoreCollections.binarySearchLong(rooms, 0, rooms.size(), Room::getFloor, findValue, findWhich);
+                return MoreCollections.binarySearchLong(rooms, 0, rooms.size(), Room::floor, findValue, findWhich);
             }
         };
         

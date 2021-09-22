@@ -3,6 +3,7 @@ package org.sn.myutils.parsetree;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.sn.myutils.testutils.TestUtil.assertException;
 
+import java.io.Serial;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Objects;
@@ -21,10 +22,10 @@ public class UnitNumberFactoryTest {
                                                  .setUnitPosition(UnitPosition.AFTER)
                                                  .build();
         
-        assertEquals(Integer.valueOf(2), factory.fromString("2"));
-        assertEquals(Integer.valueOf(2), factory.fromString("2m"));
-        assertEquals(Integer.valueOf(2000), factory.fromString("2km"));
-        assertEquals(Integer.valueOf(2000), factory.fromString("2kM"));
+        assertEquals(2, factory.fromString("2"));
+        assertEquals(2, factory.fromString("2m"));
+        assertEquals(2000, factory.fromString("2km"));
+        assertEquals(2000, factory.fromString("2kM"));
         assertException(() -> factory.fromString("km2"),
                         NumberFormatException.class,
                         "Character k is neither a decimal digit number, decimal point, nor \"e\" notation exponential mark.");
@@ -54,6 +55,7 @@ public class UnitNumberFactoryTest {
     }
     
     private abstract static class Currency extends Number {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         private final BigDecimal val;
@@ -97,6 +99,7 @@ public class UnitNumberFactoryTest {
     }
     
     private static final class USD extends Currency {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         public USD(BigDecimal val) {
@@ -105,15 +108,14 @@ public class UnitNumberFactoryTest {
         
         @Override
         public String toString() {
-            return "USD" + Objects.toString(rawvalue());
+            return "USD" + rawvalue();
         }
         
         @Override
         public boolean equals(Object thatObject) {
-            if (!(thatObject instanceof USD)) {
+            if (!(thatObject instanceof USD that)) {
                 return false;
             }
-            USD that = (USD) thatObject;
             return Objects.equals(this.rawvalue(), that.rawvalue());
         }
         
@@ -124,6 +126,7 @@ public class UnitNumberFactoryTest {
     }
     
     private static final class EUR extends Currency {
+        @Serial
         private static final long serialVersionUID = 1L;
         
         public EUR(BigDecimal val) {
@@ -132,15 +135,14 @@ public class UnitNumberFactoryTest {
         
         @Override
         public String toString() {
-            return "EUR" + Objects.toString(rawvalue());
+            return "EUR" + rawvalue();
         }
         
         @Override
         public boolean equals(Object thatObject) {
-            if (!(thatObject instanceof EUR)) {
+            if (!(thatObject instanceof EUR that)) {
                 return false;
             }
-            EUR that = (EUR) thatObject;
             return Objects.equals(this.rawvalue(), that.rawvalue());
         }
         

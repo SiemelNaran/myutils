@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import java.io.Serial;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -70,6 +71,7 @@ public class TestUtil {
     }
 
     public static class SleepInterruptedException extends RuntimeException {
+        @Serial
         private static final long serialVersionUID = 1L;
         
         SleepInterruptedException(InterruptedException cause) {
@@ -235,7 +237,6 @@ public class TestUtil {
      *        for example <code>exception -> assertEquals(expectedMessage, exception.getMessage())</code>
      * @throws AssertionError if assertion fails
      */
-    @SuppressWarnings("unchecked")
     public static <U extends Throwable> void assertException(Runnable runnable, Class<U> expectedExceptionClass, Consumer<U> exceptionChecker) {
         try {
             runnable.run();

@@ -92,7 +92,7 @@ public class MoreCollectors {
         return new Collector<>() {
             @Override
             public Supplier<PriorityQueue<T>> supplier() {
-                return () -> new PriorityQueue<T>(comparator);
+                return () -> new PriorityQueue<>(comparator);
             }
 
             @Override
@@ -145,7 +145,7 @@ public class MoreCollectors {
         return new Collector<>() {
             @Override
             public Supplier<PriorityQueue<T>> supplier() {
-                return () -> new PriorityQueue<T>(comparator.reversed());
+                return () -> new PriorityQueue<>(comparator.reversed());
             }
 
             @Override

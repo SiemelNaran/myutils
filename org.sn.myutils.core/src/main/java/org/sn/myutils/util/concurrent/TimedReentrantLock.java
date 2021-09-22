@@ -1,5 +1,6 @@
 package org.sn.myutils.util.concurrent;
 
+import java.io.Serial;
 import java.time.Duration;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
@@ -14,8 +15,9 @@ import org.sn.myutils.annotations.NotNull;
  * as well as the total approximate amount of time the lock was idle.
  */
 public class TimedReentrantLock extends ReentrantLock {
-    private static final long serialVersionUID = 1L;        
-    private static ThreadLocal<Long> startTime = new ThreadLocal<>();
+    @Serial
+    private static final long serialVersionUID = 1L;
+    private static final ThreadLocal<Long> startTime = new ThreadLocal<>();
     
     private final long creationTime;
     private long lockStartTime;

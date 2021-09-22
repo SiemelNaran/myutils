@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -19,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 
 
+@SuppressWarnings("ResultOfMethodCallIgnored")
 public class PriorityThreadPoolExecutorTest {
     long startOfTime;
 
@@ -94,7 +94,7 @@ public class PriorityThreadPoolExecutorTest {
                            "end thread with priority 8",
                            "end thread with priority 7"));
         
-        assertThat(futures.stream().map(PriorityThreadPoolExecutorTest::getFromFuture).collect(Collectors.toList()),
+        assertThat(futures.stream().map(PriorityThreadPoolExecutorTest::getFromFuture).toList(),
                    Matchers.contains("44", "55", "66", "77", "88", "99"));
     }
     
@@ -125,7 +125,7 @@ public class PriorityThreadPoolExecutorTest {
                            "end thread with priority 8",
                            "end thread with priority 7"));
         
-        assertThat(futures.stream().map(PriorityThreadPoolExecutorTest::getFromFuture).collect(Collectors.toList()),
+        assertThat(futures.stream().map(PriorityThreadPoolExecutorTest::getFromFuture).toList(),
                    Matchers.contains("44", "55", "66", "77", "88", "99"));
     }
     
@@ -140,8 +140,8 @@ public class PriorityThreadPoolExecutorTest {
                 logString("end");
                 messages.add("end thread with priority " + currentThread.getPriority());
             } catch (RuntimeException | Error e) {
-                logString("caught exception " + e.toString());
-                messages.add("thread with priority " + currentThread.getPriority() + " encountered exception " + e.toString());
+                logString("caught exception " + e);
+                messages.add("thread with priority " + currentThread.getPriority() + " encountered exception " + e);
             }
         }
         
@@ -153,8 +153,8 @@ public class PriorityThreadPoolExecutorTest {
                 logString("end");
                 messages.add("end thread with priority " + currentThread.getPriority());
             } catch (RuntimeException | Error e) {
-                logString("caught exception " + e.toString());
-                messages.add("thread with priority " + currentThread.getPriority() + " encountered exception " + e.toString());
+                logString("caught exception " + e);
+                messages.add("thread with priority " + currentThread.getPriority() + " encountered exception " + e);
             }
             return Integer.toString(Thread.currentThread().getPriority()) + Thread.currentThread().getPriority();
         }

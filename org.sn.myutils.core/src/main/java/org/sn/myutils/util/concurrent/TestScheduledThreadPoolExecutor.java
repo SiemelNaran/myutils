@@ -94,7 +94,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     public synchronized @NotNull List<Runnable> shutdownNow() {
         List<Runnable> scheduledNotStartedTasks =
                 scheduledTasks.values().stream()
-                                       .flatMap(Collection::stream)
+                                       .<TestScheduledFutureTask<?>>mapMulti((futures, flattener) -> futures.stream().forEach(future -> flattener.accept(future)))
                                        .peek(TestScheduledFutureTask::clearExecutor)
                                        .collect(Collectors.toList());
         scheduledTasks.clear();
@@ -343,13 +343,8 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
             throw new CompletionException(e);
         }
     }
-    
-    private static class AdvanceTimeResult {
-        private final long nanosLeft;
-        
-        AdvanceTimeResult(long nanosLeft) {
-            this.nanosLeft = nanosLeft;
-        }
+
+    private record AdvanceTimeResult(long nanosLeft) {
     }
     
     private synchronized AdvanceTimeResult advanceTimeWithException(long time, @NotNull TimeUnit unit, boolean waitForever) throws InterruptedException {
@@ -374,8 +369,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
                 }
             }
             for (var task : tasksToRun) {
-                var timeMillis = task.timeMillis;
-                timeOfLastFutureMillis = timeMillis;
+                timeOfLastFutureMillis = task.timeMillis;
                 var future = realExecutor.submit(task);
                 task.setRealFuture(future);
                 futures.add(future);

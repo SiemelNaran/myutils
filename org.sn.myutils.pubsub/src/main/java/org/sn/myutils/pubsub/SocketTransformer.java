@@ -206,7 +206,7 @@ class SocketTransformer {
     /**
      * Convert a byte buffer into T using Java serialization.
      * 
-     * @param T is either MessageBase.class or MessageBaseWrapper.class
+     * @param <T> is either MessageBase.class or MessageBaseWrapper.class
      * @throws ClassCastException if buffer translates into an object other than T or one derived from it.
      */
     @SuppressWarnings("unchecked")

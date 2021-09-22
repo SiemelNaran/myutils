@@ -22,6 +22,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 
+@SuppressWarnings("ResultOfMethodCallIgnored")
 public class TimedReentrantLockTest {
     private static long startOfAllTests;
     private long startOfTime;
@@ -140,7 +141,7 @@ public class TimedReentrantLockTest {
                     }
                 }
             } catch (InterruptedException e) {
-                logString("exception in thread 1 = " + e.toString());
+                logString("exception in thread 1 = " + e);
             }
             logString("end thread 1");
         }, 300, TimeUnit.MILLISECONDS);
@@ -163,7 +164,7 @@ public class TimedReentrantLockTest {
                     lock.unlock();
                 }
             } catch (InterruptedException e) {
-                logString("exception in thread 2 = " + e.toString());
+                logString("exception in thread 2 = " + e);
             }
             logString("end thread 2");
         }, 500, TimeUnit.MILLISECONDS);
@@ -276,7 +277,7 @@ public class TimedReentrantLockTest {
                     }
                 }
             } catch (InterruptedException e) {
-                logString("exception in thread 1 = " + e.toString());
+                logString("exception in thread 1 = " + e);
             }
             logString("end thread 1");
         }, 300, TimeUnit.MILLISECONDS);
@@ -293,7 +294,7 @@ public class TimedReentrantLockTest {
                     }
                 }
             } catch (InterruptedException e) {
-                logString("exception in thread 2 = " + e.toString());
+                logString("exception in thread 2 = " + e);
             }
             logString("end thread 2");
         }, 500, TimeUnit.MILLISECONDS);

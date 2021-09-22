@@ -18,6 +18,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.RandomAccessFile;
+import java.io.Serial;
 import java.io.Serializable;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -150,11 +151,11 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             }
 
             static FutureStatus fromByte(byte val) {
-                switch (val) {
-                    case 1: return PENDING;
-                    case 3: return DONE;
-                    default: return CANCELED;
-                }
+                return switch (val) {
+                    case 1 -> PENDING;
+                    case 3 -> DONE;
+                    default -> CANCELED;
+                };
             }
         }
 
@@ -178,6 +179,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
          * <p>There is no need for finalize/Cleaner because RandomAccessFile registers a cleaner to close the file when it becomes phantom reachable.
          */
         private final Map<TimeBucket, RandomAccessFile> timeBucketFileMap = Collections.synchronizedMap(new LinkedHashMap<>() {
+            @Serial
             private static final long serialVersionUID = 1L;
 
             @Override
@@ -345,7 +347,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                 try {
                     TimeBucketManager.this.done(timeBucket, position);
                 } catch (IOException | RuntimeException | Error e) {
-                    LOGGER.log(ERROR, "Unable to mark task as done: timeBucket=" + timeBucket + ", position=" + position + ", error='" + e.toString() + "'");
+                    LOGGER.log(ERROR, "Unable to mark task as done: timeBucket=" + timeBucket + ", position=" + position + ", error='" + e + "'");
                 }
             }
 
@@ -438,7 +440,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
                                 countSuccess++;
                                 timeBucket.resolveWaitingFuture(position, futureTask);
                             } catch (SerializableScheduledExecutorService.RecreateRunnableFailedException | IOException e) {
-                                LOGGER.log(WARNING, "Unable to recreate runnable: timeBucket=" + timeBucket + ", error='" + e.toString() + "'");
+                                LOGGER.log(WARNING, "Unable to recreate runnable: timeBucket=" + timeBucket + ", error='" + e + "'");
                                 countFailure++;
                             }
                         } else {
@@ -794,10 +796,9 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
 
         @Override
         public boolean equals(Object thatObject) {
-            if (!(thatObject instanceof TimeBucket)) {
+            if (!(thatObject instanceof TimeBucket that)) {
                 return false;
             }
-            TimeBucket that = (TimeBucket) thatObject;
             return this.startInclusiveMillis == that.startInclusiveMillis;
         }
 
@@ -1173,6 +1174,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
     }
 
     @Override
+    @SuppressWarnings("ResultOfMethodCallIgnored")
     public void close() throws IOException {
         shutdownNow();
         try {

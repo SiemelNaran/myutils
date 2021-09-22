@@ -17,6 +17,7 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
 
+@SuppressWarnings("ResultOfMethodCallIgnored")
 public class HashLocksTest {
     @Test
     @SuppressWarnings("checkstyle:indentation") // for argument2 to function HashLocks.create
@@ -31,8 +32,8 @@ public class HashLocksTest {
         assertNotSame(lock0, lock2);
         assertNotSame(lock0, lock2);
 
-        assertEquals(Arrays.asList(false, false, false), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::isLocked).collect(Collectors.toList()));
-        assertEquals(Arrays.asList(1, 1, 1), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::getUsage).collect(Collectors.toList()));
+        assertEquals(Arrays.asList(false, false, false), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::isLocked).toList());
+        assertEquals(Arrays.asList(1, 1, 1), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::getUsage).toList());
 
         Lock lock3 = locks.getLock(3);
         Lock lock4 = locks.getLock(4);
@@ -48,8 +49,8 @@ public class HashLocksTest {
         assertSame(lock1, lockNegative2);
         assertSame(lock0, lockNegative3);
 
-        assertEquals(Arrays.asList(false, false, false), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::isLocked).collect(Collectors.toList()));
-        assertEquals(Arrays.asList(3, 3, 3), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::getUsage).collect(Collectors.toList()));
+        assertEquals(Arrays.asList(false, false, false), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::isLocked).toList());
+        assertEquals(Arrays.asList(3, 3, 3), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::getUsage).toList());
         // explanation: 3 since 0, 3, -3 have different values for toString() but all hash to lock0
 
         Lock lock6 = locks.getLock(3);
@@ -59,8 +60,8 @@ public class HashLocksTest {
         assertSame(lock1, lock7);
         assertSame(lock2, lock8);
 
-        assertEquals(Arrays.asList(false, false, false), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::isLocked).collect(Collectors.toList()));
-        assertEquals(Arrays.asList(3, 3, 3), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::getUsage).collect(Collectors.toList()));
+        assertEquals(Arrays.asList(false, false, false), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::isLocked).toList());
+        assertEquals(Arrays.asList(3, 3, 3), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::getUsage).toList());
         // explanation: 3 since we track only 3 strings per lock
     }
     
@@ -74,8 +75,8 @@ public class HashLocksTest {
         assertNotSame(lock0, lock2);
         assertNotSame(lock0, lock2);
 
-        assertEquals(Arrays.asList(false, false, false), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::isLocked).collect(Collectors.toList()));
-        assertEquals(Arrays.asList(-1, -1, -1), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::getUsage).collect(Collectors.toList()));
+        assertEquals(Arrays.asList(false, false, false), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::isLocked).toList());
+        assertEquals(Arrays.asList(-1, -1, -1), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::getUsage).toList());
 
         Lock lock3 = locks.getLock(3);
         Lock lock4 = locks.getLock(4);
@@ -91,8 +92,8 @@ public class HashLocksTest {
         assertSame(lock1, lockNegative2);
         assertSame(lock0, lockNegative3);
         
-        assertEquals(Arrays.asList(false, false, false), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::isLocked).collect(Collectors.toList()));
-        assertEquals(Arrays.asList(-1, -1, -1), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::getUsage).collect(Collectors.toList()));
+        assertEquals(Arrays.asList(false, false, false), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::isLocked).toList());
+        assertEquals(Arrays.asList(-1, -1, -1), locks.statistics().map(HashLocks.TimedReentrantLockStatistics::getUsage).toList());
     }
     
     @Test
@@ -159,9 +160,9 @@ public class HashLocksTest {
             end 3rd after 4 seconds at 7300
          */
         
-        List<HashLocks.TimedReentrantLockStatistics> statistics = locks.statistics().collect(Collectors.toList());
+        List<HashLocks.TimedReentrantLockStatistics> statistics = locks.statistics().toList();
         
-        assertEquals(Arrays.asList(1, 0, 0), statistics.stream().map(HashLocks.TimedReentrantLockStatistics::getUsage).collect(Collectors.toList()));
+        assertEquals(Arrays.asList(1, 0, 0), statistics.stream().map(HashLocks.TimedReentrantLockStatistics::getUsage).toList());
         
         Duration[] waitTimes = statistics.stream().map(HashLocks.TimedReentrantLockStatistics::getTotalWaitTime).toArray(Duration[]::new);
         Duration[] lockRunningTimes = statistics.stream().map(HashLocks.TimedReentrantLockStatistics::getTotalLockRunningTime).toArray(Duration[]::new);

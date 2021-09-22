@@ -3,6 +3,7 @@ package org.sn.myutils.util;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.Iterator;
+import java.util.NoSuchElementException;
 import java.util.PriorityQueue;
 
 
@@ -13,10 +14,10 @@ import java.util.PriorityQueue;
  * @param <T> the type of element in each collection
  */
 public class ZipMinIterator<T> implements Iterator<T> {
-    private PriorityQueue<ValueAndLocation<T>> elements = new PriorityQueue<>();
+    private final PriorityQueue<ValueAndLocation<T>> elements;
 
     public ZipMinIterator(Collection<? extends Collection<T>> collections, Comparator<? super T> comparator) {
-        this.elements = new PriorityQueue<ValueAndLocation<T>>((lhs, rhs) -> comparator.compare(lhs.value, rhs.value));
+        this.elements = new PriorityQueue<>((lhs, rhs) -> comparator.compare(lhs.value, rhs.value));
         fillElements(collections);
     }
     
@@ -24,7 +25,7 @@ public class ZipMinIterator<T> implements Iterator<T> {
         for (var collection : collections) {
             Iterator<T> iter = collection.iterator();
             if (iter.hasNext()) {
-                elements.offer(new ValueAndLocation<T>(iter));
+                elements.offer(new ValueAndLocation<>(iter));
             }
         }
     }
@@ -45,9 +46,12 @@ public class ZipMinIterator<T> implements Iterator<T> {
     @Override
     public T next() {
         ValueAndLocation<T> result = elements.poll();
+        if (result == null) {
+            throw new NoSuchElementException();
+        }
         var iter = result.location;
         if (iter.hasNext()) {
-            elements.offer(new ValueAndLocation<T>(iter));
+            elements.offer(new ValueAndLocation<>(iter));
         }
         return result.value;
     }

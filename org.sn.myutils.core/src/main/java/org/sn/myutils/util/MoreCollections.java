@@ -214,8 +214,8 @@ public class MoreCollections {
     public static <U extends Comparable<? super U>>
     int binarySearch(List<U> list,
                      U key) {
-        if (list instanceof AbstractPageList) {
-            return pageListBinarySearch((AbstractPageList<U>) list, key);
+        if (list instanceof AbstractPageList<U> abstractPageList) {
+            return pageListBinarySearch(abstractPageList, key);
         } else {
             return Collections.binarySearch(list, key);
         }

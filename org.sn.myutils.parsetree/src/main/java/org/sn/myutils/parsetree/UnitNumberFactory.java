@@ -38,10 +38,9 @@ public class UnitNumberFactory implements NumberFactory {
         }
         
         String original = str;
-        
         String unitName;
         switch (unitPosition) {
-            case BEFORE: {
+            case BEFORE -> {
                 int[] unit = getWordAtStart(str);
                 if (unit.length > 0) {
                     unitName = new String(unit, 0, unit.length);
@@ -49,10 +48,8 @@ public class UnitNumberFactory implements NumberFactory {
                 } else {
                     unitName = "";
                 }
-                break;
             }
-            
-            case AFTER: {
+            case AFTER -> {
                 int[] number = getNumberAtStart(str);
                 if (number.length > 0) {
                     unitName = str.substring(number.length);
@@ -60,11 +57,8 @@ public class UnitNumberFactory implements NumberFactory {
                 } else {
                     unitName = "";
                 }
-                break;
             }
-                
-            default:
-                throw new UnsupportedOperationException();
+            default -> throw new UnsupportedOperationException();
         }
         
         try {
@@ -183,6 +177,8 @@ public class UnitNumberFactory implements NumberFactory {
         
         /**
          * Set the default unit. null means that a unit is required when parsing a number.
+         *
+         * @throws IllegalArgumentException if defaultUnit not found. Be sure to call setDefaultUnit after all addUnit.
          */
         public Builder setDefaultUnit(String defaultUnit) {
             defaultUnit = unitCase.convert(defaultUnit);

@@ -11,6 +11,7 @@ import static org.sn.myutils.util.concurrent.MoreExecutors.createThreadFactory;
 
 import java.io.EOFException;
 import java.io.IOException;
+import java.io.Serial;
 import java.lang.System.Logger.Level;
 import java.lang.ref.Cleaner.Cleanable;
 import java.net.ConnectException;
@@ -215,6 +216,7 @@ public class DistributedSocketPubSub extends PubSub {
     }
     
     public static class StartException extends PubSubException {
+        @Serial
         private static final long serialVersionUID = 1L;
         
         private final Map<SocketAddress, Throwable> exceptions;
@@ -429,29 +431,13 @@ public class DistributedSocketPubSub extends PubSub {
      * Class representing an action to send all deferred messages to the particular messageServer
      * as that particular messageServer is now connected.
      */
-    private static class SendDeferredMessages implements MessageWriterMessage {
-        private final SocketAddress messageServer;
-
-        public SendDeferredMessages(SocketAddress messageServer) {
-            this.messageServer = messageServer;
-        }
-
-        SocketAddress getMessageServer() {
-            return messageServer;
-        }
+    private record SendDeferredMessages(SocketAddress messageServer) implements MessageWriterMessage {
     }
 
     /**
      * A message and the message server it must be sent to.
      */
-    private static class RegularMessage implements MessageWriterMessage {
-        private final MessageBase message;
-        private final SocketAddress messageServer;
-        
-        RegularMessage(MessageBase message, SocketAddress destination) {
-            this.message = message;
-            this.messageServer = destination;
-        }
+    private record RegularMessage(MessageBase message, SocketAddress messageServer) implements MessageWriterMessage {
     }
     
     /**
@@ -485,10 +471,10 @@ public class DistributedSocketPubSub extends PubSub {
             while (true) {
                 try {
                     MessageWriterMessage messageWriterMessage = queue.take();
-                    if (messageWriterMessage instanceof SendDeferredMessages) {
-                        handleSendDeferredMessages((SendDeferredMessages) messageWriterMessage);
-                    } else if (messageWriterMessage instanceof RegularMessage) {
-                        handleSendRegularMessage((RegularMessage) messageWriterMessage);
+                    if (messageWriterMessage instanceof SendDeferredMessages sendDeferredMessages) {
+                        handleSendDeferredMessages(sendDeferredMessages);
+                    } else if (messageWriterMessage instanceof RegularMessage regularMessage) {
+                        handleSendRegularMessage(regularMessage);
                     } else {
                         throw new UnsupportedOperationException();
                     }
@@ -502,7 +488,7 @@ public class DistributedSocketPubSub extends PubSub {
         }
         
         private void handleSendDeferredMessages(SendDeferredMessages sendDeferredMessages) {
-            Deque<RegularMessage> deferredMessages = deferredQueues.remove(sendDeferredMessages.getMessageServer());
+            Deque<RegularMessage> deferredMessages = deferredQueues.remove(sendDeferredMessages.messageServer());
             if (deferredMessages != null) {
                 for (var deferredMessage : deferredMessages) {
                     send(deferredMessage);
@@ -704,24 +690,23 @@ public class DistributedSocketPubSub extends PubSub {
     }
     
     private void processMessage(SocketAddress messageServer, MessageBase message) {
-        if (message instanceof CreatePublisher) {
+        if (message instanceof CreatePublisher createPublisher) {
             // we are receiving a CreatePublisher from the server in response to a client.subscribe
-            handleCreatePublisher((CreatePublisher) message);
-        } else if (message instanceof CreatePublisherFailed) {
-            handleCreatePublisherFailed((CreatePublisherFailed) message);
-        } else if (message instanceof PublisherCreated) {
+            handleCreatePublisher(createPublisher);
+        } else if (message instanceof CreatePublisherFailed createPublisherFailed) {
+            handleCreatePublisherFailed(createPublisherFailed);
+        } else if (message instanceof PublisherCreated publisherCreated) {
             // we are receiving a PublisherCreated from the server in response to a client.createPublisher
-            handlePublisherCreated((PublisherCreated) message);
-        } else if (message instanceof SubscriberAdded) {
-            handleSubscriberAdded((SubscriberAdded) message);
-        } else if (message instanceof AddSubscriberFailed) {
-            handleAddSubscriberFailed((AddSubscriberFailed) message);
-        } else if (message instanceof SubscriberRemoved) {
-            handleSubscriberRemoved((SubscriberRemoved) message);
-        } else if (message instanceof RemoveSubscriberFailed) {
-            handleRemoveSubscriberFailed((RemoveSubscriberFailed) message);
-        } else if (message instanceof PublishMessage) {
-            PublishMessage publishMessage = (PublishMessage) message;
+            handlePublisherCreated(publisherCreated);
+        } else if (message instanceof SubscriberAdded subscriberAdded) {
+            handleSubscriberAdded(subscriberAdded);
+        } else if (message instanceof AddSubscriberFailed addSubscriberFailed) {
+            handleAddSubscriberFailed(addSubscriberFailed);
+        } else if (message instanceof SubscriberRemoved subscriberRemoved) {
+            handleSubscriberRemoved(subscriberRemoved);
+        } else if (message instanceof RemoveSubscriberFailed removeSubscriberFailed) {
+            handleRemoveSubscriberFailed(removeSubscriberFailed);
+        } else if (message instanceof PublishMessage publishMessage) {
             String topic = publishMessage.getTopic();
             threadLocalRemoteRelayMessage.set(publishMessage);
             Publisher publisher = DistributedSocketPubSub.this.getPublisher(topic);
@@ -729,14 +714,11 @@ public class DistributedSocketPubSub extends PubSub {
                 publisher = DistributedSocketPubSub.this.dormantInfoMap.get(topic).getDormantPublisher();
             }
             publisher.publish(publishMessage.getMessage());
-        } else if (message instanceof InvalidRelayMessage) {
-            InvalidRelayMessage invalid = (InvalidRelayMessage) message;
-            LOGGER.log(Level.WARNING, invalid.getError());
-        } else if (message instanceof ClientAccepted) {
-            ClientAccepted clientAccepted = (ClientAccepted) message;
+        } else if (message instanceof InvalidRelayMessage invalidRelayMessage) {
+            LOGGER.log(Level.WARNING, invalidRelayMessage.getError());
+        } else if (message instanceof ClientAccepted clientAccepted) {
             DistributedSocketPubSub.this.onMessageServerConnected(messageServer, clientAccepted);
-        } else if (message instanceof ClientRejected) {
-            ClientRejected clientRejected = (ClientRejected) message;
+        } else if (message instanceof ClientRejected clientRejected) {
             DistributedSocketPubSub.this.onMessageServerFailedToConnect(messageServer, clientRejected);
         } else {
             LOGGER.log(Level.WARNING, "Unrecognized object type received: clientMachine={0}, messageClass={1}",
@@ -826,16 +808,9 @@ public class DistributedSocketPubSub extends PubSub {
         }
     }
 
-    private static class DeferredMessage {
-        private final CloneableObject<?> message;
-        private final RetentionPriority retentionPriority;
-        private final boolean isRemoteMessage;
-        
-        DeferredMessage(CloneableObject<?> message, RetentionPriority retentionPriority, boolean isRemoteMessage) {
-            this.message = message;
-            this.retentionPriority = retentionPriority;
-            this.isRemoteMessage = isRemoteMessage;
-        }
+    private record DeferredMessage(CloneableObject<?> message,
+                                   RetentionPriority retentionPriority,
+                                   boolean isRemoteMessage) {
     }
 
     /**
@@ -1279,7 +1254,7 @@ public class DistributedSocketPubSub extends PubSub {
                        machineId,
                        socketChannels.stream()
                                      .map(channel -> getLocalAddress(channel) + " -> " + getRemoteAddress(channel))
-                                     .collect(Collectors.toList()));
+                                     .toList());
             LOGGER.log(Level.TRACE, "Call stack at creation:" + getCallStack());
             socketChannels.forEach(PubSubUtils::closeQuietly);
             closeExecutorQuietly(channelExecutor);

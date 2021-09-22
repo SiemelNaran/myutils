@@ -16,6 +16,7 @@ import static org.sn.myutils.testutils.TestUtil.countElementsInListByType;
 import static org.sn.myutils.testutils.TestUtil.sleep;
 
 import java.io.IOException;
+import java.io.Serial;
 import java.lang.System.Logger.Level;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -106,6 +107,7 @@ import org.sn.myutils.util.ExceptionUtils;
 -Djava.util.logging.config.file=../org.sn.myutils.testutils/target/classes/logging.properties
  * </code>
  */
+@SuppressWarnings("ResultOfMethodCallIgnored")
 @ExtendWith(LogFailureToConsoleTestWatcher.class)
 public class DistributedPubSubIntegrationTest extends TestBase {
     private static final System.Logger LOGGER = System.getLogger(DistributedPubSubIntegrationTest.class.getName());
@@ -156,7 +158,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
 
         assertEquals("Identification=1", centralServer.getValidTypesReceived());
         assertEquals("ClientAccepted=1", centralServer.getTypesSent());
-        assertThat(centralServer.getRemoteClients().stream().map(clientMachine -> clientMachine.getMachineId().toString()).collect(Collectors.toList()),
+        assertThat(centralServer.getRemoteClients().stream().map(clientMachine -> clientMachine.getMachineId().toString()).toList(),
                    Matchers.contains("client1"));
 
         // start a new client on a different port but with the same machine name
@@ -179,7 +181,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
 
         assertEquals("Identification=2", centralServer.getValidTypesReceived());
         assertEquals("ClientAccepted=1, ClientRejected=1", centralServer.getTypesSent());
-        assertThat(centralServer.getRemoteClients().stream().map(clientMachine -> clientMachine.getMachineId().toString()).collect(Collectors.toList()),
+        assertThat(centralServer.getRemoteClients().stream().map(clientMachine -> clientMachine.getMachineId().toString()).toList(),
                    Matchers.contains("client1"));
     }
 
@@ -622,8 +624,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         AtomicReference<ServerIndex> serverIndexCarrot = new AtomicReference<>(ServerIndex.MIN_VALUE); // index of last carrot
         centralServer.setMessageSentListener(wrapper -> {
             var message = wrapper.getMessage();
-            if (message instanceof PublishMessage) {
-                PublishMessage publishMessage = (PublishMessage) message;
+            if (message instanceof PublishMessage publishMessage) {
                 if (publishMessage.getMessage().toString().equals("CloneableString:banana")) {
                     // the idea is to capture the server id of the first banana so that we can test download within range
                     serverIndexBanana.updateAndGet(current -> TestUtil.min(current, publishMessage.getRelayFields().getServerIndex()));
@@ -1468,8 +1469,8 @@ public class DistributedPubSubIntegrationTest extends TestBase {
             
             public boolean handle(MessageWrapper wrapper) {
                 boolean isDownload;
-                if (wrapper instanceof RelayMessageWrapper) {
-                    isDownload = ((RelayMessageWrapper) wrapper).getDownloadCommandIndex() != null;
+                if (wrapper instanceof RelayMessageWrapper relayMessageWrapper) {
+                    isDownload = relayMessageWrapper.getDownloadCommandIndex() != null;
                 } else {
                     isDownload = false;
                 }
@@ -1837,6 +1838,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     }
     
     private static class BogusClientGeneratedMessage extends MessageClasses.ClientGeneratedTopicMessage {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         BogusClientGeneratedMessage() {
@@ -1850,6 +1852,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     }
     
     private static class BogusMessage implements TopicMessageBase {
+        @Serial
         private static final long serialVersionUID = 1L;
 
         @Override
@@ -2175,6 +2178,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     }
     
     @Test
+    @SuppressWarnings("OptionalGetWithoutIsPresent")
     void codeCoverageForSubscriberEndpoint() throws NoSuchMethodException, SecurityException, InstantiationException, IllegalAccessException, IllegalArgumentException, InvocationTargetException {
         Class<?> subscriberEndpointClass = Arrays.stream(DistributedMessageServer.class.getDeclaredClasses()).filter(clazz -> clazz.getSimpleName().equals("SubscriberEndpoint")).findFirst().get();
         Constructor<?> constructor = subscriberEndpointClass.getDeclaredConstructor(ClientMachineId.class, String.class, long.class);
@@ -2298,8 +2302,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
             LOGGER.log(Level.INFO, "Time taken to start servers and clients: numObjects=" + futures.size() + ", timeTaken=" + timeTaken);
         } catch (CompletionException e) {
             var cause = ExceptionUtils.unwrapCompletionException(e);
-            if (cause instanceof StartException) {
-                StartException startException = (StartException) cause;
+            if (cause instanceof StartException startException) {
                 System.err.println(startException.getMessage());
                 startException.getExceptions().entrySet().forEach(entry -> System.err.println(entry.toString()));
             }
@@ -2500,8 +2503,7 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
     @Override
     protected void onBeforeSendMessage(MessageBase message) {
         super.onBeforeSendMessage(message);
-        if (enableTamperServerIndex && message instanceof RelayMessageBase) {
-            RelayMessageBase relayMessage = (RelayMessageBase) message;
+        if (enableTamperServerIndex && message instanceof RelayMessageBase relayMessage) {
             relayMessage.setRelayFields(new RelayFields(System.currentTimeMillis(), ServerIndex.MIN_VALUE.increment(), new ClientMachineId("bogus")));
         }
     }

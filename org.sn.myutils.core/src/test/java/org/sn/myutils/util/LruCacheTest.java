@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.sn.myutils.testutils.TestUtil.assertException;
 import static org.sn.myutils.testutils.TestUtil.assertExceptionFromCallable;
 
+import java.io.Serial;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -23,7 +24,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.Random;
-import java.util.stream.Collectors;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -321,11 +321,11 @@ public class LruCacheTest {
         Iterator<Entry<String, String>> iter = cache.entrySet().iterator();
         assertTrue(iter.hasNext());
         switch (method) {
-            case "getLatest": cache.get("four"); break;
-            case "get": cache.get("three"); break;
-            case "put": cache.put("five", "5"); break;
-            case "remove": cache.remove("four"); break;
-            default: throw new UnsupportedOperationException();
+            case "getLatest" -> cache.get("four");
+            case "get" -> cache.get("three");
+            case "put" -> cache.put("five", "5");
+            case "remove" -> cache.remove("four");
+            default -> throw new UnsupportedOperationException();
         }
         assertTrue(iter.hasNext());
         assertExceptionFromCallable(iter::next, ConcurrentModificationException.class);
@@ -376,7 +376,7 @@ public class LruCacheTest {
     }
 
     private static List<String> getListFromIterator(Map<String, String> map) {
-        return map.entrySet().stream().map(Map.Entry::toString).collect(Collectors.toList());
+        return map.entrySet().stream().map(Map.Entry::toString).toList();
     }
 
     ////////////////////////////////////////////////////////////////////////////////////
@@ -399,6 +399,7 @@ public class LruCacheTest {
         {
             Instant startTime = Instant.now();
             LinkedHashMap<String, String> cache = new LinkedHashMap<>(400_000, 0.75f, true) {
+                @Serial
                 private static final long serialVersionUID = 1L;
 
                 @Override

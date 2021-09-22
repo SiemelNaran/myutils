@@ -4,12 +4,12 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.PrintWriter;
+import java.io.Serial;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.CompletionException;
-import java.util.stream.Collectors;
 import org.sn.myutils.annotations.NotNull;
 import org.sn.myutils.annotations.Nullable;
 
@@ -34,7 +34,7 @@ public class StackTraces {
         List<String> newList = new ArrayList<>(_ignoreClassOrPackageNameList);
         newList.addAll(ignores.stream()
                               .filter(elem -> !elem.endsWith("/")) // filter only class and package names
-                              .collect(Collectors.toList()));
+                              .toList());
         newList.sort(Comparator.naturalOrder());
         _ignoreClassOrPackageNameList = newList;
         
@@ -42,7 +42,7 @@ public class StackTraces {
         newList.addAll(ignores.stream()
                               .filter(elem -> elem.endsWith("/")) // filter only module names
                               .map(elem -> elem.substring(0, elem.length() - 1)) // remove the trailing /
-                              .collect(Collectors.toList()));
+                              .toList());
         newList.sort(Comparator.naturalOrder());
         _ignoreModuleNameList = newList;
     }
@@ -122,6 +122,7 @@ public class StackTraces {
             for (StackTraceElement parentElem: parentStackTrace) {
                 if (currentElem.equals(parentElem)) {
                     done = true;
+                    break;
                 }
             }
             currentFiltered.add(currentElem);
@@ -162,6 +163,7 @@ public class StackTraces {
     }
     
     private static class StackTracesCompletionException extends CompletionException {
+        @Serial
         private static final long serialVersionUID = 1L;
         
         private final String calledFrom;

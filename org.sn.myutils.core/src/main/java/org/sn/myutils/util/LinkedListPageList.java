@@ -1,5 +1,6 @@
 package org.sn.myutils.util;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.Collections;
@@ -21,6 +22,7 @@ import org.sn.myutils.annotations.NotThreadSafe;
 @NotThreadSafe
 public class LinkedListPageList<E> extends AbstractPageList<E> implements PageList<E>, RandomAccess, Serializable {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     LinkedListPageList() {
@@ -41,17 +43,17 @@ public class LinkedListPageList<E> extends AbstractPageList<E> implements PageLi
     
     @Override
     protected Page<E> createNewEmptyPage(int startIndex) {
-        return new LinkedListPage<E>(startIndex);
+        return new LinkedListPage<>(startIndex);
     }
 
     @Override
     protected Page<E> createNewPageByCopyingSublist(int startIndex, List<E> subListToCopy) {
-        return new LinkedListPage<E>(startIndex, new LinkedList<E>(subListToCopy));
+        return new LinkedListPage<>(startIndex, new LinkedList<>(subListToCopy));
     }
 
     @Override
     protected LinkedListPageList<E> createNewPageList() {
-        return new LinkedListPageList<E>(preferredMaxPageSize, maxPageSize);
+        return new LinkedListPageList<>(preferredMaxPageSize, maxPageSize);
     }
 
     @Override
@@ -60,10 +62,11 @@ public class LinkedListPageList<E> extends AbstractPageList<E> implements PageLi
     }
     
     protected static class LinkedListPage<E> extends Page<E> {
+        @Serial
         private static final long serialVersionUID = 1L;
         
         private LinkedListPage(int startIndex) {
-            super(startIndex, new LinkedList<E>());
+            super(startIndex, new LinkedList<>());
         }
         
         private LinkedListPage(int startIndex, List<E> list) {

@@ -1,5 +1,6 @@
 package org.sn.myutils.pubsub;
 
+import java.io.Serial;
 import java.math.BigInteger;
 
 
@@ -10,6 +11,7 @@ import java.math.BigInteger;
  * The next 64 bits are a monotonically increasing long.
  */
 public class ServerIndex extends Number implements Comparable<ServerIndex> {
+    @Serial
     private static final long serialVersionUID = 1L;
     
     public static final ServerIndex MIN_VALUE = new ServerIndex(BigInteger.ZERO);
@@ -31,10 +33,9 @@ public class ServerIndex extends Number implements Comparable<ServerIndex> {
 
     @Override
     public boolean equals(Object thatObject) {
-        if (!(thatObject instanceof ServerIndex)) {
+        if (!(thatObject instanceof ServerIndex that)) {
             return false;
         }
-        ServerIndex that = (ServerIndex) thatObject;
         return this.value.equals(that.value);
     }
     

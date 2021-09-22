@@ -94,25 +94,16 @@ public abstract class PubSub implements Shutdowneable {
     private final SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler;
     private final Cleanable cleanable;
 
-    public static final class PubSubConstructorArgs {
-        private final int numInMemoryHandlers;
-        private final Supplier<Queue<Subscriber>> queueCreator;
-        private final SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler;
-
-        /**
-         * Create a PubSub system.
-         *
-         * @param numInMemoryHandlers the number of threads handling messages that are published by all publishers.
-         * @param queueCreator the queue to store all message across all subscribers.
-         * @param subscriptionMessageExceptionHandler the general subscription handler for exceptions arising from all subscribers.
-         */
-        public PubSubConstructorArgs(int numInMemoryHandlers,
-                                     Supplier<Queue<Subscriber>> queueCreator,
-                                     SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler) {
-            this.numInMemoryHandlers = numInMemoryHandlers;
-            this.queueCreator = queueCreator;
-            this.subscriptionMessageExceptionHandler = subscriptionMessageExceptionHandler;
-        }
+    /**
+     * Arguments necessary to create a PubSub system.
+     *
+     * @param numInMemoryHandlers                 the number of threads handling messages that are published by all publishers.
+     * @param queueCreator                        the queue to store all message across all subscribers.
+     * @param subscriptionMessageExceptionHandler the general subscription handler for exceptions arising from all subscribers.
+     */
+    public record PubSubConstructorArgs(int numInMemoryHandlers,
+                                        Supplier<Queue<Subscriber>> queueCreator,
+                                        SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler) {
     }
 
     /**
@@ -248,6 +239,7 @@ public abstract class PubSub implements Shutdowneable {
      * @return a new publisher
      * @throws IllegalArgumentException if the publisher already exists.
      * @throws IllegalArgumentException if subscriber class of deferred subscribers is not the same or inherits from the publisher class
+     * @throws IllegalStateException if publisher already exists
      */
     public final synchronized <T> Publisher createPublisher(String topic, Class<T> publisherClass) {
         var publisher = topicMap.get(topic);
@@ -373,7 +365,8 @@ public abstract class PubSub implements Shutdowneable {
     /**
      * Attempt to unsubscribe a subscriber.
      * Running time O(k) where k is the number of subscribers.
-     * 
+     *
+     * @throws IllegalStateException if not subscribed
      * @see PubSub#basicUnsubscribe(String, String, boolean) for more notes on running time.
      */
     public synchronized void unsubscribe(Subscriber findSubscriber) {

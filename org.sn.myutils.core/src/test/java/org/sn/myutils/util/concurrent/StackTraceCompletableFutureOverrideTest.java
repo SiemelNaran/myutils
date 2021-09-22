@@ -11,13 +11,12 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Future;
-import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
 
 public class StackTraceCompletableFutureOverrideTest {
     /**
-     * The purpose of this test is to ensure that StackTraceCompletableFuture overrides all functions of Future and CopmletionStage.
+     * The purpose of this test is to ensure that StackTraceCompletableFuture overrides all functions of Future and CompletionStage.
      * Suppose in the next version of Java they add more functions to CompletionStage.
      * These functions should be overridden in StackTraceCompletableFuture so that we add stack tracing capability,
      * but because StackTraceCompletableFuture derives from CompletableFuture, there won't be any compile time errors.
@@ -39,7 +38,7 @@ public class StackTraceCompletableFutureOverrideTest {
                 if (!stackTraceCompletionStageMethods.contains(method)) {
                     String nameAndParams = extractNameAndParams(method);
                     Optional<String> found = errors.stream().filter(error -> error.endsWith(nameAndParams)).findFirst();
-                    if (!found.isPresent()) {
+                    if (found.isEmpty()) {
                         errors.add(String.format("%02d", errors.size() + 1) + " " + extractReturnType(method) + " " + nameAndParams);
                     }
                 }
@@ -48,7 +47,7 @@ public class StackTraceCompletableFutureOverrideTest {
         if (!errors.isEmpty()) {
             System.err.println("No override found for:");
             errors.forEach(System.err::println);
-            fail("Not all methods are overriden");
+            fail("Not all methods are overridden");
         }
     }
 
@@ -58,7 +57,7 @@ public class StackTraceCompletableFutureOverrideTest {
         MethodSet(Class<?> declaringClass) {
             this.methods = Arrays.stream(declaringClass.getMethods())
                                  .filter(method -> method.getDeclaringClass().equals(declaringClass))
-                                 .collect(Collectors.toList());
+                                 .toList();
         }
 
         public boolean contains(Method find) {
@@ -87,7 +86,7 @@ public class StackTraceCompletableFutureOverrideTest {
                 out.append(", ");
             }
             out.append(param.getSimpleName());
-            firstParam = true;
+            firstParam = false;
         }
         out.append(')');
         out.append(" of ");

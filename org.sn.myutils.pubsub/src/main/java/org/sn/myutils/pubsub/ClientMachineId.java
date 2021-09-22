@@ -1,5 +1,6 @@
 package org.sn.myutils.pubsub;
 
+import java.io.Serial;
 import java.lang.constant.Constable;
 import java.lang.constant.ConstantDesc;
 import java.lang.invoke.MethodHandles.Lookup;
@@ -9,6 +10,7 @@ import org.sn.myutils.annotations.NotNull;
 
 
 public final class ClientMachineId implements java.io.Serializable, Comparable<ClientMachineId>, CharSequence, Constable, ConstantDesc {
+    @Serial
     private static final long serialVersionUID = 1L;
     
     private final @NotNull String value;
@@ -19,11 +21,10 @@ public final class ClientMachineId implements java.io.Serializable, Comparable<C
     
     @Override
     public boolean equals(Object thatObject) {
-        if (!(thatObject instanceof ClientMachineId)) {
+        if (!(thatObject instanceof ClientMachineId that)) {
             return false;
         }
-        
-        ClientMachineId that = (ClientMachineId) thatObject;
+
         return this.value.equals(that.value);
     }
     
