@@ -708,10 +708,9 @@ public class DistributedMessageServer implements Shutdowneable {
 
         @Override
         public boolean equals(Object thatObject) {
-            if (!(thatObject instanceof SubscriberEndpoint)) {
+            if (!(thatObject instanceof SubscriberEndpoint that)) {
                 return false;
             }
-            SubscriberEndpoint that = (SubscriberEndpoint) thatObject;
             return this.clientMachineId.equals(that.clientMachineId) && this.subscriberName.equals(that.subscriberName);
         }
 
@@ -724,7 +723,7 @@ public class DistributedMessageServer implements Shutdowneable {
         public String toString() {
             return clientMachineId + "/" + subscriberName;
         }
-     }
+    }
 
     /**
      * A data structure to store the most recently published messages in memory.
