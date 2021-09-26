@@ -105,8 +105,8 @@
                                 <compilerArgs>
                                     <arg>-Xlint:all</arg>
                                     <arg>-Werror</arg>
-                                    <arg>-Xlint:-missing-explicit-ctor</arg>
-                                    <arg>-Xlint:-exports</arg>
+                                    <arg>-Xlint:-missing-explicit-ctor</arg> <!-- otherwise test classes need an explicit constructor -->
+                                    <arg>-Xlint:-exports</arg> <!-- otherwise error about classes like org.sn.myutils.testutils.TestBase and org.junit.jupiter.api.Test in unnamed module not exported -->
                                 </compilerArgs>
                             </configuration>
                         </execution>
