@@ -70,7 +70,6 @@ public class DefaultNumberFactory implements NumberFactory {
         return true;
     }
 
-    //@SuppressWarnings({"fallthrough", "checkstyle:FallThrough"})
     @SuppressWarnings("fallthrough")
     private Number constructInteger(String str) {
         switch (integerPolicy) {
