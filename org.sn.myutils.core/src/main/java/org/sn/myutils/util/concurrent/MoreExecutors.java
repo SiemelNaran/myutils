@@ -13,6 +13,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 
 public class MoreExecutors {
+    private MoreExecutors() {
+    }
 
     /**
      * Similar to {@link java.util.concurrent.Executors#newFixedThreadPool}

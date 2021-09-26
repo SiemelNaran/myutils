@@ -35,7 +35,10 @@ public class CompletableFutureFactory<T> {
     
     private static final Registration DEFAULT_REGISTRATION;
     private static volatile ConcurrentHashMap<String, Registration> registry = new ConcurrentHashMap<>();
-    
+
+    private CompletableFutureFactory() {
+    }
+
     public static <T> CompletableFuture<T> supplyAsync(Supplier<T> supplier) {
         return find().supplyAsync(supplier);
     }

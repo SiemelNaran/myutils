@@ -15,24 +15,24 @@ public class DefaultNumberFactory implements NumberFactory {
         PREFER_LONG,
         PREFER_BIG_INTEGER
     }
-    
+
     public enum FloatPolicy {
         PREFER_FLOAT,
         PREFER_DOUBLE,
         PREFER_BIG_DECIMAL
     }
-    
+
     static final DefaultNumberFactory DEFAULT_NUMBER_FACTORY = DefaultNumberFactory.builder().build();
-    
+
     public static Builder builder() {
         return new Builder();
     }
-    
+
     private final @Nullable IntegerPolicy integerPolicy;
     private final @NotNull FloatPolicy floatPolicy;
     private final @Nullable Integer bigDecimalScale;
     private final @Nullable RoundingMode roundingMode;
-    
+
     private DefaultNumberFactory(IntegerPolicy integerPolicy,
                                  FloatPolicy floatPolicy,
                                  Integer bigDecimalScale,
@@ -56,7 +56,7 @@ public class DefaultNumberFactory implements NumberFactory {
         }
         throw new NumberFormatException("unable to determine type of number");
     }
-    
+
     private boolean isInteger(String token) {
         final int N = token.length();
         char firstChar = token.charAt(0);
@@ -70,7 +70,7 @@ public class DefaultNumberFactory implements NumberFactory {
         return true;
     }
 
-    @SuppressWarnings("checkstyle:FallThrough")
+    @SuppressWarnings("fallthrough")
     private Number constructInteger(String str) {
         switch (integerPolicy) {
             case PREFER_INTEGER:
@@ -94,7 +94,7 @@ public class DefaultNumberFactory implements NumberFactory {
         return true;
     }
 
-    @SuppressWarnings("checkstyle:FallThrough")
+    @SuppressWarnings("fallthrough")
     private Number constructFloat(String str) {
         switch (floatPolicy) {
             case PREFER_FLOAT:
@@ -123,6 +123,9 @@ public class DefaultNumberFactory implements NumberFactory {
         private @NotNull FloatPolicy floatPolicy = FloatPolicy.PREFER_DOUBLE;
         private @Nullable Integer bigDecimalScale;
         private @Nullable RoundingMode roundingMode;
+
+        private Builder() {
+        }
         
         /**
          * Set the integer policy, if any.

@@ -18,12 +18,12 @@ class PriorityThreadPoolExecutor extends ThreadPoolExecutor implements PriorityE
                                       long keepAliveTime,
                                       TimeUnit unit,
                                       ThreadFactory threadFactory) {
-        super(corePoolSize, maximumPoolSize, keepAliveTime, unit, new PriorityBlockingQueue<Runnable>(256), threadFactory);
+        super(corePoolSize, maximumPoolSize, keepAliveTime, unit, new PriorityBlockingQueue<>(256), threadFactory);
     }
     
     @Override
     public <V> Future<V> submit(int priority, Callable<V> task) {
-        return super.submit(new PriorityCallable<V>(priority, task));
+        return super.submit(new PriorityCallable<>(priority, task));
     }
 
     @Override
@@ -39,13 +39,14 @@ class PriorityThreadPoolExecutor extends ThreadPoolExecutor implements PriorityE
     @Override
     protected <T> RunnableFuture<T> newTaskFor(Runnable runnable, T value) {
         int priority = OptionalUtils.of(runnable, PriorityRunnable.class).map(PriorityRunnable::getPriority).orElse(Thread.NORM_PRIORITY);
-        return new PriorityFutureTask<T>(runnable, value, priority);
+        return new PriorityFutureTask<>(runnable, value, priority);
     }
 
     @Override
+    @SuppressWarnings("rawtypes")
     protected <T> RunnableFuture<T> newTaskFor(Callable<T> callable) {
         int priority = OptionalUtils.of(callable, PriorityCallable.class).map(PriorityCallable::getPriority).orElse(Thread.NORM_PRIORITY);
-        return new PriorityFutureTask<T>(callable, priority);
+        return new PriorityFutureTask<>(callable, priority);
     }
     
     private static class PriorityCallable<V> implements Callable<V> {

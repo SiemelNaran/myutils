@@ -8,6 +8,9 @@ import java.util.Map;
 
 
 public class JsonAssertions {
+    private JsonAssertions() {
+    }
+
     /**
      * Compare two JSON objects.
      *
@@ -26,6 +29,9 @@ public class JsonAssertions {
 
         public static JsonComparisonParametersBuilder newBuilder() {
             return new JsonComparisonParametersBuilder();
+        }
+
+        private JsonComparisonParametersBuilder() {
         }
 
         /**

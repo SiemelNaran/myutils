@@ -109,7 +109,10 @@ public class UnitNumberFactory implements NumberFactory {
         private StringCase unitCase = null;
         private @NotNull final Map<String /*unit*/, UnaryOperator<Number>> units = new HashMap<>();
         private @Nullable String defaultUnit;
-        
+
+        private Builder() {
+        }
+
         /**
          * Set the factory used to parse the number part of a string, such as the "3" in "3km".
          * 
