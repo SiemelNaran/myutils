@@ -2,28 +2,42 @@ from argparse import ArgumentParser
 from collections import deque, namedtuple
 import json
 import numbers
+import sys
 
 
 def main():
     args = parseargs()
-    lines = readlines(args.filename)
+    if "filename" in args:
+        lines = readlines_from_file(args.filename)
+    else:
+        lines = readlines_from_stdin()
     compactify(lines, args.threshold)
     for line in lines:
         print(str(line))
 
 
 def parseargs():
+    filename_required = sys.stdin.isatty()
     parser = ArgumentParser(description="Format json in a compact way, "
                                         "putting JSON objects and arrays on the same line if they are short")
-    parser.add_argument("filename", type=str, help="the JSON file")
+    if filename_required:
+        parser.add_argument("filename", type=str, help="the JSON file, required unless reading from standard input")
     parser.add_argument("--threshold", type=int, default=80, required=False, help="the threshold, default 80")
     return parser.parse_args()
 
 
-def readlines(filename):
+def readlines_from_file(filename):
     with open(filename) as file:
-        tree = json.load(file)
-        return dumplines(tree)
+        return readlines(file)
+
+
+def readlines_from_stdin():
+    return readlines(sys.stdin)
+
+
+def readlines(fp):
+    tree = json.load(fp)
+    return dumplines(tree)
 
 
 class Line:
