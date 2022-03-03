@@ -17,13 +17,24 @@ def main():
 
 
 def parseargs():
-    filename_required = sys.stdin.isatty()
     parser = ArgumentParser(description="Format json in a compact way, "
                                         "putting JSON objects and arrays on the same line if they are short")
+    filename_required = sys.stdin.isatty()
+
+    # this part is for unit tests because sys.stdin.isatty() is always False in unit tests
+    # maybe there is a better way
+    try:
+        sys.argv.index("--nostdin")
+        filename_required = True
+        argv = [arg for arg in sys.argv if arg != "--nostdin"]
+    except ValueError:
+        argv = sys.argv
+    argv = argv[1:]
+
     if filename_required:
         parser.add_argument("filename", type=str, help="the JSON file, required unless reading from standard input")
     parser.add_argument("--threshold", type=int, default=80, required=False, help="the threshold, default 80")
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def readlines_from_file(filename):

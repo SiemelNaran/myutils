@@ -9,6 +9,7 @@ def create_process(threshold, stdin_pipe):
         args.append("--threshold")
         args.append(str(threshold))
     if not stdin_pipe:
+        args.append("--nostdin")
         args.append("test_compact_json_formatter-input01.json")
     return subprocess.Popen(args,
                             stdin=stdin_pipe,
