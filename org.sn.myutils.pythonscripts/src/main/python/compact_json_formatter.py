@@ -13,12 +13,15 @@ def main():
         lines = readlines_from_stdin()
     compactify(lines, args.threshold)
     for line in lines:
-        print(str(line))
+        print(line.tostring(" " * args.indent))
 
 
 def parseargs():
     parser = ArgumentParser(description="Format json in a compact way, "
                                         "putting JSON objects and arrays on the same line if they are short")
+    parser.add_argument("--threshold", type=int, default=80, required=False, help="the threshold, default 80")
+    parser.add_argument("--indent", type=int, default=4, required=False, help="number of spaces per indent, default 4")
+
     filename_required = sys.stdin.isatty()
 
     # this part is for unit tests because sys.stdin.isatty() is always False in unit tests
@@ -33,7 +36,6 @@ def parseargs():
 
     if filename_required:
         parser.add_argument("filename", type=str, help="the JSON file, required unless reading from standard input")
-    parser.add_argument("--threshold", type=int, default=80, required=False, help="the threshold, default 80")
     return parser.parse_args(argv)
 
 
@@ -64,8 +66,8 @@ class Line:
         self.content = content
         self.flags = flags
 
-    def __str__(self):
-        return ("    " * self.indent) + self.content
+    def tostring(self, indent):
+        return (indent * self.indent) + self.content
 
     def is_opening(self):
         return self.flags & Line.LINE_FLAG_OPENING
