@@ -79,28 +79,35 @@ class Line:
         """
         Merge this line with the next line if
         - both lines have the same indentation
+        - you are not merging a value with the start of an object/array
         - their combined length does not exceed the threshold.
-        - you are not merging a value with an object/array
 
         So change something like
            "hello": 1,
            "world": 2
         into
            "hello": 1, "world": 2
+
+        and change
+            {
+            }
+        into
+            { }
         """
         if self.indent == nextline.indent and \
                 not self.is_closing() and not nextline.is_opening() and \
                 len(self.content) + 1 + len(nextline.content) <= threshold:
             self.content += " "
             self.content += nextline.content
+            self.flags = 0
             return True
         return False
 
     def try_merge_nestedlevel(self, nextline, nextline2, threshold):
         """
         Merge this line with the next two lines if
-        - the first and last line have the same indentation
         - the first line opens an element and the last line closes and element
+        - the first and last line have the same indentation
         - their combined length does not exceed the threshold.
 
         So change something like
@@ -109,12 +116,6 @@ class Line:
            }
         into
            "random": { "hello": 1, "world": 2 }
-
-        and change
-            {
-            }
-        into
-            { }
         """
         if self.is_opening() and nextline2.is_closing() and \
                 self.indent == nextline2.indent and self.indent + 1 == nextline.indent and \
@@ -123,6 +124,7 @@ class Line:
             self.content += nextline.content
             self.content += " "
             self.content += nextline2.content
+            self.flags = 0
             return True
         return False
 

@@ -2,6 +2,8 @@ import os
 import subprocess
 import unittest
 
+from src.main.python.compact_json_formatter import Line
+
 
 def create_process(threshold, indent, stdin_pipe):
     args = ["python3", "../../main/python/compact_json_formatter.py"]
@@ -22,6 +24,31 @@ def create_process(threshold, indent, stdin_pipe):
 
 
 class CompactJsonFormatterTestCase(unittest.TestCase):
+    def test_empty(self):
+        line = Line(0, "{", Line.LINE_FLAG_OPENING)
+        nextline = Line(0, "}", Line.LINE_FLAG_CLOSING)
+        self.assertEqual(True, line.try_merge_same_level(nextline, 80))
+        self.assertEqual(0, line.indent)
+        self.assertEqual("{ }", line.content)
+        self.assertEqual(0, line.flags)
+
+    def test_three(self):
+        line = Line(0, "{", Line.LINE_FLAG_OPENING)
+        nextline = Line(1, "\"hello\":\"world\"", 0)
+        nextline2 = Line(0, "}", Line.LINE_FLAG_CLOSING)
+
+        # prove that merging line with nextline does not work
+        self.assertEqual(False, line.try_merge_same_level(nextline, 80))
+        self.assertEqual(0, line.indent)
+        self.assertEqual("{", line.content)
+        self.assertEqual(line.LINE_FLAG_OPENING, line.flags)
+
+        # prove that merging line with next two line works
+        self.assertEqual(True, line.try_merge_nestedlevel(nextline, nextline2, 80))
+        self.assertEqual(0, line.indent)
+        self.assertEqual("{ \"hello\":\"world\" }", line.content)
+        self.assertEqual(0, line.flags)
+
     def test_01_80_file(self):
         process = create_process(threshold=None, indent=None, stdin_pipe=None)
         stdout, stderr = process.communicate()
