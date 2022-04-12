@@ -1,0 +1,29 @@
+{
+    "planets": [
+        {
+            "name": "Earth",
+            "supportsLife": true,
+            "radius": {
+                "value": 6378,
+                "unit": "km"
+            },
+            "position": 3
+        },
+        {
+            "name": "Mars",
+            "supportsLife": false,
+            "radius": {
+                "value": 3396,
+                "unit": "km"
+            },
+            "position": 4
+        }
+    ],
+    "numbers": [
+        1,
+        2,
+        3
+    ],
+    "notes": {
+    }
+}
