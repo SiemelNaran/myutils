@@ -15,7 +15,7 @@
     <name>org.sn.myutils: myutils-jsontestutils</name>
 
     <properties>
-        <fasterjackson.version>2.12.2</fasterjackson.version>
+        <fasterjackson.version>2.12.7.1</fasterjackson.version>
     </properties>
 
     <dependencies>
