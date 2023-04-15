@@ -176,7 +176,7 @@ public class ExpressionParser {
         /**
          * Read a new expression.  This reads everything besides binary operators.
          * If `token` is ( then call innerParse to read everything till the closing ) as one parse node.
-         * Otherwise return the literal node, identifier node, or unary operator represented by token.
+         * Otherwise, return the literal node, identifier node, or unary operator represented by token.
          * If the token is an identifier node that is followed by an open parenthesis,
          * then call innerParse to read the function arguments as well.
          * 
@@ -204,8 +204,8 @@ public class ExpressionParser {
                         try {
                             functionName = functionCase.convert(functionName);
                         } catch (IllegalArgumentException ignored) {
-                            // function name unchanged and it won't be found in map
-                            // for example if function name is mixed case and functionCase is ALL_LETTERS_SAME_CASE
+                            // function name unchanged, and it won't be found in map
+                            // for example if function name is mixed case and functionCase is ALL_LETTERS_SAME_CASE,
                             // so we throw ParseException("unrecognized function ...") below
                         }
                         try {
@@ -267,32 +267,27 @@ public class ExpressionParser {
      */
     private ParseNode constructNodeFromToken(Token token, ParseMode parseMode) throws ParseException {
         switch (parseMode) {
-            case ONLY_BINARY_OPERATORS:
+            case ONLY_BINARY_OPERATORS -> {
                 try {
                     return BinaryOperatorNode.tryConstruct(token.getText(), binaryOperators);
                 } catch (ConstructException ignored) {
                 }
-                break;
-    
-            case EVERYTHING_ELSE:
+            }
+            case EVERYTHING_ELSE -> {
                 try {
                     return LiteralNode.tryConstruct(token.getText(), numberFactory);
                 } catch (ConstructException ignored) {
                 }
-    
                 try {
                     return IdentifierNode.tryConstruct(token.getText());
                 } catch (ConstructException ignored) {
                 }
-    
                 try {
                     return UnaryOperatorNode.tryConstruct(token.getText(), unaryOperators);
                 } catch (ConstructException ignored) {
                 }
-                break;
-                
-            default:
-                throw new UnsupportedOperationException();
+            }
+            default -> throw new UnsupportedOperationException();
         }
 
         throw new ParseException("unrecognized token '" + token.getText() + "'", token.getStart()); // handles case: 2 ?
