@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Stack;
 import java.util.function.IntPredicate;
 import org.sn.myutils.annotations.NotNull;
 import org.sn.myutils.util.RewindableIterator;
@@ -85,7 +86,9 @@ public class ExpressionParser {
     
         private ParseNode innerParse() throws ParseException {
             ParseNode tree = null;
+            var binaryStack = new Stack<BinaryOperatorNode>();
             OperatorNode incomplete = null;
+
             while (tokenizer.hasNext()) {
                 Token token = tokenizer.next();
                 endOfLastToken = token.getEnd();
@@ -110,8 +113,8 @@ public class ExpressionParser {
                     final OperatorNode newIncomplete;
                     
                     if (tree == null) {
-                        assert incomplete == null;
                         tree = readExpression(token);
+                        // tree can never be a BinaryOperatorNode so no cannot possibly add it to binaryStack
                         newIncomplete = isIncomplete(tree);
                         
                     } else if (incomplete != null) {
@@ -127,19 +130,34 @@ public class ExpressionParser {
                         
                     } else {
                         BinaryOperatorNode nodeAsBinaryOperator = (BinaryOperatorNode) constructNodeFromToken(token, ParseMode.ONLY_BINARY_OPERATORS);
-                        if (tree instanceof BinaryOperatorNode treeAsBinaryNode
-                                && !((BinaryOperatorNode) tree).isAtomic()
-                                && ((BinaryOperatorNode) tree).getPrecedence() < nodeAsBinaryOperator.getPrecedence()) {
-                            // we just read an operator that has higher precedence
-                            // so rearrange the nodes such that the right node of the current tree (say a PLUS node)
-                            // becomes the left node of the operator we just read (say a TIMES node)
-                            ParseNode oldRight = treeAsBinaryNode.getRight();
-                            nodeAsBinaryOperator.setLeft(oldRight);
-                            treeAsBinaryNode.setRight(nodeAsBinaryOperator);
-                        } else {
-                            nodeAsBinaryOperator.setLeft(tree);
-                            tree = nodeAsBinaryOperator;
+                        boolean rearranged = false;
+
+                        for ( ; !binaryStack.isEmpty(); binaryStack.pop()) {
+                            BinaryOperatorNode parent = binaryStack.peek();
+                            if (parent.getPrecedence() <= nodeAsBinaryOperator.getPrecedence()) {
+                                // we just read an operator that has higher precedence
+                                // so rearrange the nodes such that the right node of the current tree (say a PLUS node)
+                                // becomes the left node of the operator we just read (say a TIMES node)
+                                ParseNode oldRight = parent.getRight();
+                                nodeAsBinaryOperator.setLeft(oldRight);
+                                parent.setRight(nodeAsBinaryOperator);
+                                rearranged = true;
+                                break;
+                            }
                         }
+
+                        if (!rearranged) {
+                            nodeAsBinaryOperator.setLeft(tree);
+                            if (binaryStack.isEmpty()) {
+                                tree = nodeAsBinaryOperator;
+                            } else {
+                                BinaryOperatorNode parent = binaryStack.peek();
+                                parent.setRight(nodeAsBinaryOperator);
+                            }
+                        }
+
+                        binaryStack.push(nodeAsBinaryOperator);
+
                         newIncomplete = nodeAsBinaryOperator;
                         
                     }
