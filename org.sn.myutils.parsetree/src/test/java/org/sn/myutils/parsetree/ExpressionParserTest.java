@@ -43,6 +43,7 @@ public class ExpressionParserTest {
         assertEquals(14, evaluate("++--(--(2+3*4))", scope));
 
         assertEquals(67, evaluate("2+3*4*5+10/2", scope)); // 2 + 60 + 5
+        assertEquals(126, evaluate("6+5*4*3*2", scope));
 
         assertEquals(1310726, evaluate("6+5*4^3^2", scope));
         assertEquals(646, evaluate("6+5*4^3*2", scope));
