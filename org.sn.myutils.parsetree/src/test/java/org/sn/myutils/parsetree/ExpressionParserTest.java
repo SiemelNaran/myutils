@@ -2,6 +2,7 @@ package org.sn.myutils.parsetree;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.sn.myutils.testutils.TestUtil.assertExceptionFromCallable;
 
 import java.text.ParseException;
@@ -48,6 +49,14 @@ public class ExpressionParserTest {
         assertEquals(1310726, evaluate("6+5*4^3^2", scope));
         assertEquals(646, evaluate("6+5*4^3*2", scope));
         assertEquals(328, evaluate("6+5*4^3+2", scope));
+    }
+
+    @Test
+    void testAlternateSymbol() throws ParseException {
+        Map<String, Object> scope = Collections.emptyMap();
+        assertEquals(1310726, evaluate("6+5*4^3^2", scope));
+        assertEquals(1310726, evaluate("6+5*4**3^2", scope));
+        assertEquals(1310726, evaluate("6+5*4**3**2", scope));
     }
     
     @Test
@@ -343,6 +352,15 @@ public class ExpressionParserTest {
         assertEquals(0, listener.result());
     }
 
+    @Test
+    void testInvalidPrecedence() {
+        var illegalArgumentException = assertThrows(IllegalArgumentException.class, () -> {
+            ExpressionParser.builder()
+                            .addBinaryOperator(INVALID.class);
+        });
+        assertEquals("Invalid precedence: token=+, precedence=0 (should be greater than zero)", illegalArgumentException.getMessage());
+    }
+
     @SuppressWarnings("checkstyle:Indentation") // to suppress complaints about entry -> entry.getValue().getClass() below
     private static int evaluate(String expression, Map<String, Object> scope) throws ParseException {
         ParseNode tree = PARSER.parse(expression);
@@ -385,7 +403,8 @@ public class ExpressionParserTest {
                                                                    .addBinaryOperator(MINUS.class)
                                                                    .addBinaryOperator(TIMES.class)
                                                                    .addBinaryOperator(DIVIDE.class)
-                                                                   .addBinaryOperator(POWER.class)
+                                                                   .addBinaryOperator(POWER_HAT.class)
+                                                                   .addBinaryOperator(POWER_STAR_STAR.class)
                                                                    .addUnaryOperator(POSITIVE.class)
                                                                    .addUnaryOperator(NEGATIVE.class)
                                                                    .setFunctionCase(StringCase.ALL_LETTERS_SAME_CASE)
@@ -481,12 +500,7 @@ public class ExpressionParserTest {
         }        
     }
 
-    public static class POWER extends ArithmeticIntegerBinaryOperator {
-        @Override
-        public String getToken() {
-            return "^";
-        }
-
+    public static abstract class POWER extends ArithmeticIntegerBinaryOperator {
         @Override
         public int getPrecedence() {
             return 3;
@@ -502,6 +516,37 @@ public class ExpressionParserTest {
                 result *= left;
             }
             return result;
+        }
+    }
+
+    public static class POWER_HAT extends POWER {
+        @Override
+        public String getToken() {
+            return "^";
+        }
+    }
+
+    public static class POWER_STAR_STAR extends POWER {
+        @Override
+        public String getToken() {
+            return "**";
+        }
+    }
+
+    public static class INVALID extends ArithmeticIntegerBinaryOperator {
+        @Override
+        public String getToken() {
+            return "+";
+        }
+
+        @Override
+        public int getPrecedence() {
+            return 0;
+        }
+
+        @Override
+        protected int doCombine(int left, int right) {
+            return 0;
         }
     }
 

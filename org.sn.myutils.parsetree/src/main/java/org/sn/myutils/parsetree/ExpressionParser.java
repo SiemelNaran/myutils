@@ -337,13 +337,20 @@ public class ExpressionParser {
                 Constructor<? extends BinaryOperatorNode> constructor = operator.getConstructor();
                 BinaryOperatorNode instance = constructor.newInstance();
                 verifyOperatorValid(instance.getToken());
+                verifyPrecedenceValid(instance);
                 binaryOperators.put(instance.getToken(), constructor);
                 return this;
             } catch (NoSuchMethodException | IllegalAccessException | InstantiationException | InvocationTargetException e) {
                 throw new BuilderException(e);
             }
         }
-        
+
+        private void verifyPrecedenceValid(BinaryOperatorNode node) {
+            if (node.getPrecedence() <= 0) {
+                throw new IllegalArgumentException("Invalid precedence: token=" + node.getToken() + ", precedence=" + node.getPrecedence() + " (should be greater than zero)");
+            }
+        }
+
         /**
          * Add unary operator.
          * 
@@ -364,7 +371,7 @@ public class ExpressionParser {
                 throw new BuilderException(e);
             }
         }
-        
+
         /**
          * Set the function case.
          * This function must be called before addFunction.
