@@ -500,7 +500,7 @@ public class ExpressionParserTest {
         }        
     }
 
-    public static abstract class POWER extends ArithmeticIntegerBinaryOperator {
+    public abstract static  class POWER extends ArithmeticIntegerBinaryOperator {
         @Override
         public int getPrecedence() {
             return 3;
