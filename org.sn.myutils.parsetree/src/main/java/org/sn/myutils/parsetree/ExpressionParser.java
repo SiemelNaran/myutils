@@ -116,50 +116,17 @@ public class ExpressionParser {
                         tree = readExpression(token);
                         // tree can never be a BinaryOperatorNode so no cannot possibly add it to binaryStack
                         newIncomplete = isIncomplete(tree);
-                        
                     } else if (incomplete != null) {
                         ParseNode node = readExpression(token);
-                        if (incomplete instanceof UnaryOperatorNode incompleteAsUnaryOperator) {
-                            incompleteAsUnaryOperator.setNode(node);
-                        } else if (incomplete instanceof BinaryOperatorNode incompleteAsBinaryOperator) {
-                            incompleteAsBinaryOperator.setRight(node);
-                        } else {
-                            throw new UnsupportedOperationException(incomplete.getClass().getName());
-                        }
+                        fillIncompleteNode(incomplete, node);
                         newIncomplete = isIncomplete(node);
-                        
                     } else {
                         BinaryOperatorNode nodeAsBinaryOperator = (BinaryOperatorNode) constructNodeFromToken(token, ParseMode.ONLY_BINARY_OPERATORS);
-                        boolean rearranged = false;
-
-                        for ( ; !binaryStack.isEmpty(); binaryStack.pop()) {
-                            BinaryOperatorNode parent = binaryStack.peek();
-                            if (parent.getPrecedence() <= nodeAsBinaryOperator.getPrecedence()) {
-                                // we just read an operator that has higher precedence
-                                // so rearrange the nodes such that the right node of the current tree (say a PLUS node)
-                                // becomes the left node of the operator we just read (say a TIMES node)
-                                ParseNode oldRight = parent.getRight();
-                                nodeAsBinaryOperator.setLeft(oldRight);
-                                parent.setRight(nodeAsBinaryOperator);
-                                rearranged = true;
-                                break;
-                            }
+                        ParseNode newTree = attachBinaryOperator(tree, binaryStack, nodeAsBinaryOperator);
+                        if (newTree != null) {
+                            tree = newTree;
                         }
-
-                        if (!rearranged) {
-                            nodeAsBinaryOperator.setLeft(tree);
-                            if (binaryStack.isEmpty()) {
-                                tree = nodeAsBinaryOperator;
-                            } else {
-                                BinaryOperatorNode parent = binaryStack.peek();
-                                parent.setRight(nodeAsBinaryOperator);
-                            }
-                        }
-
-                        binaryStack.push(nodeAsBinaryOperator);
-
                         newIncomplete = nodeAsBinaryOperator;
-                        
                     }
                     
                     incomplete = newIncomplete;
@@ -233,6 +200,50 @@ public class ExpressionParser {
                 }
                 return result;
             }
+        }
+
+        private void fillIncompleteNode(OperatorNode incomplete, ParseNode node) {
+            if (incomplete instanceof UnaryOperatorNode incompleteAsUnaryOperator) {
+                incompleteAsUnaryOperator.setNode(node);
+            } else if (incomplete instanceof BinaryOperatorNode incompleteAsBinaryOperator) {
+                incompleteAsBinaryOperator.setRight(node);
+            } else {
+                throw new UnsupportedOperationException(incomplete.getClass().getName());
+            }
+        }
+
+        private ParseNode attachBinaryOperator(ParseNode tree, Stack<BinaryOperatorNode> binaryStack, BinaryOperatorNode nodeAsBinaryOperator) {
+            boolean attachedBelow = false;
+
+            for ( ; !binaryStack.isEmpty(); binaryStack.pop()) {
+                BinaryOperatorNode parent = binaryStack.peek();
+                if (parent.getPrecedence() <= nodeAsBinaryOperator.getPrecedence()) {
+                    // we just read an operator that has higher precedence
+                    // so rearrange the nodes such that the right node of the current tree (say a PLUS node)
+                    // becomes the left node of the operator we just read (say a TIMES node)
+                    ParseNode oldRight = parent.getRight();
+                    nodeAsBinaryOperator.setLeft(oldRight);
+                    parent.setRight(nodeAsBinaryOperator);
+                    attachedBelow = true;
+                    break;
+                }
+            }
+
+            ParseNode newTree = null;
+
+            if (!attachedBelow) {
+                nodeAsBinaryOperator.setLeft(tree);
+                if (binaryStack.isEmpty()) {
+                    newTree = nodeAsBinaryOperator;
+                } else {
+                    BinaryOperatorNode parent = binaryStack.peek();
+                    parent.setRight(nodeAsBinaryOperator);
+                }
+            }
+
+            binaryStack.push(nodeAsBinaryOperator);
+
+            return newTree;
         }
     }
     
