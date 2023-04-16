@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Stack;
 import java.util.function.IntPredicate;
 import org.sn.myutils.annotations.NotNull;
 import org.sn.myutils.util.RewindableIterator;
@@ -85,7 +86,9 @@ public class ExpressionParser {
     
         private ParseNode innerParse() throws ParseException {
             ParseNode tree = null;
+            var binaryStack = new Stack<BinaryOperatorNode>();
             OperatorNode incomplete = null;
+
             while (tokenizer.hasNext()) {
                 Token token = tokenizer.next();
                 endOfLastToken = token.getEnd();
@@ -110,38 +113,20 @@ public class ExpressionParser {
                     final OperatorNode newIncomplete;
                     
                     if (tree == null) {
-                        assert incomplete == null;
                         tree = readExpression(token);
+                        // tree can never be a BinaryOperatorNode so no cannot possibly add it to binaryStack
                         newIncomplete = isIncomplete(tree);
-                        
                     } else if (incomplete != null) {
                         ParseNode node = readExpression(token);
-                        if (incomplete instanceof UnaryOperatorNode incompleteAsUnaryOperator) {
-                            incompleteAsUnaryOperator.setNode(node);
-                        } else if (incomplete instanceof BinaryOperatorNode incompleteAsBinaryOperator) {
-                            incompleteAsBinaryOperator.setRight(node);
-                        } else {
-                            throw new UnsupportedOperationException(incomplete.getClass().getName());
-                        }
+                        fillIncompleteNode(incomplete, node);
                         newIncomplete = isIncomplete(node);
-                        
                     } else {
                         BinaryOperatorNode nodeAsBinaryOperator = (BinaryOperatorNode) constructNodeFromToken(token, ParseMode.ONLY_BINARY_OPERATORS);
-                        if (tree instanceof BinaryOperatorNode treeAsBinaryNode
-                                && !((BinaryOperatorNode) tree).isAtomic()
-                                && ((BinaryOperatorNode) tree).getPrecedence() < nodeAsBinaryOperator.getPrecedence()) {
-                            // we just read an operator that has higher precedence
-                            // so rearrange the nodes such that the right node of the current tree (say a PLUS node)
-                            // becomes the left node of the operator we just read (say a TIMES node)
-                            ParseNode oldRight = treeAsBinaryNode.getRight();
-                            nodeAsBinaryOperator.setLeft(oldRight);
-                            treeAsBinaryNode.setRight(nodeAsBinaryOperator);
-                        } else {
-                            nodeAsBinaryOperator.setLeft(tree);
-                            tree = nodeAsBinaryOperator;
+                        ParseNode newTree = attachBinaryOperator(tree, binaryStack, nodeAsBinaryOperator);
+                        if (newTree != null) {
+                            tree = newTree;
                         }
                         newIncomplete = nodeAsBinaryOperator;
-                        
                     }
                     
                     incomplete = newIncomplete;
@@ -158,7 +143,7 @@ public class ExpressionParser {
         /**
          * Read a new expression.  This reads everything besides binary operators.
          * If `token` is ( then call innerParse to read everything till the closing ) as one parse node.
-         * Otherwise return the literal node, identifier node, or unary operator represented by token.
+         * Otherwise, return the literal node, identifier node, or unary operator represented by token.
          * If the token is an identifier node that is followed by an open parenthesis,
          * then call innerParse to read the function arguments as well.
          * 
@@ -186,8 +171,8 @@ public class ExpressionParser {
                         try {
                             functionName = functionCase.convert(functionName);
                         } catch (IllegalArgumentException ignored) {
-                            // function name unchanged and it won't be found in map
-                            // for example if function name is mixed case and functionCase is ALL_LETTERS_SAME_CASE
+                            // function name unchanged, and it won't be found in map
+                            // for example if function name is mixed case and functionCase is ALL_LETTERS_SAME_CASE,
                             // so we throw ParseException("unrecognized function ...") below
                         }
                         try {
@@ -215,6 +200,50 @@ public class ExpressionParser {
                 }
                 return result;
             }
+        }
+
+        private void fillIncompleteNode(OperatorNode incomplete, ParseNode node) {
+            if (incomplete instanceof UnaryOperatorNode incompleteAsUnaryOperator) {
+                incompleteAsUnaryOperator.setNode(node);
+            } else if (incomplete instanceof BinaryOperatorNode incompleteAsBinaryOperator) {
+                incompleteAsBinaryOperator.setRight(node);
+            } else {
+                throw new UnsupportedOperationException(incomplete.getClass().getName());
+            }
+        }
+
+        private ParseNode attachBinaryOperator(ParseNode tree, Stack<BinaryOperatorNode> binaryStack, BinaryOperatorNode nodeAsBinaryOperator) {
+            boolean attachedBelow = false;
+
+            for ( ; !binaryStack.isEmpty(); binaryStack.pop()) {
+                BinaryOperatorNode parent = binaryStack.peek();
+                if (parent.getPrecedence() <= nodeAsBinaryOperator.getPrecedence()) {
+                    // we just read an operator that has higher precedence
+                    // so rearrange the nodes such that the right node of the current tree (say a PLUS node)
+                    // becomes the left node of the operator we just read (say a TIMES node)
+                    ParseNode oldRight = parent.getRight();
+                    nodeAsBinaryOperator.setLeft(oldRight);
+                    parent.setRight(nodeAsBinaryOperator);
+                    attachedBelow = true;
+                    break;
+                }
+            }
+
+            ParseNode newTree = null;
+
+            if (!attachedBelow) {
+                nodeAsBinaryOperator.setLeft(tree);
+                if (binaryStack.isEmpty()) {
+                    newTree = nodeAsBinaryOperator;
+                } else {
+                    BinaryOperatorNode parent = binaryStack.peek();
+                    parent.setRight(nodeAsBinaryOperator);
+                }
+            }
+
+            binaryStack.push(nodeAsBinaryOperator);
+
+            return newTree;
         }
     }
     
@@ -249,32 +278,27 @@ public class ExpressionParser {
      */
     private ParseNode constructNodeFromToken(Token token, ParseMode parseMode) throws ParseException {
         switch (parseMode) {
-            case ONLY_BINARY_OPERATORS:
+            case ONLY_BINARY_OPERATORS -> {
                 try {
                     return BinaryOperatorNode.tryConstruct(token.getText(), binaryOperators);
                 } catch (ConstructException ignored) {
                 }
-                break;
-    
-            case EVERYTHING_ELSE:
+            }
+            case EVERYTHING_ELSE -> {
                 try {
                     return LiteralNode.tryConstruct(token.getText(), numberFactory);
                 } catch (ConstructException ignored) {
                 }
-    
                 try {
                     return IdentifierNode.tryConstruct(token.getText());
                 } catch (ConstructException ignored) {
                 }
-    
                 try {
                     return UnaryOperatorNode.tryConstruct(token.getText(), unaryOperators);
                 } catch (ConstructException ignored) {
                 }
-                break;
-                
-            default:
-                throw new UnsupportedOperationException();
+            }
+            default -> throw new UnsupportedOperationException();
         }
 
         throw new ParseException("unrecognized token '" + token.getText() + "'", token.getStart()); // handles case: 2 ?

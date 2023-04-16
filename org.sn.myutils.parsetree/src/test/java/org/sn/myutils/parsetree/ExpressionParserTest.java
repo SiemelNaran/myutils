@@ -23,7 +23,7 @@ public class ExpressionParserTest {
     @Test
     void testEvaluate() throws ParseException {
         Map<String, Object> scope = Collections.emptyMap();
-        
+
         assertEquals(14, evaluate("2+3*4", scope));
         assertEquals(10, evaluate("2*3+4", scope));
         assertEquals(20, evaluate("(2+3)*4", scope));
@@ -41,8 +41,13 @@ public class ExpressionParserTest {
         assertEquals(14, evaluate("((2+3*4))", scope));
         assertEquals(14, evaluate("+((2+3*4))", scope));
         assertEquals(14, evaluate("++--(--(2+3*4))", scope));
-        
+
         assertEquals(67, evaluate("2+3*4*5+10/2", scope)); // 2 + 60 + 5
+        assertEquals(126, evaluate("6+5*4*3*2", scope));
+
+        assertEquals(1310726, evaluate("6+5*4^3^2", scope));
+        assertEquals(646, evaluate("6+5*4^3*2", scope));
+        assertEquals(328, evaluate("6+5*4^3+2", scope));
     }
     
     @Test
@@ -74,7 +79,7 @@ public class ExpressionParserTest {
         assertParseError("unknown(3, 4)", "unrecognized function 'unknown'", 0); // index of start of expression
         assertParseError("Max(3, 4)", "unrecognized function 'Max'", 0); // index of start of expression
         assertParseError("2 * * 3", "unrecognized token '*'", 4); // index of second *
-        assertParseError("2 ^ 3", "unrecognized token '^'", 2); // index of ^
+        assertParseError("2 & 3", "unrecognized token '&'", 2); // index of ^
     }
     
     @Test
@@ -380,6 +385,7 @@ public class ExpressionParserTest {
                                                                    .addBinaryOperator(MINUS.class)
                                                                    .addBinaryOperator(TIMES.class)
                                                                    .addBinaryOperator(DIVIDE.class)
+                                                                   .addBinaryOperator(POWER.class)
                                                                    .addUnaryOperator(POSITIVE.class)
                                                                    .addUnaryOperator(NEGATIVE.class)
                                                                    .setFunctionCase(StringCase.ALL_LETTERS_SAME_CASE)
@@ -474,7 +480,31 @@ public class ExpressionParserTest {
             return left / right;
         }        
     }
-    
+
+    public static class POWER extends ArithmeticIntegerBinaryOperator {
+        @Override
+        public String getToken() {
+            return "^";
+        }
+
+        @Override
+        public int getPrecedence() {
+            return 3;
+        }
+
+        @Override
+        protected int doCombine(int left, int right) {
+            if (right == 0) {
+                return 1;
+            }
+            int result = left;
+            for (int i = 1; i < right; i++) {
+                result *= left;
+            }
+            return result;
+        }
+    }
+
     /////
     
     private abstract static class ArithmeticIntegerUnaryOperator extends UnaryOperatorNode {
