@@ -74,20 +74,19 @@ public class MoreCollections {
                 high = mid - 1;
             } else {
                 switch (findWhich) {
-                    case FIND_LAST:
+                    case FIND_LAST -> {
                         // look in right half
                         best = mid;
                         low = mid + 1;
-                        break;
-                
-                    case FIND_FIRST:
+                    }
+                    case FIND_FIRST -> {
                         // look in left half
                         best = mid;
                         high = mid - 1;
-                        break;
-                    
-                    default:
+                    }
+                    default -> {
                         return mid;
+                    }
                 }
             }
         }
@@ -127,20 +126,19 @@ public class MoreCollections {
                 high = mid - 1;
             } else {
                 switch (findWhich) {
-                    case FIND_LAST:
+                    case FIND_LAST -> {
                         // look in right half
                         best = mid;
                         low = mid + 1;
-                        break;
-                
-                    case FIND_FIRST:
+                    }
+                    case FIND_FIRST -> {
                         // look in left half
                         best = mid;
                         high = mid - 1;
-                        break;
-                    
-                    default:
+                    }
+                    default -> {
                         return mid;
+                    }
                 }
             }
         }
@@ -180,20 +178,19 @@ public class MoreCollections {
                 high = mid - 1;
             } else {
                 switch (findWhich) {
-                    case FIND_LAST:
+                    case FIND_LAST -> {
                         // look in right half
                         best = mid;
                         low = mid + 1;
-                        break;
-                
-                    case FIND_FIRST:
+                    }
+                    case FIND_FIRST -> {
                         // look in left half
                         best = mid;
                         high = mid - 1;
-                        break;
-                    
-                    default:
+                    }
+                    default -> {
                         return mid;
+                    }
                 }
             }
         }
@@ -277,5 +274,36 @@ public class MoreCollections {
             }
         }
         sortedList.addFirst(newValue);
+    }
+
+    /**
+     * Given a list already sorted by one key, sort all elements by the first key then the second key.
+     * Essentially partition the elements by the first key, and sort each partition by the second key.
+     *
+     * @param <T> the type of elements in the collection
+     * @param sortedList a list sorted by the first comparator
+     * @param firstComparator a comparator to compare two values of type T
+     * @param secondComparator a comparator to compare two values of type T
+     */
+    public static <T> void sortSortedListBySecondKey(List<T> sortedList,
+                                                     Comparator<? super T> firstComparator,
+                                                     Comparator<? super T> secondComparator) {
+        if (sortedList.isEmpty()) {
+            return;
+        }
+        ListIterator<T> iter = sortedList.listIterator();
+        int startIndex = 0;
+        T prev = iter.next();
+        while (iter.hasNext()) {
+            T next = iter.next();
+            if (firstComparator.compare(prev, next) != 0) {
+                int endIndex = iter.nextIndex() - 1;
+                if (endIndex - startIndex > 1) {
+                    sortedList.subList(startIndex, endIndex).sort(secondComparator);
+                }
+                startIndex = endIndex;
+            }
+            prev = next;
+        }
     }
 }

@@ -2,6 +2,7 @@ package org.sn.myutils.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedList;
@@ -68,16 +69,11 @@ public class MoreCollectionsTest {
         assertEquals(23, rooms.size());
         assertEquals(-1, binarySearchCaller.call(rooms, 0, findWhich));
         assertEquals(0, binarySearchCaller.call(rooms, 1, findWhich));
-        int expect = switch (findWhich) { // TODO: Java14: rewrite as below
+        int expect = switch (findWhich) {
             case FIND_FIRST -> 2;
             case FIND_ANY -> 5;
             case FIND_LAST -> 8;
         };
-        //int expect2 = switch (findWhich) {
-        //    case FIND_FIRST -> 2;
-        //    case FIND_ANY -> 4;
-        //    case FIND_LAST -> 8;
-        //}
         assertEquals(expect, binarySearchCaller.call(rooms, 3, findWhich));
         assertEquals(-23, binarySearchCaller.call(rooms, 18, findWhich));
         assertEquals(22, binarySearchCaller.call(rooms, 19, findWhich));
@@ -105,5 +101,35 @@ public class MoreCollectionsTest {
         
         MoreCollections.addLargeElementToSortedList(sortedList, Comparator.naturalOrder(), 5);
         assertEquals(List.of(1, 2, 3, 4, 5, 6), sortedList);
+    }
+
+    private record Person(String firstName, String middleName, String lastName) {
+    }
+
+    @Test
+    void testSortSortedListBySecondKey() {
+        var sortedList = new ArrayList<Person>();
+        sortedList.add(new Person("Apple", "1", "Hello"));
+        sortedList.add(new Person("Apple", "3", "World"));
+        sortedList.add(new Person("Apple", "4", "World"));
+        sortedList.add(new Person("Apple", "2", "World"));
+        sortedList.add(new Person("Apple", "1", "World"));
+        sortedList.add(new Person("Banana", "1", "Hello"));
+        sortedList.add(new Person("Banana", "2", "Hello"));
+        sortedList.add(new Person("Banana", "1", "World"));
+
+        MoreCollections.sortSortedListBySecondKey(sortedList,
+                                                  Comparator.comparing(Person::firstName).thenComparing(Person::lastName),
+                                                  Comparator.comparing(Person::middleName));
+
+        assertEquals(List.of(new Person("Apple", "1", "Hello"),
+                             new Person("Apple", "1", "World"),
+                             new Person("Apple", "2", "World"),
+                             new Person("Apple", "3", "World"),
+                             new Person("Apple", "4", "World"),
+                             new Person("Banana", "1", "Hello"),
+                             new Person("Banana", "2", "Hello"),
+                             new Person("Banana", "1", "World")),
+                     sortedList);
     }
 }
