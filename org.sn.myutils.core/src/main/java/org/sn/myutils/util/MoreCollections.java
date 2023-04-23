@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
 import java.util.function.ToLongFunction;
@@ -291,6 +292,11 @@ public class MoreCollections {
         if (sortedList.isEmpty()) {
             return;
         }
+        BiConsumer<Integer, Integer> maybeSortSubList = (startIndex, endIndex) -> {
+            if (endIndex - startIndex > 1) {
+                sortedList.subList(startIndex, endIndex).sort(secondComparator);
+            }
+        };
         ListIterator<T> iter = sortedList.listIterator();
         int startIndex = 0;
         T prev = iter.next();
@@ -298,12 +304,11 @@ public class MoreCollections {
             T next = iter.next();
             if (firstComparator.compare(prev, next) != 0) {
                 int endIndex = iter.nextIndex() - 1;
-                if (endIndex - startIndex > 1) {
-                    sortedList.subList(startIndex, endIndex).sort(secondComparator);
-                }
+                maybeSortSubList.accept(startIndex, endIndex);
                 startIndex = endIndex;
             }
             prev = next;
         }
+        maybeSortSubList.accept(startIndex, iter.nextIndex());
     }
 }

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.sn.myutils.testutils.TestUtil;
 import org.sn.myutils.util.MoreCollections.FindWhich;
 
@@ -107,6 +109,51 @@ public class MoreCollectionsTest {
     }
 
     @Test
+    void testSortSortedListBySecondKey0() {
+        var sortedList = new ArrayList<Person>();
+
+        MoreCollections.sortSortedListBySecondKey(sortedList,
+                                                  Comparator.comparing(Person::firstName).thenComparing(Person::lastName),
+                                                  Comparator.comparing(Person::middleName));
+
+        assertEquals(Collections.emptyList(), sortedList);
+    }
+
+    @Test
+    void testSortSortedListBySecondKey1() {
+        var sortedList = new ArrayList<Person>();
+        sortedList.add(new Person("Banana", "1", "Hello"));
+
+        MoreCollections.sortSortedListBySecondKey(sortedList,
+                                                  Comparator.comparing(Person::firstName).thenComparing(Person::lastName),
+                                                  Comparator.comparing(Person::middleName));
+
+        assertEquals(List.of(new Person("Banana", "1", "Hello")),
+                     sortedList);
+    }
+
+    @ParameterizedTest(name = TestUtil.PARAMETRIZED_TEST_DISPLAY_NAME)
+    @ValueSource(booleans = {false, true})
+    void testSortSortedListBySecondKey2(boolean reverse) {
+        var sortedList = new ArrayList<Person>();
+        if (reverse) {
+            sortedList.add(new Person("Banana", "2", "Hello"));
+            sortedList.add(new Person("Banana", "1", "Hello"));
+        } else {
+            sortedList.add(new Person("Banana", "1", "Hello"));
+            sortedList.add(new Person("Banana", "2", "Hello"));
+        }
+
+        MoreCollections.sortSortedListBySecondKey(sortedList,
+                                                  Comparator.comparing(Person::firstName).thenComparing(Person::lastName),
+                                                  Comparator.comparing(Person::middleName));
+
+        assertEquals(List.of(new Person("Banana", "1", "Hello"),
+                             new Person("Banana", "2", "Hello")),
+                     sortedList);
+    }
+
+    @Test
     void testSortSortedListBySecondKey() {
         var sortedList = new ArrayList<Person>();
         sortedList.add(new Person("Apple", "1", "Hello"));
@@ -117,6 +164,8 @@ public class MoreCollectionsTest {
         sortedList.add(new Person("Banana", "1", "Hello"));
         sortedList.add(new Person("Banana", "2", "Hello"));
         sortedList.add(new Person("Banana", "1", "World"));
+        sortedList.add(new Person("Carrot", "2", "Hello"));
+        sortedList.add(new Person("Carrot", "1", "Hello"));
 
         MoreCollections.sortSortedListBySecondKey(sortedList,
                                                   Comparator.comparing(Person::firstName).thenComparing(Person::lastName),
@@ -129,7 +178,9 @@ public class MoreCollectionsTest {
                              new Person("Apple", "4", "World"),
                              new Person("Banana", "1", "Hello"),
                              new Person("Banana", "2", "Hello"),
-                             new Person("Banana", "1", "World")),
+                             new Person("Banana", "1", "World"),
+                             new Person("Carrot", "1", "Hello"),
+                             new Person("Carrot", "2", "Hello")),
                      sortedList);
     }
 }
