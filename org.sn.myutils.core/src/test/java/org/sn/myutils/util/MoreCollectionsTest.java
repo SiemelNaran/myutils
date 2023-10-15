@@ -8,6 +8,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Random;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -182,5 +183,48 @@ public class MoreCollectionsTest {
                              new Person("Carrot", "1", "Hello"),
                              new Person("Carrot", "2", "Hello")),
                      sortedList);
+    }
+
+    @Test
+    void testSortSortedListBySecondKey_Performance() {
+        var list = new ArrayList<Person>((70_000 + 20_000*2 + 8_000*3 + 2_000*4) * 100);
+
+        // create an array with 100,000 groups
+        // 70,000 groups will have 1 element
+        // 20,000 groups will have 2 elements
+        // 8,000 groups will have 3 elements
+        // 2,000 groups will have 4 elements
+        var numGroupsArray = new int[] { 70_000, 20_000, 8_000, 2_000 };
+        var random = new Random();
+        for (int numElementsInGroupMinusOne = 0, personId = 0; numElementsInGroupMinusOne < numGroupsArray.length; numElementsInGroupMinusOne++) {
+            int numGroups = numGroupsArray[numElementsInGroupMinusOne];
+            for (int i = 0; i < numGroups * 100; i++) {
+                for (int j = 0; j <= numElementsInGroupMinusOne; j++) {
+                    personId += 1;
+                    String name = String.format("%08d", personId);
+                    String middleName = Integer.toString(random.nextInt(64));
+                    var person = new Person(name, middleName, name);
+                    list.add(person);
+                }
+            }
+        }
+
+        var list1 = new ArrayList<>(list);
+        var list2 = new ArrayList<>(list);
+        long startTime;
+
+        startTime = System.nanoTime();
+        list1.sort(Comparator.comparing(Person::firstName).thenComparing(Person::lastName).thenComparing(Person::middleName));
+        long normalSortTimeTaken = System.nanoTime() - startTime;
+
+        startTime = System.nanoTime();
+        MoreCollections.sortSortedListBySecondKey(list2,
+                                                  Comparator.comparing(Person::firstName).thenComparing(Person::lastName),
+                                                  Comparator.comparing(Person::middleName));
+        long optimizedSortTimeTaken = System.nanoTime() - startTime;
+
+        assertEquals(list1, list2);
+        System.out.println("normalSortTimeTaken   =" + normalSortTimeTaken);
+        System.out.println("optimizedSortTimeTaken=" + optimizedSortTimeTaken);
     }
 }
