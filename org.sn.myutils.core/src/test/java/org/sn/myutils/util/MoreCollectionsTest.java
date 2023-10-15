@@ -214,12 +214,12 @@ public class MoreCollectionsTest {
         long startTime;
 
         startTime = System.nanoTime();
-        list1.sort(Comparator.comparing(Person::firstName).thenComparing(Person::lastName).thenComparing(Person::middleName));
+        list1.sort(Comparator.comparing(Person::firstName).thenComparing(Person::lastName));
         long normalSortTimeTaken = System.nanoTime() - startTime;
 
         startTime = System.nanoTime();
         MoreCollections.sortSortedListBySecondKey(list2,
-                                                  Comparator.comparing(Person::firstName).thenComparing(Person::lastName),
+                                                  Comparator.comparing(Person::firstName),
                                                   Comparator.comparing(Person::middleName));
         long optimizedSortTimeTaken = System.nanoTime() - startTime;
 
