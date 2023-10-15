@@ -7,6 +7,9 @@ import java.util.EmptyStackException;
  *
  * <p>One could use a LinkedList, and pop the front element when we push an element onto a stack which is at its
  * maximum size. This has the overhead of linked lists (more memory and performance), but should be ok in most cases.
+ *
+ * <p>This implementation uses an array of fixed size, so will occupy lots of memory if the maxSize is large,
+ * there are many MaxSizeStack's, and most have none to few elements in them.
  */
 public class MaxSizeStack<T> {
     private final T[] elements;
@@ -14,8 +17,8 @@ public class MaxSizeStack<T> {
     private int next = -1;
 
     @SuppressWarnings("unchecked")
-    public MaxSizeStack(int size) {
-        elements = (T[]) new Object[size];
+    public MaxSizeStack(int  maxSize) {
+        elements = (T[]) new Object[maxSize];
     }
 
     public boolean isEmpty() {
