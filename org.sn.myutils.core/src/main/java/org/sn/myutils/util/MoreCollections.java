@@ -30,7 +30,7 @@ public class MoreCollections {
      * which may at times lead to awkward code.
      * 
      * <p>This function also takes an extractor that specifies how to map each element in the array
-     * to a new element. For example, if you had a list of contacts sorted by age and you wanted
+     * to a new element. For example, if you had a list of contacts sorted by age, and you wanted
      * to find a contact with age N, the key would be N and the extract would be Contact::getAge.
      * 
      * <p>This implementation is not specialized for PageList.
@@ -74,20 +74,19 @@ public class MoreCollections {
                 high = mid - 1;
             } else {
                 switch (findWhich) {
-                    case FIND_LAST:
+                    case FIND_LAST -> {
                         // look in right half
                         best = mid;
                         low = mid + 1;
-                        break;
-                
-                    case FIND_FIRST:
+                    }
+                    case FIND_FIRST -> {
                         // look in left half
                         best = mid;
                         high = mid - 1;
-                        break;
-                    
-                    default:
+                    }
+                    default -> {
                         return mid;
+                    }
                 }
             }
         }
@@ -127,20 +126,19 @@ public class MoreCollections {
                 high = mid - 1;
             } else {
                 switch (findWhich) {
-                    case FIND_LAST:
+                    case FIND_LAST -> {
                         // look in right half
                         best = mid;
                         low = mid + 1;
-                        break;
-                
-                    case FIND_FIRST:
+                    }
+                    case FIND_FIRST -> {
                         // look in left half
                         best = mid;
                         high = mid - 1;
-                        break;
-                    
-                    default:
+                    }
+                    default -> {
                         return mid;
+                    }
                 }
             }
         }
@@ -180,20 +178,19 @@ public class MoreCollections {
                 high = mid - 1;
             } else {
                 switch (findWhich) {
-                    case FIND_LAST:
+                    case FIND_LAST -> {
                         // look in right half
                         best = mid;
                         low = mid + 1;
-                        break;
-                
-                    case FIND_FIRST:
+                    }
+                    case FIND_FIRST -> {
                         // look in left half
                         best = mid;
                         high = mid - 1;
-                        break;
-                    
-                    default:
+                    }
+                    default -> {
                         return mid;
+                    }
                 }
             }
         }

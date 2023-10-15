@@ -55,6 +55,8 @@ module YourModule {
     assertEquals("2", cache.get("two")); // now "two" is most recently used, "four" is next, and "three" is least recently used
 ```
 
+- *MaxSizeStack*: A stack of a maximum size.  This is useful for undo stacks.
+
 - *MoreCollections*: Various enhancements to java.util.Collections.
     - There is a binary search function to search a list, but applying a function to each element.
       For example if you have a list of contacts sorted by first name, you can search for a contact by first name.
