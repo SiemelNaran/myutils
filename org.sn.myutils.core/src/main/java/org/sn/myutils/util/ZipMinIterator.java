@@ -8,8 +8,8 @@ import java.util.PriorityQueue;
 
 
 /**
- * Return an iterator that takes collection of collection of values, and each call to next() returns the next highest value.
- * Each collection is assumed to be sorted.
+ * Return an iterator that takes collection of a collection of sorted values, and each call to next() returns the next highest value.
+ * Note that each collection is assumed to be sorted.
  *
  * @param <T> the type of element in each collection
  */
