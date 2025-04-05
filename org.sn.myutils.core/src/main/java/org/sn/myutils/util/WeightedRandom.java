@@ -20,7 +20,7 @@ public class WeightedRandom implements Supplier<Integer> {
     
     /**
      * Generate a weighted random generator with the given weights and the default Random generator.
-     * This random number generates an integer in the range [0, weights.length). 
+     * This random number generates an integer in the range <code>[0, weights.length)</code>.
      * 
      * @param weights the weights of each integer. Can be zero.
      */
@@ -106,7 +106,7 @@ public class WeightedRandom implements Supplier<Integer> {
     }
     
     /**
-     * Return a random integer in the range [0, weights.length).
+     * Return a random integer in the range </code>[0, weights.length)</code>.
      * Running time is O(lg(weights.length)).
      *
      * @return a random weighted integer

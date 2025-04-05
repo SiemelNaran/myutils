@@ -39,7 +39,7 @@ public final class IdentifierNode implements ParseNode {
         this.identifier = identifier;
     }
 
-    public final String getIdentifier() {
+    public String getIdentifier() {
         return identifier;
     }
     

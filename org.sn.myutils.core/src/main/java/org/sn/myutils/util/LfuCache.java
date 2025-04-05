@@ -34,9 +34,9 @@ import org.sn.myutils.annotations.Nullable;
  * <p>Fetching an item could then be O(N) because we have to scan the nodes leftwards
  * towards the head of the list to find the node with the next higher frequency.
  * For example if map is A,B,C,D,E and A has frequency 3 and the others have frequency 1,
- * and we lookup E, we quickly find E in the map.
+ * and we look up E, we quickly find E in the map.
  * But we must traverse the left pointers of E to find A,
- * the place after which to insert D as its frequency is less than A but greater than B, C, D.
+ * the place after which to insert D as its frequency is less than A bit greater than B, C, D.
  */
 @NotThreadSafe
 public class LfuCache<K, V> extends AbstractMap<K, V> {
@@ -64,7 +64,7 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
      */
     @Override
     public V put(K key, V value) {
-        if (map.size() == 0) {
+        if (map.isEmpty()) {
             assert mostFrequentPage == null;
             assert leastFrequentPage == null;
             mostFrequentPage = new Page<>(null, 1, null);
@@ -147,7 +147,7 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
     /**
      * Increase the frequency of a key that is already in the cache.
      * This means moving it to a new page,
-     * or increasing the frequency property of the page if it is the only key in that page and it is possible to do so.
+     * or increasing the frequency property of the page if it is the only key in that page, and it is possible to do so.
      *
      * @param find the page holding the key-newValue pair
      * @param key the key
@@ -213,6 +213,7 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
      * Remove an item from the cache.
      */
     @Override
+    @SuppressWarnings("SuspiciousMethodCalls")
     public V remove(Object key) {
         Page<K, V> find = map.get(key);
         if (find == null) {
@@ -224,6 +225,7 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
         }
     }
 
+    @SuppressWarnings("SuspiciousMethodCalls")
     private void finishRemove(Page<K, V> find, Object key) {
         map.remove(key);
         unlinkPageIfEmpty(find);
@@ -273,7 +275,7 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
             /**
              * {@inheritdoc}
              * 
-             * <p>The space complexity of the iterator is O(N) because the iterator stores the a pointer to the concurrent modification count of each LruCache iterator.
+             * <p>The space complexity of the iterator is O(N) because the iterator stores a pointer to the concurrent modification count of each LruCache iterator.
              * This is so that when we move an item to the next page, we reuse the instance of concurrent modification count applicable to that page.
              */
             @Override
@@ -298,7 +300,7 @@ public class LfuCache<K, V> extends AbstractMap<K, V> {
         private @NotNull LruCache<K, V>.ConcurrentModificationManager lookupConcurrentModificationManager(Page<K, V> page) {
             return managers.computeIfAbsent(
                 page,
-                unused -> {
+                _ -> {
                     var entrySet = (LruCache<K, V>.LruCacheEntrySet) page.lru.entrySet();
                     return entrySet.newConcurrentModificationManager();
                 });

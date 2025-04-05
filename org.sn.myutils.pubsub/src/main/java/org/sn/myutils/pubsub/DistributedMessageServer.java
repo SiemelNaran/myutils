@@ -1,6 +1,5 @@
 package org.sn.myutils.pubsub;
 
-import static org.sn.myutils.pubsub.PubSubUtils.addShutdownHook;
 import static org.sn.myutils.pubsub.PubSubUtils.closeExecutorQuietly;
 import static org.sn.myutils.pubsub.PubSubUtils.closeQuietly;
 import static org.sn.myutils.pubsub.PubSubUtils.computeExponentialBackoff;
@@ -11,7 +10,6 @@ import static org.sn.myutils.util.concurrent.MoreExecutors.createThreadFactory;
 
 import java.io.IOException;
 import java.lang.System.Logger.Level;
-import java.lang.ref.Cleaner.Cleanable;
 import java.net.SocketAddress;
 import java.net.StandardSocketOptions;
 import java.nio.channels.AsynchronousServerSocketChannel;
@@ -77,7 +75,6 @@ import org.sn.myutils.pubsub.MessageClasses.Resendable;
 import org.sn.myutils.pubsub.MessageClasses.SubscriberAdded;
 import org.sn.myutils.pubsub.MessageClasses.SubscriberRemoved;
 import org.sn.myutils.pubsub.MessageClasses.UnsupportedMessage;
-import org.sn.myutils.pubsub.PubSubUtils.CallStackCapturing;
 import org.sn.myutils.util.ExceptionUtils;
 import org.sn.myutils.util.MoreCollections;
 import org.sn.myutils.util.ZipMinIterator;
@@ -86,7 +83,7 @@ import org.sn.myutils.util.ZipMinIterator;
 /**
  * Server class that receives messages from a client and relays it to all subscribed to the topic.
  * When a client connects, they send an Identification message identifying their name, and the name must be unique.
- * A client can then send createPublisher and publisher.publish commands, and they will be relayed to other clients who are subscribed to the topic.
+ * A client can then send createPublisher and `publisher.publish` commands, and they will be relayed to other clients who are subscribed to the topic.
  * If sending a message to a client fails, it is retried with exponential backoff up to a maximum number of times.
  * 
  * <p>In implementation, there is one accept thread with listens for socket connections by calling asyncServerSocketChannel.accept().
@@ -100,12 +97,12 @@ import org.sn.myutils.util.ZipMinIterator;
  * If a second client connects with the same name, we log a warning and ignore the client.
  * We then add the client to our list of clients and set SO_KEEPALIVE to true.
  * 
- * <p>Thereafter clients may send createPublisher, publisher.publisher, subscribe, unsubscribe, or other commands,
+ * <p>Thereafter clients may send createPublisher, `publisher.publisher`, subscribe, unsubscribe, or other commands,
  * and these will be relayed to all other clients.
  * Upon receiving a message to relay, the server generates a monotonically  increasing integer and sets the machineId of the machine which sent the message.
  * These are part of the message sent to each client who is subscribed to the topic.
  * The server id is guaranteed to be unique monotonically increasing even if the server is restarted,
- * so so long as all machines have the correct time,
+ * so long as all machines have the correct time,
  * because the id consists of the server start time followed by a monotonically increasing long number.
  *
  * <p>If the server dies the clients keep polling for a new server to come online with capped exponential backoff.
@@ -125,7 +122,7 @@ import org.sn.myutils.util.ZipMinIterator;
  * The first two bytes are the length of the message.
  * The next N bytes is the message, when serialized and converted to a byte stream.
  */
-public class DistributedMessageServer implements Shutdowneable {
+public class DistributedMessageServer extends Shutdowneable {
     private static final System.Logger LOGGER = System.getLogger(DistributedMessageServer.class.getName());
     private static final int NUM_CHANNEL_THREADS = 4;
     private static final int MAX_RETRIES = 3;
@@ -139,9 +136,7 @@ public class DistributedMessageServer implements Shutdowneable {
     private final List<ClientMachine> clientMachines = new CopyOnWriteArrayList<>();
     private final AtomicReference<ServerIndex> maxMessage = new AtomicReference<>(new ServerIndex(CentralServerId.createDefaultFromNow()));
     private final PublishersAndSubscribers publishersAndSubscribers;
-    private final Cleanable cleanable;
-    
-    
+
     /**
      * Class representing a remote machine.
      * Key fields are machineId (a string) and channel (an AsynchronousSocketChannel).
@@ -166,7 +161,7 @@ public class DistributedMessageServer implements Shutdowneable {
             return channel;
         }
         
-        protected final @NotNull ClientMachineId getMachineId() {
+        @NotNull ClientMachineId getMachineId() {
             return machineId;
         }
         
@@ -285,7 +280,7 @@ public class DistributedMessageServer implements Shutdowneable {
                                    long clientTimestamp,
                                    ClientMachineId clientMachineId,
                                    Consumer<AddSubscriberResult> afterSubscriberAdded) {
-            TopicInfo info = topicMap.computeIfAbsent(topic, unused -> new TopicInfo(topic, mostRecentMessagesToKeep));
+            TopicInfo info = topicMap.computeIfAbsent(topic, ignored -> new TopicInfo(topic, mostRecentMessagesToKeep));
             info.lock.lock();
             try {
                 // in case client died and a new one is started, get clientTimestamp from the previous subscriber
@@ -293,9 +288,9 @@ public class DistributedMessageServer implements Shutdowneable {
                 // O(1) is possible using HashSet or HashMap lookup as inactiveSubscriberEndpoints is a HashSet
                 for (var iter = info.inactiveSubscriberEndpoints.iterator(); iter.hasNext(); ) {
                     var oldEndpoint = iter.next();
-                    if (oldEndpoint.getSubscriberName().equals(subscriberName) && oldEndpoint.getClientMachineId().equals(clientMachineId)) {
+                    if (oldEndpoint.subscriberName().equals(subscriberName) && oldEndpoint.clientMachineId().equals(clientMachineId)) {
                         iter.remove();
-                        clientTimestamp = oldEndpoint.getClientTimestamp();
+                        clientTimestamp = oldEndpoint.clientTimestamp();
                         break;
                     }
                 }
@@ -318,8 +313,8 @@ public class DistributedMessageServer implements Shutdowneable {
                             + ", subscriberName=" + subscriberName);
                 }
                 info.subscriberEndpoints.add(newEndpoint);
-                info.subscriberEndpoints.sort(Comparator.comparing(SubscriberEndpoint::getClientMachineId)
-                                                        .thenComparing(SubscriberEndpoint::getClientTimestamp));
+                info.subscriberEndpoints.sort(Comparator.comparing(SubscriberEndpoint::clientMachineId)
+                                                        .thenComparing(SubscriberEndpoint::clientTimestamp));
                 
                 // remove client machine from notifyClients as clients who subscribe to a topic are always notified when the publisher is created
                 // running time O(N) where N is the number of clients wanting a notification when the publisher is created
@@ -340,7 +335,7 @@ public class DistributedMessageServer implements Shutdowneable {
             if (info.createPublisher != null && info.createPublisher.getRelayFields().getSourceMachineId().equals(clientMachineId)) {
                 return true;
             }
-            return info.subscriberEndpoints.stream().anyMatch(endpoint -> endpoint.getClientMachineId().equals(clientMachineId));
+            return info.subscriberEndpoints.stream().anyMatch(endpoint -> endpoint.clientMachineId().equals(clientMachineId));
         }
 
         private record AddSubscriberResult(@Nullable MessageClasses.CreatePublisher createPublisher,
@@ -352,9 +347,9 @@ public class DistributedMessageServer implements Shutdowneable {
             TopicInfo info = Objects.requireNonNull(topicMap.get(topic));
             info.lock.lock();
             try {
-                info.subscriberEndpoints.removeIf(subscriberEndpoint -> subscriberEndpoint.getSubscriberName().equals(subscriberName));
-                info.inactiveSubscriberEndpoints.removeIf(endpoint -> endpoint.getClientMachineId().equals(clientMachineId)
-                                                              && endpoint.getSubscriberName().equals(subscriberName));
+                info.subscriberEndpoints.removeIf(subscriberEndpoint -> subscriberEndpoint.subscriberName().equals(subscriberName));
+                info.inactiveSubscriberEndpoints.removeIf(endpoint -> endpoint.clientMachineId().equals(clientMachineId)
+                                                              && endpoint.subscriberName().equals(subscriberName));
                 info.mostRecentMessages.removeClientMachineState(clientMachineId);
             } finally {
                 info.lock.unlock();
@@ -369,11 +364,11 @@ public class DistributedMessageServer implements Shutdowneable {
          * @return the CreatePublisher if one exists
          */
         CreatePublisher maybeAddNotifyClient(String topic, ClientMachineId clientMachineId) {
-            TopicInfo info = topicMap.computeIfAbsent(topic, unused -> new TopicInfo(topic, mostRecentMessagesToKeep));
+            TopicInfo info = topicMap.computeIfAbsent(topic, ignored -> new TopicInfo(topic, mostRecentMessagesToKeep));
             info.lock.lock();
             try {
                 if (info.createPublisher == null
-                        && info.subscriberEndpoints.stream().anyMatch(subscriberEndpoint -> subscriberEndpoint.getClientMachineId().equals(clientMachineId))) {
+                        && info.subscriberEndpoints.stream().anyMatch(subscriberEndpoint -> subscriberEndpoint.clientMachineId().equals(clientMachineId))) {
                     return null;
                 }
                 if (info.createPublisher != null) {
@@ -401,13 +396,13 @@ public class DistributedMessageServer implements Shutdowneable {
          * @param createPublisher the create publisher command sent from the client
          * @param onPublisherCreatedCallback the function to call once the publisher is created.
          *        Not called if there is an exception.
-         *        Return relayAction if we should relay this createPublisher command to other clients; this function is called on on each client subscriber.
+         *        Return relayAction if we should relay this createPublisher command to other clients; this function is called on each client subscriber.
          *        Return finalizerAction if we should confirm the CreatePublisher command to the client who sent it.
          */
         void savePublisher(CreatePublisher createPublisher,
                            Function<CreatePublisherResult, SavePublisherCallbacks> onPublisherCreatedCallback) {
             var topic = createPublisher.getTopic();
-            TopicInfo info = topicMap.computeIfAbsent(topic, unused -> new TopicInfo(topic, mostRecentMessagesToKeep));
+            TopicInfo info = topicMap.computeIfAbsent(topic, ignored -> new TopicInfo(topic, mostRecentMessagesToKeep));
             info.lock.lock();
             try {
                 CreatePublisherResult result;
@@ -465,7 +460,7 @@ public class DistributedMessageServer implements Shutdowneable {
                     int removeCount = 0;
                     for (var iter = info.subscriberEndpoints.iterator(); iter.hasNext(); ) {
                         var endpoint = iter.next();
-                        if (endpoint.getClientMachineId().equals(clientMachineId)) {
+                        if (endpoint.clientMachineId().equals(clientMachineId)) {
                             iter.remove();
                             removeCount++;
                             info.inactiveSubscriberEndpoints.add(endpoint);
@@ -501,7 +496,7 @@ public class DistributedMessageServer implements Shutdowneable {
          * @param excludeMachineId exclude this machine (used to not relay message to client who sent the message)
          * @param fetchClientsWantingNotification if true fetch client machines that want a notification (used for clients who want to download a publisher but not subscribe to it)
          * @param consumer apply this action to each client machine.
-         *        The 2nd argument is the a struct consisting of
+         *        The 2nd argument is a struct consisting of
          *          - the subscriber minimum client timestamp (useful if one client machine has many subscribers),
          *            and is null if we are only notifying a client (i.e. for the fetchPublisher command).  
          *          - the current max message id for this subscriber.
@@ -518,13 +513,13 @@ public class DistributedMessageServer implements Shutdowneable {
                 }
                 ClientMachineId prevClientMachineId = null;
                 for (SubscriberEndpoint subscriberEndpoint : info.subscriberEndpoints) {
-                    if (subscriberEndpoint.getClientMachineId().equals(excludeMachineId)) {
+                    if (subscriberEndpoint.clientMachineId().equals(excludeMachineId)) {
                         continue;
                     }
-                    if (!subscriberEndpoint.getClientMachineId().equals(prevClientMachineId)) {
-                        var params = new SubscriberParamsForCallback(subscriberEndpoint.getClientMachineId(), subscriberEndpoint.getClientTimestamp());
+                    if (!subscriberEndpoint.clientMachineId().equals(prevClientMachineId)) {
+                        var params = new SubscriberParamsForCallback(subscriberEndpoint.clientMachineId(), subscriberEndpoint.clientTimestamp());
                         consumer.accept(params);
-                        prevClientMachineId = subscriberEndpoint.getClientMachineId();
+                        prevClientMachineId = subscriberEndpoint.clientMachineId();
                     }
                 }
     
@@ -540,7 +535,7 @@ public class DistributedMessageServer implements Shutdowneable {
 
         public void saveMessage(PublishMessage publishMessage, Consumer<SubscriberParamsForCallback> relayAction) {
             String topic = publishMessage.getTopic();
-            TopicInfo info = topicMap.computeIfAbsent(topic, unused -> new TopicInfo(topic, mostRecentMessagesToKeep));
+            TopicInfo info = topicMap.computeIfAbsent(topic, ignored -> new TopicInfo(topic, mostRecentMessagesToKeep));
             info.lock.lock();
             try {
                 if (info.createPublisher != null) {
@@ -565,7 +560,7 @@ public class DistributedMessageServer implements Shutdowneable {
          * <p>Messages are saved sorted by server index.
          * To find messages between the given server indices, the current implementation searches all messages from start to end
          * till it finds the one whose index is equal to or just less than lowerBoundInclusive.
-         * So the running time to find the first record is is O(N).
+         * So the running time to find the first record is O(N).
          * Future implementations may use binary search to reduce the time to O(lg(N)).
          *
          * <p>The implementation then scans each record from here till and returns it if it falls within the given client timestamp range.
@@ -634,7 +629,7 @@ public class DistributedMessageServer implements Shutdowneable {
                     if (topics.size() != 1) {
                         throw new IllegalArgumentException("lowerBoundInclusive can only be null if downloading messages for one topic");
                     }
-                    lowerBoundInclusive = infos.get(0).mostRecentMessages.getMaxIndex(clientMachine.getMachineId());
+                    lowerBoundInclusive = infos.getFirst().mostRecentMessages.getMaxIndex(clientMachine.getMachineId());
                     lowerBoundInclusive = lowerBoundInclusive.increment();
                 }
                 
@@ -683,29 +678,7 @@ public class DistributedMessageServer implements Shutdowneable {
      * Cannot make this class a record, because in a record the unique key would be all 3 member variables.
      * One client machine can have two subscribers for the same topic.
      */
-    private static final class SubscriberEndpoint {
-        private final ClientMachineId clientMachineId;
-        private final String subscriberName;
-        private final long clientTimestamp;
-
-        private SubscriberEndpoint(ClientMachineId clientMachineId, String subscriberName, long clientTimestamp) {
-            this.clientMachineId = clientMachineId;
-            this.subscriberName = subscriberName;
-            this.clientTimestamp = clientTimestamp;
-        }
-
-        private ClientMachineId getClientMachineId() {
-            return clientMachineId;
-        }
-
-        private String getSubscriberName() {
-            return subscriberName;
-        }
-
-        private long getClientTimestamp() {
-            return clientTimestamp;
-        }
-
+    private record SubscriberEndpoint(ClientMachineId clientMachineId, String subscriberName, long clientTimestamp) {
         @Override
         public boolean equals(Object thatObject) {
             if (!(thatObject instanceof SubscriberEndpoint that)) {
@@ -803,13 +776,22 @@ public class DistributedMessageServer implements Shutdowneable {
      * @param mostRecentMessagesToKeep the number of most recent messages of the given priority to keep (and zero if message not in this list)
      * @throws IOException if there is an error opening a socket (but no error if the host:port is already in use)
      */
-    public DistributedMessageServer(@NotNull SocketAddress messageServer, Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
-        this(new SocketTransformer(), messageServer, mostRecentMessagesToKeep);
+    public static DistributedMessageServer create(@NotNull SocketAddress messageServer, Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
+        return create(messageServer, mostRecentMessagesToKeep, new SocketTransformer());
     }
-    
-    DistributedMessageServer(SocketTransformer socketTransformer,
-                             @NotNull SocketAddress messageServer,
-                             Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
+
+    static DistributedMessageServer create(@NotNull SocketAddress messageServer,
+                                           Map<RetentionPriority, Integer> mostRecentMessagesToKeep,
+                                           SocketTransformer socketTransformer) throws IOException {
+        var server = new DistributedMessageServer(messageServer, mostRecentMessagesToKeep, socketTransformer);
+        server.registerCleanable();
+        return server;
+    }
+
+    // package private for tests
+    DistributedMessageServer(@NotNull SocketAddress messageServer,
+                             Map<RetentionPriority, Integer> mostRecentMessagesToKeep,
+                             SocketTransformer socketTransformer) throws IOException {
         this.socketTransformer = socketTransformer;
         this.messageServer = messageServer;
         this.asyncServerSocketChannel = AsynchronousServerSocketChannel.open();
@@ -817,15 +799,21 @@ public class DistributedMessageServer implements Shutdowneable {
         this.channelExecutor = Executors.newFixedThreadPool(NUM_CHANNEL_THREADS, createThreadFactory("DistributedMessageServer.socket", true));
         this.retryExecutor = Executors.newScheduledThreadPool(1, createThreadFactory("DistributedMessageServer.Retry", true));
         this.publishersAndSubscribers = new PublishersAndSubscribers(mostRecentMessagesToKeep);
-        this.cleanable = addShutdownHook(this,
-                                         new Cleanup(asyncServerSocketChannel,
-                                                     acceptExecutor,
-                                                     channelExecutor,
-                                                     retryExecutor,
-                                                     clientMachines),
-                                         DistributedMessageServer.class);
     }
-    
+
+    @Override
+    protected Runnable shutdownAction() {
+        return () -> {
+            LOGGER.log(Level.INFO, "Details: serverAddress={0}",
+                       getLocalAddress(asyncServerSocketChannel));
+            closeExecutorQuietly(acceptExecutor);
+            closeExecutorQuietly(channelExecutor);
+            closeExecutorQuietly(retryExecutor);
+            clientMachines.forEach(clientMachine -> closeQuietly(clientMachine.channel));
+            closeQuietly(asyncServerSocketChannel);
+        };
+    }
+
     public SocketAddress getMessageServerAddress() {
         return messageServer;
     }
@@ -844,13 +832,14 @@ public class DistributedMessageServer implements Shutdowneable {
     }
     
     private void doStart(CompletableFuture<Void> future) {
-        String snippet = String.format("DistributedMessageServer centralServer=%s", messageServer.toString());
         try {
             openServerSocket();
             acceptExecutor.submit(new AcceptThread());
             future.complete(null);
         } catch (IOException | RuntimeException | Error e) {
-            LOGGER.log(Level.WARNING, String.format("Failed to start %s", snippet), e);
+            LOGGER.log(Level.WARNING,
+                       String.format("Failed to start DistributedMessageServer centralServer=%s", messageServer.toString()),
+                       e);
             future.completeExceptionally(e);
         }
     }
@@ -861,7 +850,7 @@ public class DistributedMessageServer implements Shutdowneable {
         LOGGER.log(Level.INFO, String.format("Started DistributedMessageServer: messageServer=%s, messageServerAddress=%s",
                                              messageServer.toString(), getLocalAddress(asyncServerSocketChannel)));
     }
-    
+
     /**
      * Thread that calls accept on a server socket channel.
      * There is only one instance of this thread.
@@ -930,10 +919,10 @@ public class DistributedMessageServer implements Shutdowneable {
                                                      message.toLoggingString()));
                             onValidMessageReceived(message);
                         };
-                        
+
                         if (message instanceof RelayMessageBase relayMessage
-                                    && ((RelayMessageBase) message).getRelayFields() != null
-                                    && (!(message instanceof Resendable) || !((Resendable)message).isResend())) {
+                                && relayMessage.getRelayFields() != null
+                                && (!(message instanceof Resendable) || !((Resendable)message).isResend())) {
                             DistributedMessageServer.this.sendInvalidRelayMessage(clientMachine,
                                                                                   relayMessage,
                                                                                   ErrorMessageEnum.MESSAGE_ALREADY_PROCESSED.format(relayMessage.getClientIndex()));
@@ -1377,7 +1366,7 @@ public class DistributedMessageServer implements Shutdowneable {
     private void internalSend(MessageWrapper wrapper, ClientMachine clientMachine, int retry) {
         try {
             socketTransformer.writeMessageToSocketAsync(wrapper, Short.MAX_VALUE, clientMachine.getChannel())
-                             .thenAcceptAsync(unused -> afterMessageSent(clientMachine, wrapper), channelExecutor)
+                             .thenAcceptAsync(ignored -> afterMessageSent(clientMachine, wrapper), channelExecutor)
                              .exceptionally(e -> retrySend(wrapper, clientMachine, retry, e))
                              .thenRun(() -> sendQueuedMessageOrReleaseLock(clientMachine));
         } catch (IOException e) {
@@ -1425,15 +1414,6 @@ public class DistributedMessageServer implements Shutdowneable {
         channelExecutor.submit(new ChannelThread(channel));
     }
     
-    /**
-     * Shutdown this object.
-     * Object cannot be restarted after shutdown.
-     */
-    @Override
-    public void shutdown() {
-        cleanable.clean();
-    }
-
     /**
      * Override this function to set socket options.
      * For example, the unit tests set SO_REUSEADDR to true.
@@ -1528,41 +1508,6 @@ public class DistributedMessageServer implements Shutdowneable {
 
         String format(Object... args) {
             return String.format(formatString, args);
-        }
-    }
-    
-    /**
-     * Cleanup this class.
-     * Close all connections, close the socket server channel, and shutdown all executors.
-     */
-    private static class Cleanup extends CallStackCapturing implements Runnable {
-        private final NetworkChannel channel;
-        private final ExecutorService acceptExecutor;
-        private final ExecutorService channelExecutor;
-        private final ExecutorService retryExecutor;
-        private final List<ClientMachine> clientMachines;
-
-        private Cleanup(NetworkChannel channel,
-                        ExecutorService acceptExecutor,
-                        ExecutorService channelExecutor,
-                        ExecutorService retryExecutor,
-                        List<ClientMachine> clientMachines) {
-            this.channel = channel;
-            this.acceptExecutor = acceptExecutor;
-            this.channelExecutor = channelExecutor;
-            this.retryExecutor = retryExecutor;
-            this.clientMachines = clientMachines;
-        }
-
-        @Override
-        public void run() {
-            LOGGER.log(Level.INFO, "Shutting down " + DistributedMessageServer.class.getSimpleName() + ": serverAddress=" + getLocalAddress(channel));
-            LOGGER.log(Level.TRACE, "Call stack at creation:" + getCallStack());
-            closeExecutorQuietly(acceptExecutor);
-            closeExecutorQuietly(channelExecutor);
-            closeExecutorQuietly(retryExecutor);
-            clientMachines.forEach(clientMachine -> closeQuietly(clientMachine.channel));
-            closeQuietly(channel);
         }
     }
 }

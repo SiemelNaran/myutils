@@ -8,7 +8,7 @@ import java.util.PriorityQueue;
 
 
 /**
- * Return an iterator that takes collection of collection of values, and each call to next() returns the next highest value.
+ * Return an iterator that takes a collection of a collection of values, and each call to next() returns the next highest value.
  * Each collection is assumed to be sorted.
  *
  * @param <T> the type of element in each collection
@@ -36,7 +36,7 @@ public class ZipMinIterator<T> implements Iterator<T> {
      */
     @Override
     public boolean hasNext() {
-        return elements.size() > 0;
+        return !elements.isEmpty();
     }
 
     /**

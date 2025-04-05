@@ -389,6 +389,21 @@ class StackTraceCompletableFuture<T> extends CompletableFuture<T> {
         }
     }
 
+    @Override
+    public State state() {
+        return future.state();
+    }
+
+    @Override
+    public T resultNow() {
+        return future.resultNow();
+    }
+
+    @Override
+    public Throwable exceptionNow() {
+        return future.exceptionNow();
+    }
+
     //
     // Overrides of functions in CompletableFuture<T>
     

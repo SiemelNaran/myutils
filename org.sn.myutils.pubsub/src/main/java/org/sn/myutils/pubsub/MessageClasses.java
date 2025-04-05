@@ -9,7 +9,7 @@ import org.sn.myutils.annotations.NotNull;
 
 
 /**
- * All of the messages sent between client and server.
+ * All the messages sent between client and server.
  */
 public interface MessageClasses {
     
@@ -63,7 +63,6 @@ public interface MessageClasses {
         return "class=" + message.getClass().getSimpleName();
     }
     
-    //////////////////////////////////////////////////////////////////////
     // Server generated messages
 
     /**
@@ -202,7 +201,7 @@ public interface MessageClasses {
     }
 
     /**
-     * Class sent by server to tell client that a message it sent sent is invalid.
+     * Class sent by server to tell client that a message it sent is invalid.
      * Required field error, which is the error message.
      */
     class InvalidMessage extends ServerGeneratedMessage {
@@ -422,7 +421,6 @@ public interface MessageClasses {
     }
 
     
-    //////////////////////////////////////////////////////////////////////
     // Client generated messages
 
     /**
@@ -444,6 +442,7 @@ public interface MessageClasses {
         private static final long serialVersionUID = 1L;
         
         private final long clientTimestamp;
+        @SuppressWarnings("serial")
         private Map<String, String> customProperties;
 
         ClientGeneratedMessage(Long clientTimestamp) {
@@ -632,6 +631,7 @@ public interface MessageClasses {
         private static final long serialVersionUID = 1L;
 
         private final int commandIndex;
+        @SuppressWarnings("serial")
         private final Collection<String> topics;
 
         public DownloadPublishedMessages(int commandIndex, Collection<String> topics) {
@@ -916,8 +916,7 @@ public interface MessageClasses {
             return super.toLoggingString() + ", message.estimateBytes=" + message.getNumBytes() + ", retentionPriority=" + priority;
         }
     }
-    
-    //////////////////////////////////////////////////////////////////////
+
     // Wrapper for server generated messages
     
     /**

@@ -84,7 +84,7 @@ public class ExpressionParserTest {
         assertParseError("max(2 + , )", "unexpected comma", 8); // index of comma
         assertParseError("2 +", "unexpected end of expression", 3); // one past end of expression
         assertParseError("(2 + 3", "missing close parenthesis", 6); // one past end of expression
-        assertParseError("max(3, 4", "missing close parenthesis in function call", 8); // one past end of of expression
+        assertParseError("max(3, 4", "missing close parenthesis in function call", 8); // one past end of expression
         assertParseError("unknown(3, 4)", "unrecognized function 'unknown'", 0); // index of start of expression
         assertParseError("Max(3, 4)", "unrecognized function 'Max'", 0); // index of start of expression
         assertParseError("2 * * 3", "unrecognized token '*'", 4); // index of second *
@@ -246,7 +246,7 @@ public class ExpressionParserTest {
          * This listener evaluates the parse tree using stacks.
          *
          * <p>We can use this approach to build a JOOQ where clause -- that is, to reduce the expression
-         * to a org.jooq.Condition.
+         * to an org.jooq.Condition.
          */
         class EvalListener implements Listener {
             private final Stack<String> binaryOperators = new Stack<>();
@@ -354,10 +354,7 @@ public class ExpressionParserTest {
 
     @Test
     void testInvalidPrecedence() {
-        var illegalArgumentException = assertThrows(IllegalArgumentException.class, () -> {
-            ExpressionParser.builder()
-                            .addBinaryOperator(INVALID.class);
-        });
+        var illegalArgumentException = assertThrows(IllegalArgumentException.class, () -> ExpressionParser.builder().addBinaryOperator(INVALID.class));
         assertEquals("Invalid precedence: token=+, precedence=0 (should be greater than zero)", illegalArgumentException.getMessage());
     }
 
@@ -599,7 +596,7 @@ public class ExpressionParserTest {
         @Override
         protected final Class<?> checkCombine(List<Class<?>> args) throws TypeException {
             if (!args.isEmpty()) {
-                Class<?> type = args.get(0);
+                Class<?> type = args.getFirst();
                 if (!type.equals(Integer.class)) {
                     throw new TypeException("only integer types are supported");
                 }

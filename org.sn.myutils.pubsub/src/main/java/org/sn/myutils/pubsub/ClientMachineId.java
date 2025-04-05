@@ -1,15 +1,11 @@
 package org.sn.myutils.pubsub;
 
 import java.io.Serial;
-import java.lang.constant.Constable;
-import java.lang.constant.ConstantDesc;
-import java.lang.invoke.MethodHandles.Lookup;
 import java.util.Objects;
-import java.util.Optional;
 import org.sn.myutils.annotations.NotNull;
 
 
-public final class ClientMachineId implements java.io.Serializable, Comparable<ClientMachineId>, CharSequence, Constable, ConstantDesc {
+public final class ClientMachineId implements java.io.Serializable, Comparable<ClientMachineId>, CharSequence {
     @Serial
     private static final long serialVersionUID = 1L;
     
@@ -56,15 +52,5 @@ public final class ClientMachineId implements java.io.Serializable, Comparable<C
     @Override
     public CharSequence subSequence(int start, int end) {
         return value.subSequence(start, end);
-    }
-    
-    @Override
-    public Optional<ClientMachineId> describeConstable() {
-        return Optional.of(this);
-    }
-
-    @Override
-    public ClientMachineId resolveConstantDesc(Lookup lookup) {
-        return this;
     }
 }

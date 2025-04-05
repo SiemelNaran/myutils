@@ -1,11 +1,8 @@
 package org.sn.myutils.pubsub;
 
-import static org.sn.myutils.pubsub.PubSubUtils.addShutdownHook;
 import static org.sn.myutils.pubsub.PubSubUtils.closeExecutorQuietly;
 import static org.sn.myutils.util.concurrent.MoreExecutors.createThreadFactory;
 
-import java.lang.System.Logger.Level;
-import java.lang.ref.Cleaner.Cleanable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -13,10 +10,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -24,7 +19,6 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.sn.myutils.annotations.NotNull;
 import org.sn.myutils.annotations.Nullable;
-import org.sn.myutils.pubsub.PubSubUtils.CallStackCapturing;
 import org.sn.myutils.util.MultimapUtils;
 
 
@@ -42,12 +36,10 @@ import org.sn.myutils.util.MultimapUtils;
  *
  * <p>Each PubSub instance has a general exception handler to handle exceptions invoking any subscription handler.
  * One may log the error with callstack (the default behavior), or
- * or provide custom behavior such as logging a shorter message or resubmitting the message to the subscription handler.
+ * provide custom behavior such as logging a shorter message or resubmitting the message to the subscription handler.
  * The handler is responsible for taking care of the backoff strategy.
  */
-public abstract class PubSub implements Shutdowneable {
-    private static final System.Logger LOGGER = System.getLogger(PubSub.class.getName());
-
+public abstract class PubSub extends Shutdowneable {
     /**
      * The default way in which messages to process in this PubSub are stored, which is just a standard queue.
      */
@@ -92,7 +84,7 @@ public abstract class PubSub implements Shutdowneable {
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition notEmpty = lock.newCondition();
     private final SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler;
-    private final Cleanable cleanable;
+
 
     /**
      * Arguments necessary to create a PubSub system.
@@ -113,14 +105,18 @@ public abstract class PubSub implements Shutdowneable {
         this.executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(args.numInMemoryHandlers, createThreadFactory("PubSubListener", true));
         this.masterList = args.queueCreator.get();
         this.subscriptionMessageExceptionHandler = args.subscriptionMessageExceptionHandler;
-        this.cleanable = addShutdownHook(this, new Cleanup(executorService, lock, notEmpty), PubSub.class);
         startThreads();
     }
-    
+
+    @Override
+    protected Runnable shutdownAction() {
+        return () -> closeExecutorQuietly(executorService);
+    }
+
     /**
      * Class representing the publisher.
      * 
-     * <p>In implementation it has a topic, publisher class, list of subscribers, and pointer to the lock in the outer PubSub class. 
+     * <p>In implementation, it has a topic, publisher class, list of subscribers, and pointer to the lock in the outer PubSub class.
      */
     public abstract class Publisher {
         private final long createdAtTimestamp;
@@ -179,7 +175,7 @@ public abstract class PubSub implements Shutdowneable {
     /**
      * Class representing a subscriber.
      * 
-     * <p>In implementation it has a topic, name, subscriber class (which must be the same as or inherit from the publisher class), callback function,
+     * <p>In implementation, it has a topic, name, subscriber class (which must be the same as or inherit from the publisher class), callback function,
      * list of messages to process, and pointer to the lock and condition and master list in the outer PubSub class. 
      */
     public abstract class Subscriber {
@@ -420,21 +416,11 @@ public abstract class PubSub implements Shutdowneable {
     }
 
     /**
-     * Thread that listens for a new message in any subscriber queue and process it by cloning it and passing it to all of the relevant subscribers. 
+     * Thread that listens for a new message in any subscriber queue and process it by cloning it
+     * and passing it to all the relevant subscribers.
      */
-    private static class Listener implements Runnable {
-        private final Queue<Subscriber> masterList;
-        private final Lock lock;
-        private final Condition notEmpty;
-        private final SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler;
-
-        private Listener(Queue<Subscriber> masterList, Lock lock, Condition notEmpty, SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler) {
-            this.masterList = masterList;
-            this.lock = lock;
-            this.notEmpty = notEmpty;
-            this.subscriptionMessageExceptionHandler = subscriptionMessageExceptionHandler;
-        }
-
+    private record Listener(Queue<Subscriber> masterList, Lock lock, Condition notEmpty,
+                            SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler) implements Runnable {
         @Override
         public void run() {
             while (true) {
@@ -468,47 +454,5 @@ public abstract class PubSub implements Shutdowneable {
                 subscriptionMessageExceptionHandler.handleException(subscriber, message, e);
             }
         }
-    }
-    
-    /**
-     * Shutdown this object.
-     */
-    @Override
-    public void shutdown() {
-        cleanable.clean();
-    }
-
-    /**
-     * Cleanup this class.
-     * Shutdown the executor and wake up all threads so that they can end gracefully.
-     */
-    private static class Cleanup extends CallStackCapturing implements Runnable {
-        private final ExecutorService executorService;
-        private final ReentrantLock lock;
-        private final Condition notEmpty;
-
-        private Cleanup(ExecutorService executorService, ReentrantLock lock, Condition notEmpty) {
-            this.executorService = executorService;
-            this.lock = lock;
-            this.notEmpty = notEmpty;
-        }
-
-        @Override
-        public void run() {
-            LOGGER.log(Level.DEBUG, "Cleaning up " + PubSub.class.getSimpleName());
-            LOGGER.log(Level.TRACE, "Call stack at creation:" + getCallStack());
-            closeExecutorQuietly(executorService);
-            try {
-                boolean locked = lock.tryLock(100, TimeUnit.MILLISECONDS);
-                if (locked) {
-                    try {
-                        notEmpty.signalAll();
-                    } finally {
-                        lock.unlock();
-                    }
-                }
-            } catch (InterruptedException ignored) {
-            }
-        }        
     }
 }

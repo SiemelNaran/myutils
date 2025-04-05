@@ -72,8 +72,8 @@ public class DefaultNumberFactory implements NumberFactory {
 
     @SuppressWarnings("fallthrough")
     private Number constructInteger(String str) {
-        switch (integerPolicy) {
-            case PREFER_INTEGER:
+        switch (Objects.requireNonNull(integerPolicy)) {
+            case IntegerPolicy.PREFER_INTEGER:
                 try {
                     return Integer.parseInt(str);
                 } catch (NumberFormatException ignored) {
@@ -84,7 +84,7 @@ public class DefaultNumberFactory implements NumberFactory {
                     return Long.parseLong(str);
                 } catch (NumberFormatException ignored) {
                 }
-                
+
             default:
                 return new BigInteger(str);
         }

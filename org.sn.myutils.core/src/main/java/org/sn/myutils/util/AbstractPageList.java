@@ -28,7 +28,7 @@ import org.sn.myutils.util.MoreCollections.FindWhich;
  * <p>This class implements RandomAccess even though looking up an element is O(lg(N)).
  * 
  * <p>This class implements java.io.Serializable.
- * 
+ *
  * <p>The spliterator splits by pages. If a page has too many elements in it, the page itself
  * does not get split.
  */
@@ -77,7 +77,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
         int pageIndex = findPage(index);
         Page<E> page = pages.get(pageIndex);
         int elementInPageIndex = index - page.startIndex;
-        ListIterator<E> elementIter = page.list.listIterator(elementInPageIndex);
+        ListIterator<E> elementIter = page.getList().listIterator(elementInPageIndex);
         E element = elementIter.next();
         doRemove(pageIndex, page, elementIter);
         return element;
@@ -92,7 +92,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
         elementIter.remove();
         modCount++;
         final boolean pageRemoved;
-        if (page.list.size() == 0) {
+        if (page.getList().isEmpty()) {
             pages.remove(pageIndex);
             updateIndices(pageIndex, -1);
             pageRemoved = true;
@@ -109,12 +109,12 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
         rangeCheckAllowEnd(index);
         if (index == size) {
             Page<E> lastPage;
-            if (size == 0 || (lastPage = pages.get(pages.size() - 1)).list.size() >= preferredMaxPageSize) {
+            if (size == 0 || (lastPage = pages.getLast()).getList().size() >= preferredMaxPageSize) {
                 Page<E> newPage = this.createNewEmptyPage(size);
-                newPage.list.add(element);
+                newPage.getList().add(element);
                 pages.add(newPage);
             } else {
-                lastPage.list.add(element);
+                lastPage.getList().add(element);
             }
             modCount++;
             size++;
@@ -122,7 +122,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
             int pageIndex = findPage(index);
             Page<E> page = pages.get(pageIndex);
             int elementInPageIndex = index - page.startIndex;
-            doAdd(pageIndex, page, page.list.listIterator(elementInPageIndex), element);
+            doAdd(pageIndex, page, page.getList().listIterator(elementInPageIndex), element);
         }
     }
     
@@ -135,28 +135,28 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
     private RecalcIterAfterAdd doAdd(int pageIndex, Page<E> page, ListIterator<E> elementIter, E element) {
         final RecalcIterAfterAdd recalcIter;
         if (elementIter.hasNext()) {
-            if (page.list.size() < maxPageSize) {
+            if (page.getList().size() < maxPageSize) {
                 elementIter.add(element);
                 recalcIter = RecalcIterAfterAdd.NONE;
             } else {
                 int elementInPageIndex = elementIter.nextIndex();
                 Page<E> remainderPage = createNewPageByCopyingSublist(page.startIndex + elementInPageIndex + 1,
-                                                                      page.list.subList(elementInPageIndex, page.list.size()));
-                page.list.subList(elementInPageIndex, page.list.size()).clear();
+                                                                      page.getList().subList(elementInPageIndex, page.getList().size()));
+                page.getList().subList(elementInPageIndex, page.getList().size()).clear();
                 pageIndex++;
                 pages.add(pageIndex, remainderPage);
-                page.list.add(element);
+                page.getList().add(element);
                 recalcIter = RecalcIterAfterAdd.LAST_ELEMENT;
             }
         } else {
-            if (page.list.size() < preferredMaxPageSize) {
+            if (page.getList().size() < preferredMaxPageSize) {
                 elementIter.add(element);
                 recalcIter = RecalcIterAfterAdd.NONE;
             } else {
-                Page<E> newPage = createNewEmptyPage(page.startIndex + page.list.size());
+                Page<E> newPage = createNewEmptyPage(page.startIndex + page.getList().size());
                 pageIndex++;
                 pages.add(pageIndex, newPage);
-                newPage.list.add(element);
+                newPage.getList().add(element);
                 recalcIter = RecalcIterAfterAdd.SECOND_ELEMENT_NEXT_PAGE;
             }
         }
@@ -197,7 +197,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
             page = createNewEmptyPage(0);
             pages.add(page);
         } else {
-            page = pages.get(pages.size() - 1);
+            page = pages.getLast();
         }
             
         Iterator<? extends E> elementsIter = elements.iterator();
@@ -207,12 +207,12 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
         int currentStart = page.startIndex;
     
         while (elementsIter.hasNext()) {
-            if (page.list.size() >= preferredMaxPageSize) {
-                currentStart += page.list.size();
+            if (page.getList().size() >= preferredMaxPageSize) {
+                currentStart += page.getList().size();
                 page = createNewEmptyPage(currentStart);
                 newPages.add(page);
             }
-            page.list.add(elementsIter.next());
+            page.getList().add(elementsIter.next());
         }
         
         pages.addAll(pages.size(), newPages);
@@ -225,10 +225,10 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
         Page<E> page = pages.get(originalPageIndex);
         int elementInPageIndex = index - page.startIndex;
         
-        if (numElementsToCopy <= maxPageSize - page.list.size()) {
-            // we are inserting a few elements and they can all be added to the current page
+        if (numElementsToCopy <= maxPageSize - page.getList().size()) {
+            // we are inserting a few elements, and they can all be added to the current page
             firstPageToUpdateIndices = originalPageIndex + 1;
-            page.list.addAll(elementInPageIndex, elements);
+            page.getList().addAll(elementInPageIndex, elements);
         } else {
             Iterator<? extends E> elementsIter = elements.iterator();
             int currentStart = page.startIndex;
@@ -241,12 +241,12 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
             final Page<E> remainderPage;
             if (elementInPageIndex > 0) {
                 remainderPage = createNewPageByCopyingSublist(page.startIndex + elementInPageIndex,
-                                                              page.list.subList(elementInPageIndex, page.list.size()));
-                page.list.subList(elementInPageIndex, page.list.size()).clear();
+                                                              page.getList().subList(elementInPageIndex, page.getList().size()));
+                page.getList().subList(elementInPageIndex, page.getList().size()).clear();
                 
                 // copy elements to bring the size of the page to preferredMaxPageSize
-                while (elementsIter.hasNext() && page.list.size() < preferredMaxPageSize) {
-                    page.list.add(elementsIter.next());
+                while (elementsIter.hasNext() && page.getList().size() < preferredMaxPageSize) {
+                    page.getList().add(elementsIter.next());
                     numElementsToCopy--;
                 }
             } else {
@@ -258,12 +258,12 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
             List<Page<E>> newPages = new ArrayList<>(numPagesToCreate + 1); // +1 for remainder page
         
             while (elementsIter.hasNext()) {
-                if (page.list.size() >= preferredMaxPageSize) {
-                    currentStart += page.list.size();
+                if (page.getList().size() >= preferredMaxPageSize) {
+                    currentStart += page.getList().size();
                     page = createNewEmptyPage(currentStart);
                     newPages.add(page);
                 }
-                page.list.add(elementsIter.next());
+                page.getList().add(elementsIter.next());
             }
             
             final int indexWhereToInsertPages;
@@ -287,7 +287,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
     private abstract class SpliceHandler {
         void addPageByMoveElements(int startIndex, Page<E> source, int start, int end) {
             addPageByCopyElements(startIndex, source, start, end);
-            source.list.subList(start, end).clear();
+            source.getList().subList(start, end).clear();
         }
         
         abstract void shallowCopyPage(int newStartIndex, Page<E> page);
@@ -310,7 +310,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
             
             @Override
             public void addPageByCopyElements(int startIndex, Page<E> source, int start, int end) {
-                Page<E> newPage = createNewPageByCopyingSublist(startIndex, source.list.subList(start, end));
+                Page<E> newPage = createNewPageByCopyingSublist(startIndex, source.getList().subList(start, end));
                 output.pages.add(newPage);
             }
 
@@ -364,8 +364,8 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
         final int removeFrom;
         {
             int startInPage = startInclusive - page.startIndex;
-            int endInPage = min(page.list.size(), endExclusive - startInclusive);
-            if (startInPage == 0 && endInPage == page.list.size()) {
+            int endInPage = min(page.getList().size(), endExclusive - startInclusive);
+            if (startInPage == 0 && endInPage == page.getList().size()) {
                 // we are splicing the entire first page, so do a shallow copy of page,
                 // and modify page.startIndex because this page will be removed at the end
                 spliceHandler.shallowCopyPage(0, page);
@@ -378,7 +378,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
             page = pageIter.next();
             pageIndex++;
         }
-        // move entire middle pages from this to output, so do a shallow copy of each page.list
+        // move entire middle pages from this to output, so do a shallow copy of each page.getList()
         for ( ; pageIndex < lastPageIndex; pageIndex++) {
             spliceHandler.shallowCopyPage(page.startIndex - startInclusive, page);
             page = pageIter.next();
@@ -387,8 +387,8 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
         if (lastPageIndex > firstPageIndex) {
             // this branch is called if we are splicing elements from more than one page
             int lastSize = endExclusive - page.startIndex;
-            if (lastSize == page.list.size()) {
-                // we are splicing the entire last page, so do a shallow copy of page.list
+            if (lastSize == page.getList().size()) {
+                // we are splicing the entire last page, so do a shallow copy of page.getList()
                 spliceHandler.shallowCopyPage(page.startIndex - startInclusive, page);
                 removeTo = lastPageIndex + 1;
             } else {
@@ -420,7 +420,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
         Page<E> page = pages.get(pageIndex);
         int elementInPageIndex = index - page.startIndex;
         modCount++;
-        return page.list.set(elementInPageIndex, element);
+        return page.getList().set(elementInPageIndex, element);
     }
     
     /**
@@ -436,7 +436,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
         int pageIndex = findPage(index);
         Page<E> page = pages.get(pageIndex);
         int elementInPageIndex = index - page.startIndex;
-        return page.list.get(elementInPageIndex);
+        return page.getList().get(elementInPageIndex);
     }
 
     @Override
@@ -456,7 +456,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
     
     @Override
     public Spliterator<E> spliterator() {
-        int averagePageSize = pages.size() > 0 ? size / pages.size() : 1; 
+        int averagePageSize = !pages.isEmpty() ? size / pages.size() : 1;
         return new PageListSpliterator<>(modCount, averagePageSize, pages.spliterator());
     }
 
@@ -465,10 +465,10 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
         int delta = 0;
         for (Page<E> page: pages) {
             page.startIndex -= delta;
-            int originalSize = page.list.size();
-            boolean changes = page.list.removeIf(filter);
+            int originalSize = page.getList().size();
+            boolean changes = page.getList().removeIf(filter);
             if (changes) {
-                int newSize = page.list.size();
+                int newSize = page.getList().size();
                 delta += originalSize - newSize;
             }
         }
@@ -483,7 +483,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
     @Override
     public void forEach(Consumer<? super E> operator) {
         for (Page<E> page : pages) {
-            page.list.forEach(operator);
+            page.getList().forEach(operator);
         }
         modCount++;
     }
@@ -491,7 +491,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
     @Override
     public void replaceAll(UnaryOperator<E> operator) {
         for (Page<E> page: pages) {
-            page.list.replaceAll(operator);
+            page.getList().replaceAll(operator);
         }
         modCount++;
     }
@@ -548,14 +548,14 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
         return result;
     }
     
-    protected static class Page<E> implements Serializable {
+    protected static final class Page<E> implements Serializable {
         @Serial
         private static final long serialVersionUID = 1L;
-        
+
         private int startIndex;
-        private final List<E> list;
-        
-        Page(int startIndex, List<E> list) {
+        private final Serializable list; // also implements List<E>
+
+        Page(int startIndex, Serializable list) {
             this.startIndex = startIndex;
             this.list = list;
         }
@@ -563,9 +563,10 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
         int getStartIndex() {
             return startIndex;
         }
-        
+
+        @SuppressWarnings("unchecked")
         List<E> getList() {
-            return list;
+            return (List<E>) list;
         }
         
         @Override
@@ -660,7 +661,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
             } catch (IndexOutOfBoundsException e) {
                 return Collections.<E>emptyList().listIterator();
             }
-            return page.list.listIterator(elementInPageIndex);
+            return page.getList().listIterator(elementInPageIndex);
         }
         
         final ListIterator<E> getIteratorOfPage(int pageDelta, IterDirection direction) {
@@ -668,8 +669,8 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
             Page<E> page = pages.get(newPageIndex); // never throws because newPageIndex always in [0, pages.size)
             pageIndex = newPageIndex;
             return switch (direction) {
-                case FORWARD -> page.list.listIterator();
-                case BACKWARD -> page.list.listIterator(page.list.size());
+                case FORWARD -> page.getList().listIterator();
+                case BACKWARD -> page.getList().listIterator(page.getList().size());
             };
         }
         
@@ -747,20 +748,20 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
             } catch (IndexOutOfBoundsException e) {
                 AbstractPageList.this.add(0, element);
                 pageIndex = 0;
-                elementIter = pages.get(0).list.listIterator(1);
+                elementIter = pages.getFirst().getList().listIterator(1);
                 expectedModCount = AbstractPageList.this.modCount;
                 return;
             }
             RecalcIterAfterAdd recalcIter = doAdd(pageIndex, page, elementIter, element);
             switch (recalcIter) {
                 case LAST_ELEMENT:
-                    elementIter = page.list.listIterator(page.list.size());
+                    elementIter = page.getList().listIterator(page.getList().size());
                     break;
                     
                 case SECOND_ELEMENT_NEXT_PAGE:
                     pageIndex++;
                     page = pages.get(pageIndex);
-                    elementIter = page.list.listIterator(1);
+                    elementIter = page.getList().listIterator(1);
                     break;
                     
                 case NONE:
@@ -783,7 +784,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
             this.expectedModCount = modCount;
             this.averagePageSize = averagePageSize;
             this.pageSpliterator = pageSpliterator;
-            pageSpliterator.tryAdvance(page -> innerSpliterator = page.list.spliterator());
+            pageSpliterator.tryAdvance(page -> innerSpliterator = page.getList().spliterator());
         }
 
         @Override
@@ -802,7 +803,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
             }
             boolean done = innerSpliterator.tryAdvance(action);
             if (!done) {
-                boolean hasNextPage = pageSpliterator.tryAdvance(page -> innerSpliterator = page.list.spliterator());
+                boolean hasNextPage = pageSpliterator.tryAdvance(page -> innerSpliterator = page.getList().spliterator());
                 if (hasNextPage) {
                     done = innerSpliterator.tryAdvance(action);
                 } else {
@@ -819,7 +820,7 @@ public abstract class AbstractPageList<E> extends AbstractList<E> implements Pag
             }
             do {
                 innerSpliterator.forEachRemaining(action);
-            } while (pageSpliterator.tryAdvance(page -> innerSpliterator = page.list.spliterator()));
+            } while (pageSpliterator.tryAdvance(page -> innerSpliterator = page.getList().spliterator()));
             innerSpliterator = null;
         }
 

@@ -1,6 +1,7 @@
 package org.sn.myutils.util.concurrent;
 
 import java.io.Serial;
+import java.io.Serializable;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -123,7 +124,7 @@ public class HashLocks<LockType, LockStatisticsType> {
     }
 
 
-    public record CollisionTracking(int numStringsPerHashCode) {
+    public record CollisionTracking(int numStringsPerHashCode) implements Serializable {
         public static CollisionTrackingBuilder newBuilder() {
             return new CollisionTrackingBuilder();
         }

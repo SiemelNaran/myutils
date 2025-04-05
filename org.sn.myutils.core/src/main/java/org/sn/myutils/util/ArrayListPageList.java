@@ -41,12 +41,12 @@ public class ArrayListPageList<E> extends AbstractPageList<E> implements PageLis
     
     @Override
     protected Page<E> createNewEmptyPage(int startIndex) {
-        return new ArrayListPage<>(startIndex);
+        return new Page<>(startIndex, new ArrayList<E>());
     }
 
     @Override
     protected Page<E> createNewPageByCopyingSublist(int startIndex, List<E> subListToCopy) {
-        return new ArrayListPage<>(startIndex, new ArrayList<>(subListToCopy));
+        return new Page<>(startIndex, new ArrayList<>(subListToCopy));
     }
 
     @Override
@@ -57,18 +57,5 @@ public class ArrayListPageList<E> extends AbstractPageList<E> implements PageLis
     @Override
     public ArrayListPageList<E> splice(int startInclusive, int endExclusive) {
         return (ArrayListPageList<E>) super.splice(startInclusive, endExclusive);
-    }
-    
-    protected static class ArrayListPage<E> extends Page<E> {
-        @Serial
-        private static final long serialVersionUID = 1L;
-        
-        private ArrayListPage(int startIndex) {
-            super(startIndex, new ArrayList<>());
-        }
-        
-        private ArrayListPage(int startIndex, List<E> list) {
-            super(startIndex, list);
-        }
     }
 }

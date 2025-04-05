@@ -131,7 +131,7 @@ public class Iterables {
     /**
      * Given an iterable, return an iterator pointing to the Nth element.
      * If word is a List then use return a list iterator pointing to the Nth element, an O(1) operation.
-     * Otherwise get a regular iterator and advance it N times, an O(N) operation.
+     * Otherwise, get a regular iterator and advance it N times, an O(N) operation.
      *
      * @throws IndexOutOfBoundsException if offset is out of bounds
      */
@@ -177,43 +177,21 @@ public class Iterables {
     }
 
 
-    private static class SizedIntStreamIterable implements Iterable<Integer>, Sized {
-        private final Supplier<IntStream> streamSupplier;
-        private final int size;
-
-        private SizedIntStreamIterable(Supplier<IntStream> streamSupplier, int size) {
-            this.streamSupplier = streamSupplier;
-            this.size = size;
-        }
+    private record SizedIntStreamIterable(Supplier<IntStream> streamSupplier,
+                                          int size) implements Iterable<Integer>, Sized {
 
         @Override
         public @NotNull Iterator<Integer> iterator() {
             return streamSupplier.get().iterator();
         }
-
-        @Override
-        public int size() {
-            return size;
-        }
     }
 
-    private static class SizedCharacterStreamIterable implements Iterable<Character>, Sized {
-        private final Supplier<IntStream> streamSupplier;
-        private final int size;
-
-        private SizedCharacterStreamIterable(Supplier<IntStream> streamSupplier, int size) {
-            this.streamSupplier = streamSupplier;
-            this.size = size;
-        }
+    private record SizedCharacterStreamIterable(Supplier<IntStream> streamSupplier,
+                                                int size) implements Iterable<Character>, Sized {
 
         @Override
         public @NotNull Iterator<Character> iterator() {
-            return streamSupplier.get().mapToObj(intValue -> (char)intValue).iterator();
-        }
-
-        @Override
-        public int size() {
-            return size;
+            return streamSupplier.get().mapToObj(intValue -> (char) intValue).iterator();
         }
     }
 }

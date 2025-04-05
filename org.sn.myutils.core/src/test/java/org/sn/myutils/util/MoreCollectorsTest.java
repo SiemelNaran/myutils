@@ -37,7 +37,7 @@ public class MoreCollectorsTest extends TestBase {
 
     /**
      * Verify that MoreCollectors.maxAndMinBy returns the same thing as Collectors.minBy and Collectors.maxBy.
-     * If two Person's have the same age in seconds, return the first person.
+     * If two Person have the same age in seconds, return the first person.
      *
      * <p>The sequential way is sometimes faster than the parallel way.  No idea why!
      */

@@ -24,7 +24,7 @@ public class CentralServerIdTest {
         
         CentralServerId centralServerId1 = new CentralServerId(1595660400000L);
         CentralServerId centralServerId2 = new CentralServerId(1595660400001L);
-        assertNotEquals(centralServerId, null);
+        assertNotEquals(null, centralServerId);
         assertEquals(centralServerId, centralServerId1);
         assertNotSame(centralServerId, centralServerId1);
         assertNotEquals(centralServerId1, centralServerId2);
@@ -32,7 +32,7 @@ public class CentralServerIdTest {
         assertNotEquals(centralServerId1.hashCode(), centralServerId2.hashCode());
         assertTrue(centralServerId1.compareTo(centralServerId2) < 0);
         assertTrue(centralServerId2.compareTo(centralServerId1) > 0);
-        assertEquals(centralServerId1.compareTo(centralServerId), 0);
+        assertEquals(0, centralServerId1.compareTo(centralServerId));
     }
     
     @Test

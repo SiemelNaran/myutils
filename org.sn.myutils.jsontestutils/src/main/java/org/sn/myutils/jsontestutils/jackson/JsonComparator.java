@@ -41,18 +41,8 @@ class JsonComparator {
     /**
      * Class representing path to a JSON attribute.
      */
-    private static class JsonPath {
+    private record JsonPath(String name, String value, JsonComparator.JsonPath parent) {
         private static final JsonPath EMPTY = new JsonPath(null, null, null);
-
-        private final String name;
-        private final String value;
-        private final JsonPath parent;
-
-        private JsonPath(String name, String value, JsonPath parent) {
-            this.name = name;
-            this.value = value;
-            this.parent = parent;
-        }
 
         /**
          * Return the JSON path, which is a string like "[].child.someArray[].booleanFlag" or "[].lastName".
@@ -62,7 +52,7 @@ class JsonComparator {
             StringBuilder result = new StringBuilder();
             if (parent != null) {
                 result.append(parent.getType());
-                if (result.length() > 0 && !name.equals("[]")) {
+                if (!result.isEmpty() && !name.equals("[]")) {
                     result.append('.');
                 }
                 result.append(name);
@@ -78,7 +68,7 @@ class JsonComparator {
             StringBuilder result = new StringBuilder();
             if (parent != null) {
                 result.append(parent.getPathAsString());
-                if (result.length() > 0 && !name.equals("[]")) {
+                if (!result.isEmpty() && !name.equals("[]")) {
                     result.append('.');
                 }
                 if ("[]".equals(name)) {
@@ -134,7 +124,7 @@ class JsonComparator {
         private final List<String> errors = new ArrayList<>();
 
         private void compare(JsonPath path, JsonNode expected, JsonNode actual) {
-            if (!equivalent(expected.getClass(), actual.getClass())) {
+            if (notEquivalent(expected.getClass(), actual.getClass())) {
                 addError(path,
                          "Expected " + expected.getClass().getSimpleName() + "(" + expected.asText()
                                  + ") but got " + actual.getClass().getSimpleName() + "(" + actual.asText() + ")");
@@ -241,7 +231,7 @@ class JsonComparator {
         }
 
         private void compareTypes(JsonPath path, JsonNode expected, JsonNode actual) {
-            if (!equivalent(expected.getClass(), actual.getClass())) {
+            if (notEquivalent(expected.getClass(), actual.getClass())) {
                 addError(path,
                          "Expected type " + expected.getClass().getSimpleName()
                                  + " but got type " + actual.getClass().getSimpleName());
@@ -253,7 +243,7 @@ class JsonComparator {
         }
 
         void throwIfAssertionErrors(JsonNode actual) {
-            if (errors.size() > 0) {
+            if (!errors.isEmpty()) {
                 try {
                     if (printToStdErr) {
                         errors.forEach(System.err::println);
@@ -305,18 +295,18 @@ class JsonComparator {
      * Return true if the node types are the same, for example if both are TextNode.
      * Also return true if one is an IntNode and the other a LongNode.
      */
-    private static boolean equivalent(Class<? extends JsonNode> first, Class<? extends JsonNode> second) {
+    private static boolean notEquivalent(Class<? extends JsonNode> first, Class<? extends JsonNode> second) {
         if (first.equals(second)) {
-            return true;
+            return false;
         }
         if ((first.equals(IntNode.class) && second.equals(LongNode.class))
                 || (first.equals(LongNode.class) && second.equals(IntNode.class))) {
-            return true;
+            return false;
         }
         if ((first.equals(FloatNode.class) && second.equals(DoubleNode.class))
                 || (first.equals(DoubleNode.class) && second.equals(FloatNode.class))) {
-            return true;
+            return false;
         }
-        return false;
+        return true;
     }
 }

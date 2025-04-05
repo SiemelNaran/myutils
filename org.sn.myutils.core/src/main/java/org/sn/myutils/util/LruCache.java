@@ -65,7 +65,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
      */
     @Override
     public V put(K key, V value) {
-        if (map.size() == 0) {
+        if (map.isEmpty()) {
             assert newestNode == null;
             assert oldestNode == null;
             newestNode = new Node<>(null, key, value, null);
@@ -135,6 +135,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
      * Remove an item from the cache.
      */
     @Override
+    @SuppressWarnings("SuspiciousMethodCalls")
     public V remove(Object key) {
         Node<K, V> find = map.get(key);
         return internalRemove(find);
@@ -340,7 +341,7 @@ public class LruCache<K, V> extends AbstractMap<K, V> {
     }
 
     /**
-     * Remove oldest node.
+     * Remove the oldest node.
      * LinkedHashMap does not have this function.
      * 
      * <p>This function is useful if you have an LRU cache of some large or infinite size

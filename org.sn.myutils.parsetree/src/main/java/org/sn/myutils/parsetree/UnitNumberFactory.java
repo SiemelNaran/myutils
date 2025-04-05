@@ -64,7 +64,7 @@ public class UnitNumberFactory implements NumberFactory {
         try {
             unitName = unitCase.convert(unitName);
         } catch (IllegalArgumentException ignored) {
-            // unit name unchanged and it won't be found in map
+            // unit name unchanged, and it won't be found in map
             // for example if unit name is mixed case and unitCase is ALL_LETTERS_SAME_CASE
             // so we throw NumberFormatException("unrecognized unit ...") below
         }

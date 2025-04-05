@@ -21,7 +21,7 @@ public class SimpleTrie<T extends Comparable<T>, U> extends TrieIterationHelper.
     private int modCount;
 
     public SimpleTrie() {
-        clear();
+        this.root = new SimpleTrieNode<>(null);
     }
 
     @Override
@@ -31,7 +31,7 @@ public class SimpleTrie<T extends Comparable<T>, U> extends TrieIterationHelper.
 
     @Override
     public @Nullable U put(Iterable<T> codePoints, @NotNull U data) {
-        U oldData = root.add(codePoints, data);
+        U oldData = root.add(codePoints, Objects.requireNonNull(data));
         modCount++;
         return oldData;
     }

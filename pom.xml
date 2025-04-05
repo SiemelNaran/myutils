@@ -54,30 +54,21 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-checkstyle-plugin</artifactId>
-                    <version>3.1.1</version>
-                    <dependencies>
-                        <dependency>
-                            <groupId>com.puppycrawl.tools</groupId>
-                            <artifactId>checkstyle</artifactId>
-                            <version>9.0</version>
-                        </dependency>
-                    </dependencies>
+                    <version>3.6.0</version>
+                    <configuration>
+                        <configLocation>checkstyle/checks.xml</configLocation>
+                        <encoding>UTF-8</encoding>
+                        <consoleOutput>true</consoleOutput>
+                        <failsOnError>true</failsOnError>
+                        <linkXRef>false</linkXRef>
+                    </configuration>
                     <executions>
                         <execution>
-                            <id>test-compile</id>
-                            <phase>test-compile</phase>
-                            <configuration>
-                                <includeTestSourceDirectory>true</includeTestSourceDirectory>
-                                <configLocation>${project.basedir}/../checkstyle/checks.xml</configLocation>
-                                <suppressionsLocation>${project.basedir}/../checkstyle/suppressions.xml</suppressionsLocation>
-                                <encoding>UTF-8</encoding>
-                                <consoleOutput>true</consoleOutput>
-                                <violationSeverity>warning</violationSeverity>
-                                <failsOnError>true</failsOnError>
-                            </configuration>
-                            <goals>
-                                <goal>check</goal>
-                            </goals>
+                        <id>validate</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
                         </execution>
                     </executions>
                 </plugin>
@@ -86,7 +77,7 @@
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>3.8.0</version>
                     <configuration>
-                        <release>16</release>
+                        <release>24</release>
                         <showWarnings>true</showWarnings>
                     </configuration>
                     <executions>

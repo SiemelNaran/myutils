@@ -19,7 +19,7 @@ public class MoreCollectors {
     /**
      * Given a stream, return both the minimum and maximum
      * If the stream is empty return an empty Optional.
-     * Otherwise return an Optional of an an array of two elements,
+     * Otherwise, return an Optional of an array of two elements,
      * where the first element is the minimum and the second is the maximum.
      */
     public static <T> Collector<T, MinMax<T>, Optional<MinMax<T>>>

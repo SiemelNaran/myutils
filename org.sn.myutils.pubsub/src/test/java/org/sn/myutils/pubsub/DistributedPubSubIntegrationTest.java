@@ -120,20 +120,21 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     
     @AfterEach
     void invokeShutdowns() {
-        System.out.println("invokeShutdowns");
-        for (var iter = shutdowns.descendingIterator(); iter.hasNext(); ) {
+        System.out.println("invokeShutdowns: size=" + shutdowns.size());
+        int count = 1;
+        for (var iter = shutdowns.descendingIterator(); iter.hasNext(); count++) {
             var s = iter.next();
+            System.out.println("Shutting down " + count + ": " + s);
             s.shutdown();
         }
         shutdowns.clear();
-        sleep(250); // sleep to allow operating system to reclaim port (though this number 250 seems arbitrary)
     }
     
     //////////////////////////////////////////////////////////////////////
 
     private static final String CENTRAL_SERVER_HOST = "localhost";
     private static final int CENTRAL_SERVER_PORT = 2101;
-    private static final int SECOND_CENTRAL_SERVER_PORT = 2102;
+    private static final int SECOND_CENTRAL_SERVER_PORT = 2501;
 
     /**
      * Test duplicate clients.
@@ -270,7 +271,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
             assertThat(words, Matchers.contains("one-s2a", "two-s2a"));
         } else {
             assertThat(words, Matchers.contains("one-s1", "two-s1", "one-s2a", "two-s2a"));
-            // "one-s1", "two-s1" is printed as as ClientOneSubscriber is added before the client receives the PublisherCreated message from the server
+            // "one-s1", "two-s1" is printed as ClientOneSubscriber is added before the client receives the PublisherCreated message from the server
             // so the publisher is only made active once PublisherCreated and SubscriberAdded are received from the server
         }
 
@@ -618,7 +619,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   31001
+                                   30001
         );
         AtomicReference<ServerIndex> serverIndexBanana = new AtomicReference<>(ServerIndex.MAX_VALUE); // index of first banana
         AtomicReference<ServerIndex> serverIndexCarrot = new AtomicReference<>(ServerIndex.MIN_VALUE); // index of last carrot
@@ -688,7 +689,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
-                                   31002
+                                   30002
         );
         assertNull(client2.getPublisher("hello"));
         waitFor(Collections.singletonList(client2.startAsync()));
@@ -753,7 +754,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         sleep(250); // time to let messages be sent to client2
         System.out.println("after client2 downloads (unsorted): actual=" + words);
         // because SubscriberAdded commands are received in a random order, subscriber1 may be added after subscriber2
-        // so sort elements 0 and 1, elements 2 and 3, etc
+        // so sort elements 0 and 1, elements 2 and 3, etc.
         // this still proves that ImportantTwo sent first, then ImportantThree, then banana, then carrot, then dragonfruit
         words.subList(0, 2).sort(Comparator.naturalOrder());
         words.subList(2, 4).sort(Comparator.naturalOrder());
@@ -830,7 +831,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     }
     
     /**
-     * In this test we shutdown the client and server.
+     * In this test we shut down the client and server.
      * Verify that restart fails.
      */
     @Test
@@ -844,7 +845,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   31001
+                                   30001
         );
         Future<Void> startClient1Future = client1.startAsync();
         //assertFalse(startClient1Future.isDone());// may be true
@@ -885,7 +886,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         var clientDuplicateAddress = createClient(PubSub.defaultQueueCreator(),
                                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
                                                   "client2",
-                                                  31001
+                                                  30001
         );
         Future<Void> startClientDuplicateAddressFuture = clientDuplicateAddress.startAsync();
         sleep(250); // time to let client start        
@@ -921,7 +922,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   31001
+                                   30001
         );
         CompletableFuture<Void> client1Started = client1.startAsync();
         Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
@@ -934,7 +935,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
-                                   31002
+                                   30002
         );
         client2.startAsync();
         client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a")));
@@ -993,7 +994,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   31001
+                                   30001
         );
         waitFor(Collections.singletonList(client1.startAsync()));
         assertEquals(1, client1.getCountTypesSent()); // Identification
@@ -1002,7 +1003,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
-                                   31002
+                                   30002
         );
         waitFor(Collections.singletonList(client2.startAsync()));
         assertEquals(1, client1.getCountTypesSent());
@@ -1057,7 +1058,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   31001
+                                   30001
         );
         waitFor(Collections.singletonList(client1.startAsync()));
         Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
@@ -1069,7 +1070,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
-                                   31002
+                                   30002
         );
         waitFor(Collections.singletonList(client2.startAsync()));
         client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a")));
@@ -1136,14 +1137,14 @@ public class DistributedPubSubIntegrationTest extends TestBase {
             var client1 = createClient(PubSub.defaultQueueCreator(),
                                        PubSub.defaultSubscriptionMessageExceptionHandler(),
                                        "client1",
-                                       31001
+                                       30001
             );
             startFutures.add(client1.startAsync());
             
             var client2 = createClient(PubSub.defaultQueueCreator(),
                                        PubSub.defaultSubscriptionMessageExceptionHandler(),
                                        "client2",
-                                       31002
+                                       30002
             );
             startFutures.add(client2.startAsync());
 
@@ -1213,14 +1214,14 @@ public class DistributedPubSubIntegrationTest extends TestBase {
             var client1 = createClient(PubSub.defaultQueueCreator(),
                                        PubSub.defaultSubscriptionMessageExceptionHandler(),
                                        "client1",
-                                       31001
+                                       30001
             );
             startFutures.add(client1.startAsync());
             
             var client2 = createClient(PubSub.defaultQueueCreator(),
                                        PubSub.defaultSubscriptionMessageExceptionHandler(),
                                        "client2",
-                                       31002
+                                       30002
             );
             startFutures.add(client2.startAsync());
 
@@ -1269,10 +1270,10 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals("client1", client1.getMachineId().toString());
         assertEquals("client2", client2.getMachineId().toString());
         assertNotEquals(client1.hashCode(), client2.hashCode());
-        assertNotEquals(client1, null);
+        assertNotNull(client1);
         // ClientMachine::toString is mostly used for how the debugger renders the object
-        assertEquals("client1@/127.0.0.1:31001", client1.toString());
-        assertEquals("client2@/127.0.0.1:31002", client2.toString());
+        assertEquals("client1@/127.0.0.1:30001", client1.toString());
+        assertEquals("client2@/127.0.0.1:30002", client2.toString());
     }
     
     /**
@@ -1293,7 +1294,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   31001
+                                   30001
         );
         startFutures.add(client1.startAsync());
         Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
@@ -1303,7 +1304,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
-                                   31002
+                                   30002
         );
         client2.setMessageReceivedListener(wrapper -> {
             var message = wrapper.getMessage();
@@ -1379,7 +1380,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   31001
+                                   30001
         );
         startFutures.add(client1.startAsync());
         Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
@@ -1393,7 +1394,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
-                                   31002
+                                   30002
         );
         waitFor(Collections.singletonList(client2.startAsync()));
         client2.subscribe("hello", "ClientTwoSubscriber_First", CloneableString.class, str -> words.add(str.append("-s2a")));
@@ -1447,14 +1448,14 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         var client1 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client1",
-                                   31001
+                                   30001
         );
         startFutures.add(client1.startAsync());
 
         var client2 = createClient(PubSub.defaultQueueCreator(),
                                    PubSub.defaultSubscriptionMessageExceptionHandler(),
                                    "client2",
-                                   31002
+                                   30002
         );
         startFutures.add(client2.startAsync());
         
@@ -1522,7 +1523,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         helloPublisher1.publish(new CloneableString("carrot"));
 
         // because SubscriberAdded commands are received in a random order, subscriber1 may be added after subscriber2
-        // so sort elements 0 and 1, elements 2 and 3, etc
+        // so sort elements 0 and 1, elements 2 and 3, etc.
         // this still proves that ImportantTwo sent first, then ImportantThree, then banana, then carrot, then dragonfruit
         sleep(250); // time to let messages be sent to client2
         words.subList(3, 5).sort(Comparator.naturalOrder());
@@ -1560,12 +1561,12 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      * Test performance.
      * There is a central server and 4 clients.
      * 3 clients publish N messages each, and one of them also publishes another N messages.
-     * The 4th client receives all of the messages and has 2 subscribers.
+     * The 4th client receives all the messages and has 2 subscribers.
      * 
      * <p>On my Linux laptop Intel Core i7-3720QM CPU @ 2.60GHz * 4,<br/>
      * With N as 1000 the test takes about 1.0sec at INFO level, and 2.9sec at TRACE level<br/>
      *
-     * <p>On my MacOS 2.3GHz Intel Core i9,<br/>
+     * <p>On my macOS 2.3GHz Intel Core i9,<br/>
      * With N as 1000 the test takes about 1.4sec.<br/>
      * 
      * <p>This test also tests that the server does not encounter WritePendingException
@@ -1918,7 +1919,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         List<CompletableFuture<Void>> startFutures = new ArrayList<>();
 
         var serverSocketTransformer = new TestSocketTransformer();
-        var centralServer = createServer(serverSocketTransformer, Collections.emptyMap());
+        var centralServer = createServer(Collections.emptyMap(), CENTRAL_SERVER_PORT, serverSocketTransformer);
         startFutures.add(centralServer.start());
         
         var clientSocketTransformer = new TestSocketTransformer();
@@ -1944,7 +1945,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals("ClientAccepted=1", client1.getTypesReceived());
         assertEquals("ClientAccepted=1", client2.getTypesReceived());
     
-        // client1 create publisher but we mock so that each call to send message to server fails
+        // client1 create publisher, but we mock so that each call to send message to server fails
         // verify that there is one initial send and 3 retries but all fail
         System.out.println("Test client retry");
         clientSocketTransformer.setWriteFailCount("CreatePublisher");
@@ -1972,7 +1973,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertThat(client1.getSendFailures(), Matchers.empty());
         assertThat(centralServer.getSendFailures(), Matchers.empty());
         
-        // client2 subscribes to the topic, which sends the createPublisher command down to them
+        // client2 subscribes to the topic, which sends the createPublisher command down to them.
         // we mock so that each call to send message to server fails
         // verify that there is one initial send and 3 retries but all fail on the server
         System.out.println("Test server retry");
@@ -2147,29 +2148,29 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     }
 
     public static void main(String[] args) throws IOException {
-        DistributedMessageServer centralServer = new TestDistributedMessageServer(new InetSocketAddress(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT),
-                                                                                  Collections.emptyMap());
+        DistributedMessageServer centralServer = DistributedMessageServer.create(new InetSocketAddress(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT),
+                                                                                 Collections.emptyMap());
         centralServer.start();
         sleep(250); // time to let the central server start
         
-        var client1 = new TestDistributedSocketPubSub(1,
-                                                      PubSub.defaultQueueCreator(),
-                                                      PubSub.defaultSubscriptionMessageExceptionHandler(),
-                                                      "client1",
-                                                      KeyToSocketAddressMapper.forSingleHostAndPort("localhost",
-                                                                                                    30001,
-                                                                                                    CENTRAL_SERVER_HOST,
-                                                                                                    CENTRAL_SERVER_PORT));
+        var client1 = DistributedSocketPubSub.create(new PubSub.PubSubConstructorArgs(1,
+                                                                                      PubSub.defaultQueueCreator(),
+                                                                                      PubSub.defaultSubscriptionMessageExceptionHandler()),
+                                                     "client1",
+                                                     KeyToSocketAddressMapper.forSingleHostAndPort("localhost",
+                                                                                                   30001,
+                                                                                                   CENTRAL_SERVER_HOST,
+                                                                                                   CENTRAL_SERVER_PORT));
         client1.startAsync();
         
-        var client2 = new TestDistributedSocketPubSub(1,
-                                                      PubSub.defaultQueueCreator(),
-                                                      PubSub.defaultSubscriptionMessageExceptionHandler(),
-                                                      "client2",
-                                                      KeyToSocketAddressMapper.forSingleHostAndPort("localhost",
-                                                                                                    30002,
-                                                                                                    CENTRAL_SERVER_HOST,
-                                                                                                    CENTRAL_SERVER_PORT));
+        var client2 = TestDistributedSocketPubSub.create(new PubSub.PubSubConstructorArgs(1,
+                                                                                         PubSub.defaultQueueCreator(),
+                                                                                         PubSub.defaultSubscriptionMessageExceptionHandler()),
+                                                        "client2",
+                                                        KeyToSocketAddressMapper.forSingleHostAndPort("localhost",
+                                                                                                        30002,
+                                                                                                        CENTRAL_SERVER_HOST,
+                                                                                                        CENTRAL_SERVER_PORT));
         client2.startAsync();
 
         sleep(250); // time to let clients start, connect to the central server, and send identification
@@ -2190,7 +2191,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         Object subscriberEndpoint2 = constructor.newInstance(clientMachineId1, "SubscriberName2", 500L);
         Object subscriberEndpoint3 = constructor.newInstance(clientMachineId2, "SubscriberName3", 500L);
 
-        assertNotEquals(subscriberEndpoint1, null);
+        assertNotNull(subscriberEndpoint1);
         
         assertEquals(subscriberEndpoint1, subscriberEndpoint1b);
         assertEquals(subscriberEndpoint1.hashCode(), subscriberEndpoint1b.hashCode());
@@ -2213,26 +2214,26 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     /**
      * Create a server and add it to list of objects to be shutdown at the end of the test function.
      */
-    private TestDistributedMessageServer createServer(Map<RetentionPriority, Integer> mostRecentMessagesToKeep, int port) throws IOException {
-        var server = new TestDistributedMessageServer(new InetSocketAddress(CENTRAL_SERVER_HOST, port),
-                                                      mostRecentMessagesToKeep);
-        addShutdown(server);
-        return server;
+    private TestDistributedMessageServer createServer(Map<RetentionPriority, Integer> mostRecentMessagesToKeep,
+                                                      int port) throws IOException {
+        return createServer(mostRecentMessagesToKeep, port, new SocketTransformer());
     }
     
     /**
      * Create a server and add it to list of objects to be shutdown at the end of the test function.
      * Use the default port CENTRAL_SERVER_PORT.
      */
-    private TestDistributedMessageServer createServer(SocketTransformer socketTransformer,
-                                                      Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
-        var server = new TestDistributedMessageServer(socketTransformer,
-                                                      new InetSocketAddress(CENTRAL_SERVER_HOST, CENTRAL_SERVER_PORT),
-                                                      mostRecentMessagesToKeep);
+    private TestDistributedMessageServer createServer(Map<RetentionPriority, Integer> mostRecentMessagesToKeep,
+                                                      int port,
+                                                      SocketTransformer socketTransformer) throws IOException {
+        var server = new TestDistributedMessageServer(new InetSocketAddress(CENTRAL_SERVER_HOST, port),
+                                                      mostRecentMessagesToKeep,
+                                                      socketTransformer);
+        server.registerCleanable();
         addShutdown(server);
         return server;
     }
-    
+
     /**
      * Create a client and add it to list of objects to be shutdown at the end of the test function.
      * Use the KeyToSocketAddressMapper for a single host and port.
@@ -2241,15 +2242,13 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                                      SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler,
                                                      String machineId,
                                                      int localPort) throws IOException {
-        var client = createClient(queueCreator,
-                                  subscriptionMessageExceptionHandler,
-                                  machineId,
-                                  KeyToSocketAddressMapper.forSingleHostAndPort("localhost",
-                                                                                localPort,
-                                                                                DistributedPubSubIntegrationTest.CENTRAL_SERVER_HOST,
-                                                                                DistributedPubSubIntegrationTest.CENTRAL_SERVER_PORT));
-        addShutdown(client);
-        return client;
+        return createClient(queueCreator,
+                            subscriptionMessageExceptionHandler,
+                            machineId,
+                            KeyToSocketAddressMapper.forSingleHostAndPort("localhost",
+                                                                          localPort,
+                                                                          DistributedPubSubIntegrationTest.CENTRAL_SERVER_HOST,
+                                                                          DistributedPubSubIntegrationTest.CENTRAL_SERVER_PORT));
     }
     
     /**
@@ -2263,7 +2262,9 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                                      queueCreator,
                                                      subscriptionMessageExceptionHandler,
                                                      machineId,
-                                                     mapper);
+                                                     mapper,
+                                                     new SocketTransformer());
+        client.registerCleanable();
         addShutdown(client);
         return client;
     }
@@ -2277,15 +2278,16 @@ public class DistributedPubSubIntegrationTest extends TestBase {
                                                      SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler,
                                                      String machineId,
                                                      int port) throws IOException {
-        var client = new TestDistributedSocketPubSub(socketTransformer,
-                                                     1,
+        var client = new TestDistributedSocketPubSub(1,
                                                      queueCreator,
                                                      subscriptionMessageExceptionHandler,
                                                      machineId,
                                                      KeyToSocketAddressMapper.forSingleHostAndPort("localhost",
                                                                                                    port,
                                                                                                    DistributedPubSubIntegrationTest.CENTRAL_SERVER_HOST,
-                                                                                                   DistributedPubSubIntegrationTest.CENTRAL_SERVER_PORT));
+                                                                                                   DistributedPubSubIntegrationTest.CENTRAL_SERVER_PORT),
+                                                     socketTransformer);
+        client.registerCleanable();
         addShutdown(client);
         return client;
     }
@@ -2321,14 +2323,9 @@ class TestDistributedMessageServer extends DistributedMessageServer {
     private Consumer<MessageWrapper> messageSentListener;
 
     public TestDistributedMessageServer(SocketAddress messageServer,
-                                        Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
-        super(messageServer, mostRecentMessagesToKeep);
-    }
-
-    public TestDistributedMessageServer(SocketTransformer socketTransformer,
-                                        SocketAddress messageServer,
-                                        Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
-        super(socketTransformer, messageServer, mostRecentMessagesToKeep);
+                                        Map<RetentionPriority, Integer> mostRecentMessagesToKeep,
+                                        SocketTransformer socketTransformer) throws IOException {
+        super(messageServer, mostRecentMessagesToKeep, socketTransformer);
     }
 
     public void setSecurityKey(String key) {
@@ -2343,7 +2340,8 @@ class TestDistributedMessageServer extends DistributedMessageServer {
     }
 
     /**
-     * Set SO_REUSEADDR so that the unit tests can close and open channels immediately, not waiting for TIME_WAIT seconds.
+     * Set SO_REUSEADDR to true so that the unit tests can close and open channels immediately,
+     * not waiting for TIME_WAIT seconds.
      */
     @Override
     protected void onBeforeSocketBound(NetworkChannel channel) throws IOException {
@@ -2434,22 +2432,13 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
                                        Supplier<Queue<Subscriber>> queueCreator,
                                        SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler,
                                        String machineId,
-                                       KeyToSocketAddressMapper messageServerLookup) throws IOException {
+                                       KeyToSocketAddressMapper messageServerLookup,
+                                       SocketTransformer socketTransformer) throws IOException {
         super(new PubSubConstructorArgs(numInMemoryHandlers, queueCreator, subscriptionMessageExceptionHandler),
               machineId,
-              messageServerLookup);
-    }
-
-    public TestDistributedSocketPubSub(SocketTransformer socketTransformer,
-                                       int numInMemoryHandlers,
-                                       Supplier<Queue<Subscriber>> queueCreator,
-                                       SubscriptionMessageExceptionHandler subscriptionMessageExceptionHandler,
-                                       String machineId,
-                                       KeyToSocketAddressMapper messageServerLookup) throws IOException {
-        super(socketTransformer,
-              new PubSubConstructorArgs(numInMemoryHandlers, queueCreator, subscriptionMessageExceptionHandler),
-              machineId,
-              messageServerLookup);
+              messageServerLookup,
+              socketTransformer,
+              TestDistributedSocketPubSub::onBeforeSocketBound);
     }
 
     void enableSecurityKey(String key) {
@@ -2468,12 +2457,15 @@ class TestDistributedSocketPubSub extends DistributedSocketPubSub {
     }
 
     /**
-     * Set SO_REUSEADDR so that the unit tests can close and open channels immediately, not waiting for TIME_WAIT seconds.
+     * Set SO_REUSEADDR to true so that the unit tests can close and open channels immediately,
+     * not waiting for TIME_WAIT seconds.
      */
-    @Override
-    protected void onBeforeSocketBound(NetworkChannel channel) throws IOException {
-        super.onBeforeSocketBound(channel);
-        channel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
+    private static void onBeforeSocketBound(NetworkChannel channel) {
+        try {
+            channel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
    
     @Override

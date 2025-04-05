@@ -6,6 +6,7 @@ import static java.lang.Math.max;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.Callable;
@@ -71,7 +72,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     /**
      * {@inheritDoc}
      * 
-     * <p>Cancels periodic tasks that have not started. Non periodic tasks will run at the next scheduled time.
+     * <p>Cancels periodic tasks that have not started. Non-periodic tasks will run at the next scheduled time.
      */
     @Override
     public synchronized void shutdown() {
@@ -94,7 +95,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     public synchronized @NotNull List<Runnable> shutdownNow() {
         List<Runnable> scheduledNotStartedTasks =
                 scheduledTasks.values().stream()
-                                       .<TestScheduledFutureTask<?>>mapMulti((futures, flattener) -> futures.stream().forEach(future -> flattener.accept(future)))
+                                       .<TestScheduledFutureTask<?>>mapMulti(Iterable::forEach)
                                        .peek(TestScheduledFutureTask::clearExecutor)
                                        .collect(Collectors.toList());
         scheduledTasks.clear();
@@ -228,7 +229,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
     
     private static class TestScheduledFutureTask<T> extends FutureTask<T> implements RunnableScheduledFuture<T> {
         private @Nullable TestScheduledThreadPoolExecutor executor;
-        private final long periodMillis; // zero means non recurring, positive means scheduleAtFixedRate, negative means scheduleWithFixedDelay
+        private final long periodMillis; // zero means non-recurring, positive means scheduleAtFixedRate, negative means scheduleWithFixedDelay
         private long timeMillis;
         private volatile Future<?> realFuture;
         
@@ -294,7 +295,7 @@ public class TestScheduledThreadPoolExecutor implements ScheduledExecutorService
         }
 
         private void runNormal() {
-            assert executor != null; // to avoid IntelliJ warning about NullPointerException
+            var executor = Objects.requireNonNull(this.executor); // to avoid IntelliJ warning about NullPointerException
             executor.setCurrentTimeMillis(timeMillis);
             if (!isPeriodic()) {
                 super.run();

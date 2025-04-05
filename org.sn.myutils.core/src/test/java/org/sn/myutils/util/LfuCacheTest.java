@@ -344,7 +344,7 @@ public class LfuCacheTest {
 
             assertNotEquals(entryFour.hashCode(), entryTwo.hashCode());
             assertNotEquals(entryFour, entryTwo);
-            assertNotEquals(entryFour, null);
+            assertNotEquals(null, entryFour);
 
             var anotherEntryFour = cache.entrySet().iterator().next();
             assertNotSame(entryFour, anotherEntryFour);

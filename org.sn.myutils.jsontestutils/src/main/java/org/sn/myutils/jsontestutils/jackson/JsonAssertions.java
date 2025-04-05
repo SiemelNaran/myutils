@@ -98,7 +98,7 @@ public class JsonAssertions {
          *         if top level is a JSON array of objects,
          *         each having an attribute "child" which is a JSON object,
          *         which has an attribute "someArray" which is a JON array,
-         *         which has an attrubute "booleanFlag".
+         *         which has an attribute "booleanFlag".
          *     </li>
          * </ul>
          */

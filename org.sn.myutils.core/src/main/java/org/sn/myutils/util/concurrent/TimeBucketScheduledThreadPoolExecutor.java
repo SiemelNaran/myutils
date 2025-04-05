@@ -43,6 +43,7 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.RunnableScheduledFuture;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
@@ -81,7 +82,7 @@ import org.sn.myutils.util.concurrent.SerializableLambdaUtils.RunnableInfo;
  * It is not necessary to call the close function as files will be closed as program exit anyway,
  * but the unit tests do it each test creates a new TimeBucketScheduledThreadPoolExecutor.
  */
-public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableScheduledExecutorService {
+public class TimeBucketScheduledThreadPoolExecutor implements ScheduledExecutorService {
     private interface IndexFileLoader {
         /**
          * Create or overwrite a file.
@@ -105,7 +106,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
          * Open a file for reading and writing.
          *
          * @param filename the file's basename. The real file will be this filename within the folder passed to TimeBucketScheduledThreadPoolExecutor's constructor.
-         * @param createIfNotFound If true then if the file does not exist, create an empty file
+         * @param createIfNotFound If true, then if the file does not exist, create an empty file
          * @return a RandomAccessFile or null if createIfNotFound is found and file does not exist. It is the caller's responsibility to close this.
          */
         @Nullable RandomAccessFile open(String filename, boolean createIfNotFound) throws IOException;
@@ -171,8 +172,8 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         private final DataFileLoader dataFileLoader;
 
         /**
-         * A LRU cache of each time bucket to the random access file, which is an open file.
-         * When an time bucket is explicitly removed or evicted from the map, we close the file.
+         * An LRU cache of each time bucket to the random access file, which is an open file.
+         * When a time bucket is explicitly removed or evicted from the map, we close the file.
          *
          * <p>This class may not be complete, so it is not suitable for general use, and is therefore private.
          *
@@ -258,7 +259,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             private final TimeBucket timeBucket;
             private final long position; // position of this task within the RandomAccessFile. Used to mark the task as done or canceled.
             private final long whenMillis;
-            private volatile @Nullable RunnableScheduledFuture<V> realFuture; // will be non null when the time bucket is loaded into memory
+            private volatile @Nullable RunnableScheduledFuture<V> realFuture; // will be non-null when the time bucket is loaded into memory
             private volatile boolean canceled;
 
             TimeBucketFutureTask(TimeBucket timeBucket, long position, long whenMillis) {
@@ -646,8 +647,13 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             }
         }
 
+        /**
+         * Get the random access file for the given time bucket.
+         * This function adds the file to an internal map,
+         * and closes the file when we remove the file.
+         */
         private @NotNull RandomAccessFile lookupTimeBucketDataFile(TimeBucket timeBucket, boolean createIfNotFound) {
-            return timeBucketFileMap.computeIfAbsent(timeBucket, unused -> {
+            return timeBucketFileMap.computeIfAbsent(timeBucket, _ -> {
                 try {
                     RandomAccessFile randomAccessFile = Objects.requireNonNull(dataFileLoader.open(timeBucket.getFilename(), createIfNotFound));
                     if (randomAccessFile.length() == 0) {
@@ -779,7 +785,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
          *
          * <p>Set inMemory to true if:
          * - the start time of this bucket is less than or equal to now
-         * - the start time of this bucket is slightly greater than now where slightly means 20% of the bucket length.  By example:
+         * - the start time of this bucket is slightly greater than now where slightly means 20% of the bucket length.  For example:
          *     if time bucket starts at 4000ms, and bucket length is 1000ms, and now is 3900ms, set inMemory=true
          *     because 3900 >= 4000 - (20% of 1000) = 3800ms
          */
@@ -866,21 +872,21 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
         }
 
         RunnableScheduledFuture<?> pullRealFuture(long position) throws InterruptedException {
-            var blockingValue = waitingFutures.computeIfAbsent(position, unused -> new BlockingValue<>());
+            var blockingValue = waitingFutures.computeIfAbsent(position, _ -> new BlockingValue<>());
             var futureTask = blockingValue.get();
             waitingFutures.remove(position);
             return futureTask.realFuture;
         }
 
         RunnableScheduledFuture<?> pullRealFuture(long position, long nanos) throws InterruptedException, TimeoutException {
-            var blockingValue = waitingFutures.computeIfAbsent(position, unused -> new BlockingValue<>());
+            var blockingValue = waitingFutures.computeIfAbsent(position, _ -> new BlockingValue<>());
             var futureTask = blockingValue.get(nanos, TimeUnit.NANOSECONDS);
             waitingFutures.remove(position);
             return futureTask.realFuture;
         }
 
         void resolveWaitingFuture(long position, @NotNull TimeBucketManager.TimeBucketFutureTask<?> future) {
-            waitingFutures.computeIfPresent(position, (unusedPosition, blockingValue) -> blockingValue.setValue(future));
+            waitingFutures.computeIfPresent(position, (_, blockingValue) -> blockingValue.setValue(future));
         }
     }
 
@@ -1033,7 +1039,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
     public void shutdown() {
         executorState = ExecutorState.SHUTDOWN;
         timeBucketManager.stopBackgroundTasks(false);
-        // we cannot shutdown mainExecutor because during awaitTermination tasks from future time buckets may be added to it
+        // we cannot shut down mainExecutor because during awaitTermination tasks from future time buckets may be added to it
     }
 
     /**
@@ -1175,7 +1181,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
 
     @Override
     @SuppressWarnings("ResultOfMethodCallIgnored")
-    public void close() throws IOException {
+    public void close() {
         shutdownNow();
         try {
             awaitTermination(1, TimeUnit.MICROSECONDS); // closes files
@@ -1183,7 +1189,7 @@ public class TimeBucketScheduledThreadPoolExecutor implements AutoCloseableSched
             try {
                 awaitTermination(1, TimeUnit.MICROSECONDS); // closes files
             } catch (InterruptedException | RuntimeException | Error e) {
-                throw new IOException(e);
+                throw new RuntimeException(e);
             }
         }
     }

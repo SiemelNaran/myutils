@@ -85,7 +85,7 @@ public class PriorityLock implements Lock {
          * </ul>
          * 
          * @param originalPriority the priority of the thread when lock was called.
-         *                         Other threads are awaiting for this priority's condition object to be signaled
+         *                         Other threads are waiting for this priority's condition object to be signaled
          * @param threadLockDetails same as priorityLock.threadLockDetails                         
          */
         private void removeThreadAndSignal(int originalPriority, @NotNull ThreadLockDetails threadLockDetails) {
@@ -387,7 +387,7 @@ public class PriorityLock implements Lock {
         // all 3 member variables below are only changed while internalLock is locked =>
         private volatile int originalPriority; // to save the original priority of the thread in case user changes it while running the thread
         private volatile long threadId;
-        private int holdCount; // IntelliJ gives warnings on ++holdCount and --holdCount if make this volatile
+        private int holdCount; // IntelliJ gives warnings on ++holdCount and --holdCount we if make this volatile
 
         /**
          * Set the member variables of the class.
@@ -399,7 +399,7 @@ public class PriorityLock implements Lock {
 
         private void setAll(int originalPriority, int holdCount) {
             this.originalPriority = originalPriority;
-            this.threadId = Thread.currentThread().getId();
+            this.threadId = Thread.currentThread().threadId();
             this.holdCount = holdCount;
         }
 
@@ -415,7 +415,7 @@ public class PriorityLock implements Lock {
          * even though internalLock.isHeldByCurrentThread() is true.
          */
         public boolean isExplicitlyLockedByCurrentThread() {
-            return Thread.currentThread().getId() == threadId;
+            return Thread.currentThread().threadId() == threadId;
         }
 
         public void incrementHoldCount() {
@@ -920,7 +920,7 @@ public class PriorityLock implements Lock {
      * When this exception is thrown, the priority lock is locked by the current thread,
      * but the current thread is not the one with the highest priority.
      */
-    public static class MaybeNotHighestThreadAfterAwaitError extends ThreadDeath {
+    public static class MaybeNotHighestThreadAfterAwaitError extends Error {
         @Serial
         private static final long serialVersionUID = 1L;
         

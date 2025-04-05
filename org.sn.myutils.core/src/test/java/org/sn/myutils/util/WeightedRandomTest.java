@@ -84,7 +84,9 @@ public class WeightedRandomTest extends TestBase {
      * It is unlikely that the random integer will exactly equal the position, here [iNT_MIN, 0].
      * So use a new random number generator that is guaranteed to return one of those values.
      * This gets full code coverage on the line
+     * <code>
      *            if (index < 0) {
+     * </code>
      * as usually the condition is true, but in this test the condition is false.
      */
     @Test
@@ -106,7 +108,7 @@ public class WeightedRandomTest extends TestBase {
     /**
      * The basic algorithm is to pick a random number then find this random number in the position array.
      * As there are many entries in the position array with the same value INT_MIN, and many with the value 0,
-     * the algorithm would normally find the a random position.
+     * the algorithm would normally find a random position.
      * But we need to find the right most position with this value.
      */
     @Test

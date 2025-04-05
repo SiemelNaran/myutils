@@ -14,6 +14,8 @@ import java.util.concurrent.RunnableScheduledFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+
+import org.sn.myutils.annotations.NotNull;
 import org.sn.myutils.util.concurrent.SerializableScheduledExecutorService.RecreateRunnableFailedException;
 import org.sn.myutils.util.concurrent.SerializableScheduledExecutorService.TaskInfo;
 
@@ -82,13 +84,13 @@ class SerializableLambdaUtils {
         private final Class<? extends Runnable> runnableClass;
         private byte flags;
 
-        RunnableInfo(TimeInfo info, SerializableRunnable runnable) {
+        RunnableInfo(TimeInfo info, @NotNull SerializableRunnable runnable) {
             this.timeInfo = info;
             this.serializableRunnable = runnable;
             this.runnableClass = null;
         }
 
-        RunnableInfo(TimeInfo info, Class<? extends Runnable> runnableClass) {
+        RunnableInfo(TimeInfo info, @NotNull Class<? extends Runnable> runnableClass) {
             this.timeInfo = info;
             this.serializableRunnable = null;
             this.runnableClass = runnableClass;
@@ -135,6 +137,7 @@ class SerializableLambdaUtils {
             if (serializableRunnable != null) {
                 return serializableRunnable;
             } else {
+                assert runnableClass != null;
                 try {
                     return runnableClass.getDeclaredConstructor().newInstance();
                 } catch (Exception e) {
@@ -159,6 +162,7 @@ class SerializableLambdaUtils {
             }
         }
 
+        @SuppressWarnings("rawtypes")
         TaskInfo toTaskInfo() {
             return new TaskInfo() {
                 @Override
@@ -280,15 +284,9 @@ class SerializableLambdaUtils {
         return null;
     }
 
-    private static class AdaptSerializableCallable implements SerializableRunnable {
+    private record AdaptSerializableCallable(SerializableCallable<?> callable) implements SerializableRunnable {
         @Serial
         private static final long serialVersionUID = 1L;
-
-        private final SerializableCallable<?> callable;
-
-        AdaptSerializableCallable(SerializableCallable<?> callable) {
-            this.callable = callable;
-        }
 
         @Override
         public void run() {
@@ -301,15 +299,9 @@ class SerializableLambdaUtils {
     }
 
     @SuppressWarnings("rawtypes")
-    private static class AdaptSerializableCallableClass implements SerializableRunnable {
+    private record AdaptSerializableCallableClass(Class<? extends Callable> clazz) implements SerializableRunnable {
         @Serial
         private static final long serialVersionUID = 1L;
-
-        private final Class<? extends Callable> clazz;
-
-        AdaptSerializableCallableClass(Class<? extends Callable> clazz) {
-            this.clazz = clazz;
-        }
 
         @Override
         public void run() {

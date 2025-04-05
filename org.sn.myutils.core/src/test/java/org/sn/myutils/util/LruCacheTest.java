@@ -261,7 +261,7 @@ public class LruCacheTest {
 
             assertNotEquals(entryFour.hashCode(), entryThree.hashCode());
             assertNotEquals(entryFour, entryThree);
-            assertNotEquals(entryFour, null);
+            assertNotEquals(null, entryFour);
             
             var anotherEntryFour = cache.entrySet().iterator().next();
             assertNotSame(entryFour, anotherEntryFour);
@@ -344,8 +344,6 @@ public class LruCacheTest {
         return list;
     }
 
-    ////////////////////////////////////////////////////////////////////////////////////
-
     /**
      * Test to compare LinkedHashMap to LruCache.
      * In LruCache, iteration order is most recently accessed or written to least recent.
@@ -379,11 +377,9 @@ public class LruCacheTest {
         return map.entrySet().stream().map(Map.Entry::toString).toList();
     }
 
-    ////////////////////////////////////////////////////////////////////////////////////
-
     /**
      * This test has no assertions.
-     * It just compare the speed of LinkedHashMap with constructor argument accessOrder=true to LruCache.
+     * It just compares the speed of LinkedHashMap with constructor argument accessOrder=true to LruCache.
      * 
      * @see LruCache for comment on performance.
      */

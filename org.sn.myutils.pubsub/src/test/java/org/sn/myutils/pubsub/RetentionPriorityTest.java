@@ -10,5 +10,4 @@ public class RetentionPriorityTest {
     void testCompare() {
         assertTrue(RetentionPriority.MEDIUM.compareTo(RetentionPriority.HIGH) < 0);
     }
-
 }

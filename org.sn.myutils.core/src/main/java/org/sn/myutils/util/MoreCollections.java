@@ -24,13 +24,13 @@ public class MoreCollections {
     
     /**
      * An extension of Collection.binarySearch that searches in a subarray for the specified element.
-     * We could use Collections.sort on a list.sublist(start, end) to search a subarray,
+     * We could use <code>Collections.sort</code> on a list.sublist(start, end) to search a subarray,
      * but there is an extra level of indirection,
      * and the indices of the sublist start at zero and don't match the index in the full array,
      * which may at times lead to awkward code.
      * 
      * <p>This function also takes an extractor that specifies how to map each element in the array
-     * to a new element. For example, if you had a list of contacts sorted by age and you wanted
+     * to a new element. For example, if you had a list of contacts sorted by age, and you wanted
      * to find a contact with age N, the key would be N and the extract would be Contact::getAge.
      * 
      * <p>This implementation is not specialized for PageList.
@@ -234,7 +234,7 @@ public class MoreCollections {
     int pageListBinarySearch(AbstractPageList<U> list,
                              U key) {
         ArrayList<Page<U>> pages = list.getPages();
-        int index = binarySearch(pages, 0, pages.size(), page -> page.getList().get(0), key, FindWhich.FIND_ANY);
+        int index = binarySearch(pages, 0, pages.size(), page -> page.getList().getFirst(), key, FindWhich.FIND_ANY);
         if (index >= 0) {
             Page<U> page = pages.get(index);
             return page.getStartIndex();
@@ -276,6 +276,6 @@ public class MoreCollections {
                 return;
             }
         }
-        sortedList.add(0, newValue);
+        sortedList.addFirst(newValue);
     }
 }

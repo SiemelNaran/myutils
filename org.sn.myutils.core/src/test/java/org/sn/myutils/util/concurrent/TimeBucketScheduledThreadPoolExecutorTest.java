@@ -131,7 +131,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     @Test
     void basicTestRunnable() throws IOException {
         Duration timeBucketLength = Duration.ofSeconds(1);
-        try (AutoCloseableScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
+        try (ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
             assertEquals(0, countFiles());
 
             sleepTillNextSecond();
@@ -191,7 +191,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     @Test
     void basicTestCallable() throws IOException {
         Duration timeBucketLength = Duration.ofSeconds(1);
-        try (AutoCloseableScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
+        try (ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
             assertEquals(0, countFiles());
 
             sleepTillNextSecond();
@@ -246,7 +246,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     @Order(1)
     void multipleThreadsWriteToTimeBucketAtSameTime() throws IOException, InterruptedException {
         Duration timeBucketLength = Duration.ofSeconds(1);
-        try (AutoCloseableScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
+        try (ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
             sleepTillNextSecond();
 
             ScheduledExecutorService runner = Executors.newScheduledThreadPool(4, myThreadFactory());
@@ -275,7 +275,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     @SuppressWarnings("unchecked")
     void cancelAndGet() throws IOException, ExecutionException, InterruptedException {
         Duration timeBucketLength = Duration.ofSeconds(1);
-        try (AutoCloseableScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
+        try (ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
             assertEquals(0, countFiles());
 
             sleepTillNextSecond();
@@ -315,7 +315,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     @Test
     void getTimeout1() throws IOException {
         Duration timeBucketLength = Duration.ofSeconds(1);
-        try (AutoCloseableScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
+        try (ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
             assertEquals(0, countFiles());
 
             sleepTillNextSecond();
@@ -337,7 +337,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     @Test
     void getTimeout2() throws IOException {
         Duration timeBucketLength = Duration.ofSeconds(1);
-        try (AutoCloseableScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
+        try (ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
             assertEquals(0, countFiles());
 
             sleepTillNextSecond();
@@ -359,7 +359,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     @Test
     void testForwardingFunctions() throws IOException, ExecutionException, InterruptedException {
         Duration timeBucketLength = Duration.ofSeconds(1);
-        try (AutoCloseableScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
+        try (ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
             service.execute(new MyRunnable("execute"));
             var future1 = service.submit(new MyRunnable("apple"));
             var future2 = service.submit(new MyRunnable("banana"), "banana");
@@ -385,7 +385,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     @Test
     void testRejectWhenShutdown() throws IOException, InterruptedException, ExecutionException, TimeoutException {
         Duration timeBucketLength = Duration.ofSeconds(1);
-        try (AutoCloseableScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
+        try (ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
             assertEquals(0, countFiles());
 
             service.shutdown();
@@ -419,7 +419,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     @Test
     void changeBucketLength() throws IOException {
         Duration timeBucketLength = Duration.ofSeconds(1);
-        try (AutoCloseableScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
+        try (ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
             assertEquals(0, countFiles());
 
             sleepTillNextSecond();
@@ -444,7 +444,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     @Test
     void tooManyTimeBuckets() throws IOException {
         Duration timeBucketLength = Duration.ofMillis(250);
-        try (AutoCloseableScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
+        try (ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory())) {
             sleepTillNextSecond();
 
             int numBuckets = 0;
@@ -480,7 +480,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     @Test
     void testAwaitTermination1() throws IOException, InterruptedException {
         Duration timeBucketLength = Duration.ofSeconds(1);
-        AutoCloseableScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory());
+        ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory());
         sleepTillNextSecond();
 
         service.schedule(new MyRunnable("800"), 800, TimeUnit.MILLISECONDS); // bucket [0, 1000)
@@ -515,7 +515,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
     @ValueSource(booleans = {false, true})
     void testAwaitTermination2(boolean addExtra) throws IOException, InterruptedException {
         Duration timeBucketLength = Duration.ofSeconds(1);
-        AutoCloseableScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory());
+        ScheduledExecutorService service = MoreExecutors.newTimeBucketScheduledThreadPool(folder, timeBucketLength, 1, myThreadFactory());
         sleepTillNextSecond();
 
         service.schedule(new MyRunnable("1100"), 1100, TimeUnit.MILLISECONDS); // bucket [1000, 2000)
@@ -571,7 +571,7 @@ class TimeBucketScheduledThreadPoolExecutorTest extends TestBase {
      */
     @Test
     void testRestartExecutor() throws IOException, InterruptedException {
-        AutoCloseableScheduledExecutorService service = null;
+        ScheduledExecutorService service = null;
 
         try {
             Duration timeBucketLength = Duration.ofSeconds(1);

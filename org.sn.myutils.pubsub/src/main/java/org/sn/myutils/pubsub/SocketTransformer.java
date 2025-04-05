@@ -230,7 +230,7 @@ class SocketTransformer {
     
     /**
      * Tell if the exception reflects the fact that the socket is closed.
-     * The list includes EOFException and all of the channel exceptions that have the word Closed in them.
+     * The list includes EOFException and all the channel exceptions that have the word Closed in them.
      */
     static boolean isClosed(Throwable throwable) {
         Throwable e = unwrapCompletionException(throwable);
