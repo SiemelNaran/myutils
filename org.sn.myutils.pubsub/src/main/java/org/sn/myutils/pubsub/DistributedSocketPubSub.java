@@ -119,8 +119,9 @@ import org.sn.myutils.pubsub.MessageClasses.TopicMessageBase;
 public class DistributedSocketPubSub extends PubSub {
     private static final System.Logger LOGGER = System.getLogger(DistributedSocketPubSub.class.getName());
     private static final ThreadLocal<RelayMessageBase> threadLocalRemoteRelayMessage = new ThreadLocal<>();
-    private static final int MAX_RETRIES = 3;
-    
+    private static final int MAX_RETRIES_FOR_SEND = 3;
+    private static final int MAX_RETRIES_FOR_RECONNECT = 4;
+
     private final Map<String /*topic*/, DormantInfo> dormantInfoMap = new ConcurrentHashMap<>();
     private final SocketTransformer socketTransformer;
     private final KeyToSocketAddressMapper messageServerLookup;
@@ -306,7 +307,7 @@ public class DistributedSocketPubSub extends PubSub {
                 channelExecutor.submit(new MessageReader(messageServer));
             } catch (ConnectException e) {
                 int nextRetry = retry + 1;
-                long delayMillis = computeExponentialBackoff(1000, nextRetry, 4);
+                long delayMillis = getTimeBeforeAttemptingToReconnect(nextRetry);
                 replaceInternalSocketChannel(messageServer, createNewSocket(localAddress, onBeforeBindChannel));
                 LOGGER.log(Level.INFO, String.format("Failed to connect %s. Retrying in %d millis...", snippet, delayMillis));
                 retryExecutor.schedule(() -> doStartOne(messageServer, snippet, nextRetry), delayMillis, TimeUnit.MILLISECONDS);
@@ -315,7 +316,20 @@ public class DistributedSocketPubSub extends PubSub {
             messageServerConnectionListener.completeFutureExceptionally(messageServer, unwrapCompletionException(e));
         }
     }
-    
+
+
+    protected static final long getMaxTimeBeforeAttemptingToReconnect() {
+        return getTimeBeforeAttemptingToReconnect(MAX_RETRIES_FOR_RECONNECT);
+    }
+
+    protected static final long getMinTimeBeforeAttemptingToReconnect() {
+        return getTimeBeforeAttemptingToReconnect(1);
+    }
+
+    private static long getTimeBeforeAttemptingToReconnect(int retryNumber) {
+        return computeExponentialBackoff(1000, retryNumber, MAX_RETRIES_FOR_RECONNECT);
+    }
+
     /**
      * This class is about things to happen when the client is started and receives the ClientAccepted message.
      */
@@ -554,7 +568,7 @@ public class DistributedSocketPubSub extends PubSub {
                 DistributedSocketPubSub.this.onMessageSent(message);
                 future.complete(null);
             } catch (IOException e) {
-                boolean retryDone = retry >= MAX_RETRIES || SocketTransformer.isClosed(e);
+                boolean retryDone = retry >= MAX_RETRIES_FOR_SEND || SocketTransformer.isClosed(e);
                 Level level = retryDone ? Level.WARNING : Level.DEBUG;
                 LOGGER.log(level,
                            String.format("Send message failed: machine=%s, retry=%d, retryDone=%b",
@@ -562,7 +576,7 @@ public class DistributedSocketPubSub extends PubSub {
                            e);
                 if (!retryDone) {
                     int nextRetry = retry + 1;
-                    long delayMillis = computeExponentialBackoff(1000, nextRetry, MAX_RETRIES);
+                    long delayMillis = computeExponentialBackoff(1000, nextRetry, MAX_RETRIES_FOR_SEND);
                     retryExecutor.schedule(() -> send(future, destinationMessage, nextRetry), delayMillis, TimeUnit.MILLISECONDS);
                 } else {
                     future.completeExceptionally(e);
@@ -869,7 +883,7 @@ public class DistributedSocketPubSub extends PubSub {
      */
     @Override
     protected void registerPublisher(Publisher publisher) {
-        var info = dormantInfoMap.computeIfAbsent(publisher.getTopic(), ignoredTopic -> new DormantInfo());
+        var info = dormantInfoMap.computeIfAbsent(publisher.getTopic(), _ -> new DormantInfo());
         if (info.dormantPublisher != null) {
             throw new IllegalStateException("publisher already exists: topic=" + publisher.getTopic());
         }
