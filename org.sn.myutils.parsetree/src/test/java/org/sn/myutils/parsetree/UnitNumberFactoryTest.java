@@ -64,7 +64,7 @@ public class UnitNumberFactoryTest {
             this.val = val;
         }
         
-        protected final BigDecimal rawvalue() {
+        protected final BigDecimal rawValue() {
             return val;
         }
         
@@ -108,7 +108,7 @@ public class UnitNumberFactoryTest {
         
         @Override
         public String toString() {
-            return "USD" + rawvalue();
+            return "USD" + rawValue();
         }
         
         @Override
@@ -116,12 +116,12 @@ public class UnitNumberFactoryTest {
             if (!(thatObject instanceof USD that)) {
                 return false;
             }
-            return Objects.equals(this.rawvalue(), that.rawvalue());
+            return Objects.equals(this.rawValue(), that.rawValue());
         }
         
         @Override
         public int hashCode() {
-            return Objects.hash(rawvalue());
+            return Objects.hash(rawValue());
         }
     }
     
@@ -135,7 +135,7 @@ public class UnitNumberFactoryTest {
         
         @Override
         public String toString() {
-            return "EUR" + rawvalue();
+            return "EUR" + rawValue();
         }
         
         @Override
@@ -143,12 +143,12 @@ public class UnitNumberFactoryTest {
             if (!(thatObject instanceof EUR that)) {
                 return false;
             }
-            return Objects.equals(this.rawvalue(), that.rawvalue());
+            return Objects.equals(this.rawValue(), that.rawValue());
         }
         
         @Override
         public int hashCode() {
-            return Objects.hash(rawvalue());
+            return Objects.hash(rawValue());
         }
     }
 }

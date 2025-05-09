@@ -5,11 +5,12 @@ import java.util.Map;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.sn.myutils.annotations.NotNull;
+import org.sn.myutils.annotations.Nullable;
 
 
 /**
  * Helper class to deal with the multimap structure, i.e. something like Map&larr;K, List&larr;V&rarr;&rarr;.
- * This is a alternative to the Guava Multimap classes.
+ * This is an alternative to the Guava Multimap classes.
  *
  * @param <K> the key
  * @param <V> the type of each value in the collection for this key
@@ -38,7 +39,21 @@ public class MultimapUtils<K, V> {
      * Create an empty collection if one does not exist.
      */
     public @NotNull Collection<V> getOrCreate(K key) {
-        return map.computeIfAbsent(key, unused -> creator.get());
+        return map.computeIfAbsent(key, _ -> creator.get());
+    }
+
+    /**
+     * Get the collection with the given key.
+     */
+    public @Nullable Collection<V> get(K key) {
+        return map.get(key);
+    }
+
+    /**
+     * Tell if the key exists in the map.
+     */
+    public boolean containsKey(K key) {
+        return map.containsKey(key);
     }
 
     /**

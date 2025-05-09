@@ -50,7 +50,7 @@ public abstract class KeyToSocketAddressMapper {
      * @return the local address. This will usually be localhost and a unique port.
      */
     public final @NotNull SocketAddress getLocalAddress(SocketAddress remoteAddress) {
-        return remoteToLocalMap.computeIfAbsent(remoteAddress, unused -> generateLocalAddress());
+        return remoteToLocalMap.computeIfAbsent(remoteAddress, _ -> generateLocalAddress());
     }
     
     /**

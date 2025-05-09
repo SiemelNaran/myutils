@@ -43,12 +43,12 @@ public class LinkedListPageList<E> extends AbstractPageList<E> implements PageLi
     
     @Override
     protected Page<E> createNewEmptyPage(int startIndex) {
-        return new LinkedListPage<>(startIndex);
+        return new Page<>(startIndex, new LinkedList<E>());
     }
 
     @Override
     protected Page<E> createNewPageByCopyingSublist(int startIndex, List<E> subListToCopy) {
-        return new LinkedListPage<>(startIndex, new LinkedList<>(subListToCopy));
+        return new Page<>(startIndex, new LinkedList<>(subListToCopy));
     }
 
     @Override
@@ -59,18 +59,5 @@ public class LinkedListPageList<E> extends AbstractPageList<E> implements PageLi
     @Override
     public LinkedListPageList<E> splice(int startInclusive, int endExclusive) {
         return (LinkedListPageList<E>) super.splice(startInclusive, endExclusive);
-    }
-    
-    protected static class LinkedListPage<E> extends Page<E> {
-        @Serial
-        private static final long serialVersionUID = 1L;
-        
-        private LinkedListPage(int startIndex) {
-            super(startIndex, new LinkedList<>());
-        }
-        
-        private LinkedListPage(int startIndex, List<E> list) {
-            super(startIndex, list);
-        }
     }
 }

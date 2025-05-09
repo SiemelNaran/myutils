@@ -2,6 +2,7 @@ package org.sn.myutils.util.concurrent;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -54,7 +55,8 @@ public interface SerializableScheduledExecutorService extends ScheduledExecutorS
      * @return list of tasks
      */
     @Override
-    @NotNull List<Runnable> shutdownNow();
+    @NotNull
+    List<Runnable> shutdownNow();
     
     
     default void importUnfinishedTasks(UnfinishedTasks unfinishedTasks) throws RecreateRunnableFailedException {
@@ -134,14 +136,14 @@ public interface SerializableScheduledExecutorService extends ScheduledExecutorS
         private static final long serialVersionUID = 1L;
         private static final String UNABLE_TO_RECREATE = "Unable to recreate ";
 
-        private final List<Class<?>> listClass;
+        private final ArrayList<Class<?>> listClass;
 
         RecreateRunnableFailedException(Class<?> clazz) {
-            this.listClass = Collections.singletonList(clazz);
+            this.listClass = new ArrayList<>(List.of(clazz));
         }
 
-        RecreateRunnableFailedException(@NotNull List<Class<?>> clazzList) {
-            this.listClass = Collections.unmodifiableList(clazzList);
+        RecreateRunnableFailedException(@NotNull ArrayList<Class<?>> clazzList) {
+            this.listClass = clazzList;
         }
 
         @Override

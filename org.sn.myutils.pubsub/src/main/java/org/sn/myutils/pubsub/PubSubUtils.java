@@ -2,6 +2,8 @@ package org.sn.myutils.pubsub;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.lang.ref.Cleaner;
 import java.lang.ref.Cleaner.Cleanable;
 import java.nio.channels.AsynchronousSocketChannel;
@@ -19,16 +21,19 @@ import org.sn.myutils.pubsub.MessageClasses.RelayMessageBase;
 
 
 class PubSubUtils {
+    private static final System.Logger LOGGER = System.getLogger(PubSubUtils.class.getName());
     private static final Cleaner cleaner = Cleaner.create();
     
     /**
      * A class whose constructor a few lines of the current thread's call stack.
      * Used for recording when an object was created, so that it can be logged upon destruction.
      */
-    abstract static class CallStackCapturing {
+    private static class CallStackCapturing implements Runnable {
+        private final Class<? extends Shutdowneable> clazz;
         private final StackTraceElement[] stackTrace;
 
-        CallStackCapturing() {
+        CallStackCapturing(Class<? extends Shutdowneable> clazz) {
+            this.clazz = clazz;
             StackTraceElement[] fullStackTrace = Thread.currentThread().getStackTrace();
             this.stackTrace = Arrays.stream(fullStackTrace).skip(3).limit(7).toArray(StackTraceElement[]::new);
         }
@@ -37,7 +42,7 @@ class PubSubUtils {
          * Return the call stack at creation.
          * It starts with a newline and does not end with a newline.
          */
-        String getCallStack() {
+        private String getCallStack() {
             StringBuilder builder = new StringBuilder("\n");
             for (var element : stackTrace) {
                 builder.append("\tat ")
@@ -48,13 +53,22 @@ class PubSubUtils {
             builder.deleteCharAt(builder.length() - 1);
             return builder.toString();
         }
+
+        @Override
+        public void run() {
+            LOGGER.log(System.Logger.Level.INFO, "Shutting down {0}", clazz.getSimpleName());
+            LOGGER.log(System.Logger.Level.TRACE, "Call stack at creation:" + getCallStack());
+        }
     }
-    
-    static Cleanable addShutdownHook(Object object, Runnable cleanup, Class<?> clazz) {
-        Cleanable cleanable = cleaner.register(object, cleanup);
-        Thread thread = new Thread(cleanable::clean, clazz.getSimpleName() + ".shutdown");
-        Runtime.getRuntime().addShutdownHook(thread);
-        return cleanable;
+
+    static Cleanable addShutdownHook(Shutdowneable object) {
+        CallStackCapturing callStackCapturing = new CallStackCapturing(object.getClass());
+        Runnable shutdownAction = object.shutdownAction();
+        Runnable runnable = () -> {
+            callStackCapturing.run();
+            shutdownAction.run();
+        };
+        return cleaner.register(object, runnable);
     }
     
     static String getLocalAddress(NetworkChannel channel) {
@@ -95,8 +109,13 @@ class PubSubUtils {
             return;
         }
         try {
+            if (!(closeable instanceof ObjectOutputStream || closeable instanceof ObjectInputStream)) {
+                // don't log "Shutting down java.io.ObjectOutputStream" etc. as they happen so frequently
+                LOGGER.log(System.Logger.Level.TRACE, "Shutting down " + closeable);
+            }
             closeable.close();
-        } catch (IOException | RuntimeException | Error ignored) {
+        } catch (IOException | RuntimeException | Error e) {
+            LOGGER.log(System.Logger.Level.TRACE, "Error closing " + closeable, e);
         }
     }
     
@@ -144,9 +163,8 @@ class PubSubUtils {
     static long computeExponentialBackoff(long base, int retryNumber, int capRetries, double jitterFraction) {
         long backoff = computeExponentialBackoff(base, retryNumber, capRetries);
         double range = backoff * jitterFraction;
-        long delta = (long) (Math.random() * range + 0.5);
-        delta -= range / 2;
-        return backoff + delta;
+        double delta = (long) (Math.random() * range + 0.5) - (range / 2);
+        return (long) (backoff + delta);
     }
     
     static Long extractClientIndex(MessageBase message) {

@@ -51,7 +51,7 @@ public class PageListTest {
             } catch (RuntimeException e) {
                 throw new RuntimeException("error running " + clazz.getSimpleName(), e);
             } finally {
-                PAGE_LIST_CLASS.set(null);
+                PAGE_LIST_CLASS.remove();
             }
         }
     }
@@ -123,10 +123,10 @@ public class PageListTest {
             PageList<Integer> list = constructPageList(3, 5);
             assertEquals(0, list.size());
             assertTrue(list.isEmpty());
-            assertEquals(0, list.stream().count());
+            assertEquals(0, (long) list.size());
             assertNull(list.spliterator().trySplit());
-            list.spliterator().tryAdvance(val -> { throw new RuntimeException(); });
-            list.spliterator().forEachRemaining(val -> { throw new RuntimeException(); });
+            list.spliterator().tryAdvance(_ -> { throw new RuntimeException(); });
+            list.spliterator().forEachRemaining(_ -> { throw new RuntimeException(); });
         });
     }
     
@@ -675,7 +675,7 @@ public class PageListTest {
             PageList<Integer> list = constructPageList(3, 5);
             IntStream.range(1, 16).forEach(list::add);
             assertEquals("0[1,2,3] * 3[4,5,6] * 6[7,8,9] * 9[10,11,12] * 12[13,14,15]", extract(list));
-            int expectedSum = list.stream().collect(Collectors.summingInt(val -> val));
+            int expectedSum = list.stream().mapToInt(val -> val).sum();
             assertEquals(120, expectedSum);
             
             Spliterator<Integer> iter1 = list.spliterator();

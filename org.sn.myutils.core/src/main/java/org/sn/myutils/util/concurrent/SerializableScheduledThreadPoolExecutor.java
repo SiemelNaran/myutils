@@ -65,7 +65,7 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
      * {@inheritdoc}
      *
      * <p>This function does not return tasks that are serializable and not canceled.
-     * Instead they are added to a member variable 'unfinishedTasks',
+     * Instead, they are added to a member variable 'unfinishedTasks',
      * and the initial delay is reset from what the user created the task as to from the time of export.
      * Running time O(N^2).
      */
@@ -116,7 +116,7 @@ public class SerializableScheduledThreadPoolExecutor extends ScheduledThreadPool
         UnfinishedTasksImpl unfinishedImpl = (UnfinishedTasksImpl) unfinished;
         
         Map<Class<?>, List<ScheduledFuture<?>>> result = new HashMap<>();
-        List<Class<?>> errors = new ArrayList<>();
+        ArrayList<Class<?>> errors = new ArrayList<>();
         
         for (RunnableInfo runnableInfo: unfinishedImpl.getRunnables()) {
             try {

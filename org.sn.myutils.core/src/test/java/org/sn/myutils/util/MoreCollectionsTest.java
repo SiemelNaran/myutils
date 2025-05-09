@@ -68,13 +68,11 @@ public class MoreCollectionsTest {
         assertEquals(23, rooms.size());
         assertEquals(-1, binarySearchCaller.call(rooms, 0, findWhich));
         assertEquals(0, binarySearchCaller.call(rooms, 1, findWhich));
-        int expect;
-        switch (findWhich) { // TODO: Java14: rewrite as below
-            case FIND_FIRST: expect = 2; break;
-            case FIND_ANY: expect = 5; break;
-            case FIND_LAST: expect = 8; break;
-            default: throw new UnsupportedOperationException();
-        }
+        int expect = switch (findWhich) { // TODO: Java14: rewrite as below
+            case FIND_FIRST -> 2;
+            case FIND_ANY -> 5;
+            case FIND_LAST -> 8;
+        };
         //int expect2 = switch (findWhich) {
         //    case FIND_FIRST -> 2;
         //    case FIND_ANY -> 4;

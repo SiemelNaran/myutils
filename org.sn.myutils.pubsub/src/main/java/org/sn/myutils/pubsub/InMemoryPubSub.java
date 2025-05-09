@@ -17,7 +17,14 @@ public class InMemoryPubSub extends PubSub {
      * @param baseArgs the arguments for the in-memory pubsub system
      * @see PubSubConstructorArgs for the arguments to the super class
      */
-    public InMemoryPubSub(PubSubConstructorArgs baseArgs) {
+    public static InMemoryPubSub create(PubSubConstructorArgs baseArgs) {
+        var pubSub = new InMemoryPubSub(baseArgs);
+        pubSub.registerCleanable();
+        return pubSub;
+    }
+
+    // package private because needed for test
+    InMemoryPubSub(PubSubConstructorArgs baseArgs) {
         super(baseArgs);
     }
 

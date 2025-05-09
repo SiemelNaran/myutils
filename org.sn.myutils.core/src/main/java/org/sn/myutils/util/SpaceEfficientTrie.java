@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -27,7 +26,7 @@ public class SpaceEfficientTrie<T extends Comparable<T>, U> extends TrieIteratio
     private int modCount;
 
     public SpaceEfficientTrie() {
-        clear();
+        this.root = new SpaceEfficientTrieNode<>(null);
     }
 
     @Override
@@ -37,7 +36,7 @@ public class SpaceEfficientTrie<T extends Comparable<T>, U> extends TrieIteratio
 
     @Override
     public @Nullable U put(Iterable<T> codePoints, @NotNull U data) {
-        U oldData = root.add(codePoints, data);
+        U oldData = root.add(codePoints, Objects.requireNonNull(data));
         modCount++;
         return oldData;
     }
@@ -126,12 +125,12 @@ public class SpaceEfficientTrie<T extends Comparable<T>, U> extends TrieIteratio
         }
 
         U add(Iterable<T> codePoints, @NotNull U data) {
-            var find = doAddOrFind(this, codePoints, Optional.of(data));
+            var find = doAddOrFind(this, codePoints, data);
             return find != null ? find.oldData : null;
         }
 
         @Nullable U remove(Iterable<T> codePoints) {
-            var find = doAddOrFind(this, codePoints, Optional.empty());
+            var find = doAddOrFind(this, codePoints, null);
             // note find.oldData is the same as find.entry.getValue().data
             if (find == null || find.oldData == null) {
                 return null;
@@ -142,7 +141,7 @@ public class SpaceEfficientTrie<T extends Comparable<T>, U> extends TrieIteratio
         }
 
         @Nullable U find(Iterable<T> codePoints) {
-            var find = doAddOrFind(this, codePoints, Optional.empty());
+            var find = doAddOrFind(this, codePoints, null);
             // note find.oldData is the same as find.entry.getValue().data
             return find != null ? find.oldData : null;
         }
@@ -150,38 +149,38 @@ public class SpaceEfficientTrie<T extends Comparable<T>, U> extends TrieIteratio
         /**
          * Add or look for a word.
          * Returns the old data associated with this word, or null if the word is new.
-         * Thus this function is used for both add and lookup.
+         * Thus, this function is used for both add and lookup.
          *
          * @param <T>             the type of character
          * @param <U>             the type of the data
          * @param trie            is the root node in the initial call to this function
          * @param newWord         the word to add or look for
-         * @param newDataSupplier if present it means we are adding a word, and if absent it means we are looking up a word
+         * @param newData         if not null it means we are adding a word, and if absent it means we are looking up a word
          * @return the old data associated with this node
          */
         private static <T extends Comparable<T>, U> FindInfo<T, U>
         doAddOrFind(SpaceEfficientTrieNode<T, U> trie,
                     Iterable<T> newWord,
-                    Optional<U> newDataSupplier) {
+                    U newData) {
             Map.Entry<Iterable<T>, SpaceEfficientTrieNode<T, U>> lessThanWord = trie.children.floorEntry(newWord);
             Map.Entry<Iterable<T>, SpaceEfficientTrieNode<T, U>> greaterThanWord = trie.children.ceilingEntry(newWord);
             if (lessThanWord == null && greaterThanWord == null) {
-                newDataSupplier.ifPresent(newData -> {
+                if (newData != null) {
                     var newTrie = new SpaceEfficientTrieNode<T, U>(newData);
                     trie.addChild(newWord, newTrie);
-                });
+                }
                 return null;
             } else if (lessThanWord == null) {
-                return attach(trie, greaterThanWord, newWord, newDataSupplier);
+                return attach(trie, greaterThanWord, newWord, newData);
             } else if (greaterThanWord == null) {
-                return attach(trie, lessThanWord, newWord, newDataSupplier);
+                return attach(trie, lessThanWord, newWord, newData);
             } else {
                 int numCommonChars1 = lengthOfCommonPrefix(greaterThanWord.getKey(), newWord);
                 int numCommonChars2 = lengthOfCommonPrefix(lessThanWord.getKey(), newWord);
                 if (numCommonChars1 >= numCommonChars2) {
-                    return attach(trie, greaterThanWord, newWord, newDataSupplier);
+                    return attach(trie, greaterThanWord, newWord, newData);
                 } else {
-                    return attach(trie, lessThanWord, newWord, newDataSupplier);
+                    return attach(trie, lessThanWord, newWord, newData);
                 }
             }
         }
@@ -190,16 +189,16 @@ public class SpaceEfficientTrie<T extends Comparable<T>, U> extends TrieIteratio
         attach(SpaceEfficientTrieNode<T, U> trie,
                Map.Entry<Iterable<T>, SpaceEfficientTrieNode<T, U>> existingEntry,
                Iterable<T> newWord,
-               Optional<U> newDataSupplier) {
+               U newData) {
             int numCommonChars = lengthOfCommonPrefix(existingEntry.getKey(), newWord);
             List<T> commonWord = substring(newWord, 0, numCommonChars);
             if (commonWord.isEmpty()) {
                 // for example the trie has "apple" and we are adding a completely new word "banana"
                 // so just add it
-                newDataSupplier.ifPresent(newData -> {
+                if (newData != null) {
                     var newTrie = new SpaceEfficientTrieNode<T, U>(newData);
                     trie.addChild(newWord, newTrie);
-                });
+                }
                 return null;
             } else {
                 List<T> restOfExistingWord = substring(existingEntry.getKey(), numCommonChars);
@@ -209,12 +208,12 @@ public class SpaceEfficientTrie<T extends Comparable<T>, U> extends TrieIteratio
                     // so remove "bottom"
                     // create "bott"
                     // and under this create "om" with the data that was associated to "bottom", and "le"
-                    if (newDataSupplier.isPresent()) {
+                    if (newData != null) {
                         var commonTrie = new SpaceEfficientTrieNode<T, U>(null);
                         trie.removeChild(existingEntry.getKey());
                         trie.addChild(commonWord, commonTrie);
                         commonTrie.addChild(restOfExistingWord, existingEntry.getValue());
-                        var newTrie = new SpaceEfficientTrieNode<T, U>(newDataSupplier.get());
+                        var newTrie = new SpaceEfficientTrieNode<T, U>(newData);
                         commonTrie.addChild(restOfNewWord, newTrie);
                     }
                     return null;
@@ -227,17 +226,17 @@ public class SpaceEfficientTrie<T extends Comparable<T>, U> extends TrieIteratio
                         // when comparing "bottlenecks" to "bott" we match first 4 chars only,
                         //     and restOfExistingWord is "" and restOfNewWord is "lenecks"
                         // so call add recursively on the trie that is "le"
-                        return doAddOrFind(existingEntry.getValue(), restOfNewWord, newDataSupplier);
+                        return doAddOrFind(existingEntry.getValue(), restOfNewWord, newData);
                     } else {
                         // at this point we are replacing (or finding) a word in the trie
                         // for example trie has "bottle" and the new word is bottle
                         U oldData = existingEntry.getValue().data;
-                        newDataSupplier.ifPresent(newData -> {
+                        if (newData != null) {
                             existingEntry.getValue().data = newData;
                             if (oldData == null) {
                                 rollupSize(existingEntry.getValue(), 1);
                             }
-                        });
+                        }
                         return new FindInfo<>(existingEntry, oldData);
                     }
                 }

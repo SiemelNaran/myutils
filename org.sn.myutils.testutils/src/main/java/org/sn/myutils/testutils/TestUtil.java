@@ -178,7 +178,7 @@ public class TestUtil {
      * @throws AssertionError if assertion fails
      */
     public static <T, U extends Throwable> void assertExceptionFromCallable(Callable<T> callable, Class<U> expectedExceptionClass) {
-        assertExceptionFromCallable(callable, expectedExceptionClass, exception -> { });
+        assertExceptionFromCallable(callable, expectedExceptionClass, _ -> { });
     }
 
     /**
@@ -218,7 +218,7 @@ public class TestUtil {
      * @throws AssertionError if assertion fails
      */
     public static <U extends Throwable> void assertException(Runnable runnable, Class<U> expectedExceptionClass) {
-        assertException(runnable, expectedExceptionClass, exception -> { });
+        assertException(runnable, expectedExceptionClass, _ -> { });
     }
 
     /**

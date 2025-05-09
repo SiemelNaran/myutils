@@ -6,7 +6,7 @@ import java.math.BigInteger;
 
 /**
  * A class representing a server index.
- * This is a 128 bit integer.
+ * This is a 128-bit integer.
  * The first 64 bits are the epoch milliseconds of when the server was started.
  * The next 64 bits are a monotonically increasing long.
  */

@@ -87,15 +87,8 @@ class TrieIterationHelper {
             return entry;
         }
 
-        private static class TrieEntryImpl<T extends Comparable<T>, U> implements Trie.TrieEntry<T, U> {
-            private final List<T> pathToHere;
-            private final TrieNode<T,U> node;
-
-            public TrieEntryImpl(List<T> pathToHere, TrieNode<T, U> node) {
-                this.pathToHere = pathToHere;
-                this.node = node;
-            }
-
+        private record TrieEntryImpl<T extends Comparable<T>, U>(List<T> pathToHere,
+                                                                 TrieNode<T, U> node) implements Trie.TrieEntry<T, U> {
             @Override
             public List<T> getWord() {
                 return pathToHere;

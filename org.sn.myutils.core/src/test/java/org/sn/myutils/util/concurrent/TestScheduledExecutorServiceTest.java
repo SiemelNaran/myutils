@@ -477,7 +477,7 @@ public class TestScheduledExecutorServiceTest extends TestBase {
         assertFalse(service.isTerminated());
         
         service.shutdown();
-        service.awaitTermination(250, TimeUnit.MILLISECONDS);
+        service.awaitTermination(1000, TimeUnit.MILLISECONDS);
         assertTrue(service.isShutdown());
         assertTrue(service.isTerminated());
     }

@@ -36,7 +36,7 @@ import org.sn.myutils.annotations.NotThreadSafe;
  * All characters in this character class will be considered to be part of the token.
  * For example, if the predicate is Character.isLetterOrDigit, then all letters and digits will constitute on token.
  * 
- * <p>This class parses unicode strings.
+ * <p>This class parses Unicode strings.
  * 
  * @author snaran
  */
@@ -47,7 +47,7 @@ public class SimpleStringTokenizerFactory {
      *  
      *  <p>You can choose to treat text within single quotes, within double quotes, or both as a token.
      *  
-     *  <p>If escape is true, characters are escaped, so if you want a double quote inside a double quoted string,
+     *  <p>If escape is true, characters are escaped, so if you want a double quote inside a double-quoted string,
      *  enter <code>\"</code>, and if you want a backslash then enter <code>\\</code>.
      *  The tokenizer also transforms \n \r \t \f \b.
      *  
@@ -111,7 +111,7 @@ public class SimpleStringTokenizerFactory {
             }
             
             /**
-             * Set whether characters will be escaped or double quoted.
+             * Set whether characters will be escaped or double-quoted.
              * Default is true.
              */
             public Builder setEscape(boolean escape) {

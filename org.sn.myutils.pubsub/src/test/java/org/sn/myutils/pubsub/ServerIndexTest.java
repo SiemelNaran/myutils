@@ -44,7 +44,7 @@ public class ServerIndexTest extends TestBase {
         assertEquals(nextServerIndex, otherServerIndex);
         assertEquals(nextServerIndex.hashCode(), otherServerIndex.hashCode());
         
-        assertNotEquals(nextServerIndex, null);
+        assertNotEquals(null, nextServerIndex);
     }
     
     @Test

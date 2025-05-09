@@ -18,7 +18,7 @@ public class MoreExecutors {
 
     /**
      * Similar to {@link java.util.concurrent.Executors#newFixedThreadPool}
-     * except that queued threads are run in order of priority, with highest priority threads first.
+     * except that queued threads are run in order of priority, with the highest priority threads first.
      */
     public static PriorityExecutorService newFixedPriorityThreadPool(int numThreads) {
         return newFixedPriorityThreadPool(numThreads, Executors.defaultThreadFactory());
@@ -27,7 +27,7 @@ public class MoreExecutors {
     
     /**
      * Similar to {@link java.util.concurrent.Executors#newFixedThreadPool}
-     * except that queued threads are run in order of priority, with highest priority threads first.
+     * except that queued threads are run in order of priority, with the highest priority threads first.
      */
     public static PriorityExecutorService newFixedPriorityThreadPool(int numThreads, ThreadFactory threadFactory) {
         return new PriorityThreadPoolExecutor(numThreads, numThreads,
@@ -59,7 +59,7 @@ public class MoreExecutors {
      *
      * @throws IOException if there was an error loading the existing time buckets
      */
-    public static AutoCloseableScheduledExecutorService newTimeBucketScheduledThreadPool(Path folder,
+    public static ScheduledExecutorService newTimeBucketScheduledThreadPool(Path folder,
                                                                                          Duration timeBucketLength,
                                                                                          int corePoolSize,
                                                                                          ThreadFactory threadFactory) throws IOException {
@@ -96,7 +96,7 @@ public class MoreExecutors {
      * Advance the time to the given time, executing all runnables up till the given time.
      * 
      * <p>The purpose of this static function is so that code can call TestScheduledThreadPoolExecutor.advanceTime(service, time, unit)
-     * and it calls the real advanceTime if service is a myutils.util.concurrent.TestScheduledThreadPoolExecutor,
+     * and it calls the real advanceTime if service is a utils.util.concurrent.TestScheduledThreadPoolExecutor,
      * and waits for the desired time if service is a java.util.concurrent.ScheduledThreadPoolExecutor.
      * 
      * @throws CompletionException if this thread is interrupted with the cause as the InterruptedException
@@ -135,7 +135,7 @@ public class MoreExecutors {
      * 
      * @param basename the thread names will be basename-1, basename-2, etc
      * @param daemon true if the new threads should be daemon threads
-     * @return a thread factory whose whose first thread is basename-1, second is basename-2, etc.
+     * @return a thread factory whose first thread is basename-1, second is basename-2, etc.
      */
     public static ThreadFactory createThreadFactory(String basename, boolean daemon) {
         ThreadGroup threadGroup = new ThreadGroup(basename);
