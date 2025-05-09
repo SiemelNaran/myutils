@@ -1160,26 +1160,23 @@ public class DistributedSocketPubSub extends PubSub {
     /**
      * Fetch the publisher from central server.
      */
-    public final CompletableFuture<Publisher> fetchPublisher(@NotNull String topic) {
-        synchronized (fetchPublisherMap) {
-            var publisher = getPublisher(topic);
-            if (publisher != null) {
-                return CompletableFuture.completedFuture(publisher);
-            } else {
-                return fetchPublisherMap.computeIfAbsent(topic, t -> {
-                    messageWriter.queueSendFetchPublisher(t);
-                    return new CompletableFuture<>();
-                });
-            }
+    public final synchronized CompletableFuture<Publisher> fetchPublisher(@NotNull String topic) {
+        var publisher = getPublisher(topic);
+        if (publisher != null) {
+            return CompletableFuture.completedFuture(publisher);
+        } else {
+            return fetchPublisherMap.computeIfAbsent(topic, t -> {
+                messageWriter.queueSendFetchPublisher(t);
+                return new CompletableFuture<>();
+            });
         }
     }
 
-    private void resolveFetchPublisher(Publisher publisher) {
-        synchronized (fetchPublisherMap) {
-            var future = fetchPublisherMap.remove(publisher.getTopic());
-            if (future != null) {
-                future.complete(publisher);
-            }
+    // the function that calls this, i.e. PubSub.createPublisher, is also synchronized
+    private synchronized void resolveFetchPublisher(Publisher publisher) {
+        var future = fetchPublisherMap.remove(publisher.getTopic());
+        if (future != null) {
+            future.complete(publisher);
         }
     }
 
