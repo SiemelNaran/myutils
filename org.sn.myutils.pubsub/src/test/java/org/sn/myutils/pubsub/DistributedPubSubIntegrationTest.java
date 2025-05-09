@@ -1853,6 +1853,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals("ClientAccepted=6, CreatePublisher=4, PublisherCreated=1, SubscriberAdded=4", centralServer.getTypesSent()); // CreatePublisher +1
 
         CompletableFuture<Publisher> repeatFuturePublisher5 = client5.fetchPublisher("hello");
+        assertNotSame(repeatFuturePublisher5, futurePublisher5);
         assertTrue(repeatFuturePublisher5.isDone());
         assertNotSame(futurePublisher5, repeatFuturePublisher5);
         assertSame(publisher5, repeatFuturePublisher5.get());

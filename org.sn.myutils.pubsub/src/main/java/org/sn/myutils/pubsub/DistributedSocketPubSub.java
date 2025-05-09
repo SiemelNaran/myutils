@@ -529,6 +529,9 @@ public class DistributedSocketPubSub extends PubSub {
         
         private void handleSendDeferredMessages(SendDeferredMessages sendDeferredMessages) {
             Deque<RegularMessage> deferredMessages = deferredQueues.remove(sendDeferredMessages.messageServer());
+            LOGGER.log(Level.INFO, "Send deferred messages for machine={0} numMessages={1}",
+                       machineId,
+                       deferredMessages != null ? deferredMessages.size() : 0);
             if (deferredMessages != null) {
                 for (var deferredMessage : deferredMessages) {
                     send(deferredMessage);
@@ -548,12 +551,6 @@ public class DistributedSocketPubSub extends PubSub {
         }
 
         private CompletableFuture<Void> send(RegularMessage destinationMessage) {
-            LOGGER.log(
-                Level.TRACE,
-                () -> String.format("Sending message to server: clientMachine=%s, messageServer=%s, %s",
-                                    machineId,
-                                    destinationMessage.messageServer,
-                                    destinationMessage.message.toLoggingString()));
             CompletableFuture<Void> future = new CompletableFuture<>();
             send(future, destinationMessage, 0);
             return future;
@@ -561,8 +558,15 @@ public class DistributedSocketPubSub extends PubSub {
         
         private void send(CompletableFuture<Void> future, RegularMessage destinationMessage, int retry) {
             var message = destinationMessage.message;
+            var channel = getInternalSocketChannel(destinationMessage.messageServer);
+            LOGGER.log(
+                    Level.TRACE,
+                    () -> String.format("Sending message to server: clientAddress=%s, clientMachine=%s, messageServer=%s, %s",
+                                        getLocalAddress(channel),
+                                        machineId,
+                                        destinationMessage.messageServer,
+                                        destinationMessage.message.toLoggingString()));
             try {
-                var channel = getInternalSocketChannel(destinationMessage.messageServer);
                 DistributedSocketPubSub.this.onBeforeSendMessage(message);
                 socketTransformer.writeMessageToSocket(message, Short.MAX_VALUE, channel);
                 DistributedSocketPubSub.this.onMessageSent(message);
@@ -571,8 +575,8 @@ public class DistributedSocketPubSub extends PubSub {
                 boolean retryDone = retry >= MAX_RETRIES_FOR_SEND || SocketTransformer.isClosed(e);
                 Level level = retryDone ? Level.WARNING : Level.DEBUG;
                 LOGGER.log(level,
-                           String.format("Send message failed: machine=%s, retry=%d, retryDone=%b",
-                                         machineId, retry, retryDone),
+                           String.format("Send message failed: localAddress=%s, machine=%s, retry=%d, retryDone=%b",
+                                         getLocalAddress(channel), machineId, retry, retryDone),
                            e);
                 if (!retryDone) {
                     int nextRetry = retry + 1;

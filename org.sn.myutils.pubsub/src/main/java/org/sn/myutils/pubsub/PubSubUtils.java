@@ -2,6 +2,8 @@ package org.sn.myutils.pubsub;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.lang.ref.Cleaner;
 import java.lang.ref.Cleaner.Cleanable;
 import java.nio.channels.AsynchronousSocketChannel;
@@ -107,7 +109,10 @@ class PubSubUtils {
             return;
         }
         try {
-            LOGGER.log(System.Logger.Level.TRACE, "Shutting down" + closeable);
+            if (!(closeable instanceof ObjectOutputStream || closeable instanceof ObjectInputStream)) {
+                // don't log "Shutting down java.io.ObjectOutputStream" etc. as they happen so frequently
+                LOGGER.log(System.Logger.Level.TRACE, "Shutting down " + closeable);
+            }
             closeable.close();
         } catch (IOException | RuntimeException | Error e) {
             LOGGER.log(System.Logger.Level.TRACE, "Error closing " + closeable, e);

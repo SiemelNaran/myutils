@@ -909,6 +909,10 @@ public class DistributedMessageServer extends Shutdowneable {
                 } else {
                     clientMachine = findClientMachineByChannel(channel);
                     if (clientMachine == null) {
+                        LOGGER.log(Level.TRACE,
+                                   String.format("Received message from unknown client: clientAddress=%s, %s",
+                                                 getRemoteAddress(channel),
+                                                 message.toLoggingString()));
                         sendRequestIdentification(channel, message);
                     } else {
                         ClientMachine clientMachineAsFinal = clientMachine;
