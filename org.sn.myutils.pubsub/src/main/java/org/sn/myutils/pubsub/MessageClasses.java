@@ -1030,7 +1030,14 @@ public interface MessageClasses {
         
         @Override
         public String toLoggingString() {
-            return classType(this) + " [" + message.toLoggingString() + "]";
+            if (message instanceof InternalServerError) {
+                return classType(message);
+            }
+            return classType(message) + " [" + message.toLoggingString() + "]";
+        }
+
+        public String getClassTypeOnly() {
+            return classType(this);
         }
     }
 
