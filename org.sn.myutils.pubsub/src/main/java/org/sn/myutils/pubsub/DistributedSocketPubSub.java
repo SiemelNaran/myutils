@@ -54,12 +54,15 @@ import org.sn.myutils.pubsub.MessageClasses.ClientAccepted;
 import org.sn.myutils.pubsub.MessageClasses.ClientRejected;
 import org.sn.myutils.pubsub.MessageClasses.CreatePublisher;
 import org.sn.myutils.pubsub.MessageClasses.CreatePublisherFailed;
+import org.sn.myutils.pubsub.MessageClasses.DownloadFailed;
 import org.sn.myutils.pubsub.MessageClasses.DownloadPublishedMessages;
 import org.sn.myutils.pubsub.MessageClasses.DownloadPublishedMessagesByClientTimestamp;
 import org.sn.myutils.pubsub.MessageClasses.DownloadPublishedMessagesByServerId;
 import org.sn.myutils.pubsub.MessageClasses.FetchPublisher;
 import org.sn.myutils.pubsub.MessageClasses.Identification;
+import org.sn.myutils.pubsub.MessageClasses.InternalServerError;
 import org.sn.myutils.pubsub.MessageClasses.InvalidRelayMessage;
+import org.sn.myutils.pubsub.MessageClasses.MakeServerThrowAnException;
 import org.sn.myutils.pubsub.MessageClasses.MessageBase;
 import org.sn.myutils.pubsub.MessageClasses.MessageWrapper;
 import org.sn.myutils.pubsub.MessageClasses.PublishMessage;
@@ -318,11 +321,11 @@ public class DistributedSocketPubSub extends PubSub {
     }
 
 
-    protected static final long getMaxTimeBeforeAttemptingToReconnect() {
+    protected static long getMaxTimeBeforeAttemptingToReconnect() {
         return getTimeBeforeAttemptingToReconnect(MAX_RETRIES_FOR_RECONNECT);
     }
 
-    protected static final long getMinTimeBeforeAttemptingToReconnect() {
+    protected static long getMinTimeBeforeAttemptingToReconnect() {
         return getTimeBeforeAttemptingToReconnect(1);
     }
 
@@ -400,7 +403,11 @@ public class DistributedSocketPubSub extends PubSub {
             LOGGER.log(Level.ERROR, "Failed to reset create new channel");
         }
     }
-    
+
+    void makeAllServersThrowAnException() {
+        messageWriter.queueSendMakeAllServersThrowAnException();
+    }
+
     private void doSendAllPublishersAndSubscribers(SocketAddress sendToMessageServer) {
         forEachPublisher(basePublisher -> {
             DistributedPublisher publisher = (DistributedPublisher) basePublisher;
@@ -595,6 +602,11 @@ public class DistributedSocketPubSub extends PubSub {
             }
         }
 
+        void queueSendMakeAllServersThrowAnException() {
+            var message = new MakeServerThrowAnException();
+            internalBroadcastMessage(message);
+        }
+
         void queueSendAddSubscriber(long createdAtTimestamp, @NotNull String topic, @NotNull String subscriberName, boolean isResend) {
             var addSubscriber = new AddSubscriber(createdAtTimestamp, topic, subscriberName, localCommandIndex.incrementAndGet(), true, isResend);
             Map<String, String> customProperties = new LinkedHashMap<>();
@@ -670,6 +682,12 @@ public class DistributedSocketPubSub extends PubSub {
             internalPutMessageWriterMessage(new RegularMessage(message, messageServer));
         }
 
+        private void internalBroadcastMessage(MessageBase message) {
+            for (var messageServer: DistributedSocketPubSub.this.messageServerLookup.getRemoteUniverse()) {
+                internalPutMessageWriterMessage(new RegularMessage(message, messageServer));
+            }
+        }
+
         private void internalPutMessageWriterMessage(MessageWriterMessage message) {
             try {
                 queue.put(message);
@@ -735,6 +753,8 @@ public class DistributedSocketPubSub extends PubSub {
     
     private void processMessage(SocketAddress messageServer, MessageBase message) {
         switch (message) {
+            case InternalServerError internalServerError ->
+                handleInternalServerError(internalServerError);
             case CreatePublisher createPublisher ->
                 // we are receiving a CreatePublisher from the server in response to a client.subscribe
                 handleCreatePublisher(createPublisher);
@@ -760,9 +780,11 @@ public class DistributedSocketPubSub extends PubSub {
                     DistributedSocketPubSub.this.onMessageServerConnected(messageServer, clientAccepted);
             case ClientRejected clientRejected ->
                     DistributedSocketPubSub.this.onMessageServerFailedToConnect(messageServer, clientRejected);
+            case DownloadFailed downloadFailed ->
+                    LOGGER.log(Level.WARNING, "Download failed: " + downloadFailed.toLoggingString());
             default ->
                     LOGGER.log(Level.WARNING, "Unrecognized object type received: clientMachine={0}, messageClass={1}",
-                            DistributedSocketPubSub.this.machineId, message.getClass().getSimpleName());
+                               DistributedSocketPubSub.this.machineId, message.getClass().getSimpleName());
         }
     }
 
@@ -935,7 +957,11 @@ public class DistributedSocketPubSub extends PubSub {
             messageWriter.queueSendRemoveSubscriber(subscriber.getTopic(),subscriber.getSubscriberName());
         }
     }
-    
+
+    private void handleInternalServerError(InternalServerError error) {
+        LOGGER.log(Level.ERROR, error.getStackTraceAsString());
+    }
+
     private void handleCreatePublisher(CreatePublisher createPublisher) {
         threadLocalRemoteRelayMessage.set(createPublisher);
         String topic = createPublisher.getTopic();

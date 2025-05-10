@@ -55,11 +55,14 @@ import org.sn.myutils.pubsub.MessageClasses.ClientGeneratedMessage;
 import org.sn.myutils.pubsub.MessageClasses.ClientRejected;
 import org.sn.myutils.pubsub.MessageClasses.CreatePublisher;
 import org.sn.myutils.pubsub.MessageClasses.CreatePublisherFailed;
+import org.sn.myutils.pubsub.MessageClasses.DownloadFailed;
 import org.sn.myutils.pubsub.MessageClasses.DownloadPublishedMessagesByClientTimestamp;
 import org.sn.myutils.pubsub.MessageClasses.DownloadPublishedMessagesByServerId;
 import org.sn.myutils.pubsub.MessageClasses.FetchPublisher;
 import org.sn.myutils.pubsub.MessageClasses.Identification;
+import org.sn.myutils.pubsub.MessageClasses.InternalServerError;
 import org.sn.myutils.pubsub.MessageClasses.InvalidRelayMessage;
+import org.sn.myutils.pubsub.MessageClasses.MakeServerThrowAnException;
 import org.sn.myutils.pubsub.MessageClasses.MessageBase;
 import org.sn.myutils.pubsub.MessageClasses.MessageWrapper;
 import org.sn.myutils.pubsub.MessageClasses.PublishMessage;
@@ -74,7 +77,7 @@ import org.sn.myutils.pubsub.MessageClasses.RequestIdentification;
 import org.sn.myutils.pubsub.MessageClasses.Resendable;
 import org.sn.myutils.pubsub.MessageClasses.SubscriberAdded;
 import org.sn.myutils.pubsub.MessageClasses.SubscriberRemoved;
-import org.sn.myutils.pubsub.MessageClasses.UnsupportedMessage;
+import org.sn.myutils.pubsub.MessageClasses.UnhandledMessage;
 import org.sn.myutils.util.ExceptionUtils;
 import org.sn.myutils.util.MoreCollections;
 import org.sn.myutils.util.ZipMinIterator;
@@ -893,83 +896,96 @@ public class DistributedMessageServer extends Shutdowneable {
                              .thenApplyAsync(message -> handle(channel, message), channelExecutor)
                              .whenComplete(this::onComplete);
         }
-        
+
         private @Nullable ClientMachine handle(AsynchronousSocketChannel channel, MessageBase message) {
             ClientMachine clientMachine = null;
-            boolean unhandled = false;
-            if (message instanceof ClientGeneratedMessage) {
-                if (message instanceof Identification identification) {
-                    LOGGER.log(
-                        Level.TRACE,
-                        () -> String.format("Received message from client: clientAddress=%s, %s",
-                                            getRemoteAddress(channel),
-                                            message.toLoggingString()));
-                    onValidMessageReceived(message);
-                    DistributedMessageServer.this.addIfNotPresent(identification, channel);
-                } else {
-                    clientMachine = findClientMachineByChannel(channel);
-                    if (clientMachine == null) {
+            try {
+                boolean unhandled = false;
+                if (message instanceof ClientGeneratedMessage) {
+                    if (message instanceof Identification identification) {
                         LOGGER.log(Level.TRACE,
-                                   String.format("Received message from unknown client: clientAddress=%s, %s",
-                                                 getRemoteAddress(channel),
-                                                 message.toLoggingString()));
-                        sendRequestIdentification(channel, message);
+                                   () -> String.format("Received message from client: clientAddress=%s, %s",
+                                                       getRemoteAddress(channel),
+                                                       message.toLoggingString()));
+                        onValidMessageReceived(message);
+                        DistributedMessageServer.this.addIfNotPresent(identification, channel);
                     } else {
-                        ClientMachine clientMachineAsFinal = clientMachine;
-                        Runnable logging = () -> {
+                        clientMachine = findClientMachineByChannel(channel);
+                        if (clientMachine == null) {
                             LOGGER.log(Level.TRACE,
-                                       String.format("Received message from client: clientMachine=%s, %s",
-                                                     clientMachineAsFinal.getMachineId(),
+                                       String.format("Received message from unknown client: clientAddress=%s, %s",
+                                                     getRemoteAddress(channel),
                                                      message.toLoggingString()));
-                            onValidMessageReceived(message);
-                        };
-
-                        if (message instanceof RelayMessageBase relayMessage
-                                && relayMessage.getRelayFields() != null
-                                && (!(message instanceof Resendable) || !((Resendable)message).isResend())) {
-                            DistributedMessageServer.this.sendInvalidRelayMessage(clientMachine,
-                                                                                  relayMessage,
-                                                                                  ErrorMessageEnum.MESSAGE_ALREADY_PROCESSED.format(relayMessage.getClientIndex()));
-                        } else if (message instanceof FetchPublisher fetchPublisher) {
-                            logging.run();
-                            DistributedMessageServer.this.handleFetchPublisher(clientMachine, fetchPublisher.getTopic());
-                        } else if (message instanceof AddSubscriber addSubscriber) {
-                            logging.run();
-                            DistributedMessageServer.this.handleAddSubscriber(clientMachine, addSubscriber);
-                        } else if (message instanceof RemoveSubscriber removeSubscriber) {
-                            logging.run();
-                            DistributedMessageServer.this.handleRemoveSubscriber(clientMachine, removeSubscriber);
-                        } else if (message instanceof RelayMessageBase relay) {
-                            if (relay.getRelayFields() == null) {
-                                ServerIndex nextServerId = maxMessage.updateAndGet(ServerIndex::increment);
-                                relay.setRelayFields(new RelayFields(System.currentTimeMillis(), nextServerId, clientMachine.getMachineId()));
-                            }
-                            logging.run();
-                            DistributedMessageServer.this.handleRelayMessage(clientMachine, relay);
-                        } else if (message instanceof DownloadPublishedMessagesByServerId downloadPublishedMessagesByServerId) {
-                            logging.run();
-                            DistributedMessageServer.this.handleDownload(clientMachine, downloadPublishedMessagesByServerId);
-                        } else if (message instanceof DownloadPublishedMessagesByClientTimestamp downloadPublishedMessagesByClientTimestamp) {
-                            logging.run();
-                            DistributedMessageServer.this.handleDownload(clientMachine, downloadPublishedMessagesByClientTimestamp);
+                            sendRequestIdentification(channel, message);
                         } else {
-                            unhandled = true;
+                            ClientMachine clientMachineAsFinal = clientMachine;
+                            Runnable logging = () -> {
+                                LOGGER.log(Level.TRACE,
+                                           String.format("Received message from client: clientMachine=%s, %s",
+                                                         clientMachineAsFinal.getMachineId(),
+                                                         message.toLoggingString()));
+                                onValidMessageReceived(message);
+                            };
+
+                            if (message instanceof RelayMessageBase relayMessage
+                                    && relayMessage.getRelayFields() != null
+                                    && (!(message instanceof Resendable) || !((Resendable) message).isResend())) {
+                                DistributedMessageServer.this.sendInvalidRelayMessage(clientMachine,
+                                                                                      relayMessage,
+                                                                                      ErrorMessageEnum.MESSAGE_ALREADY_PROCESSED.format(relayMessage.getClientIndex()));
+                            } else if (message instanceof FetchPublisher fetchPublisher) {
+                                logging.run();
+                                DistributedMessageServer.this.handleFetchPublisher(clientMachine, fetchPublisher.getTopic());
+                            } else if (message instanceof AddSubscriber addSubscriber) {
+                                logging.run();
+                                DistributedMessageServer.this.handleAddSubscriber(clientMachine, addSubscriber);
+                            } else if (message instanceof RemoveSubscriber removeSubscriber) {
+                                logging.run();
+                                DistributedMessageServer.this.handleRemoveSubscriber(clientMachine, removeSubscriber);
+                            } else if (message instanceof RelayMessageBase relay) {
+                                if (relay.getRelayFields() == null) {
+                                    ServerIndex nextServerId = maxMessage.updateAndGet(ServerIndex::increment);
+                                    relay.setRelayFields(new RelayFields(System.currentTimeMillis(), nextServerId, clientMachine.getMachineId()));
+                                }
+                                logging.run();
+                                DistributedMessageServer.this.handleRelayMessage(clientMachine, relay);
+                            } else if (message instanceof DownloadPublishedMessagesByServerId downloadPublishedMessagesByServerId) {
+                                logging.run();
+                                DistributedMessageServer.this.handleDownload(clientMachine, downloadPublishedMessagesByServerId);
+                            } else if (message instanceof DownloadPublishedMessagesByClientTimestamp downloadPublishedMessagesByClientTimestamp) {
+                                logging.run();
+                                DistributedMessageServer.this.handleDownload(clientMachine, downloadPublishedMessagesByClientTimestamp);
+                            } else {
+                                unhandled = true;
+                            }
                         }
                     }
+                } else {
+                    clientMachine = findClientMachineByChannel(channel);
+                    unhandled = true;
                 }
-            } else {
-                clientMachine = findClientMachineByChannel(channel);
-                unhandled = true;
-            }
-            if (unhandled) {
-                if (clientMachine == null) {
-                    clientMachine = ClientMachine.unregistered(channel);
+                if (message instanceof MakeServerThrowAnException) {
+                    LOGGER.log(Level.TRACE,
+                               String.format("Received message from client: clientAddress=%s, clientMachine=%s, %s",
+                                             getRemoteAddress(channel),
+                                             clientMachine != null ? clientMachine.getMachineId() : "<unknown>",
+                                             message.toLoggingString()));
+                    onValidMessageReceived(message);
+                    throw new RuntimeException("Random error");
                 }
-                LOGGER.log(Level.WARNING,
-                           String.format("Unsupported message from client: clientMachine=%s, %s",
-                                         clientMachine,
-                                         message.toLoggingString()));
-                DistributedMessageServer.this.wrapAndSend(new UnsupportedMessage(message.getClass(), extractClientIndex(message)), clientMachine);
+                if (unhandled) {
+                    if (clientMachine == null) {
+                        clientMachine = ClientMachine.unregistered(channel);
+                    }
+                    LOGGER.log(Level.WARNING,
+                               String.format("Unsupported message from client: clientMachine=%s, %s",
+                                             clientMachine,
+                                             message.toLoggingString()));
+                    DistributedMessageServer.this.wrapAndSend(new UnhandledMessage(message.getClass(), extractClientIndex(message)), clientMachine);
+                }
+            } catch (RuntimeException e) {
+                DistributedMessageServer.this.sendInternalServerError(channel, clientMachine, e);
+                throw e;
             }
             return clientMachine;
         }
@@ -980,8 +996,12 @@ public class DistributedMessageServer extends Shutdowneable {
                     logChannelClosed(exception);
                     removeChannel(channel);
                     return;
+                } else if (exception instanceof SocketTransformer.ReadSocketException) {
+                    logException("Error reading from remote socket", clientMachine, exception);
+                    DistributedMessageServer.this.wrapAndSend(new InternalServerError(exception), clientMachine);
                 } else {
-                    logException(clientMachine, exception);
+                    logException("Error processing message", clientMachine, exception);
+                    DistributedMessageServer.this.wrapAndSend(new InternalServerError(exception), clientMachine);
                 }
             }
             DistributedMessageServer.this.submitReadFromChannelJob(channel);
@@ -995,9 +1015,9 @@ public class DistributedMessageServer extends Shutdowneable {
                        e.toString());
         }
         
-        private void logException(@Nullable ClientMachine clientMachine, Throwable e) {
+        private void logException(String topLevelMessage, @Nullable ClientMachine clientMachine, Throwable e) {
             LOGGER.log(Level.WARNING,
-                       String.format("Error reading from remote socket: clientMachine=%s",
+                       String.format(topLevelMessage + ": clientMachine=%s",
                                      clientMachine != null ? clientMachine.getMachineId() : getRemoteAddress(channel)),
                        e);
         }
@@ -1296,7 +1316,10 @@ public class DistributedMessageServer extends Shutdowneable {
             Long.MAX_VALUE /*maxClientTimestamp*/,
             download.getStartServerIndexInclusive(),
             download.getEndServerIndexInclusive(),
-            exception -> wrapAndSend(exception.toInvalidMessage(), clientMachine),
+            exception -> wrapAndSend(new DownloadFailed(download.getCommandIndex(),
+                                                        download.toLoggingString(),
+                                                        exception.getMessage()),
+                                     clientMachine),
             /*forceLogging*/ true);
     }
 
@@ -1310,7 +1333,10 @@ public class DistributedMessageServer extends Shutdowneable {
             download.getEndInclusive() /*maxClientTimestamp*/,
             ServerIndex.MIN_VALUE,
             ServerIndex.MAX_VALUE,
-            exception -> wrapAndSend(exception.toInvalidMessage(), clientMachine),
+            exception -> wrapAndSend(new DownloadFailed(download.getCommandIndex(),
+                                                        download.toLoggingString(),
+                                                        exception.getMessage()),
+                                     clientMachine),
             /*forceLogging*/ true);
     }
 
@@ -1339,6 +1365,14 @@ public class DistributedMessageServer extends Shutdowneable {
                                                  trigger,
                                                  numMessages));
         }
+    }
+
+    private void sendInternalServerError(AsynchronousSocketChannel channel, ClientMachine clientMachine, RuntimeException exception) {
+        if (clientMachine == null) {
+            clientMachine = ClientMachine.unregistered(channel);
+        }
+        InternalServerError request = new InternalServerError(exception);
+        wrapAndSend(request, clientMachine);
     }
 
     private void sendRequestIdentification(AsynchronousSocketChannel channel, MessageBase message) {
@@ -1392,6 +1426,9 @@ public class DistributedMessageServer extends Shutdowneable {
     
     private Void retrySend(MessageWrapper wrapper, ClientMachine clientMachine, int retry, Throwable throwable) {
         Throwable e = ExceptionUtils.unwrapCompletionException(throwable);
+        if (e instanceof SocketTransformer.WriteSocketException) {
+            e = e.getCause();
+        }
         boolean retryDone = retry >= MAX_RETRIES || SocketTransformer.isClosed(e) || e instanceof RuntimeException || e instanceof Error;
         Level level = retryDone ? Level.WARNING : Level.TRACE;
         LOGGER.log(level, () -> String.format("Send message failed: clientMachine=%s, messageClass=%s, retry=%d, retryDone=%b",
