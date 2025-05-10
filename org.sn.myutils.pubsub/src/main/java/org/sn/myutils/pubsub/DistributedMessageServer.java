@@ -901,7 +901,15 @@ public class DistributedMessageServer extends Shutdowneable {
             ClientMachine clientMachine = null;
             boolean unhandled = false;
             if (message instanceof ClientGeneratedMessage) {
-                if (message instanceof Identification identification) {
+                if (message instanceof MakeServerThrowAnException) {
+                    LOGGER.log(Level.TRACE,
+                               String.format("Received message from client: clientAddress=%s, clientMachine=%s, %s",
+                                             getRemoteAddress(channel),
+                                             clientMachine != null ? clientMachine.getMachineId() : "<unknown>",
+                                             message.toLoggingString()));
+                    onValidMessageReceived(message);
+                    throw new RuntimeException("Random error");
+                } else if (message instanceof Identification identification) {
                     LOGGER.log(Level.TRACE,
                                () -> String.format("Received message from client: clientAddress=%s, %s",
                                                    getRemoteAddress(channel),
@@ -963,15 +971,7 @@ public class DistributedMessageServer extends Shutdowneable {
                 clientMachine = findClientMachineByChannel(channel);
                 unhandled = true;
             }
-            if (message instanceof MakeServerThrowAnException) {
-                LOGGER.log(Level.TRACE,
-                           String.format("Received message from client: clientAddress=%s, clientMachine=%s, %s",
-                                         getRemoteAddress(channel),
-                                         clientMachine != null ? clientMachine.getMachineId() : "<unknown>",
-                                         message.toLoggingString()));
-                onValidMessageReceived(message);
-                throw new RuntimeException("Random error");
-            }
+
             if (unhandled) {
                 if (clientMachine == null) {
                     clientMachine = ClientMachine.unregistered(channel);
