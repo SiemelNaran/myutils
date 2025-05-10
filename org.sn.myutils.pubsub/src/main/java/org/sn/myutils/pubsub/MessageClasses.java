@@ -2,9 +2,12 @@ package org.sn.myutils.pubsub;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import org.sn.myutils.annotations.NotNull;
 
 
@@ -40,7 +43,7 @@ public interface MessageClasses {
     }
 
     /**
-     * If a message can be sent to the server after it was already send and received, it should inherit from this class.
+     * If a message can be sent to the server after it was already sent and received, it should inherit from this class.
      */
     interface Resendable {
         boolean isResend();
@@ -97,15 +100,15 @@ public interface MessageClasses {
         @Serial
         private static final long serialVersionUID = 1L;
         
-        private final Class<? extends MessageBase> classOfMessage;
+        private final Class<?> classOfMessage;
         private final Long failedClientIndex; // optional because not all messages have a clientIndex
         
-        AbstractInvalidMessage(Class<? extends MessageBase> classOfMessage, Long failedClientIndex) {
+        AbstractInvalidMessage(Class<?> classOfMessage, Long failedClientIndex) {
             this.classOfMessage = classOfMessage;
             this.failedClientIndex = failedClientIndex;
         }
         
-        Class<? extends MessageBase> getClassOfMessage() {
+        Class<?> getClassOfMessage() {
             return classOfMessage;
         }
         
@@ -121,19 +124,66 @@ public interface MessageClasses {
 
     /**
      * Class sent by server when it receives an object type it does not know how to handle.
-     * This could happen if the client and server are on different versions.
+     * This could happen if we added a new message class that the client can send but forgot to write the server code to handle this message.
      */
-    class UnsupportedMessage extends AbstractInvalidMessage {
+    class UnhandledMessage extends AbstractInvalidMessage {
         @Serial
         private static final long serialVersionUID = 1L;
 
-        UnsupportedMessage(Class<? extends MessageBase> classOfMessage, Long failedClientIndex) {
+        UnhandledMessage(Class<? extends MessageBase> classOfMessage, Long failedClientIndex) {
             super(classOfMessage, failedClientIndex);
+        }
+    }
+
+    class InternalServerError extends ServerGeneratedMessage {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        private final @NotNull String stackTrace;
+
+        InternalServerError(Throwable throwable) {
+            super();
+            this.stackTrace = generateShortStackTrace(throwable);
+        }
+
+        public @NotNull String getStackTraceAsString() {
+            return stackTrace;
+        }
+
+        @Override
+        public String toLoggingString() {
+            return super.toLoggingString() + ", stackTrace=\n" + stackTrace;
+        }
+
+        /**
+         * Generate a string similar to throwable.printStackTrace() but show only the first
+         * 5 lines the stack trace and its causes.
+         */
+        private static String generateShortStackTrace(Throwable throwable) {
+            StringBuilder result = new StringBuilder();
+            Set<Throwable> throwables = new HashSet<>();
+            while (throwable != null && !throwables.contains(throwable)) {
+                if (!throwables.isEmpty()) {
+                    result.append("Caused by: ");
+                }
+                result.append(throwable).append('\n');
+                Arrays.stream(throwable.getStackTrace())
+                      .limit(5)
+                      .forEach(stackTraceElement -> result.append("\t")
+                                                          .append(stackTraceElement.toString())
+                                                          .append('\n'));
+                throwables.add(throwable);
+                throwable = throwable.getCause();
+            }
+            return result.toString();
         }
     }
 
     /**
      * Class sent by server to client to request identification.
+     * This happens for example if the client creates or publisher or subscribes before sending their identification.
+     * Clients send their identification right after connecting, but the server may receive messages out of order,
+     * so the server may receive a CreatePublisher message before the Identification message.
      */
     class RequestIdentification extends AbstractInvalidMessage {
         @Serial
@@ -168,7 +218,8 @@ public interface MessageClasses {
     }
 
     /**
-     * Class sent by server to tell client that it failed to start.
+     * Class sent by server to tell client that it failed to register.
+     * This happens if a second client sends an Identification with the same name as a previous registered client.
      */
     class ClientRejected extends ServerGeneratedMessage {
         @Serial
@@ -204,13 +255,13 @@ public interface MessageClasses {
      * Class sent by server to tell client that a message it sent is invalid.
      * Required field error, which is the error message.
      */
-    class InvalidMessage extends ServerGeneratedMessage {
+    abstract class AbstractCommandFailed extends ServerGeneratedMessage {
         @Serial
         private static final long serialVersionUID = 1L;
         
         private final @NotNull String error;
 
-        InvalidMessage(@NotNull String error) {
+        AbstractCommandFailed(@NotNull String error) {
             this.error = error;
         }
 
@@ -228,7 +279,7 @@ public interface MessageClasses {
      * Class to notify the client that the attempt to subscribe or unsubscribe failed,
      * Required fields topic and subscriberName.
      */
-    abstract class AddOrRemoveSubscriberFailed extends InvalidMessage {
+    abstract class AddOrRemoveSubscriberFailed extends AbstractCommandFailed {
         @Serial
         private static final long serialVersionUID = 1L;
         
@@ -274,13 +325,39 @@ public interface MessageClasses {
         }
     }
 
+    class DownloadFailed extends AbstractCommandFailed {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        private final int commandIndex;
+        private final @NotNull String downloadRequest;
+
+        DownloadFailed(int commandIndex, @NotNull String downloadRequest, @NotNull String error) {
+            super(error);
+            this.commandIndex = commandIndex;
+            this.downloadRequest = downloadRequest;
+        }
+
+        public int getCommandIndex() {
+            return commandIndex;
+        }
+
+        public @NotNull String getDownloadRequest() {
+            return downloadRequest;
+        }
+
+        @Override
+        public String toLoggingString() {
+            return super.toLoggingString() + ", commandIndex=" + commandIndex + ", downloadRequest={" + downloadRequest + "}";
+        }
+    }
 
     /**
      * Class sent by server to tell client that a relay message it sent was invalid.
      * For example, this could happen if client sends a message to server that server already processed.
      * Required fields failedClientIndex, which identifies the message.
      */
-    class InvalidRelayMessage extends InvalidMessage {
+    class InvalidRelayMessage extends AbstractCommandFailed {
         @Serial
         private static final long serialVersionUID = 1L;
         
@@ -475,14 +552,14 @@ public interface MessageClasses {
     class Identification extends ClientGeneratedMessage {
         @Serial
         private static final long serialVersionUID = 1L;
-        
+
         private final ClientMachineId machineId;
-        
+
         Identification(ClientMachineId machineId) {
             super(null);
             this.machineId = machineId;
         }
-        
+
         ClientMachineId getMachineId() {
             return machineId;
         }
@@ -490,6 +567,19 @@ public interface MessageClasses {
         @Override
         public String toLoggingString() {
             return super.toLoggingString() + ", machineId=" + machineId;
+        }
+    }
+
+    /**
+     * Class sent by client to get server to throw an exception.
+     * Used for testing.
+     */
+    class MakeServerThrowAnException extends ClientGeneratedMessage {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        MakeServerThrowAnException() {
+            super(null);
         }
     }
     
@@ -573,7 +663,7 @@ public interface MessageClasses {
         
         private final boolean tryDownload;
         private final boolean isResend;
-        
+
         public AddSubscriber(long createdAtTimestamp, String topic, String subscriberName, int commandIndex, boolean tryDownload, boolean isResend) {
             super(createdAtTimestamp, topic, subscriberName, commandIndex);
             this.tryDownload = tryDownload;

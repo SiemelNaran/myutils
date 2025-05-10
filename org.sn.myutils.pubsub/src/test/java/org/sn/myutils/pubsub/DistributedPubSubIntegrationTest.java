@@ -1,7 +1,6 @@
 package org.sn.myutils.pubsub;
 
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -161,6 +160,38 @@ public class DistributedPubSubIntegrationTest extends TestBase {
             sleepTime += TestDistributedSocketPubSub.getMinTimeBeforeAttemptingToReconnect();
         }
         sleep(sleepTime);
+    }
+
+    /**
+     * Test to see how client handles server exceptions.
+     * The client just logs the exception.
+     */
+    @Test
+    void testException() throws IOException {
+        List<CompletableFuture<Void>> startFutures = new ArrayList<>();
+
+        int serverPort = NEXT_CENTRAL_SERVER_PORT.getAndIncrement();
+        int clientPort1 = NEXT_CLIENT_PORT.getAndIncrement();
+
+        var centralServer = createServer(Collections.emptyMap(), serverPort);
+        startFutures.add(centralServer.start());
+        sleep(250); // time to let the central server start
+
+        var client1 = createClient(PubSub.defaultQueueCreator(),
+                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                   "client1",
+                                   clientPort1,
+                                   serverPort);
+        startFutures.add(client1.startAsync());
+
+        waitFor(startFutures);
+        assertEquals("Identification=1", client1.getTypesSent());
+        assertEquals("ClientAccepted=1", client1.getTypesReceived());
+
+        client1.makeAllServersThrowAnException();
+        sleep(250);
+        assertEquals("Identification=1, MakeServerThrowAnException=1", client1.getTypesSent());
+        assertEquals("ClientAccepted=1, InternalServerError=1", client1.getTypesReceived());
     }
 
     /**

@@ -90,6 +90,12 @@ class SocketTransformer {
         buffer.flip();
     }
 
+    static class WriteSocketException extends Exception {
+        private WriteSocketException(Throwable cause) {
+            super(cause);
+        }
+    }
+
     /**
      * Write a message to a socket asynchronously.
      * The first 2 bytes is the length of the message.
@@ -116,7 +122,7 @@ class SocketTransformer {
 
                     @Override
                     public void failed(Throwable e, Void unused) {
-                        futureMessage.completeExceptionally(e);
+                        futureMessage.completeExceptionally(new WriteSocketException(e));
                     }
                     
                 });
@@ -124,12 +130,18 @@ class SocketTransformer {
 
             @Override
             public void failed(Throwable e, Void unused) {
-                futureMessage.completeExceptionally(e);
+                futureMessage.completeExceptionally(new WriteSocketException(e));
             }
         });
         return futureMessage;
     }
-    
+
+    static class ReadSocketException extends Exception {
+        private ReadSocketException(Throwable cause) {
+            super(cause);
+        }
+    }
+
     /**
      * Read a message from a socket asynchronously.
      * The first 2 bytes is the length of the message.
@@ -145,7 +157,7 @@ class SocketTransformer {
             @Override
             public void completed(Integer lengthBufferLength, Void unused) {
                 if (lengthBufferLength < Short.BYTES) {
-                    futureMessage.completeExceptionally(new EOFException("end of stream: read " + lengthBuffer.capacity() + " bytes, expected " + lengthBufferLength));
+                    futureMessage.completeExceptionally(new ReadSocketException(new EOFException("end of stream: read " + lengthBuffer.capacity() + " bytes, expected " + lengthBufferLength)));
                 }
                 try {
                     lengthBuffer.flip();
@@ -156,32 +168,32 @@ class SocketTransformer {
                         @Override
                         public void completed(Integer messageBufferLength, Void unused) {
                             if (messageBufferLength < length) {
-                                futureMessage.completeExceptionally(new EOFException("end of stream: read " + messageBuffer.capacity() + " bytes, got " + messageBufferLength));
+                                futureMessage.completeExceptionally(new ReadSocketException(new EOFException("end of stream: read " + messageBuffer.capacity() + " bytes, got " + messageBufferLength)));
                             }
                             try {
                                 messageBuffer.flip();
                                 MessageBase message = byteBufferToMessage(messageBuffer, MessageBase.class);
                                 futureMessage.complete(message);
                             } catch (IOException | RuntimeException | Error e) {
-                                futureMessage.completeExceptionally(e);
+                                futureMessage.completeExceptionally(new ReadSocketException(e));
                             }
                         }
     
                         @Override
                         public void failed(Throwable e, Void unused) {
-                            futureMessage.completeExceptionally(e);
+                            futureMessage.completeExceptionally(new ReadSocketException(e));
                         }
                         
                     });
                     
                 } catch (RuntimeException | Error e) {
-                    futureMessage.completeExceptionally(e);
+                    futureMessage.completeExceptionally(new ReadSocketException(e));
                 }
             }
 
             @Override
             public void failed(Throwable e, Void unused) {
-                futureMessage.completeExceptionally(e);
+                futureMessage.completeExceptionally(new ReadSocketException(e));
             }
         });
         return futureMessage;
