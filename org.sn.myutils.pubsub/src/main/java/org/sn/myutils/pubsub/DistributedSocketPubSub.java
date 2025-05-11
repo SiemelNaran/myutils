@@ -959,7 +959,7 @@ public class DistributedSocketPubSub extends PubSub {
     }
 
     private void handleInternalServerError(InternalServerError error) {
-        LOGGER.log(Level.ERROR, error.getStackTraceAsString());
+        LOGGER.log(Level.ERROR, error.getExceptionString());
     }
 
     private void handleCreatePublisher(CreatePublisher createPublisher) {

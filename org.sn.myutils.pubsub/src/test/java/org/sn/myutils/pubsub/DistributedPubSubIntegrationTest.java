@@ -174,6 +174,8 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int clientPort1 = NEXT_CLIENT_PORT.getAndIncrement();
 
         var centralServer = createServer(Collections.emptyMap(), serverPort);
+        var oldLogging = centralServer.setInternalServerErrorLogging(true);
+        assertFalse(oldLogging.includeCallStackWhenSendingInternalServerErrors());
         startFutures.add(centralServer.start());
         sleep(250); // time to let the central server start
 

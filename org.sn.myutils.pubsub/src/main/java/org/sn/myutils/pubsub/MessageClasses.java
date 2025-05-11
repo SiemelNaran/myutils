@@ -8,6 +8,9 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletionException;
+
 import org.sn.myutils.annotations.NotNull;
 
 
@@ -139,20 +142,20 @@ public interface MessageClasses {
         @Serial
         private static final long serialVersionUID = 1L;
 
-        private final @NotNull String stackTrace;
+        private final @NotNull String exceptionString;
 
-        InternalServerError(Throwable throwable) {
+        private InternalServerError(Throwable throwable, boolean includeCallStack) {
             super();
-            this.stackTrace = generateShortStackTrace(throwable);
+            this.exceptionString = includeCallStack ? generateShortStackTrace(throwable) : throwable.toString();
         }
 
-        public @NotNull String getStackTraceAsString() {
-            return stackTrace;
+        public @NotNull String getExceptionString() {
+            return exceptionString;
         }
 
         @Override
         public String toLoggingString() {
-            return super.toLoggingString() + ", stackTrace=\n" + stackTrace;
+            return super.toLoggingString() + ", exceptionString=\n" + exceptionString;
         }
 
         /**
@@ -161,21 +164,42 @@ public interface MessageClasses {
          */
         private static String generateShortStackTrace(Throwable throwable) {
             StringBuilder result = new StringBuilder();
+            int limit = 1;
             Set<Throwable> throwables = new HashSet<>();
             while (throwable != null && !throwables.contains(throwable)) {
                 if (!throwables.isEmpty()) {
                     result.append("Caused by: ");
                 }
                 result.append(throwable).append('\n');
-                Arrays.stream(throwable.getStackTrace())
-                      .limit(5)
-                      .forEach(stackTraceElement -> result.append("\t")
-                                                          .append(stackTraceElement.toString())
-                                                          .append('\n'));
+                if (!(throwable instanceof CompletionException)) {
+                    Arrays.stream(throwable.getStackTrace())
+                          .limit(limit)
+                          .forEach(stackTraceElement -> result.append("\t")
+                                                              .append(stackTraceElement.toString())
+                                                              .append('\n'));
+                }
                 throwables.add(throwable);
                 throwable = throwable.getCause();
+                limit = 5;
             }
             return result.toString();
+        }
+
+        static class InternalServerErrorException extends Exception {
+            private final UUID errorId;
+
+            public InternalServerErrorException(String topLevelMessage, Throwable e) {
+                super(topLevelMessage, e);
+                errorId = UUID.randomUUID();
+            }
+
+            public String getMessage() {
+                return "An internal server error occurred " + super.getMessage() + " with errorId=" + errorId;
+            }
+
+            public InternalServerError toMessage(boolean includeCallStack) {
+                return new InternalServerError(this, includeCallStack);
+            }
         }
     }
 
