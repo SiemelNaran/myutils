@@ -245,7 +245,10 @@ class SocketTransformer {
      * The list includes EOFException and all the channel exceptions that have the word Closed in them.
      */
     static boolean isClosed(Throwable throwable) {
-        Throwable e = unwrapCompletionException(throwable);
-        return e instanceof EOFException || e instanceof ClosedChannelException;
+        throwable = unwrapCompletionException(throwable);
+        if (throwable instanceof ReadSocketException || throwable instanceof WriteSocketException) {
+            throwable = throwable.getCause();
+        }
+        return throwable instanceof EOFException || throwable instanceof ClosedChannelException;
     }
 }
