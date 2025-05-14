@@ -11,6 +11,7 @@ import java.io.InvalidClassException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.OptionalDataException;
+import java.io.Serial;
 import java.io.StreamCorruptedException;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
@@ -91,6 +92,9 @@ class SocketTransformer {
     }
 
     static class WriteSocketException extends Exception {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
         private WriteSocketException(Throwable cause) {
             super(cause);
         }
@@ -137,6 +141,9 @@ class SocketTransformer {
     }
 
     static class ReadSocketException extends Exception {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
         private ReadSocketException(Throwable cause) {
             super(cause);
         }

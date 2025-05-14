@@ -404,8 +404,8 @@ public class DistributedSocketPubSub extends PubSub {
         }
     }
 
-    void makeAllServersThrowAnException() {
-        messageWriter.queueSendMakeAllServersThrowAnException();
+    void makeAllServersThrowAnException(String runtimeExceptionMessage) {
+        messageWriter.queueSendMakeAllServersThrowAnException(runtimeExceptionMessage);
     }
 
     private void doSendAllPublishersAndSubscribers(SocketAddress sendToMessageServer) {
@@ -602,8 +602,8 @@ public class DistributedSocketPubSub extends PubSub {
             }
         }
 
-        void queueSendMakeAllServersThrowAnException() {
-            var message = new MakeServerThrowAnException();
+        void queueSendMakeAllServersThrowAnException(String runtimeExceptionMessage) {
+            var message = new MakeServerThrowAnException(runtimeExceptionMessage);
             internalBroadcastMessage(message);
         }
 

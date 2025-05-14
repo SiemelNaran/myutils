@@ -141,7 +141,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      * It looks like Linux lets you bind to the same port if SO_REUSEADDR is set.,
      * so tests can close a channel and reopen it almost right away.
      * <p>
-     * But in Mac OS, you get an error "Address already in use",
+     * But in macOS, you get an error "Address already in use",
      * so let's wait for TIME_WAIT seconds (which is usually 60 seconds).
      */
     private static void waitForPortToBeReleasedIfNecessary() {
@@ -174,8 +174,6 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int clientPort1 = NEXT_CLIENT_PORT.getAndIncrement();
 
         var centralServer = createServer(Collections.emptyMap(), serverPort);
-        var oldLogging = centralServer.setInternalServerErrorLogging(true);
-        assertFalse(oldLogging.includeCallStackWhenSendingInternalServerErrors());
         startFutures.add(centralServer.start());
         sleep(250); // time to let the central server start
 
@@ -190,10 +188,26 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals("Identification=1", client1.getTypesSent());
         assertEquals("ClientAccepted=1", client1.getTypesReceived());
 
-        client1.makeAllServersThrowAnException();
+        var oldLogging = centralServer.setInternalServerErrorLogging(true);
+        assertFalse(oldLogging.includeCallStackWhenSendingInternalServerErrors());
+        client1.makeAllServersThrowAnException("Random error one");
         sleep(250);
         assertEquals("Identification=1, MakeServerThrowAnException=1", client1.getTypesSent());
         assertEquals("ClientAccepted=1, InternalServerError=1", client1.getTypesReceived());
+        // verify that client log shows an error like:
+        // An internal server error occurred while processing message with errorId=67066d80-2317-4df1-bcee-978ea4bf7b74
+        // Caused by: java.util.concurrent.CompletionException: java.lang.RuntimeException: Random error one
+        // and more lines of call stack and root cause call stacks
+
+        oldLogging = centralServer.setInternalServerErrorLogging(false);
+        assertTrue(oldLogging.includeCallStackWhenSendingInternalServerErrors());
+        client1.makeAllServersThrowAnException("Random error two");
+        sleep(250);
+        assertEquals("Identification=1, MakeServerThrowAnException=2", client1.getTypesSent());
+        assertEquals("ClientAccepted=1, InternalServerError=2", client1.getTypesReceived());
+        // verify that client log shows an error like:
+        // An internal server error occurred while processing message with errorId=67066d80-2317-4df1-bcee-978ea4bf7b74
+        // and that we don't see error detail or call stacks
     }
 
     /**

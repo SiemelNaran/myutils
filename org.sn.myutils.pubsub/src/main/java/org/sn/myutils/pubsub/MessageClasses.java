@@ -186,6 +186,9 @@ public interface MessageClasses {
         }
 
         static class InternalServerErrorException extends Exception {
+            @Serial
+            private static final long serialVersionUID = 1L;
+
             private final UUID errorId;
 
             public InternalServerErrorException(String topLevelMessage, Throwable e) {
@@ -602,8 +605,15 @@ public interface MessageClasses {
         @Serial
         private static final long serialVersionUID = 1L;
 
-        MakeServerThrowAnException() {
+        private final String runtimeExceptionMessage;
+
+        MakeServerThrowAnException(String runtimeExceptionMessage) {
             super(null);
+            this.runtimeExceptionMessage = runtimeExceptionMessage;
+        }
+
+        public String getRuntimeExceptionMessage() {
+            return runtimeExceptionMessage;
         }
     }
     

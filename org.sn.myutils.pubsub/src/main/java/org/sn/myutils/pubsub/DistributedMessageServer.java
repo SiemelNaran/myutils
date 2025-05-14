@@ -936,13 +936,13 @@ public class DistributedMessageServer extends Shutdowneable {
                             onValidMessageReceived(message);
                         };
 
-                        if (message instanceof MakeServerThrowAnException) {
+                        if (message instanceof MakeServerThrowAnException makeServerThrowAnException) {
                             LOGGER.log(Level.TRACE,
                                        String.format("Received message from client: clientMachine=%s, %s",
                                                      clientMachine.getMachineId(),
                                                      message.toLoggingString()));
                             onValidMessageReceived(message);
-                            throw new RuntimeException("Random error");
+                            throw new RuntimeException(makeServerThrowAnException.getRuntimeExceptionMessage());
                         } else if (message instanceof RelayMessageBase relayMessage
                                 && relayMessage.getRelayFields() != null
                                 && (!(message instanceof Resendable) || !((Resendable) message).isResend())) {
