@@ -268,7 +268,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
 
     /**
      * Basic test for publish + subscribe.
-     * There is a central server, 2 clients, and one subscribers in each client.
+     * There is a central server, 2 clients, and one subscriber in each client.
      * 
      * @param orderString if "CreatePublisherFirst" then client1 creates publisher and waits for a response before creating the subscriber.
      *                    If "CreatePublisherAndAddSubscriberAtSameTime" then client1 creates publisher and subscriber at the same time.
@@ -385,6 +385,87 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals("ClientAccepted=1, PublisherCreated=1, SubscriberAdded=1", client1.getTypesReceived());
         assertEquals("AddSubscriber=2, Identification=1", client2.getTypesSent());
         assertEquals("ClientAccepted=1, CreatePublisher=1, PublishMessage=6, SubscriberAdded=2", client2.getTypesReceived());
+    }
+
+    /**
+     * Basic test for publish + subscribe with a queue.
+     * There is a central server, 3 clients, one of the a publisher and the other two queue subscribers.
+     */
+    @Test
+    void queueTest() throws IOException {
+        List<String> words = Collections.synchronizedList(new ArrayList<>());
+        List<CompletableFuture<Void>> startFutures = new ArrayList<>();
+
+        int serverPort = NEXT_CENTRAL_SERVER_PORT.getAndIncrement();
+        int clientPort1 = NEXT_CLIENT_PORT.getAndIncrement();
+        int clientPort2 = NEXT_CLIENT_PORT.getAndIncrement();
+        int clientPort3 = NEXT_CLIENT_PORT.getAndIncrement();
+
+        var centralServer = createServer(Collections.emptyMap(), serverPort);
+        startFutures.add(centralServer.start());
+        sleep(250); // time to let the central server start
+
+        var client1 = createClient(PubSub.defaultQueueCreator(),
+                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                   "client1",
+                                   clientPort1,
+                                   serverPort);
+        startFutures.add(client1.startAsync());
+
+        var client2 = createClient(PubSub.defaultQueueCreator(),
+                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                   "client2",
+                                   clientPort2,
+                                   serverPort);
+        startFutures.add(client2.startAsync());
+
+        var client3 = createClient(PubSub.defaultQueueCreator(),
+                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                   "client3",
+                                   clientPort3,
+                                   serverPort);
+        startFutures.add(client3.startAsync());
+
+        waitFor(startFutures);
+        assertEquals("Identification=1", client1.getTypesSent());
+        assertEquals("ClientAccepted=1", client1.getTypesReceived());
+        assertEquals("Identification=1", client2.getTypesSent());
+        assertEquals("ClientAccepted=1", client2.getTypesReceived());
+        assertEquals("Identification=1", client3.getTypesSent());
+        assertEquals("ClientAccepted=1", client3.getTypesReceived());
+
+        // client1 create publisher, client2 and client3 subscribe as queues
+        Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
+        sleep(250);
+        client2.subscribeAsQueue("hello", "ClientTwoSubscriber", CloneableString.class, str -> words.add(str.append("-s2")));
+        sleep(250);
+        client3.subscribeAsQueue("hello", "ClientThreeSubscriber", CloneableString.class, str -> words.add(str.append("-s3")));
+        sleep(250);
+
+        // publish 3 messages
+        publisher1.publish(new CloneableString("one"));
+        sleep(100);
+        publisher1.publish(new CloneableString("two"));
+        sleep(100);
+        publisher1.publish(new CloneableString("three"));
+        sleep(100);
+        publisher1.publish(new CloneableString("four"));
+        sleep(100);
+        publisher1.publish(new CloneableString("five"));
+        sleep(100);
+        publisher1.publish(new CloneableString("six"));
+        sleep(100);
+
+        sleep(500); // to let published messages get sent over
+
+        System.out.println("after publish 'one', 'two', 'three, 'four', 'five', 'six': actual=" + words);
+        assertEquals("CreatePublisher=1, Identification=1, PublishMessage=6", client1.getTypesSent());
+        assertEquals("ClientAccepted=1, PublisherCreated=1", client1.getTypesReceived());
+        assertEquals("AddSubscriber=1, Identification=1", client2.getTypesSent());
+        assertEquals("ClientAccepted=1, CreatePublisher=1, PublishMessage=3, SubscriberAdded=1", client2.getTypesReceived());
+        assertEquals("AddSubscriber=1, Identification=1", client3.getTypesSent());
+        assertEquals("ClientAccepted=1, CreatePublisher=1, PublishMessage=3, SubscriberAdded=1", client3.getTypesReceived());
+        assertThat(words, Matchers.contains("one-s2", "two-s3", "three-s2", "four-s3", "five-s2", "six-s3"));
     }
 
     /**

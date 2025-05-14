@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletionException;
-
 import org.sn.myutils.annotations.NotNull;
 
 
@@ -556,7 +555,7 @@ public interface MessageClasses {
         long getClientTimestamp() {
             return clientTimestamp;
         }
-        
+
         void setCustomProperties(Map<String, String> customProperties) {
             this.customProperties = customProperties;
         }
@@ -694,14 +693,28 @@ public interface MessageClasses {
     class AddSubscriber extends AddOrRemoveSubscriber implements Resendable {
         @Serial
         private static final long serialVersionUID = 1L;
-        
-        private final boolean tryDownload;
-        private final boolean isResend;
 
-        public AddSubscriber(long createdAtTimestamp, String topic, String subscriberName, int commandIndex, boolean tryDownload, boolean isResend) {
+        private final boolean isResend;
+        private final ReceiveMode receiveMode;
+        private final boolean tryDownload;
+
+        public static AddSubscriber subscribeAll(long createdAtTimestamp, String topic, String subscriberName, int commandIndex, boolean isResend, boolean tryDownload) {
+            return new AddSubscriber(createdAtTimestamp, topic, subscriberName, commandIndex, isResend, ReceiveMode.PUBSUB, tryDownload);
+        }
+
+        public static AddSubscriber subscribeQueue(long createdAtTimestamp, String topic, String subscriberName, int commandIndex, boolean isResend) {
+            return new AddSubscriber(createdAtTimestamp, topic, subscriberName, commandIndex, isResend, ReceiveMode.QUEUE, false);
+        }
+
+        private AddSubscriber(long createdAtTimestamp, String topic, String subscriberName, int commandIndex, boolean isResend, ReceiveMode receiveMode, boolean tryDownload) {
             super(createdAtTimestamp, topic, subscriberName, commandIndex);
+            this.receiveMode = receiveMode;
             this.tryDownload = tryDownload;
             this.isResend = isResend;
+        }
+
+        public ReceiveMode getReceiveMode() {
+            return receiveMode;
         }
 
         public boolean shouldTryDownload() {

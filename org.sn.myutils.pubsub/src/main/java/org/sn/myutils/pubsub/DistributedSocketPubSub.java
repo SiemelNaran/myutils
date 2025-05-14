@@ -425,7 +425,8 @@ public class DistributedSocketPubSub extends PubSub {
                     messageWriter.queueSendAddSubscriber(subscriber.getCreatedAtTimestamp(),
                                                          topic,
                                                          subscriber.getSubscriberName(),
-                                                         /*isResend*/ true);
+                                                         /*isResend*/ true,
+                                                         subscriber.getReceiveMode());
                 }
             }
         });
@@ -607,8 +608,11 @@ public class DistributedSocketPubSub extends PubSub {
             internalBroadcastMessage(message);
         }
 
-        void queueSendAddSubscriber(long createdAtTimestamp, @NotNull String topic, @NotNull String subscriberName, boolean isResend) {
-            var addSubscriber = new AddSubscriber(createdAtTimestamp, topic, subscriberName, localCommandIndex.incrementAndGet(), true, isResend);
+        void queueSendAddSubscriber(long createdAtTimestamp, @NotNull String topic, @NotNull String subscriberName, boolean isResend, ReceiveMode receiveMode) {
+            AddSubscriber addSubscriber = switch (receiveMode) {
+                case PUBSUB -> AddSubscriber.subscribeAll(createdAtTimestamp, topic, subscriberName, localCommandIndex.incrementAndGet(), isResend, true);
+                case QUEUE -> AddSubscriber.subscribeQueue(createdAtTimestamp, topic, subscriberName, localCommandIndex.incrementAndGet(), isResend);
+            };
             Map<String, String> customProperties = new LinkedHashMap<>();
             DistributedSocketPubSub.this.addCustomPropertiesForAddSubscriber(customProperties, topic, subscriberName);
             addSubscriber.setCustomProperties(customProperties);
@@ -881,8 +885,9 @@ public class DistributedSocketPubSub extends PubSub {
         private DistributedSubscriber(@NotNull String topic,
                                       @NotNull String subscriberName,
                                       @NotNull Class<? extends CloneableObject<?>> subscriberClass,
-                                      @NotNull Consumer<CloneableObject<?>> callback) {
-            super(topic, subscriberName, subscriberClass, callback);
+                                      @NotNull Consumer<CloneableObject<?>> callback,
+                                      ReceiveMode receiveMode) {
+            super(topic, subscriberName, subscriberClass, callback, receiveMode);
         }
 
         public boolean isInvalid() {
@@ -938,7 +943,7 @@ public class DistributedSocketPubSub extends PubSub {
             DistributedSubscriber distributedSubscriber = (DistributedSubscriber) subscriber;
             var info = dormantInfoMap.computeIfAbsent(subscriber.getTopic(), ignoredTopic -> new DormantInfo());
             info.addDormantSubscriber(distributedSubscriber);
-            messageWriter.queueSendAddSubscriber(subscriber.getCreatedAtTimestamp(), subscriber.getTopic(),subscriber.getSubscriberName(), /*isResend*/ false);
+            messageWriter.queueSendAddSubscriber(subscriber.getCreatedAtTimestamp(), subscriber.getTopic(),subscriber.getSubscriberName(), /*isResend*/ false, subscriber.getReceiveMode());
         }
     }
     
@@ -1179,8 +1184,9 @@ public class DistributedSocketPubSub extends PubSub {
     protected DistributedSubscriber newSubscriber(@NotNull String topic,
                                                   @NotNull String subscriberName,
                                                   @NotNull Class<? extends CloneableObject<?>> subscriberClass,
-                                                  @NotNull Consumer<CloneableObject<?>> callback) {
-        return new DistributedSubscriber(topic, subscriberName, subscriberClass, callback);
+                                                  @NotNull Consumer<CloneableObject<?>> callback,
+                                                  ReceiveMode receiveMode) {
+        return new DistributedSubscriber(topic, subscriberName, subscriberClass, callback, receiveMode);
     }
     
     /**
