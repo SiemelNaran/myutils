@@ -38,8 +38,9 @@ public class InMemoryPubSub extends PubSub {
         private InMemorySubscriber(@NotNull String topic,
                                    @NotNull String subscriberName,
                                    @NotNull Class<? extends CloneableObject<?>> subscriberClass,
-                                   @NotNull Consumer<CloneableObject<?>> callback) {
-            super(topic, subscriberName, subscriberClass, callback);
+                                   @NotNull Consumer<CloneableObject<?>> callback,
+                                   ReceiveMode receiveMode) {
+            super(topic, subscriberName, subscriberClass, callback, receiveMode);
         }
     }
 
@@ -52,8 +53,9 @@ public class InMemoryPubSub extends PubSub {
     protected Subscriber newSubscriber(@NotNull String topic,
                                        @NotNull String subscriberName,
                                        @NotNull Class<? extends CloneableObject<?>> subscriberClass,
-                                       @NotNull Consumer<CloneableObject<?>> callback) {
-        return new InMemorySubscriber(topic, subscriberName, subscriberClass, callback);
+                                       @NotNull Consumer<CloneableObject<?>> callback,
+                                       ReceiveMode receiveMode) {
+        return new InMemorySubscriber(topic, subscriberName, subscriberClass, callback, receiveMode);
     }
 
     @Override

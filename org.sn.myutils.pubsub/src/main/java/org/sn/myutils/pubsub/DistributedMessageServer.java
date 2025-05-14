@@ -271,6 +271,7 @@ public class DistributedMessageServer extends Shutdowneable {
         
         private final Map<RetentionPriority, Integer> mostRecentMessagesToKeep;
         private final Map<String /*topic*/, TopicInfo> topicMap = new ConcurrentHashMap<>();
+        private final Set<SubscriberEndpoint> subscriberEndpointsForRoundRobin = new HashSet<>();
         
         PublishersAndSubscribers(Map<RetentionPriority, Integer> mostRecentMessagesToKeep) {
             this.mostRecentMessagesToKeep = mostRecentMessagesToKeep;
@@ -285,6 +286,7 @@ public class DistributedMessageServer extends Shutdowneable {
         void addSubscriberEndpoint(final String topic,
                                    final String subscriberName,
                                    long clientTimestamp,
+                                   ReceiveMode receiveMode,
                                    ClientMachineId clientMachineId,
                                    Consumer<AddSubscriberResult> afterSubscriberAdded) {
             TopicInfo info = topicMap.computeIfAbsent(topic, ignored -> new TopicInfo(topic, mostRecentMessagesToKeep));
@@ -312,7 +314,7 @@ public class DistributedMessageServer extends Shutdowneable {
                 // sort order is clientMachine then client timestamp
                 // running time O(N*lg(N)) where N is the number of active subscribers
                 // O(lg(N) + N) is possible using binary search followed by insert at the right location
-                var newEndpoint = new SubscriberEndpoint(clientMachineId, subscriberName, clientTimestamp);
+                var newEndpoint = new SubscriberEndpoint(clientMachineId, subscriberName, clientTimestamp, receiveMode);
                 if (info.subscriberEndpoints.contains(newEndpoint)) {
                     throw new IllegalStateException("Already subscribed to topic: "// COVERAGE: missed
                             + "clientMachine=" + clientMachineId
@@ -512,6 +514,11 @@ public class DistributedMessageServer extends Shutdowneable {
                                                      @Nullable ClientMachineId excludeMachineId,
                                                      boolean fetchClientsWantingNotification,
                                                      Consumer<SubscriberParamsForCallback> consumer) {
+            Consumer<SubscriberEndpoint> wrapperConsumer = subscriberEndpoint -> {
+                var params = new SubscriberParamsForCallback(subscriberEndpoint.clientMachineId(), subscriberEndpoint.clientTimestamp());
+                consumer.accept(params);
+            };
+
             TopicInfo info = Objects.requireNonNull(topicMap.get(topic));
             info.lock.lock();
             try {
@@ -519,15 +526,33 @@ public class DistributedMessageServer extends Shutdowneable {
                     return;
                 }
                 ClientMachineId prevClientMachineId = null;
+                boolean sentQueue = false;
+                SubscriberEndpoint firstQueueEndpoint = null;
                 for (SubscriberEndpoint subscriberEndpoint : info.subscriberEndpoints) {
                     if (subscriberEndpoint.clientMachineId().equals(excludeMachineId)) {
                         continue;
                     }
-                    if (!subscriberEndpoint.clientMachineId().equals(prevClientMachineId)) {
-                        var params = new SubscriberParamsForCallback(subscriberEndpoint.clientMachineId(), subscriberEndpoint.clientTimestamp());
-                        consumer.accept(params);
-                        prevClientMachineId = subscriberEndpoint.clientMachineId();
+                    if (subscriberEndpoint.clientMachineId().equals(prevClientMachineId)) {
+                        continue;
                     }
+                    prevClientMachineId = subscriberEndpoint.clientMachineId();
+                    if (subscriberEndpoint.receiveMode() == ReceiveMode.QUEUE) {
+                        if (sentQueue || subscriberEndpointsForRoundRobin.contains(subscriberEndpoint)) {
+                            if (firstQueueEndpoint == null) {
+                                firstQueueEndpoint = subscriberEndpoint;
+                            }
+                            continue;
+                        }
+                        subscriberEndpointsForRoundRobin.add(subscriberEndpoint);
+                        sentQueue = true;
+                    }
+                    wrapperConsumer.accept(subscriberEndpoint);
+                }
+
+                if (!sentQueue && firstQueueEndpoint != null) {
+                    subscriberEndpointsForRoundRobin.clear();
+                    subscriberEndpointsForRoundRobin.add(firstQueueEndpoint);
+                    wrapperConsumer.accept(firstQueueEndpoint);
                 }
     
                 if (fetchClientsWantingNotification && info.notifyClients != null) {
@@ -685,7 +710,7 @@ public class DistributedMessageServer extends Shutdowneable {
      * Cannot make this class a record, because in a record the unique key would be all 3 member variables.
      * One client machine can have two subscribers for the same topic.
      */
-    private record SubscriberEndpoint(ClientMachineId clientMachineId, String subscriberName, long clientTimestamp) {
+    private record SubscriberEndpoint(ClientMachineId clientMachineId, String subscriberName, long clientTimestamp, ReceiveMode receiveMode) {
         @Override
         public boolean equals(Object thatObject) {
             if (!(thatObject instanceof SubscriberEndpoint that)) {
@@ -1181,6 +1206,7 @@ public class DistributedMessageServer extends Shutdowneable {
         publishersAndSubscribers.addSubscriberEndpoint(topic,
                                                        subscriberName,
                                                        subscriberInfo.getClientTimestamp(),
+                                                       subscriberInfo.getReceiveMode(),
                                                        clientMachine.getMachineId(),
                                                        afterSubscriberAdded);
     }
