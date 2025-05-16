@@ -330,7 +330,7 @@ public abstract class PubSub extends Shutdowneable {
     }
 
     /**
-     * Create a subscriber that receives messages a queue.
+     * Create a subscriber that receives messages as a queue.
      *
      * @param <T> the type of object this subscriber receives. Must be the same as or inherit from the publisher class, and must implement CloneableObject.
      * @param topic the topic

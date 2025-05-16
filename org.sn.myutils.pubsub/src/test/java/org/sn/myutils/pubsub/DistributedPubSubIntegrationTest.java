@@ -67,6 +67,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.sn.myutils.annotations.NotNull;
 import org.sn.myutils.annotations.Nullable;
 import org.sn.myutils.pubsub.DistributedMessageServer.ClientMachine;
+import org.sn.myutils.pubsub.DistributedMessageServer.DistributedMessageServerOptions;
 import org.sn.myutils.pubsub.DistributedSocketPubSub.DistributedPublisher;
 import org.sn.myutils.pubsub.DistributedSocketPubSub.DistributedSubscriber;
 import org.sn.myutils.pubsub.DistributedSocketPubSub.StartException;
@@ -173,7 +174,9 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int serverPort = NEXT_CENTRAL_SERVER_PORT.getAndIncrement();
         int clientPort1 = NEXT_CLIENT_PORT.getAndIncrement();
 
-        var centralServer = createServer(Collections.emptyMap(), serverPort);
+        var centralServer = createServer(serverPort);
+        var oldLogging = centralServer.setInternalServerErrorLogging(true);
+        assertFalse(oldLogging.includeCallStackWhenSendingInternalServerErrors());
         startFutures.add(centralServer.start());
         sleep(250); // time to let the central server start
 
@@ -223,7 +226,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int clientPort1 = NEXT_CLIENT_PORT.getAndIncrement();
         int clientPort2 = NEXT_CLIENT_PORT.getAndIncrement();
 
-        var centralServer = createServer(Collections.emptyMap(), serverPort);
+        var centralServer = createServer(serverPort);
         startFutures.add(centralServer.start());
 
         var client1 = createClient(PubSub.defaultQueueCreator(),
@@ -292,7 +295,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int clientPort1 = NEXT_CLIENT_PORT.getAndIncrement();
         int clientPort2 = NEXT_CLIENT_PORT.getAndIncrement();
 
-        var centralServer = createServer(Collections.emptyMap(), serverPort);
+        var centralServer = createServer(serverPort);
         startFutures.add(centralServer.start());
         sleep(250); // time to let the central server start
 
@@ -389,7 +392,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
 
     /**
      * Basic test for publish + subscribe with a queue.
-     * There is a central server, 3 clients, one of the a publisher and the other two queue subscribers.
+     * There is a central server, 3 clients, one of them a publisher and the other two queue subscribers.
      */
     @Test
     void queueTest() throws IOException {
@@ -401,7 +404,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int clientPort2 = NEXT_CLIENT_PORT.getAndIncrement();
         int clientPort3 = NEXT_CLIENT_PORT.getAndIncrement();
 
-        var centralServer = createServer(Collections.emptyMap(), serverPort);
+        var centralServer = createServer(serverPort);
         startFutures.add(centralServer.start());
         sleep(250); // time to let the central server start
 
@@ -437,9 +440,9 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         // client1 create publisher, client2 and client3 subscribe as queues
         Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
         sleep(250);
-        client2.subscribeAsQueue("hello", "ClientTwoSubscriber", CloneableString.class, str -> words.add(str.append("-s2")));
+        assertNotNull(client2.subscribeAsQueue("hello", "ClientTwoSubscriber", CloneableString.class, str -> words.add(str.append("-s2"))));
         sleep(250);
-        client3.subscribeAsQueue("hello", "ClientThreeSubscriber", CloneableString.class, str -> words.add(str.append("-s3")));
+        assertNotNull(client3.subscribeAsQueue("hello", "ClientThreeSubscriber", CloneableString.class, str -> words.add(str.append("-s3"))));
         sleep(250);
 
         // publish 3 messages
@@ -488,7 +491,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int clientPort2 = NEXT_CLIENT_PORT.getAndIncrement();
         int clientPort3 = NEXT_CLIENT_PORT.getAndIncrement();
 
-        var centralServer = createServer(Collections.emptyMap(), serverPort);
+        var centralServer = createServer(serverPort);
         startFutures.add(centralServer.start());
         sleep(250); // time to let the central server start
 
@@ -654,7 +657,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int clientPort1 = NEXT_CLIENT_PORT.getAndIncrement();
         int clientPort2 = NEXT_CLIENT_PORT.getAndIncrement();
 
-        var centralServer = createServer(Collections.emptyMap(), serverPort);
+        var centralServer = createServer(serverPort);
         centralServer.setSecurityKey("hello123");
         startFutures.add(centralServer.start());
         sleep(250); // time to let the central server start
@@ -791,7 +794,10 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int clientPort1 = NEXT_CLIENT_PORT.getAndIncrement();
         int clientPort2 = NEXT_CLIENT_PORT.getAndIncrement();
 
-        var centralServer = createServer(Map.of(RetentionPriority.HIGH, 2, RetentionPriority.MEDIUM, 3), serverPort);
+        var centralServer = createServer(serverPort,
+                                         DistributedMessageServerOptions.create()
+                                                                        .setMostRecentMessagesToKeep(Map.of(RetentionPriority.HIGH, 2,
+                                                                                                            RetentionPriority.MEDIUM, 3)));
         waitFor(Collections.singletonList(centralServer.start()));
         
         var client1 = createClient(PubSub.defaultQueueCreator(),
@@ -1017,7 +1023,10 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int serverPort = NEXT_CENTRAL_SERVER_PORT.getAndIncrement();
         int clientPort1 = NEXT_CLIENT_PORT.getAndIncrement();
 
-        var centralServer = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3), serverPort);
+        var centralServer = createServer(serverPort,
+                                         DistributedMessageServerOptions.create()
+                                                                        .setMostRecentMessagesToKeep(Map.of(RetentionPriority.HIGH, 1,
+                                                                                                            RetentionPriority.MEDIUM, 3)));
         Future<Void> startCentralServerFuture = centralServer.start();
         //assertFalse(startCentralServerFuture.isDone()); // may be true
         startCentralServerFuture.get(); // assert no exception
@@ -1043,7 +1052,10 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertExceptionFromCallable(startCentralServerFutureAgain::get, ExecutionException.class, "java.nio.channels.AlreadyBoundException");
 
         // start another server on same host:port
-        var centralServerDuplicateAddress = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3), serverPort);
+        var centralServerDuplicateAddress = createServer(serverPort,
+                                                         DistributedMessageServerOptions.create()
+                                                                                        .setMostRecentMessagesToKeep(Map.of(RetentionPriority.HIGH, 1,
+                                                                                                                            RetentionPriority.MEDIUM, 3)));
         Future<Void> startServerDuplicateAddressFuture = centralServerDuplicateAddress.start();
         sleep(250); // time to let server start        
         assertTrue(startServerDuplicateAddressFuture.isDone());
@@ -1147,7 +1159,10 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         
         assertFalse(client1Started.isDone());
 
-        var centralServer = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3), serverPort);
+        var centralServer = createServer(serverPort,
+                                         DistributedMessageServerOptions.create()
+                                                                        .setMostRecentMessagesToKeep(Map.of(RetentionPriority.HIGH, 1,
+                                                                                                            RetentionPriority.MEDIUM, 3)));
         centralServer.start();
         sleep(250); // time to let the central server start
         sleep(2000); // clients try to connect to the server every 1sec, 2sec, 4sec, 8sec, 8sec so more time to let the clients connect to the central server
@@ -1177,7 +1192,10 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int clientPort1 = NEXT_CLIENT_PORT.getAndIncrement();
         int clientPort2 = NEXT_CLIENT_PORT.getAndIncrement();
 
-        var centralServer = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3), serverPort);
+        var centralServer = createServer(serverPort,
+                                         DistributedMessageServerOptions.create()
+                                                                        .setMostRecentMessagesToKeep(Map.of(RetentionPriority.HIGH, 1,
+                                                                                                            RetentionPriority.MEDIUM, 3)));
         waitFor(Collections.singletonList(centralServer.start()));
         
         var client1 = createClient(PubSub.defaultQueueCreator(),
@@ -1204,7 +1222,10 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         sleep(250); // time to let central server shutdown
 
         waitForPortToBeReleasedIfNecessary();
-        var centralServer2 = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3), serverPort);
+        var centralServer2 = createServer(serverPort,
+                                          DistributedMessageServerOptions.create()
+                                                                         .setMostRecentMessagesToKeep(Map.of(RetentionPriority.HIGH, 1,
+                                                                                                             RetentionPriority.MEDIUM, 3)));
         waitFor(Collections.singletonList(centralServer2.start()));
         waitForClientsToReconnect();
 
@@ -1246,7 +1267,10 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int clientPort1 = NEXT_CLIENT_PORT.getAndIncrement();
         int clientPort2 = NEXT_CLIENT_PORT.getAndIncrement();
 
-        var centralServer = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3), serverPort);
+        var centralServer = createServer(serverPort,
+                                         DistributedMessageServerOptions.create()
+                                                                        .setMostRecentMessagesToKeep(Map.of(RetentionPriority.HIGH, 1,
+                                                                                                            RetentionPriority.MEDIUM, 3)));
         waitFor(Collections.singletonList(centralServer.start()));
         
         var client1 = createClient(PubSub.defaultQueueCreator(),
@@ -1296,7 +1320,10 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         words.clear();
 
         waitForPortToBeReleasedIfNecessary();
-        var centralServer2 = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3), serverPort);
+        var centralServer2 = createServer(serverPort,
+                                          DistributedMessageServerOptions.create()
+                                                                         .setMostRecentMessagesToKeep(Map.of(RetentionPriority.HIGH, 1,
+                                                                                                             RetentionPriority.MEDIUM, 3)));
         waitFor(Collections.singletonList(centralServer2.start()));
         waitForClientsToReconnect();
         sleep(250); // more time to let SubscriberAdded and PublisherCreated be sent to each client
@@ -1325,7 +1352,10 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int clientPort1 = NEXT_CLIENT_PORT.getAndIncrement();
         int clientPort2 = NEXT_CLIENT_PORT.getAndIncrement();
 
-        var centralServer = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 8), serverPort);
+        var centralServer = createServer(serverPort,
+                                         DistributedMessageServerOptions.create()
+                                                                        .setMostRecentMessagesToKeep(Map.of(RetentionPriority.HIGH, 1,
+                                                                                                            RetentionPriority.MEDIUM, 3)));
         waitFor(Collections.singletonList(centralServer.start()));
         
         {
@@ -1493,7 +1523,10 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int clientPort1 = NEXT_CLIENT_PORT.getAndIncrement();
         int clientPort2 = NEXT_CLIENT_PORT.getAndIncrement();
 
-        var centralServer = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3), serverPort);
+        var centralServer = createServer(serverPort,
+                                         DistributedMessageServerOptions.create()
+                                                                        .setMostRecentMessagesToKeep(Map.of(RetentionPriority.HIGH, 1,
+                                                                                                            RetentionPriority.MEDIUM, 3)));
         startFutures.add(centralServer.start());
         
         var client1 = createClient(PubSub.defaultQueueCreator(),
@@ -1546,7 +1579,10 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         sleep(250); // time to let central server shutdown
 
         waitForPortToBeReleasedIfNecessary();
-        var centralServer2 = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3), serverPort);
+        var centralServer2 = createServer(serverPort,
+                                          DistributedMessageServerOptions.create()
+                                                                         .setMostRecentMessagesToKeep(Map.of(RetentionPriority.HIGH, 1,
+                                                                                                             RetentionPriority.MEDIUM, 3)));
         waitFor(Collections.singletonList(centralServer2.start()));
         waitForClientsToReconnect();
 
@@ -1584,7 +1620,10 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int clientPort1 = NEXT_CLIENT_PORT.getAndIncrement();
         int clientPort2 = NEXT_CLIENT_PORT.getAndIncrement();
 
-        var centralServer = createServer(Map.of(RetentionPriority.HIGH, 1, RetentionPriority.MEDIUM, 3), serverPort);
+        var centralServer = createServer(serverPort,
+                                         DistributedMessageServerOptions.create()
+                                                                        .setMostRecentMessagesToKeep(Map.of(RetentionPriority.HIGH, 1,
+                                                                                                            RetentionPriority.MEDIUM, 3)));
         startFutures.add(centralServer.start());
         
         var client1 = createClient(PubSub.defaultQueueCreator(),
@@ -1656,7 +1695,10 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int clientPort1 = NEXT_CLIENT_PORT.getAndIncrement();
         int clientPort2 = NEXT_CLIENT_PORT.getAndIncrement();
 
-        var centralServer = createServer(Map.of(RetentionPriority.HIGH, 2, RetentionPriority.MEDIUM, 3), serverPort);
+        var centralServer = createServer(serverPort,
+                                         DistributedMessageServerOptions.create()
+                                                                        .setMostRecentMessagesToKeep(Map.of(RetentionPriority.HIGH, 2,
+                                                                                                            RetentionPriority.MEDIUM, 3)));
         startFutures.add(centralServer.start());
         
         var client1 = createClient(PubSub.defaultQueueCreator(),
@@ -1797,7 +1839,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int clientPort3 = NEXT_CLIENT_PORT.getAndIncrement();
         int clientPort4 = NEXT_CLIENT_PORT.getAndIncrement();
 
-        var centralServer = createServer(Collections.emptyMap(), serverPort);
+        var centralServer = createServer(serverPort);
         startFutures.add(centralServer.start());
         
         var client1 = createClient(PubSub.defaultQueueCreator(),
@@ -1892,7 +1934,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int clientPort5 = NEXT_CLIENT_PORT.getAndIncrement();
         int clientPort6 = NEXT_CLIENT_PORT.getAndIncrement();
 
-        var centralServer = createServer(Collections.emptyMap(), serverPort);
+        var centralServer = createServer(serverPort);
         startFutures.add(centralServer.start());
         
         var client1 = createClient(PubSub.defaultQueueCreator(),
@@ -2022,7 +2064,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int serverPort = NEXT_CENTRAL_SERVER_PORT.getAndIncrement();
         int clientPort1 = NEXT_CLIENT_PORT.getAndIncrement();
 
-        var centralServer = createServer(Collections.emptyMap(), serverPort);
+        var centralServer = createServer(serverPort);
         startFutures.add(centralServer.start());
         
         var client1 = createClient(PubSub.defaultQueueCreator(),
@@ -2106,7 +2148,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int serverPort = NEXT_CENTRAL_SERVER_PORT.getAndIncrement();
         int clientPort1 = NEXT_CLIENT_PORT.getAndIncrement();
 
-        var centralServer = createServer(Collections.emptyMap(), serverPort);
+        var centralServer = createServer(serverPort);
         startFutures.add(centralServer.start());
         
         var client1 = createClient(PubSub.defaultQueueCreator(),
@@ -2155,7 +2197,9 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int clientPort2 = NEXT_CLIENT_PORT.getAndIncrement();
 
         var serverSocketTransformer = new TestSocketTransformer();
-        var centralServer = createServer(Collections.emptyMap(), serverPort, serverSocketTransformer);
+        var centralServer = createServer(serverPort,
+                                         DistributedMessageServerOptions.create()
+                                                                        .setSocketTransformer(serverSocketTransformer));
         startFutures.add(centralServer.start());
         
         var clientSocketTransformer = new TestSocketTransformer();
@@ -2245,9 +2289,9 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int clientPort2 = NEXT_CLIENT_PORT.getAndIncrement();
         int clientPort3 = NEXT_CLIENT_PORT.getAndIncrement();
 
-        var centralServer1 = createServer(Collections.emptyMap(), serverPort1);
+        var centralServer1 = createServer(serverPort1);
         startFutures.add(centralServer1.start());
-        var centralServer2 = createServer(Collections.emptyMap(), serverPort2);
+        var centralServer2 = createServer(serverPort2);
         startFutures.add(centralServer2.start());
         sleep(250); // time to let the central servers start
         
@@ -2395,7 +2439,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         int clientPort2 = NEXT_CLIENT_PORT.getAndIncrement();
 
         DistributedMessageServer centralServer = DistributedMessageServer.create(new InetSocketAddress(CENTRAL_SERVER_HOST, serverPort),
-                                                                                 Collections.emptyMap());
+                                                                                 DistributedMessageServerOptions.create());
         centralServer.start();
         sleep(250); // time to let the central server start
         
@@ -2448,25 +2492,20 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         
         assertEquals("client1/SubscriberName1", subscriberEndpoint1.toString());
     }
-    
+
     /**
      * Create a server and add it to list of objects to be shutdown at the end of the test function.
      */
-    private TestDistributedMessageServer createServer(Map<RetentionPriority, Integer> mostRecentMessagesToKeep,
-                                                      int port) throws IOException {
-        return createServer(mostRecentMessagesToKeep, port, new SocketTransformer());
+    private TestDistributedMessageServer createServer(int port) throws IOException {
+        return createServer(port, DistributedMessageServerOptions.create());
     }
-    
+
     /**
      * Create a server and add it to list of objects to be shutdown at the end of the test function.
-     * Use the default port CENTRAL_SERVER_PORT.
      */
-    private TestDistributedMessageServer createServer(Map<RetentionPriority, Integer> mostRecentMessagesToKeep,
-                                                      int port,
-                                                      SocketTransformer socketTransformer) throws IOException {
+    private TestDistributedMessageServer createServer(int port, DistributedMessageServerOptions options) throws IOException {
         var server = new TestDistributedMessageServer(new InetSocketAddress(CENTRAL_SERVER_HOST, port),
-                                                      mostRecentMessagesToKeep,
-                                                      socketTransformer);
+                                                      options);
         server.registerCleanable();
         addShutdown(server);
         return server;
@@ -2562,10 +2601,8 @@ class TestDistributedMessageServer extends DistributedMessageServer {
     private String securityKey;
     private Consumer<MessageWrapper> messageSentListener;
 
-    public TestDistributedMessageServer(SocketAddress messageServer,
-                                        Map<RetentionPriority, Integer> mostRecentMessagesToKeep,
-                                        SocketTransformer socketTransformer) throws IOException {
-        super(messageServer, mostRecentMessagesToKeep, socketTransformer);
+    public TestDistributedMessageServer(SocketAddress messageServer, DistributedMessageServerOptions options) throws IOException {
+        super(messageServer, options);
     }
 
     public void setSecurityKey(String key) {
