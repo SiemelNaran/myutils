@@ -1970,20 +1970,20 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         sleep(250);
         assertEquals("BogusClientGeneratedMessage=1, Identification=1", client1.getTypesSent());
         assertEquals("Identification=1", centralServer.getValidTypesReceived());
-        assertEquals("ClientAccepted=1, UnsupportedMessage=1", centralServer.getTypesSent());
-        assertEquals("ClientAccepted=1, UnsupportedMessage=1", client1.getTypesReceived());
+        assertEquals("ClientAccepted=1, UnhandledMessage=1", centralServer.getTypesSent());
+        assertEquals("ClientAccepted=1, UnhandledMessage=1", client1.getTypesReceived());
         
         BogusMessage bogus2 = new BogusMessage();
         sendMethod.invoke(messageWriter, bogus2);
         sleep(250);
         assertEquals("BogusClientGeneratedMessage=1, BogusMessage=1, Identification=1", client1.getTypesSent());
         assertEquals("Identification=1", centralServer.getValidTypesReceived());
-        assertEquals("ClientAccepted=1, UnsupportedMessage=2", centralServer.getTypesSent());
-        assertEquals("ClientAccepted=1, UnsupportedMessage=2", client1.getTypesReceived()); // because nothing received as message reader is not started
+        assertEquals("ClientAccepted=1, UnhandledMessage=2", centralServer.getTypesSent());
+        assertEquals("ClientAccepted=1, UnhandledMessage=2", client1.getTypesReceived()); // because nothing received as message reader is not started
         
         // verify that log shows
-        // WARNING: Unsupported  message from client: clientMachine=client1, BogusClientGeneratedMessage
-        // WARNING: Unsupported  message from client: clientMachine=/127.0.0.1:30001, BogusMessage
+        // WARNING: Unhandled  message from client: clientMachine=client1, BogusClientGeneratedMessage
+        // WARNING: Unhandled  message from client: clientMachine=/127.0.0.1:30001, BogusMessage
     }
     
     private static class BogusClientGeneratedMessage extends MessageClasses.ClientGeneratedTopicMessage {

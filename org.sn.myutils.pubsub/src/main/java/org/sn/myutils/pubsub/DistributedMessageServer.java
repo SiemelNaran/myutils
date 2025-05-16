@@ -986,7 +986,7 @@ public class DistributedMessageServer extends Shutdowneable {
                     clientMachine = ClientMachine.unregistered(channel);
                 }
                 LOGGER.log(Level.WARNING,
-                           String.format("Unsupported message from client: clientMachine=%s, %s",
+                           String.format("Unhandled message from client: clientMachine=%s, %s",
                                          clientMachine,
                                          message.toLoggingString()));
                 DistributedMessageServer.this.wrapAndSend(new UnhandledMessage(message.getClass(), extractClientIndex(message)), clientMachine);
