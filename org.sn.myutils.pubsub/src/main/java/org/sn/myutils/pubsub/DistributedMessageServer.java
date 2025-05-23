@@ -139,9 +139,55 @@ public class DistributedMessageServer extends Shutdowneable {
     private final List<ClientMachine> clientMachines = new CopyOnWriteArrayList<>();
     private final AtomicReference<ServerIndex> maxMessage = new AtomicReference<>(new ServerIndex(CentralServerId.createDefaultFromNow()));
     private final PublishersAndSubscribers publishersAndSubscribers;
-    private InternalServerErrorLogging internalServerErrorLogging = new InternalServerErrorLogging(false);
+    private InternalServerErrorLogging internalServerErrorLogging;
 
     public record InternalServerErrorLogging(boolean includeCallStackWhenSendingInternalServerErrors) {
+    }
+
+    public static class DistributedMessageServerOptions {
+        private InternalServerErrorLogging internalServerErrorLogging = new InternalServerErrorLogging(false);
+        private SocketTransformer socketTransformer = new SocketTransformer();
+        private Map<RetentionPriority, Integer> mostRecentMessagesToKeep = Collections.emptyMap();
+        private QueueAlgorithm queueAlgorithm = QueueAlgorithm.ROUND_ROBIN;
+
+        public static DistributedMessageServerOptions create() {
+            return new DistributedMessageServerOptions();
+        }
+
+        private DistributedMessageServerOptions() {
+        }
+
+        public DistributedMessageServerOptions setInternalServerErrorLogging(InternalServerErrorLogging internalServerErrorLogging) {
+            this.internalServerErrorLogging = internalServerErrorLogging;
+            return this;
+        }
+        /**
+         * Used to override the functions that read from and write to the socket.
+         * This is only used by unit tests.
+         */
+        DistributedMessageServerOptions setSocketTransformer(SocketTransformer socketTransformer) {
+            this.socketTransformer = socketTransformer;
+            return this;
+        }
+
+        /**
+         * The number of most recent messages of the given priority to keep,
+         * assumed to be zero if message not in this list.
+         * Defaults to the empty list.
+         */
+        public DistributedMessageServerOptions setMostRecentMessagesToKeep(Map<RetentionPriority, Integer> mostRecentMessagesToKeep) {
+            this.mostRecentMessagesToKeep = mostRecentMessagesToKeep;
+            return this;
+        }
+
+        /**
+         * The algorithm used to send messages to a queue.
+         * Defaults to ROUND_ROBIN.
+         */
+        public DistributedMessageServerOptions setQueueAlgorithm(QueueAlgorithm queueAlgorithm) {
+            this.queueAlgorithm = queueAlgorithm;
+            return this;
+        }
     }
 
     /**
@@ -238,6 +284,7 @@ public class DistributedMessageServer extends Shutdowneable {
             private final ReentrantLock lock = new ReentrantLock();
             private CreatePublisher createPublisher;
             private final List<SubscriberEndpoint> subscriberEndpoints = new ArrayList<>(); // unique by ClientMachine, subscriberName; sorted by ClientMachine, clientTimestamp
+            private int numberOfQueueSubscriberEndpoints;
             private Set<ClientMachineId> notifyClients; // clients to notify when a publisher is created
             private final Collection<SubscriberEndpoint> inactiveSubscriberEndpoints = new HashSet<>();
             private final MostRecentMessages mostRecentMessages;
@@ -271,9 +318,12 @@ public class DistributedMessageServer extends Shutdowneable {
         
         private final Map<RetentionPriority, Integer> mostRecentMessagesToKeep;
         private final Map<String /*topic*/, TopicInfo> topicMap = new ConcurrentHashMap<>();
+        private final Set<SubscriberEndpoint> subscriberEndpointsForRoundRobin = new HashSet<>();
+        private final QueueAlgorithm queueAlgorithm;
         
-        PublishersAndSubscribers(Map<RetentionPriority, Integer> mostRecentMessagesToKeep) {
+        PublishersAndSubscribers(Map<RetentionPriority, Integer> mostRecentMessagesToKeep, QueueAlgorithm queueAlgorithm) {
             this.mostRecentMessagesToKeep = mostRecentMessagesToKeep;
+            this.queueAlgorithm = queueAlgorithm;
         }
 
         /**
@@ -285,6 +335,7 @@ public class DistributedMessageServer extends Shutdowneable {
         void addSubscriberEndpoint(final String topic,
                                    final String subscriberName,
                                    long clientTimestamp,
+                                   ReceiveMode receiveMode,
                                    ClientMachineId clientMachineId,
                                    Consumer<AddSubscriberResult> afterSubscriberAdded) {
             TopicInfo info = topicMap.computeIfAbsent(topic, ignored -> new TopicInfo(topic, mostRecentMessagesToKeep));
@@ -312,7 +363,7 @@ public class DistributedMessageServer extends Shutdowneable {
                 // sort order is clientMachine then client timestamp
                 // running time O(N*lg(N)) where N is the number of active subscribers
                 // O(lg(N) + N) is possible using binary search followed by insert at the right location
-                var newEndpoint = new SubscriberEndpoint(clientMachineId, subscriberName, clientTimestamp);
+                var newEndpoint = new SubscriberEndpoint(clientMachineId, subscriberName, clientTimestamp, receiveMode);
                 if (info.subscriberEndpoints.contains(newEndpoint)) {
                     throw new IllegalStateException("Already subscribed to topic: "// COVERAGE: missed
                             + "clientMachine=" + clientMachineId
@@ -322,7 +373,10 @@ public class DistributedMessageServer extends Shutdowneable {
                 info.subscriberEndpoints.add(newEndpoint);
                 info.subscriberEndpoints.sort(Comparator.comparing(SubscriberEndpoint::clientMachineId)
                                                         .thenComparing(SubscriberEndpoint::clientTimestamp));
-                
+                if (newEndpoint.receiveMode() == ReceiveMode.QUEUE) {
+                    info.numberOfQueueSubscriberEndpoints++;
+                }
+
                 // remove client machine from notifyClients as clients who subscribe to a topic are always notified when the publisher is created
                 // running time O(N) where N is the number of clients wanting a notification when the publisher is created
                 if (info.notifyClients != null) {
@@ -354,9 +408,16 @@ public class DistributedMessageServer extends Shutdowneable {
             TopicInfo info = Objects.requireNonNull(topicMap.get(topic));
             info.lock.lock();
             try {
-                info.subscriberEndpoints.removeIf(subscriberEndpoint -> subscriberEndpoint.subscriberName().equals(subscriberName));
-                info.inactiveSubscriberEndpoints.removeIf(endpoint -> endpoint.clientMachineId().equals(clientMachineId)
-                                                              && endpoint.subscriberName().equals(subscriberName));
+                for (var iter = info.subscriberEndpoints.iterator(); iter.hasNext(); ) {
+                    var subscriberEndpoint = iter.next();
+                    if (subscriberEndpoint.clientMachineId().equals(clientMachineId) && subscriberEndpoint.subscriberName().equals(subscriberName)) {
+                        iter.remove();
+                        if (subscriberEndpoint.receiveMode() == ReceiveMode.QUEUE) {
+                            info.numberOfQueueSubscriberEndpoints--;
+                        }
+                    }
+                }
+                info.inactiveSubscriberEndpoints.removeIf(endpoint -> endpoint.clientMachineId().equals(clientMachineId) && endpoint.subscriberName().equals(subscriberName));
                 info.mostRecentMessages.removeClientMachineState(clientMachineId);
             } finally {
                 info.lock.unlock();
@@ -424,6 +485,7 @@ public class DistributedMessageServer extends Shutdowneable {
                     forClientsSubscribedToPublisher(createPublisher.getTopic(),
                                                     createPublisher.getRelayFields().getSourceMachineId() /*excludeMachineId*/,
                                                     true /*fetchClientsWantingNotification*/,
+                                                    false /*useQueue*/,
                                                     callbacks.relayAction);
                 }
                 if (callbacks.finalizerAction != null) {
@@ -502,6 +564,8 @@ public class DistributedMessageServer extends Shutdowneable {
          * @param topic retrieve clientMachines subscribed to this topic or who want a notification
          * @param excludeMachineId exclude this machine (used to not relay message to client who sent the message)
          * @param fetchClientsWantingNotification if true fetch client machines that want a notification (used for clients who want to download a publisher but not subscribe to it)
+         * @param useQueue if true then send message to only one queue subscriber using the `this.queueAlgorithm`.
+         *                 If fetchClientsWantingNotification is true, then useQueue must be false.
          * @param consumer apply this action to each client machine.
          *        The 2nd argument is a struct consisting of
          *          - the subscriber minimum client timestamp (useful if one client machine has many subscribers),
@@ -511,25 +575,31 @@ public class DistributedMessageServer extends Shutdowneable {
         private void forClientsSubscribedToPublisher(String topic,
                                                      @Nullable ClientMachineId excludeMachineId,
                                                      boolean fetchClientsWantingNotification,
+                                                     boolean useQueue,
                                                      Consumer<SubscriberParamsForCallback> consumer) {
+            assert !fetchClientsWantingNotification || !useQueue;
+
+            Consumer<SubscriberEndpoint> wrapperConsumer = subscriberEndpoint -> {
+                var params = new SubscriberParamsForCallback(subscriberEndpoint.clientMachineId(), subscriberEndpoint.clientTimestamp());
+                consumer.accept(params);
+            };
+
             TopicInfo info = Objects.requireNonNull(topicMap.get(topic));
             info.lock.lock();
             try {
                 if (info.createPublisher == null) {
                     return;
                 }
-                ClientMachineId prevClientMachineId = null;
-                for (SubscriberEndpoint subscriberEndpoint : info.subscriberEndpoints) {
-                    if (subscriberEndpoint.clientMachineId().equals(excludeMachineId)) {
-                        continue;
-                    }
-                    if (!subscriberEndpoint.clientMachineId().equals(prevClientMachineId)) {
-                        var params = new SubscriberParamsForCallback(subscriberEndpoint.clientMachineId(), subscriberEndpoint.clientTimestamp());
-                        consumer.accept(params);
-                        prevClientMachineId = subscriberEndpoint.clientMachineId();
-                    }
+
+                int numMessagesSent = sendPubSub(info, excludeMachineId, wrapperConsumer, useQueue);
+                if (useQueue) {
+                    numMessagesSent += switch (queueAlgorithm) {
+                        case ROUND_ROBIN -> sendQueueRoundRobin(info, excludeMachineId, wrapperConsumer);
+                        case RANDOM -> sendQueueRandom(info, excludeMachineId, wrapperConsumer);
+                    };
                 }
-    
+                LOGGER.log(Level.TRACE, "For topic {0} published {1} messages", info.topic, numMessagesSent);
+
                 if (fetchClientsWantingNotification && info.notifyClients != null) {
                     Stream<ClientMachineId> notifyClients = info.notifyClients.stream();
                     info.notifyClients = null;
@@ -538,6 +608,92 @@ public class DistributedMessageServer extends Shutdowneable {
             } finally {
                 info.lock.unlock();
             }
+        }
+
+        private int sendPubSub(TopicInfo info,
+                               @Nullable ClientMachineId excludeMachineId,
+                               Consumer<SubscriberEndpoint> wrapperConsumer,
+                               boolean ignoreQueueSubscribers) {
+            int count = 0;
+            @SuppressWarnings("ReassignedVariable") ClientMachineId prevClientMachineId = null;
+
+            for (SubscriberEndpoint subscriberEndpoint : info.subscriberEndpoints) {
+                if (ignoreQueueSubscribers && subscriberEndpoint.receiveMode() == ReceiveMode.QUEUE) {
+                    continue;
+                }
+                if (subscriberEndpoint.clientMachineId().equals(excludeMachineId)) {
+                    continue;
+                }
+                if (subscriberEndpoint.clientMachineId().equals(prevClientMachineId)) {
+                    continue;
+                }
+                prevClientMachineId = subscriberEndpoint.clientMachineId();
+                wrapperConsumer.accept(subscriberEndpoint);
+                count += 1;
+            }
+            return count;
+        }
+
+        private int sendQueueRoundRobin(TopicInfo info, @Nullable ClientMachineId excludeMachineId, Consumer<SubscriberEndpoint> wrapperConsumer) {
+            ClientMachineId prevClientMachineId = null;
+            SubscriberEndpoint roundRobinFirstQueueEndpoint = null;
+
+            for (SubscriberEndpoint subscriberEndpoint : info.subscriberEndpoints) {
+                if (subscriberEndpoint.receiveMode() != ReceiveMode.QUEUE) {
+                    continue;
+                }
+                if (subscriberEndpoint.clientMachineId().equals(excludeMachineId)) {
+                    continue;
+                }
+                if (subscriberEndpoint.clientMachineId().equals(prevClientMachineId)) {
+                    continue;
+                }
+                prevClientMachineId = subscriberEndpoint.clientMachineId();
+                if (subscriberEndpointsForRoundRobin.contains(subscriberEndpoint)) {
+                    if (roundRobinFirstQueueEndpoint == null) {
+                        roundRobinFirstQueueEndpoint = subscriberEndpoint;
+                    }
+                    continue;
+                }
+                subscriberEndpointsForRoundRobin.add(subscriberEndpoint);
+                wrapperConsumer.accept(subscriberEndpoint);
+                return 1;
+            }
+
+            if (roundRobinFirstQueueEndpoint != null) {
+                subscriberEndpointsForRoundRobin.clear();
+                subscriberEndpointsForRoundRobin.add(roundRobinFirstQueueEndpoint);
+                wrapperConsumer.accept(roundRobinFirstQueueEndpoint);
+                return 1;
+            }
+
+            return 0;
+        }
+
+        private int sendQueueRandom(TopicInfo info, @Nullable ClientMachineId excludeMachineId, Consumer<SubscriberEndpoint> wrapperConsumer) {
+            ClientMachineId prevClientMachineId = null;
+            final int randomSubscriber = (int)(Math.random() * info.numberOfQueueSubscriberEndpoints);
+            int queueSubscriberIndex = 0;
+
+            for (SubscriberEndpoint subscriberEndpoint : info.subscriberEndpoints) {
+                if (subscriberEndpoint.receiveMode() != ReceiveMode.QUEUE) {
+                    continue;
+                }
+                if (subscriberEndpoint.clientMachineId().equals(excludeMachineId)) {
+                    continue;
+                }
+                if (subscriberEndpoint.clientMachineId().equals(prevClientMachineId)) {
+                    continue;
+                }
+                if (queueSubscriberIndex == randomSubscriber) {
+                    wrapperConsumer.accept(subscriberEndpoint);
+                    return 1;
+                }
+                prevClientMachineId = subscriberEndpoint.clientMachineId();
+                queueSubscriberIndex++;
+            }
+
+            return 0;
         }
 
         public void saveMessage(PublishMessage publishMessage, Consumer<SubscriberParamsForCallback> relayAction) {
@@ -552,6 +708,7 @@ public class DistributedMessageServer extends Shutdowneable {
                     forClientsSubscribedToPublisher(topic,
                                                     publishMessage.getRelayFields().getSourceMachineId(),
                                                     false,
+                                                    true /*useQueue*/,
                                                     relayAction);
                 } else {
                     info.addDeferredPublishMessage(publishMessage, relayAction);
@@ -685,7 +842,7 @@ public class DistributedMessageServer extends Shutdowneable {
      * Cannot make this class a record, because in a record the unique key would be all 3 member variables.
      * One client machine can have two subscribers for the same topic.
      */
-    private record SubscriberEndpoint(ClientMachineId clientMachineId, String subscriberName, long clientTimestamp) {
+    private record SubscriberEndpoint(ClientMachineId clientMachineId, String subscriberName, long clientTimestamp, ReceiveMode receiveMode) {
         @Override
         public boolean equals(Object thatObject) {
             if (!(thatObject instanceof SubscriberEndpoint that)) {
@@ -775,37 +932,35 @@ public class DistributedMessageServer extends Shutdowneable {
             highestIndexMap.remove(clientMachineId);
         }
     }
-    
+
+    public enum QueueAlgorithm {
+        ROUND_ROBIN,
+        RANDOM,
+    }
+
     /**
      * Create a message server.
      * 
      * @param messageServer the host/port of this server
-     * @param mostRecentMessagesToKeep the number of most recent messages of the given priority to keep (and zero if message not in this list)
+     * @param options the options for the distributed server
      * @throws IOException if there is an error opening a socket (but no error if the host:port is already in use)
      */
-    public static DistributedMessageServer create(@NotNull SocketAddress messageServer, Map<RetentionPriority, Integer> mostRecentMessagesToKeep) throws IOException {
-        return create(messageServer, mostRecentMessagesToKeep, new SocketTransformer());
-    }
-
-    static DistributedMessageServer create(@NotNull SocketAddress messageServer,
-                                           Map<RetentionPriority, Integer> mostRecentMessagesToKeep,
-                                           SocketTransformer socketTransformer) throws IOException {
-        var server = new DistributedMessageServer(messageServer, mostRecentMessagesToKeep, socketTransformer);
+    public static DistributedMessageServer create(@NotNull SocketAddress messageServer, DistributedMessageServerOptions options) throws IOException {
+        var server = new DistributedMessageServer(messageServer, options);
         server.registerCleanable();
         return server;
     }
 
     // package private for tests
-    DistributedMessageServer(@NotNull SocketAddress messageServer,
-                             Map<RetentionPriority, Integer> mostRecentMessagesToKeep,
-                             SocketTransformer socketTransformer) throws IOException {
-        this.socketTransformer = socketTransformer;
+    DistributedMessageServer(@NotNull SocketAddress messageServer, DistributedMessageServerOptions options) throws IOException {
+        this.socketTransformer = options.socketTransformer;
         this.messageServer = messageServer;
         this.asyncServerSocketChannel = AsynchronousServerSocketChannel.open();
         this.acceptExecutor = Executors.newSingleThreadExecutor(createThreadFactory("DistributedMessageServer.accept", true));
         this.channelExecutor = Executors.newFixedThreadPool(NUM_CHANNEL_THREADS, createThreadFactory("DistributedMessageServer.socket", true));
         this.retryExecutor = Executors.newScheduledThreadPool(1, createThreadFactory("DistributedMessageServer.Retry", true));
-        this.publishersAndSubscribers = new PublishersAndSubscribers(mostRecentMessagesToKeep);
+        this.publishersAndSubscribers = new PublishersAndSubscribers(options.mostRecentMessagesToKeep, options.queueAlgorithm);
+        this.internalServerErrorLogging = options.internalServerErrorLogging;
     }
 
     public InternalServerErrorLogging setInternalServerErrorLogging(boolean includeCallStackWhenSendingInternalServerErrors) {
@@ -1181,6 +1336,7 @@ public class DistributedMessageServer extends Shutdowneable {
         publishersAndSubscribers.addSubscriberEndpoint(topic,
                                                        subscriberName,
                                                        subscriberInfo.getClientTimestamp(),
+                                                       subscriberInfo.getReceiveMode(),
                                                        clientMachine.getMachineId(),
                                                        afterSubscriberAdded);
     }
