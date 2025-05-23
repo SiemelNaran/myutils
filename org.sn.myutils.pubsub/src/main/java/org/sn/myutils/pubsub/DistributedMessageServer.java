@@ -157,16 +157,10 @@ public class DistributedMessageServer extends Shutdowneable {
         private DistributedMessageServerOptions() {
         }
 
-        /**
-         * How to handle internal server errors (i.e. RuntimeException).
-         * By default, we only send the errorId to the client, while on the server we log the errorId and excdeption.
-         * We can also send truncated call stacks to the client.
-         */
         public DistributedMessageServerOptions setInternalServerErrorLogging(InternalServerErrorLogging internalServerErrorLogging) {
             this.internalServerErrorLogging = internalServerErrorLogging;
             return this;
         }
-
         /**
          * Used to override the functions that read from and write to the socket.
          * This is only used by unit tests.
@@ -491,6 +485,7 @@ public class DistributedMessageServer extends Shutdowneable {
                     forClientsSubscribedToPublisher(createPublisher.getTopic(),
                                                     createPublisher.getRelayFields().getSourceMachineId() /*excludeMachineId*/,
                                                     true /*fetchClientsWantingNotification*/,
+                                                    false /*useQueue*/,
                                                     callbacks.relayAction);
                 }
                 if (callbacks.finalizerAction != null) {
@@ -569,6 +564,8 @@ public class DistributedMessageServer extends Shutdowneable {
          * @param topic retrieve clientMachines subscribed to this topic or who want a notification
          * @param excludeMachineId exclude this machine (used to not relay message to client who sent the message)
          * @param fetchClientsWantingNotification if true fetch client machines that want a notification (used for clients who want to download a publisher but not subscribe to it)
+         * @param useQueue if true then send message to only one queue subscriber using the `this.queueAlgorithm`.
+         *                 If fetchClientsWantingNotification is true, then useQueue must be false.
          * @param consumer apply this action to each client machine.
          *        The 2nd argument is a struct consisting of
          *          - the subscriber minimum client timestamp (useful if one client machine has many subscribers),
@@ -578,7 +575,10 @@ public class DistributedMessageServer extends Shutdowneable {
         private void forClientsSubscribedToPublisher(String topic,
                                                      @Nullable ClientMachineId excludeMachineId,
                                                      boolean fetchClientsWantingNotification,
+                                                     boolean useQueue,
                                                      Consumer<SubscriberParamsForCallback> consumer) {
+            assert !fetchClientsWantingNotification || !useQueue;
+
             Consumer<SubscriberEndpoint> wrapperConsumer = subscriberEndpoint -> {
                 var params = new SubscriberParamsForCallback(subscriberEndpoint.clientMachineId(), subscriberEndpoint.clientTimestamp());
                 consumer.accept(params);
@@ -591,11 +591,13 @@ public class DistributedMessageServer extends Shutdowneable {
                     return;
                 }
 
-                int numMessagesSent = sendPubSub(info, excludeMachineId, wrapperConsumer);
-                numMessagesSent += switch (queueAlgorithm) {
-                    case ROUND_ROBIN -> sendQueueRoundRobin(info, excludeMachineId, wrapperConsumer);
-                    case RANDOM -> sendQueueRandom(info, excludeMachineId, wrapperConsumer);
-                };
+                int numMessagesSent = sendPubSub(info, excludeMachineId, wrapperConsumer, useQueue);
+                if (useQueue) {
+                    numMessagesSent += switch (queueAlgorithm) {
+                        case ROUND_ROBIN -> sendQueueRoundRobin(info, excludeMachineId, wrapperConsumer);
+                        case RANDOM -> sendQueueRandom(info, excludeMachineId, wrapperConsumer);
+                    };
+                }
                 LOGGER.log(Level.TRACE, "For topic {0} published {1} messages", info.topic, numMessagesSent);
 
                 if (fetchClientsWantingNotification && info.notifyClients != null) {
@@ -608,12 +610,15 @@ public class DistributedMessageServer extends Shutdowneable {
             }
         }
 
-        private int sendPubSub(TopicInfo info, @Nullable ClientMachineId excludeMachineId, Consumer<SubscriberEndpoint> wrapperConsumer) {
+        private int sendPubSub(TopicInfo info,
+                               @Nullable ClientMachineId excludeMachineId,
+                               Consumer<SubscriberEndpoint> wrapperConsumer,
+                               boolean ignoreQueueSubscribers) {
             int count = 0;
-            ClientMachineId prevClientMachineId = null;
+            @SuppressWarnings("ReassignedVariable") ClientMachineId prevClientMachineId = null;
 
             for (SubscriberEndpoint subscriberEndpoint : info.subscriberEndpoints) {
-                if (subscriberEndpoint.receiveMode() != ReceiveMode.PUBSUB) {
+                if (ignoreQueueSubscribers && subscriberEndpoint.receiveMode() == ReceiveMode.QUEUE) {
                     continue;
                 }
                 if (subscriberEndpoint.clientMachineId().equals(excludeMachineId)) {
@@ -680,12 +685,12 @@ public class DistributedMessageServer extends Shutdowneable {
                 if (subscriberEndpoint.clientMachineId().equals(prevClientMachineId)) {
                     continue;
                 }
-                prevClientMachineId = subscriberEndpoint.clientMachineId();
-                queueSubscriberIndex++;
                 if (queueSubscriberIndex == randomSubscriber) {
                     wrapperConsumer.accept(subscriberEndpoint);
                     return 1;
                 }
+                prevClientMachineId = subscriberEndpoint.clientMachineId();
+                queueSubscriberIndex++;
             }
 
             return 0;
@@ -703,6 +708,7 @@ public class DistributedMessageServer extends Shutdowneable {
                     forClientsSubscribedToPublisher(topic,
                                                     publishMessage.getRelayFields().getSourceMachineId(),
                                                     false,
+                                                    true /*useQueue*/,
                                                     relayAction);
                 } else {
                     info.addDeferredPublishMessage(publishMessage, relayAction);
