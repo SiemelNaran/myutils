@@ -55,11 +55,14 @@ import org.sn.myutils.pubsub.MessageClasses.ClientGeneratedMessage;
 import org.sn.myutils.pubsub.MessageClasses.ClientRejected;
 import org.sn.myutils.pubsub.MessageClasses.CreatePublisher;
 import org.sn.myutils.pubsub.MessageClasses.CreatePublisherFailed;
+import org.sn.myutils.pubsub.MessageClasses.DownloadFailed;
 import org.sn.myutils.pubsub.MessageClasses.DownloadPublishedMessagesByClientTimestamp;
 import org.sn.myutils.pubsub.MessageClasses.DownloadPublishedMessagesByServerId;
 import org.sn.myutils.pubsub.MessageClasses.FetchPublisher;
 import org.sn.myutils.pubsub.MessageClasses.Identification;
+import org.sn.myutils.pubsub.MessageClasses.InternalServerError;
 import org.sn.myutils.pubsub.MessageClasses.InvalidRelayMessage;
+import org.sn.myutils.pubsub.MessageClasses.MakeServerThrowAnException;
 import org.sn.myutils.pubsub.MessageClasses.MessageBase;
 import org.sn.myutils.pubsub.MessageClasses.MessageWrapper;
 import org.sn.myutils.pubsub.MessageClasses.PublishMessage;
@@ -74,7 +77,7 @@ import org.sn.myutils.pubsub.MessageClasses.RequestIdentification;
 import org.sn.myutils.pubsub.MessageClasses.Resendable;
 import org.sn.myutils.pubsub.MessageClasses.SubscriberAdded;
 import org.sn.myutils.pubsub.MessageClasses.SubscriberRemoved;
-import org.sn.myutils.pubsub.MessageClasses.UnsupportedMessage;
+import org.sn.myutils.pubsub.MessageClasses.UnhandledMessage;
 import org.sn.myutils.util.ExceptionUtils;
 import org.sn.myutils.util.MoreCollections;
 import org.sn.myutils.util.ZipMinIterator;
@@ -136,6 +139,10 @@ public class DistributedMessageServer extends Shutdowneable {
     private final List<ClientMachine> clientMachines = new CopyOnWriteArrayList<>();
     private final AtomicReference<ServerIndex> maxMessage = new AtomicReference<>(new ServerIndex(CentralServerId.createDefaultFromNow()));
     private final PublishersAndSubscribers publishersAndSubscribers;
+    private InternalServerErrorLogging internalServerErrorLogging = new InternalServerErrorLogging(false);
+
+    public record InternalServerErrorLogging(boolean includeCallStackWhenSendingInternalServerErrors) {
+    }
 
     /**
      * Class representing a remote machine.
@@ -143,7 +150,7 @@ public class DistributedMessageServer extends Shutdowneable {
      */
     protected static final class ClientMachine {
         private static ClientMachine unregistered(@NotNull AsynchronousSocketChannel channel) {
-            return new ClientMachine(new ClientMachineId("<unregistered>"), channel);
+            return new ClientMachine(new ClientMachineId(String.format("<unregistered %s>", channel)), channel);
         }
         
         private final @NotNull ClientMachineId machineId;
@@ -801,6 +808,12 @@ public class DistributedMessageServer extends Shutdowneable {
         this.publishersAndSubscribers = new PublishersAndSubscribers(mostRecentMessagesToKeep);
     }
 
+    public InternalServerErrorLogging setInternalServerErrorLogging(boolean includeCallStackWhenSendingInternalServerErrors) {
+        var oldValue = internalServerErrorLogging;
+        this.internalServerErrorLogging = new InternalServerErrorLogging(includeCallStackWhenSendingInternalServerErrors);
+        return oldValue;
+    }
+
     @Override
     protected Runnable shutdownAction() {
         return () -> {
@@ -893,17 +906,16 @@ public class DistributedMessageServer extends Shutdowneable {
                              .thenApplyAsync(message -> handle(channel, message), channelExecutor)
                              .whenComplete(this::onComplete);
         }
-        
+
         private @Nullable ClientMachine handle(AsynchronousSocketChannel channel, MessageBase message) {
             ClientMachine clientMachine = null;
             boolean unhandled = false;
             if (message instanceof ClientGeneratedMessage) {
                 if (message instanceof Identification identification) {
-                    LOGGER.log(
-                        Level.TRACE,
-                        () -> String.format("Received message from client: clientAddress=%s, %s",
-                                            getRemoteAddress(channel),
-                                            message.toLoggingString()));
+                    LOGGER.log(Level.TRACE,
+                               () -> String.format("Received message from client: clientAddress=%s, %s",
+                                                   getRemoteAddress(channel),
+                                                   message.toLoggingString()));
                     onValidMessageReceived(message);
                     DistributedMessageServer.this.addIfNotPresent(identification, channel);
                 } else {
@@ -924,9 +936,16 @@ public class DistributedMessageServer extends Shutdowneable {
                             onValidMessageReceived(message);
                         };
 
-                        if (message instanceof RelayMessageBase relayMessage
+                        if (message instanceof MakeServerThrowAnException makeServerThrowAnException) {
+                            LOGGER.log(Level.TRACE,
+                                       String.format("Received message from client: clientMachine=%s, %s",
+                                                     clientMachine.getMachineId(),
+                                                     message.toLoggingString()));
+                            onValidMessageReceived(message);
+                            throw new RuntimeException(makeServerThrowAnException.getRuntimeExceptionMessage());
+                        } else if (message instanceof RelayMessageBase relayMessage
                                 && relayMessage.getRelayFields() != null
-                                && (!(message instanceof Resendable) || !((Resendable)message).isResend())) {
+                                && (!(message instanceof Resendable) || !((Resendable) message).isResend())) {
                             DistributedMessageServer.this.sendInvalidRelayMessage(clientMachine,
                                                                                   relayMessage,
                                                                                   ErrorMessageEnum.MESSAGE_ALREADY_PROCESSED.format(relayMessage.getClientIndex()));
@@ -961,15 +980,16 @@ public class DistributedMessageServer extends Shutdowneable {
                 clientMachine = findClientMachineByChannel(channel);
                 unhandled = true;
             }
+
             if (unhandled) {
                 if (clientMachine == null) {
                     clientMachine = ClientMachine.unregistered(channel);
                 }
                 LOGGER.log(Level.WARNING,
-                           String.format("Unsupported message from client: clientMachine=%s, %s",
+                           String.format("Unhandled message from client: clientMachine=%s, %s",
                                          clientMachine,
                                          message.toLoggingString()));
-                DistributedMessageServer.this.wrapAndSend(new UnsupportedMessage(message.getClass(), extractClientIndex(message)), clientMachine);
+                DistributedMessageServer.this.wrapAndSend(new UnhandledMessage(message.getClass(), extractClientIndex(message)), clientMachine);
             }
             return clientMachine;
         }
@@ -981,7 +1001,14 @@ public class DistributedMessageServer extends Shutdowneable {
                     removeChannel(channel);
                     return;
                 } else {
-                    logException(clientMachine, exception);
+                    String topLevelMessage;
+                    if (exception instanceof SocketTransformer.ReadSocketException) {
+                        topLevelMessage = "while reading from socket";
+                    } else {
+                        topLevelMessage = "while processing message";
+                    }
+                    var internalServerErrorException = new InternalServerError.InternalServerErrorException(topLevelMessage, exception);
+                    sendInternalServerError(channel, internalServerErrorException);
                 }
             }
             DistributedMessageServer.this.submitReadFromChannelJob(channel);
@@ -993,13 +1020,6 @@ public class DistributedMessageServer extends Shutdowneable {
                        "Channel closed: clientMachine={0}, exception={1}",
                        clientMachine != null ? clientMachine.getMachineId() : "<unknown>",
                        e.toString());
-        }
-        
-        private void logException(@Nullable ClientMachine clientMachine, Throwable e) {
-            LOGGER.log(Level.WARNING,
-                       String.format("Error reading from remote socket: clientMachine=%s",
-                                     clientMachine != null ? clientMachine.getMachineId() : getRemoteAddress(channel)),
-                       e);
         }
     }
     
@@ -1296,7 +1316,10 @@ public class DistributedMessageServer extends Shutdowneable {
             Long.MAX_VALUE /*maxClientTimestamp*/,
             download.getStartServerIndexInclusive(),
             download.getEndServerIndexInclusive(),
-            exception -> wrapAndSend(exception.toInvalidMessage(), clientMachine),
+            exception -> wrapAndSend(new DownloadFailed(download.getCommandIndex(),
+                                                        download.toLoggingString(),
+                                                        exception.getMessage()),
+                                     clientMachine),
             /*forceLogging*/ true);
     }
 
@@ -1310,7 +1333,10 @@ public class DistributedMessageServer extends Shutdowneable {
             download.getEndInclusive() /*maxClientTimestamp*/,
             ServerIndex.MIN_VALUE,
             ServerIndex.MAX_VALUE,
-            exception -> wrapAndSend(exception.toInvalidMessage(), clientMachine),
+            exception -> wrapAndSend(new DownloadFailed(download.getCommandIndex(),
+                                                        download.toLoggingString(),
+                                                        exception.getMessage()),
+                                     clientMachine),
             /*forceLogging*/ true);
     }
 
@@ -1339,6 +1365,19 @@ public class DistributedMessageServer extends Shutdowneable {
                                                  trigger,
                                                  numMessages));
         }
+    }
+
+    private void sendInternalServerError(AsynchronousSocketChannel channel, InternalServerError.InternalServerErrorException exception) {
+        ClientMachine clientMachine = findClientMachineByChannel(channel);
+        if (clientMachine == null) {
+            clientMachine = ClientMachine.unregistered(channel);
+        }
+        LOGGER.log(Level.WARNING,
+                   String.format("Internal server error: clientMachine=%s",
+                                 clientMachine.getMachineId()),
+                   exception);
+        InternalServerError request = exception.toMessage(internalServerErrorLogging.includeCallStackWhenSendingInternalServerErrors());
+        wrapAndSend(request, clientMachine);
     }
 
     private void sendRequestIdentification(AsynchronousSocketChannel channel, MessageBase message) {
@@ -1392,6 +1431,9 @@ public class DistributedMessageServer extends Shutdowneable {
     
     private Void retrySend(MessageWrapper wrapper, ClientMachine clientMachine, int retry, Throwable throwable) {
         Throwable e = ExceptionUtils.unwrapCompletionException(throwable);
+        if (e instanceof SocketTransformer.WriteSocketException) {
+            e = e.getCause();
+        }
         boolean retryDone = retry >= MAX_RETRIES || SocketTransformer.isClosed(e) || e instanceof RuntimeException || e instanceof Error;
         Level level = retryDone ? Level.WARNING : Level.TRACE;
         LOGGER.log(level, () -> String.format("Send message failed: clientMachine=%s, messageClass=%s, retry=%d, retryDone=%b",

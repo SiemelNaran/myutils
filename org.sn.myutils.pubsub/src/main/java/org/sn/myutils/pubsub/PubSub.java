@@ -249,7 +249,7 @@ public abstract class PubSub extends Shutdowneable {
         onPublisherAdded(publisher);
         return publisher;
     }
-    
+
     protected abstract <T> Publisher newPublisher(String topic, Class<T> publisherClass);
     
     /**

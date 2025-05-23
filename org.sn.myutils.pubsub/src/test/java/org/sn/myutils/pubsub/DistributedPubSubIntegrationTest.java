@@ -1,7 +1,6 @@
 package org.sn.myutils.pubsub;
 
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -142,7 +141,7 @@ public class DistributedPubSubIntegrationTest extends TestBase {
      * It looks like Linux lets you bind to the same port if SO_REUSEADDR is set.,
      * so tests can close a channel and reopen it almost right away.
      * <p>
-     * But in Mac OS, you get an error "Address already in use",
+     * But in macOS, you get an error "Address already in use",
      * so let's wait for TIME_WAIT seconds (which is usually 60 seconds).
      */
     private static void waitForPortToBeReleasedIfNecessary() {
@@ -161,6 +160,54 @@ public class DistributedPubSubIntegrationTest extends TestBase {
             sleepTime += TestDistributedSocketPubSub.getMinTimeBeforeAttemptingToReconnect();
         }
         sleep(sleepTime);
+    }
+
+    /**
+     * Test to see how client handles server exceptions.
+     * The client just logs the exception.
+     */
+    @Test
+    void testException() throws IOException {
+        List<CompletableFuture<Void>> startFutures = new ArrayList<>();
+
+        int serverPort = NEXT_CENTRAL_SERVER_PORT.getAndIncrement();
+        int clientPort1 = NEXT_CLIENT_PORT.getAndIncrement();
+
+        var centralServer = createServer(Collections.emptyMap(), serverPort);
+        startFutures.add(centralServer.start());
+        sleep(250); // time to let the central server start
+
+        var client1 = createClient(PubSub.defaultQueueCreator(),
+                                   PubSub.defaultSubscriptionMessageExceptionHandler(),
+                                   "client1",
+                                   clientPort1,
+                                   serverPort);
+        startFutures.add(client1.startAsync());
+
+        waitFor(startFutures);
+        assertEquals("Identification=1", client1.getTypesSent());
+        assertEquals("ClientAccepted=1", client1.getTypesReceived());
+
+        var oldLogging = centralServer.setInternalServerErrorLogging(true);
+        assertFalse(oldLogging.includeCallStackWhenSendingInternalServerErrors());
+        client1.makeAllServersThrowAnException("Random error one");
+        sleep(250);
+        assertEquals("Identification=1, MakeServerThrowAnException=1", client1.getTypesSent());
+        assertEquals("ClientAccepted=1, InternalServerError=1", client1.getTypesReceived());
+        // verify that client log shows an error like:
+        // An internal server error occurred while processing message with errorId=67066d80-2317-4df1-bcee-978ea4bf7b74
+        // Caused by: java.util.concurrent.CompletionException: java.lang.RuntimeException: Random error one
+        // and more lines of call stack and root cause call stacks
+
+        oldLogging = centralServer.setInternalServerErrorLogging(false);
+        assertTrue(oldLogging.includeCallStackWhenSendingInternalServerErrors());
+        client1.makeAllServersThrowAnException("Random error two");
+        sleep(250);
+        assertEquals("Identification=1, MakeServerThrowAnException=2", client1.getTypesSent());
+        assertEquals("ClientAccepted=1, InternalServerError=2", client1.getTypesReceived());
+        // verify that client log shows an error like:
+        // An internal server error occurred while processing message with errorId=67066d80-2317-4df1-bcee-978ea4bf7b74
+        // and that we don't see error detail or call stacks
     }
 
     /**
@@ -1923,20 +1970,20 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         sleep(250);
         assertEquals("BogusClientGeneratedMessage=1, Identification=1", client1.getTypesSent());
         assertEquals("Identification=1", centralServer.getValidTypesReceived());
-        assertEquals("ClientAccepted=1, UnsupportedMessage=1", centralServer.getTypesSent());
-        assertEquals("ClientAccepted=1, UnsupportedMessage=1", client1.getTypesReceived());
+        assertEquals("ClientAccepted=1, UnhandledMessage=1", centralServer.getTypesSent());
+        assertEquals("ClientAccepted=1, UnhandledMessage=1", client1.getTypesReceived());
         
         BogusMessage bogus2 = new BogusMessage();
         sendMethod.invoke(messageWriter, bogus2);
         sleep(250);
         assertEquals("BogusClientGeneratedMessage=1, BogusMessage=1, Identification=1", client1.getTypesSent());
         assertEquals("Identification=1", centralServer.getValidTypesReceived());
-        assertEquals("ClientAccepted=1, UnsupportedMessage=2", centralServer.getTypesSent());
-        assertEquals("ClientAccepted=1, UnsupportedMessage=2", client1.getTypesReceived()); // because nothing received as message reader is not started
+        assertEquals("ClientAccepted=1, UnhandledMessage=2", centralServer.getTypesSent());
+        assertEquals("ClientAccepted=1, UnhandledMessage=2", client1.getTypesReceived()); // because nothing received as message reader is not started
         
         // verify that log shows
-        // WARNING: Unsupported  message from client: clientMachine=client1, BogusClientGeneratedMessage
-        // WARNING: Unsupported  message from client: clientMachine=/127.0.0.1:30001, BogusMessage
+        // WARNING: Unhandled  message from client: clientMachine=client1, BogusClientGeneratedMessage
+        // WARNING: Unhandled  message from client: clientMachine=/127.0.0.1:30001, BogusMessage
     }
     
     private static class BogusClientGeneratedMessage extends MessageClasses.ClientGeneratedTopicMessage {
