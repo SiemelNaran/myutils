@@ -354,11 +354,11 @@ public abstract class PubSub extends Shutdowneable {
     }
 
     @SuppressWarnings("unchecked")
-    public final synchronized <T extends CloneableObject<?>> Subscriber genericSubscribe(@NotNull String topic,
-                                                                                         @NotNull String subscriberName,
-                                                                                         @NotNull Class<T> subscriberClass,
-                                                                                         @NotNull Consumer<T> callback,
-                                                                                         ReceiveMode receiveMode) {
+    private final synchronized <T extends CloneableObject<?>> Subscriber genericSubscribe(@NotNull String topic,
+                                                                                          @NotNull String subscriberName,
+                                                                                          @NotNull Class<T> subscriberClass,
+                                                                                          @NotNull Consumer<T> callback,
+                                                                                          ReceiveMode receiveMode) {
         Consumer<CloneableObject<?>> callbackCasted = (Consumer<CloneableObject<?>>) callback;
         Supplier<Subscriber> subscriberCreator = () -> {
             onBeforeAddSubscriber(topic, subscriberName, subscriberClass);

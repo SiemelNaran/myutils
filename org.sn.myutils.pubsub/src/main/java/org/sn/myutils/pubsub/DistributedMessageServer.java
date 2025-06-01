@@ -317,15 +317,32 @@ public class DistributedMessageServer extends Shutdowneable {
                 deferredPublishMessages.add(new DeferredPublishMessage(publishMessage, relayAction));
             }
         }
-        
+
+        private interface QueueAlgorithmImpl {
+            /**
+             * Send one message to a subscriber who is subscribed as a queue.
+             *
+             * @param info the topic
+             * @param excludeMachineId used to prevent sending the message to the machine that sent the original message
+             * @param wrapperConsumer the function that sends the message.  The message to send is part of this class.
+             *                        First argument is the endpoint to send the message to.
+             *                        Second argument is whether to include the subscriber name is the message we send across the channel.
+             */
+            int sendOneMessage(TopicInfo info,
+                               @Nullable ClientMachineId excludeMachineId,
+                               BiConsumer<SubscriberEndpoint, Boolean> wrapperConsumer);
+        }
+
         private final Map<RetentionPriority, Integer> mostRecentMessagesToKeep;
         private final Map<String /*topic*/, TopicInfo> topicMap = new ConcurrentHashMap<>();
-        private final Set<SubscriberEndpoint> subscriberEndpointsForRoundRobin = new HashSet<>();
-        private final QueueAlgorithm queueAlgorithm;
+        private final QueueAlgorithmImpl queueAlgorithmImpl;
         
         PublishersAndSubscribers(Map<RetentionPriority, Integer> mostRecentMessagesToKeep, QueueAlgorithm queueAlgorithm) {
             this.mostRecentMessagesToKeep = mostRecentMessagesToKeep;
-            this.queueAlgorithm = queueAlgorithm;
+            this.queueAlgorithmImpl =  switch (queueAlgorithm) {
+                case ROUND_ROBIN -> new RoundRobinQueueImpl();
+                case RANDOM -> new RandomQueueImpl();
+            };
         }
 
         /**
@@ -597,10 +614,7 @@ public class DistributedMessageServer extends Shutdowneable {
 
                 int numMessagesSent = sendPubSub(info, excludeMachineId, wrapperConsumer, useQueue);
                 if (useQueue) {
-                    numMessagesSent += switch (queueAlgorithm) {
-                        case ROUND_ROBIN -> sendQueueRoundRobin(info, excludeMachineId, wrapperConsumer);
-                        case RANDOM -> sendQueueRandom(info, excludeMachineId, wrapperConsumer);
-                    };
+                    numMessagesSent += queueAlgorithmImpl.sendOneMessage(info, excludeMachineId, wrapperConsumer);
                 }
                 LOGGER.log(Level.TRACE, "For topic {0} published {1} messages", info.topic, numMessagesSent);
 
@@ -638,60 +652,68 @@ public class DistributedMessageServer extends Shutdowneable {
             return count;
         }
 
-        private int sendQueueRoundRobin(TopicInfo info,
-                                        @Nullable ClientMachineId excludeMachineId,
-                                        BiConsumer<SubscriberEndpoint, Boolean> wrapperConsumer) {
-            SubscriberEndpoint roundRobinFirstQueueEndpoint = null;
+        private static class RoundRobinQueueImpl implements QueueAlgorithmImpl {
+            private final Set<SubscriberEndpoint> subscriberEndpointsSent = new HashSet<>();
 
-            for (SubscriberEndpoint subscriberEndpoint : info.subscriberEndpoints) {
-                if (subscriberEndpoint.receiveMode() != ReceiveMode.QUEUE) {
-                    continue;
-                }
-                if (subscriberEndpoint.clientMachineId().equals(excludeMachineId)) {
-                    continue;
-                }
-                if (subscriberEndpointsForRoundRobin.contains(subscriberEndpoint)) {
-                    if (roundRobinFirstQueueEndpoint == null) {
-                        roundRobinFirstQueueEndpoint = subscriberEndpoint;
+            @Override
+            public int sendOneMessage(TopicInfo info,
+                                      @Nullable ClientMachineId excludeMachineId,
+                                      BiConsumer<SubscriberEndpoint, Boolean> wrapperConsumer) {
+                SubscriberEndpoint roundRobinFirstQueueEndpoint = null;
+
+                for (SubscriberEndpoint subscriberEndpoint : info.subscriberEndpoints) {
+                    if (subscriberEndpoint.receiveMode() != ReceiveMode.QUEUE) {
+                        continue;
                     }
-                    continue;
-                }
-                subscriberEndpointsForRoundRobin.add(subscriberEndpoint);
-                wrapperConsumer.accept(subscriberEndpoint, true);
-                return 1;
-            }
-
-            if (roundRobinFirstQueueEndpoint != null) {
-                subscriberEndpointsForRoundRobin.clear();
-                subscriberEndpointsForRoundRobin.add(roundRobinFirstQueueEndpoint);
-                wrapperConsumer.accept(roundRobinFirstQueueEndpoint, true);
-                return 1;
-            }
-
-            return 0;
-        }
-
-        private int sendQueueRandom(TopicInfo info,
-                                    @Nullable ClientMachineId excludeMachineId,
-                                    BiConsumer<SubscriberEndpoint, Boolean> wrapperConsumer) {
-            final int randomSubscriber = (int)(Math.random() * info.numberOfQueueSubscriberEndpoints);
-            int queueSubscriberIndex = 0;
-
-            for (SubscriberEndpoint subscriberEndpoint : info.subscriberEndpoints) {
-                if (subscriberEndpoint.receiveMode() != ReceiveMode.QUEUE) {
-                    continue;
-                }
-                if (subscriberEndpoint.clientMachineId().equals(excludeMachineId)) {
-                    continue;
-                }
-                if (queueSubscriberIndex == randomSubscriber) {
+                    if (subscriberEndpoint.clientMachineId().equals(excludeMachineId)) {
+                        continue;
+                    }
+                    if (subscriberEndpointsSent.contains(subscriberEndpoint)) {
+                        if (roundRobinFirstQueueEndpoint == null) {
+                            roundRobinFirstQueueEndpoint = subscriberEndpoint;
+                        }
+                        continue;
+                    }
+                    subscriberEndpointsSent.add(subscriberEndpoint);
                     wrapperConsumer.accept(subscriberEndpoint, true);
                     return 1;
                 }
-                queueSubscriberIndex++;
-            }
 
-            return 0;
+                if (roundRobinFirstQueueEndpoint != null) {
+                    subscriberEndpointsSent.clear();
+                    subscriberEndpointsSent.add(roundRobinFirstQueueEndpoint);
+                    wrapperConsumer.accept(roundRobinFirstQueueEndpoint, true);
+                    return 1;
+                }
+
+                return 0;
+            }
+        }
+
+        private static class RandomQueueImpl implements QueueAlgorithmImpl {
+            @Override
+            public int sendOneMessage(TopicInfo info,
+                                      @Nullable ClientMachineId excludeMachineId,
+                                      BiConsumer<SubscriberEndpoint, Boolean> wrapperConsumer) {
+                final int randomSubscriber = (int) (Math.random() * info.numberOfQueueSubscriberEndpoints);
+                int queueSubscriberIndex = 0;
+
+                for (SubscriberEndpoint subscriberEndpoint : info.subscriberEndpoints) {
+                    if (subscriberEndpoint.receiveMode() != ReceiveMode.QUEUE) {
+                        continue;
+                    }
+                    if (subscriberEndpoint.clientMachineId().equals(excludeMachineId)) {
+                        continue;
+                    }
+                    if (queueSubscriberIndex == randomSubscriber) {
+                        wrapperConsumer.accept(subscriberEndpoint, true);
+                        return 1;
+                    }
+                    queueSubscriberIndex++;
+                }
+
+                return 0;
+            }
         }
 
         public void saveMessage(PublishMessage publishMessage, Consumer<SubscriberParamsForCallback> relayAction) {
