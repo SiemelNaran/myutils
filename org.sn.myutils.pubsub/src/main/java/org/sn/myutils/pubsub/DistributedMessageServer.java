@@ -41,6 +41,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -67,6 +68,7 @@ import org.sn.myutils.pubsub.MessageClasses.MessageBase;
 import org.sn.myutils.pubsub.MessageClasses.MessageWrapper;
 import org.sn.myutils.pubsub.MessageClasses.PublishMessage;
 import org.sn.myutils.pubsub.MessageClasses.PublisherCreated;
+import org.sn.myutils.pubsub.MessageClasses.QueueMessage;
 import org.sn.myutils.pubsub.MessageClasses.RelayFields;
 import org.sn.myutils.pubsub.MessageClasses.RelayMessageBase;
 import org.sn.myutils.pubsub.MessageClasses.RelayMessageWrapper;
@@ -579,8 +581,10 @@ public class DistributedMessageServer extends Shutdowneable {
                                                      Consumer<SubscriberParamsForCallback> consumer) {
             assert !fetchClientsWantingNotification || !useQueue;
 
-            Consumer<SubscriberEndpoint> wrapperConsumer = subscriberEndpoint -> {
-                var params = new SubscriberParamsForCallback(subscriberEndpoint.clientMachineId(), subscriberEndpoint.clientTimestamp());
+            BiConsumer<SubscriberEndpoint, Boolean> wrapperConsumer = (subscriberEndpoint, sendAsQueue) -> {
+                var params = new SubscriberParamsForCallback(subscriberEndpoint.clientMachineId(),
+                                                             sendAsQueue ? subscriberEndpoint.subscriberName() : null,
+                                                             subscriberEndpoint.clientTimestamp());
                 consumer.accept(params);
             };
 
@@ -603,7 +607,7 @@ public class DistributedMessageServer extends Shutdowneable {
                 if (fetchClientsWantingNotification && info.notifyClients != null) {
                     Stream<ClientMachineId> notifyClients = info.notifyClients.stream();
                     info.notifyClients = null;
-                    notifyClients.forEach(clientMachineId -> consumer.accept(new SubscriberParamsForCallback(clientMachineId, null)));
+                    notifyClients.forEach(clientMachineId -> consumer.accept(new SubscriberParamsForCallback(clientMachineId, null, null)));
                 }
             } finally {
                 info.lock.unlock();
@@ -612,7 +616,7 @@ public class DistributedMessageServer extends Shutdowneable {
 
         private int sendPubSub(TopicInfo info,
                                @Nullable ClientMachineId excludeMachineId,
-                               Consumer<SubscriberEndpoint> wrapperConsumer,
+                               BiConsumer<SubscriberEndpoint, Boolean> wrapperConsumer,
                                boolean ignoreQueueSubscribers) {
             int count = 0;
             @SuppressWarnings("ReassignedVariable") ClientMachineId prevClientMachineId = null;
@@ -628,14 +632,15 @@ public class DistributedMessageServer extends Shutdowneable {
                     continue;
                 }
                 prevClientMachineId = subscriberEndpoint.clientMachineId();
-                wrapperConsumer.accept(subscriberEndpoint);
+                wrapperConsumer.accept(subscriberEndpoint, false);
                 count += 1;
             }
             return count;
         }
 
-        private int sendQueueRoundRobin(TopicInfo info, @Nullable ClientMachineId excludeMachineId, Consumer<SubscriberEndpoint> wrapperConsumer) {
-            ClientMachineId prevClientMachineId = null;
+        private int sendQueueRoundRobin(TopicInfo info,
+                                        @Nullable ClientMachineId excludeMachineId,
+                                        BiConsumer<SubscriberEndpoint, Boolean> wrapperConsumer) {
             SubscriberEndpoint roundRobinFirstQueueEndpoint = null;
 
             for (SubscriberEndpoint subscriberEndpoint : info.subscriberEndpoints) {
@@ -645,10 +650,6 @@ public class DistributedMessageServer extends Shutdowneable {
                 if (subscriberEndpoint.clientMachineId().equals(excludeMachineId)) {
                     continue;
                 }
-                if (subscriberEndpoint.clientMachineId().equals(prevClientMachineId)) {
-                    continue;
-                }
-                prevClientMachineId = subscriberEndpoint.clientMachineId();
                 if (subscriberEndpointsForRoundRobin.contains(subscriberEndpoint)) {
                     if (roundRobinFirstQueueEndpoint == null) {
                         roundRobinFirstQueueEndpoint = subscriberEndpoint;
@@ -656,22 +657,23 @@ public class DistributedMessageServer extends Shutdowneable {
                     continue;
                 }
                 subscriberEndpointsForRoundRobin.add(subscriberEndpoint);
-                wrapperConsumer.accept(subscriberEndpoint);
+                wrapperConsumer.accept(subscriberEndpoint, true);
                 return 1;
             }
 
             if (roundRobinFirstQueueEndpoint != null) {
                 subscriberEndpointsForRoundRobin.clear();
                 subscriberEndpointsForRoundRobin.add(roundRobinFirstQueueEndpoint);
-                wrapperConsumer.accept(roundRobinFirstQueueEndpoint);
+                wrapperConsumer.accept(roundRobinFirstQueueEndpoint, true);
                 return 1;
             }
 
             return 0;
         }
 
-        private int sendQueueRandom(TopicInfo info, @Nullable ClientMachineId excludeMachineId, Consumer<SubscriberEndpoint> wrapperConsumer) {
-            ClientMachineId prevClientMachineId = null;
+        private int sendQueueRandom(TopicInfo info,
+                                    @Nullable ClientMachineId excludeMachineId,
+                                    BiConsumer<SubscriberEndpoint, Boolean> wrapperConsumer) {
             final int randomSubscriber = (int)(Math.random() * info.numberOfQueueSubscriberEndpoints);
             int queueSubscriberIndex = 0;
 
@@ -682,14 +684,10 @@ public class DistributedMessageServer extends Shutdowneable {
                 if (subscriberEndpoint.clientMachineId().equals(excludeMachineId)) {
                     continue;
                 }
-                if (subscriberEndpoint.clientMachineId().equals(prevClientMachineId)) {
-                    continue;
-                }
                 if (queueSubscriberIndex == randomSubscriber) {
-                    wrapperConsumer.accept(subscriberEndpoint);
+                    wrapperConsumer.accept(subscriberEndpoint, true);
                     return 1;
                 }
-                prevClientMachineId = subscriberEndpoint.clientMachineId();
                 queueSubscriberIndex++;
             }
 
@@ -833,6 +831,7 @@ public class DistributedMessageServer extends Shutdowneable {
      * such as relaying a published message to these subscribers.
      */
     private record SubscriberParamsForCallback(ClientMachineId clientMachineId,
+                                               String subscriberName,
                                                Long minClientTimestamp) {
     }
 
@@ -1457,7 +1456,8 @@ public class DistributedMessageServer extends Shutdowneable {
     private void handlePublishMessage(PublishMessage relay) {
         Consumer<SubscriberParamsForCallback> relayAction = params -> {
             var otherClientMachine = lookupClientMachine(params.clientMachineId());
-            wrapAndSend(relay, otherClientMachine);
+            MessageBase message = params.subscriberName() == null ? relay : new QueueMessage(relay, params.subscriberName());
+            wrapAndSend(message, otherClientMachine);
         };
         publishersAndSubscribers.saveMessage(relay, relayAction);
     }

@@ -67,6 +67,7 @@ import org.sn.myutils.pubsub.MessageClasses.MessageBase;
 import org.sn.myutils.pubsub.MessageClasses.MessageWrapper;
 import org.sn.myutils.pubsub.MessageClasses.PublishMessage;
 import org.sn.myutils.pubsub.MessageClasses.PublisherCreated;
+import org.sn.myutils.pubsub.MessageClasses.QueueMessage;
 import org.sn.myutils.pubsub.MessageClasses.RelayFields;
 import org.sn.myutils.pubsub.MessageClasses.RelayMessageBase;
 import org.sn.myutils.pubsub.MessageClasses.RemoveSubscriber;
@@ -770,15 +771,8 @@ public class DistributedSocketPubSub extends PubSub {
             case AddSubscriberFailed addSubscriberFailed -> handleAddSubscriberFailed(addSubscriberFailed);
             case SubscriberRemoved subscriberRemoved -> handleSubscriberRemoved(subscriberRemoved);
             case RemoveSubscriberFailed removeSubscriberFailed -> handleRemoveSubscriberFailed(removeSubscriberFailed);
-            case PublishMessage publishMessage -> {
-                String topic = publishMessage.getTopic();
-                threadLocalRemoteRelayMessage.set(publishMessage);
-                Publisher publisher = DistributedSocketPubSub.this.getPublisher(topic);
-                if (publisher == null) {
-                    publisher = DistributedSocketPubSub.this.dormantInfoMap.get(topic).getDormantPublisher();
-                }
-                publisher.publish(publishMessage.getMessage());
-            }
+            case PublishMessage publishMessage -> handlePublishOrQueueMessage(publishMessage, null);
+            case QueueMessage queueMessage -> handlePublishOrQueueMessage(queueMessage.getPublishMessage(), queueMessage.getSubscriberName());
             case InvalidRelayMessage invalidRelayMessage -> LOGGER.log(Level.WARNING, invalidRelayMessage.getError());
             case ClientAccepted clientAccepted ->
                     DistributedSocketPubSub.this.onMessageServerConnected(messageServer, clientAccepted);
@@ -790,6 +784,16 @@ public class DistributedSocketPubSub extends PubSub {
                     LOGGER.log(Level.WARNING, "Unrecognized object type received: clientMachine={0}, messageClass={1}",
                                DistributedSocketPubSub.this.machineId, message.getClass().getSimpleName());
         }
+    }
+
+    private void handlePublishOrQueueMessage(PublishMessage publishMessage, String subscriberName) {
+        String topic = publishMessage.getTopic();
+        threadLocalRemoteRelayMessage.set(publishMessage);
+        Publisher publisher = DistributedSocketPubSub.this.getPublisher(topic);
+        if (publisher == null) {
+            publisher = DistributedSocketPubSub.this.dormantInfoMap.get(topic).getDormantPublisher();
+        }
+        publisher.publish(publishMessage.getMessage(), null, subscriberName);
     }
 
     private void doRestart(SocketAddress messageServer) {
@@ -838,16 +842,19 @@ public class DistributedSocketPubSub extends PubSub {
          * If the publisher is dormant then add the message to a queue to be published once the publisher goes live.
          */
         @Override
-        public <T extends CloneableObject<?>> void publish(@NotNull T message, RetentionPriority priority) {
+        public <T extends CloneableObject<?>> void publish(@NotNull T message, RetentionPriority priority, String subscriberName) {
             boolean isRemoteMessage = threadLocalRemoteRelayMessage.get() != null;
-            doPublish(message, priority, isRemoteMessage);
+            doPublish(message, priority, subscriberName, isRemoteMessage);
         }
         
-        private void doPublish(@NotNull CloneableObject<?> message, RetentionPriority priority, boolean isRemoteMessage) {
+        private void doPublish(@NotNull CloneableObject<?> message,
+                               RetentionPriority priority,
+                               String subscriberName,
+                               boolean isRemoteMessage) {
             if (isDormant) {
-                messagesWhileDormant.add(new DeferredMessage(message, priority, isRemoteMessage));
+                messagesWhileDormant.add(new DeferredMessage(message, priority, subscriberName, isRemoteMessage));
             } else {
-                super.publish(message, priority);
+                super.publish(message, priority, subscriberName);
                 if (!isRemoteMessage) {
                     // this DistributedPubSub is publishing a new message
                     // so send it to the central server
@@ -859,7 +866,7 @@ public class DistributedSocketPubSub extends PubSub {
         private void setLive() {
             isDormant = false;
             for (var message : messagesWhileDormant) {
-                doPublish(message.message, message.retentionPriority, message.isRemoteMessage);
+                doPublish(message.message, message.retentionPriority, message.subscriberName, message.isRemoteMessage);
             }
             messagesWhileDormant.clear();
         }
@@ -876,6 +883,7 @@ public class DistributedSocketPubSub extends PubSub {
 
     private record DeferredMessage(CloneableObject<?> message,
                                    RetentionPriority retentionPriority,
+                                   String subscriberName,
                                    boolean isRemoteMessage) {
     }
 

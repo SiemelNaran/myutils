@@ -152,16 +152,21 @@ public abstract class PubSub extends Shutdowneable {
         protected @NotNull List<Subscriber> getSubscribers() {
             return new ArrayList<>(subscribers);
         }
-        
+
         public final <T extends CloneableObject<?>> void publish(@NotNull T message) {
-            publish(message, RetentionPriority.MEDIUM);
+            publish(message, RetentionPriority.MEDIUM, null);
         }
-        
-        public <T extends CloneableObject<?>> void publish(@NotNull T message, RetentionPriority priority) {
+
+        public final <T extends CloneableObject<?>> void publish(@NotNull T message, RetentionPriority priority) {
+            publish(message, priority, null);
+        }
+
+        <T extends CloneableObject<?>> void publish(@NotNull T message, RetentionPriority priority, String subscriberName) {
             PubSub.this.lock.lock();
             try {
                 for (var subscriber : subscribers) {
-                    if (subscriber.subscriberClass.isInstance(message)) {
+                    if (subscriber.subscriberClass.isInstance(message) &&
+                            (subscriberName == null || subscriberName.equals(subscriber.subscriberName))) {
                         CloneableObject<?> copy = (CloneableObject<?>) message.clone();
                         subscriber.addMessage(copy);
                     }

@@ -38,6 +38,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -136,8 +137,9 @@ public class DistributedPubSubIntegrationTest extends TestBase {
     //////////////////////////////////////////////////////////////////////
 
     private static final String CENTRAL_SERVER_HOST = "localhost";
-    private static final AtomicInteger NEXT_CENTRAL_SERVER_PORT = new AtomicInteger(2101);
-    private static final AtomicInteger NEXT_CLIENT_PORT = new AtomicInteger(35001);
+    private static final Random random = new Random();
+    private static final AtomicInteger NEXT_CENTRAL_SERVER_PORT = new AtomicInteger(2101 + random.nextInt(100));
+    private static final AtomicInteger NEXT_CLIENT_PORT = new AtomicInteger(35001 + random.nextInt(100));
 
     /**
      * It looks like Linux lets you bind to the same port if SO_REUSEADDR is set.,
@@ -439,15 +441,19 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         assertEquals("Identification=1", client3.getTypesSent());
         assertEquals("ClientAccepted=1", client3.getTypesReceivedAsString());
 
-        // client1 create publisher, client2 and client3 subscribe as queues
+        // client1 create publisher
+        // client2 and client3 subscribe as queues
+        // client3 subscribes twice
         Publisher publisher1 = client1.createPublisher("hello", CloneableString.class);
         sleep(250);
         assertNotNull(client2.subscribeAsQueue("hello", "ClientTwoSubscriber", CloneableString.class, str -> words.add(str.append("-s2"))));
         sleep(250);
-        assertNotNull(client3.subscribeAsQueue("hello", "ClientThreeSubscriber", CloneableString.class, str -> words.add(str.append("-s3"))));
+        assertNotNull(client3.subscribeAsQueue("hello", "ClientThreeSubscriber-a", CloneableString.class, str -> words.add(str.append("-s3a"))));
+        sleep(250);
+        assertNotNull(client3.subscribeAsQueue("hello", "ClientThreeSubscriber-b", CloneableString.class, str -> words.add(str.append("-s3b"))));
         sleep(250);
 
-        // publish 3 messages
+        // publish 9 messages
         publisher1.publish(new CloneableString("one"));
         sleep(100);
         publisher1.publish(new CloneableString("two"));
@@ -460,21 +466,37 @@ public class DistributedPubSubIntegrationTest extends TestBase {
         sleep(100);
         publisher1.publish(new CloneableString("six"));
         sleep(100);
+        publisher1.publish(new CloneableString("seven"));
+        sleep(100);
+        publisher1.publish(new CloneableString("eight"));
+        sleep(100);
+        publisher1.publish(new CloneableString("nine"));
+        sleep(100);
 
         sleep(500); // to let published messages get sent over
 
-        System.out.println("after publish 'one', 'two', 'three, 'four', 'five', 'six': actual=" + words);
-        assertEquals("CreatePublisher=1, Identification=1, PublishMessage=6", client1.getTypesSent());
+        System.out.println("after publish 'one', 'two', 'three, 'four', 'five', 'six', 'seven', 'eight', 'nine': actual=" + words);
+        assertEquals("CreatePublisher=1, Identification=1, PublishMessage=9", client1.getTypesSent());
         assertEquals("ClientAccepted=1, PublisherCreated=1", client1.getTypesReceivedAsString());
         assertEquals("AddSubscriber=1, Identification=1", client2.getTypesSent());
-        assertEquals("AddSubscriber=1, Identification=1", client3.getTypesSent());
-        List<String> allTypesReeceived = new ArrayList<>(client2.getTypesReceived());
-        allTypesReeceived.addAll(client3.getTypesReceived());
-        assertEquals("ClientAccepted=2, CreatePublisher=2, PublishMessage=6, SubscriberAdded=2", countElementsInListByType(allTypesReeceived));
-        var modifiedWords = words.stream()
-                                 .map(str -> str.substring(0, str.indexOf('-')))
-                                 .toList();
-        assertThat(modifiedWords, Matchers.contains("one", "two", "three", "four", "five", "six"));
+        assertEquals("AddSubscriber=2, Identification=1", client3.getTypesSent());
+        if (queueAlgorithm == DistributedMessageServer.QueueAlgorithm.ROUND_ROBIN) {
+            assertEquals("ClientAccepted=1, CreatePublisher=1, QueueMessage=3, SubscriberAdded=1", client2.getTypesReceivedAsString());
+            assertEquals("ClientAccepted=1, CreatePublisher=1, QueueMessage=6, SubscriberAdded=2", client3.getTypesReceivedAsString());
+            assertThat(words, Matchers.contains("one-s2", "two-s3a", "three-s3b",
+                                                "four-s2", "five-s3a", "six-s3b",
+                                                "seven-s2", "eight-s3a", "nine-s3b"));
+        } else if (queueAlgorithm == DistributedMessageServer.QueueAlgorithm.RANDOM) {
+            List<String> allTypesReeceived = new ArrayList<>(client2.getTypesReceived());
+            allTypesReeceived.addAll(client3.getTypesReceived());
+            assertEquals("ClientAccepted=2, CreatePublisher=2, QueueMessage=9, SubscriberAdded=3", countElementsInListByType(allTypesReeceived));
+            var modifiedWords = words.stream()
+                                     .map(str -> str.substring(0, str.indexOf('-')))
+                                     .toList();
+            assertThat(modifiedWords, Matchers.contains("one", "two", "three", "four", "five", "six", "seven", "eight", "nine"));
+        } else {
+            throw new UnsupportedOperationException(queueAlgorithm.toString());
+        }
     }
 
     /**

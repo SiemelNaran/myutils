@@ -25,7 +25,7 @@ public interface MessageClasses {
     interface LoggingString {
         String toLoggingString();
     }
-    
+
     /**
      * This base class of all messages sent between client and server.
      */
@@ -523,7 +523,37 @@ public interface MessageClasses {
         }
     }
 
-    
+    /**
+     * Action representing a message that is sent to one client, i.e. for a push queue.
+     */
+    class QueueMessage extends ServerGeneratedMessage {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        private final @NotNull PublishMessage publishMessage;
+        private final @NotNull String subscriberName;
+
+        QueueMessage(@NotNull PublishMessage publishMessage, @NotNull String subscriberName) {
+            super();
+            this.publishMessage = publishMessage;
+            this.subscriberName = subscriberName;
+        }
+
+        @NotNull PublishMessage getPublishMessage() {
+            return publishMessage;
+        }
+
+        String getSubscriberName() {
+            return subscriberName;
+        }
+
+        @Override
+        public String toLoggingString() {
+            return super.toLoggingString() + ", publishMessage=" + publishMessage.toLoggingString() + ", subscriberName=" + subscriberName;
+        }
+    }
+
+
     // Client generated messages
 
     /**
