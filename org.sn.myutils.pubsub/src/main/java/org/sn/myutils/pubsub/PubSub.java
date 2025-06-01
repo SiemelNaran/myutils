@@ -154,7 +154,7 @@ public abstract class PubSub extends Shutdowneable {
         }
 
         public final <T extends CloneableObject<?>> void publish(@NotNull T message) {
-            publish(message, RetentionPriority.MEDIUM, null);
+            publish(message, RetentionPriority.MEDIUM);
         }
 
         public final <T extends CloneableObject<?>> void publish(@NotNull T message, RetentionPriority priority) {
@@ -354,11 +354,11 @@ public abstract class PubSub extends Shutdowneable {
     }
 
     @SuppressWarnings("unchecked")
-    private final synchronized <T extends CloneableObject<?>> Subscriber genericSubscribe(@NotNull String topic,
-                                                                                          @NotNull String subscriberName,
-                                                                                          @NotNull Class<T> subscriberClass,
-                                                                                          @NotNull Consumer<T> callback,
-                                                                                          ReceiveMode receiveMode) {
+    private synchronized <T extends CloneableObject<?>> Subscriber genericSubscribe(@NotNull String topic,
+                                                                                    @NotNull String subscriberName,
+                                                                                    @NotNull Class<T> subscriberClass,
+                                                                                    @NotNull Consumer<T> callback,
+                                                                                    ReceiveMode receiveMode) {
         Consumer<CloneableObject<?>> callbackCasted = (Consumer<CloneableObject<?>>) callback;
         Supplier<Subscriber> subscriberCreator = () -> {
             onBeforeAddSubscriber(topic, subscriberName, subscriberClass);
