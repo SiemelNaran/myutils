@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletionException;
-
 import org.sn.myutils.annotations.NotNull;
 
 
@@ -26,7 +25,7 @@ public interface MessageClasses {
     interface LoggingString {
         String toLoggingString();
     }
-    
+
     /**
      * This base class of all messages sent between client and server.
      */
@@ -524,7 +523,37 @@ public interface MessageClasses {
         }
     }
 
-    
+    /**
+     * Action representing a message that is sent to one client, i.e. for a push queue.
+     */
+    class QueueMessage extends ServerGeneratedMessage {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        private final @NotNull PublishMessage publishMessage;
+        private final @NotNull String subscriberName;
+
+        QueueMessage(@NotNull PublishMessage publishMessage, @NotNull String subscriberName) {
+            super();
+            this.publishMessage = publishMessage;
+            this.subscriberName = subscriberName;
+        }
+
+        @NotNull PublishMessage getPublishMessage() {
+            return publishMessage;
+        }
+
+        String getSubscriberName() {
+            return subscriberName;
+        }
+
+        @Override
+        public String toLoggingString() {
+            return super.toLoggingString() + ", publishMessage=" + publishMessage.toLoggingString() + ", subscriberName=" + subscriberName;
+        }
+    }
+
+
     // Client generated messages
 
     /**
@@ -556,7 +585,7 @@ public interface MessageClasses {
         long getClientTimestamp() {
             return clientTimestamp;
         }
-        
+
         void setCustomProperties(Map<String, String> customProperties) {
             this.customProperties = customProperties;
         }
@@ -694,14 +723,28 @@ public interface MessageClasses {
     class AddSubscriber extends AddOrRemoveSubscriber implements Resendable {
         @Serial
         private static final long serialVersionUID = 1L;
-        
-        private final boolean tryDownload;
-        private final boolean isResend;
 
-        public AddSubscriber(long createdAtTimestamp, String topic, String subscriberName, int commandIndex, boolean tryDownload, boolean isResend) {
+        private final boolean isResend;
+        private final ReceiveMode receiveMode;
+        private final boolean tryDownload;
+
+        public static AddSubscriber subscribeAll(long createdAtTimestamp, String topic, String subscriberName, int commandIndex, boolean isResend, boolean tryDownload) {
+            return new AddSubscriber(createdAtTimestamp, topic, subscriberName, commandIndex, isResend, ReceiveMode.PUBSUB, tryDownload);
+        }
+
+        public static AddSubscriber subscribeQueue(long createdAtTimestamp, String topic, String subscriberName, int commandIndex, boolean isResend) {
+            return new AddSubscriber(createdAtTimestamp, topic, subscriberName, commandIndex, isResend, ReceiveMode.QUEUE, false);
+        }
+
+        private AddSubscriber(long createdAtTimestamp, String topic, String subscriberName, int commandIndex, boolean isResend, ReceiveMode receiveMode, boolean tryDownload) {
             super(createdAtTimestamp, topic, subscriberName, commandIndex);
+            this.receiveMode = receiveMode;
             this.tryDownload = tryDownload;
             this.isResend = isResend;
+        }
+
+        public ReceiveMode getReceiveMode() {
+            return receiveMode;
         }
 
         public boolean shouldTryDownload() {

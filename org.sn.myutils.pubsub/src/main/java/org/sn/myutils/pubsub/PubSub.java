@@ -152,16 +152,21 @@ public abstract class PubSub extends Shutdowneable {
         protected @NotNull List<Subscriber> getSubscribers() {
             return new ArrayList<>(subscribers);
         }
-        
+
         public final <T extends CloneableObject<?>> void publish(@NotNull T message) {
             publish(message, RetentionPriority.MEDIUM);
         }
-        
-        public <T extends CloneableObject<?>> void publish(@NotNull T message, RetentionPriority priority) {
+
+        public final <T extends CloneableObject<?>> void publish(@NotNull T message, RetentionPriority priority) {
+            publish(message, priority, null);
+        }
+
+        <T extends CloneableObject<?>> void publish(@NotNull T message, RetentionPriority priority, String subscriberName) {
             PubSub.this.lock.lock();
             try {
                 for (var subscriber : subscribers) {
-                    if (subscriber.subscriberClass.isInstance(message)) {
+                    if (subscriber.subscriberClass.isInstance(message) &&
+                            (subscriberName == null || subscriberName.equals(subscriber.subscriberName))) {
                         CloneableObject<?> copy = (CloneableObject<?>) message.clone();
                         subscriber.addMessage(copy);
                     }
@@ -184,17 +189,20 @@ public abstract class PubSub extends Shutdowneable {
         private final @NotNull String subscriberName;
         private final @NotNull Class<? extends CloneableObject<?>> subscriberClass; // same as or inherits from publisherClass
         private final @NotNull Consumer<CloneableObject<?>> callback;
+        private final @NotNull ReceiveMode receiveMode;
         private final @NotNull Queue<CloneableObject<?>> messages = new ArrayDeque<>();
 
         protected Subscriber(@NotNull String topic,
                              @NotNull String subscriberName,
                              @NotNull Class<? extends CloneableObject<?>> subscriberClass,
-                             @NotNull Consumer<CloneableObject<?>> callback) {
+                             @NotNull Consumer<CloneableObject<?>> callback,
+                             ReceiveMode receiveMode) {
             this.createdAtTimestamp = System.currentTimeMillis();
             this.topic = topic;
             this.subscriberName = subscriberName;
             this.subscriberClass = subscriberClass;
             this.callback = callback;
+            this.receiveMode = receiveMode;
         }
         
         protected long getCreatedAtTimestamp() {
@@ -209,6 +217,11 @@ public abstract class PubSub extends Shutdowneable {
         @NotNull
         public String getSubscriberName() {
             return subscriberName;
+        }
+
+        @NotNull
+        public ReceiveMode getReceiveMode() {
+            return receiveMode;
         }
 
         public void addMessage(CloneableObject<?> message) {
@@ -303,7 +316,7 @@ public abstract class PubSub extends Shutdowneable {
     }
 
     /**
-     * Create a subscriber.
+     * Create a subscriber that receives all messages.
      * 
      * @param <T> the type of object this subscriber receives. Must be the same as or inherit from the publisher class, and must implement CloneableObject.
      * @param topic the topic
@@ -314,15 +327,42 @@ public abstract class PubSub extends Shutdowneable {
      * @throws IllegalArgumentException if subscriber class is not the same or inherits from the publisher class
      * @throws IllegalStateException if the PubSub is already subscribed to the topic with the same subscriberName
 -     */
+    public final <T extends CloneableObject<?>> Subscriber subscribe(@NotNull String topic,
+                                                                     @NotNull String subscriberName,
+                                                                     @NotNull Class<T> subscriberClass,
+                                                                     @NotNull Consumer<T> callback) {
+        return genericSubscribe(topic, subscriberName, subscriberClass, callback, ReceiveMode.PUBSUB);
+    }
+
+    /**
+     * Create a subscriber that receives messages as a queue.
+     *
+     * @param <T> the type of object this subscriber receives. Must be the same as or inherit from the publisher class, and must implement CloneableObject.
+     * @param topic the topic
+     * @param subscriberName the name of this subscriber, useful for debugging
+     * @param subscriberClass same as T.class
+     * @param callback the callback function
+     * @return a new subscriber
+     * @throws IllegalArgumentException if subscriber class is not the same or inherits from the publisher class
+     * @throws IllegalStateException if the PubSub is already subscribed to the topic with the same subscriberName
+    -     */
+    public final <T extends CloneableObject<?>> Subscriber subscribeAsQueue(@NotNull String topic,
+                                                                            @NotNull String subscriberName,
+                                                                            @NotNull Class<T> subscriberClass,
+                                                                            @NotNull Consumer<T> callback) {
+        return genericSubscribe(topic, subscriberName, subscriberClass, callback, ReceiveMode.QUEUE);
+    }
+
     @SuppressWarnings("unchecked")
-    public final synchronized <T extends CloneableObject<?>> Subscriber subscribe(@NotNull String topic,
-                                                                                  @NotNull String subscriberName,
-                                                                                  @NotNull Class<T> subscriberClass,
-                                                                                  @NotNull Consumer<T> callback) {
+    private synchronized <T extends CloneableObject<?>> Subscriber genericSubscribe(@NotNull String topic,
+                                                                                    @NotNull String subscriberName,
+                                                                                    @NotNull Class<T> subscriberClass,
+                                                                                    @NotNull Consumer<T> callback,
+                                                                                    ReceiveMode receiveMode) {
         Consumer<CloneableObject<?>> callbackCasted = (Consumer<CloneableObject<?>>) callback;
         Supplier<Subscriber> subscriberCreator = () -> {
             onBeforeAddSubscriber(topic, subscriberName, subscriberClass);
-            return newSubscriber(topic, subscriberName, subscriberClass, callbackCasted);
+            return newSubscriber(topic, subscriberName, subscriberClass, callbackCasted, receiveMode);
         };
         final Subscriber subscriber;
         var publisher = topicMap.get(topic);
@@ -348,7 +388,8 @@ public abstract class PubSub extends Shutdowneable {
     protected abstract Subscriber newSubscriber(@NotNull String topic,
                                                 @NotNull String subscriberName,
                                                 @NotNull Class<? extends CloneableObject<?>> subscriberClass,
-                                                @NotNull Consumer<CloneableObject<?>> callback);
+                                                @NotNull Consumer<CloneableObject<?>> callback,
+                                                ReceiveMode receiveMode);
 
     private static void checkClassType(Class<?> publisherClass, Class<?> subscriberClass) {
         if (!(publisherClass.isAssignableFrom(subscriberClass))) {

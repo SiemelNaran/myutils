@@ -67,6 +67,7 @@ import org.sn.myutils.pubsub.MessageClasses.MessageBase;
 import org.sn.myutils.pubsub.MessageClasses.MessageWrapper;
 import org.sn.myutils.pubsub.MessageClasses.PublishMessage;
 import org.sn.myutils.pubsub.MessageClasses.PublisherCreated;
+import org.sn.myutils.pubsub.MessageClasses.QueueMessage;
 import org.sn.myutils.pubsub.MessageClasses.RelayFields;
 import org.sn.myutils.pubsub.MessageClasses.RelayMessageBase;
 import org.sn.myutils.pubsub.MessageClasses.RemoveSubscriber;
@@ -425,7 +426,8 @@ public class DistributedSocketPubSub extends PubSub {
                     messageWriter.queueSendAddSubscriber(subscriber.getCreatedAtTimestamp(),
                                                          topic,
                                                          subscriber.getSubscriberName(),
-                                                         /*isResend*/ true);
+                                                         /*isResend*/ true,
+                                                         subscriber.getReceiveMode());
                 }
             }
         });
@@ -607,8 +609,11 @@ public class DistributedSocketPubSub extends PubSub {
             internalBroadcastMessage(message);
         }
 
-        void queueSendAddSubscriber(long createdAtTimestamp, @NotNull String topic, @NotNull String subscriberName, boolean isResend) {
-            var addSubscriber = new AddSubscriber(createdAtTimestamp, topic, subscriberName, localCommandIndex.incrementAndGet(), true, isResend);
+        void queueSendAddSubscriber(long createdAtTimestamp, @NotNull String topic, @NotNull String subscriberName, boolean isResend, ReceiveMode receiveMode) {
+            AddSubscriber addSubscriber = switch (receiveMode) {
+                case PUBSUB -> AddSubscriber.subscribeAll(createdAtTimestamp, topic, subscriberName, localCommandIndex.incrementAndGet(), isResend, true);
+                case QUEUE -> AddSubscriber.subscribeQueue(createdAtTimestamp, topic, subscriberName, localCommandIndex.incrementAndGet(), isResend);
+            };
             Map<String, String> customProperties = new LinkedHashMap<>();
             DistributedSocketPubSub.this.addCustomPropertiesForAddSubscriber(customProperties, topic, subscriberName);
             addSubscriber.setCustomProperties(customProperties);
@@ -766,15 +771,8 @@ public class DistributedSocketPubSub extends PubSub {
             case AddSubscriberFailed addSubscriberFailed -> handleAddSubscriberFailed(addSubscriberFailed);
             case SubscriberRemoved subscriberRemoved -> handleSubscriberRemoved(subscriberRemoved);
             case RemoveSubscriberFailed removeSubscriberFailed -> handleRemoveSubscriberFailed(removeSubscriberFailed);
-            case PublishMessage publishMessage -> {
-                String topic = publishMessage.getTopic();
-                threadLocalRemoteRelayMessage.set(publishMessage);
-                Publisher publisher = DistributedSocketPubSub.this.getPublisher(topic);
-                if (publisher == null) {
-                    publisher = DistributedSocketPubSub.this.dormantInfoMap.get(topic).getDormantPublisher();
-                }
-                publisher.publish(publishMessage.getMessage());
-            }
+            case PublishMessage publishMessage -> handlePublishOrQueueMessage(publishMessage, null);
+            case QueueMessage queueMessage -> handlePublishOrQueueMessage(queueMessage.getPublishMessage(), queueMessage.getSubscriberName());
             case InvalidRelayMessage invalidRelayMessage -> LOGGER.log(Level.WARNING, invalidRelayMessage.getError());
             case ClientAccepted clientAccepted ->
                     DistributedSocketPubSub.this.onMessageServerConnected(messageServer, clientAccepted);
@@ -786,6 +784,16 @@ public class DistributedSocketPubSub extends PubSub {
                     LOGGER.log(Level.WARNING, "Unrecognized object type received: clientMachine={0}, messageClass={1}",
                                DistributedSocketPubSub.this.machineId, message.getClass().getSimpleName());
         }
+    }
+
+    private void handlePublishOrQueueMessage(PublishMessage publishMessage, String subscriberName) {
+        String topic = publishMessage.getTopic();
+        threadLocalRemoteRelayMessage.set(publishMessage);
+        Publisher publisher = DistributedSocketPubSub.this.getPublisher(topic);
+        if (publisher == null) {
+            publisher = DistributedSocketPubSub.this.dormantInfoMap.get(topic).getDormantPublisher();
+        }
+        publisher.publish(publishMessage.getMessage(), null, subscriberName);
     }
 
     private void doRestart(SocketAddress messageServer) {
@@ -834,16 +842,19 @@ public class DistributedSocketPubSub extends PubSub {
          * If the publisher is dormant then add the message to a queue to be published once the publisher goes live.
          */
         @Override
-        public <T extends CloneableObject<?>> void publish(@NotNull T message, RetentionPriority priority) {
+        public <T extends CloneableObject<?>> void publish(@NotNull T message, RetentionPriority priority, String subscriberName) {
             boolean isRemoteMessage = threadLocalRemoteRelayMessage.get() != null;
-            doPublish(message, priority, isRemoteMessage);
+            doPublish(message, priority, subscriberName, isRemoteMessage);
         }
         
-        private void doPublish(@NotNull CloneableObject<?> message, RetentionPriority priority, boolean isRemoteMessage) {
+        private void doPublish(@NotNull CloneableObject<?> message,
+                               RetentionPriority priority,
+                               String subscriberName,
+                               boolean isRemoteMessage) {
             if (isDormant) {
-                messagesWhileDormant.add(new DeferredMessage(message, priority, isRemoteMessage));
+                messagesWhileDormant.add(new DeferredMessage(message, priority, subscriberName, isRemoteMessage));
             } else {
-                super.publish(message, priority);
+                super.publish(message, priority, subscriberName);
                 if (!isRemoteMessage) {
                     // this DistributedPubSub is publishing a new message
                     // so send it to the central server
@@ -855,7 +866,7 @@ public class DistributedSocketPubSub extends PubSub {
         private void setLive() {
             isDormant = false;
             for (var message : messagesWhileDormant) {
-                doPublish(message.message, message.retentionPriority, message.isRemoteMessage);
+                doPublish(message.message, message.retentionPriority, message.subscriberName, message.isRemoteMessage);
             }
             messagesWhileDormant.clear();
         }
@@ -872,6 +883,7 @@ public class DistributedSocketPubSub extends PubSub {
 
     private record DeferredMessage(CloneableObject<?> message,
                                    RetentionPriority retentionPriority,
+                                   String subscriberName,
                                    boolean isRemoteMessage) {
     }
 
@@ -881,8 +893,9 @@ public class DistributedSocketPubSub extends PubSub {
         private DistributedSubscriber(@NotNull String topic,
                                       @NotNull String subscriberName,
                                       @NotNull Class<? extends CloneableObject<?>> subscriberClass,
-                                      @NotNull Consumer<CloneableObject<?>> callback) {
-            super(topic, subscriberName, subscriberClass, callback);
+                                      @NotNull Consumer<CloneableObject<?>> callback,
+                                      ReceiveMode receiveMode) {
+            super(topic, subscriberName, subscriberClass, callback, receiveMode);
         }
 
         public boolean isInvalid() {
@@ -938,7 +951,7 @@ public class DistributedSocketPubSub extends PubSub {
             DistributedSubscriber distributedSubscriber = (DistributedSubscriber) subscriber;
             var info = dormantInfoMap.computeIfAbsent(subscriber.getTopic(), ignoredTopic -> new DormantInfo());
             info.addDormantSubscriber(distributedSubscriber);
-            messageWriter.queueSendAddSubscriber(subscriber.getCreatedAtTimestamp(), subscriber.getTopic(),subscriber.getSubscriberName(), /*isResend*/ false);
+            messageWriter.queueSendAddSubscriber(subscriber.getCreatedAtTimestamp(), subscriber.getTopic(),subscriber.getSubscriberName(), /*isResend*/ false, subscriber.getReceiveMode());
         }
     }
     
@@ -1179,8 +1192,9 @@ public class DistributedSocketPubSub extends PubSub {
     protected DistributedSubscriber newSubscriber(@NotNull String topic,
                                                   @NotNull String subscriberName,
                                                   @NotNull Class<? extends CloneableObject<?>> subscriberClass,
-                                                  @NotNull Consumer<CloneableObject<?>> callback) {
-        return new DistributedSubscriber(topic, subscriberName, subscriberClass, callback);
+                                                  @NotNull Consumer<CloneableObject<?>> callback,
+                                                  ReceiveMode receiveMode) {
+        return new DistributedSubscriber(topic, subscriberName, subscriberClass, callback, receiveMode);
     }
     
     /**

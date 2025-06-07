@@ -28,6 +28,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -191,6 +192,44 @@ public class InMemoryPubSubIntegrationTest {
         publisher.publish(new CloneableString("two"));
         sleep(100); // wait for subscribers to work
         assertThat(words, Matchers.contains("two-s1"));
+    }
+
+    @Test
+    @Disabled("We don't support queue algorithms for in memory pubsub")
+    void testQueue() {
+        List<String> words = Collections.synchronizedList(new ArrayList<>());
+
+        PubSub pubSub = InMemoryPubSub.create(new PubSub.PubSubConstructorArgs(1, PubSub.defaultQueueCreator(), PubSub.defaultSubscriptionMessageExceptionHandler()));
+        PubSub.Publisher publisher = pubSub.createPublisher("hello", CloneableString.class);
+        Consumer<CloneableString> handleString1 = str -> words.add(str.append("-s1"));
+        pubSub.subscribeAsQueue("hello", "Subscriber1", CloneableString.class, handleString1);
+        Consumer<CloneableString> handleString2 = str -> words.add(str.append("-s2"));
+        pubSub.subscribeAsQueue("hello", "Subscriber2", CloneableString.class, handleString2);
+
+        // test publish
+        // since the handlers modify the messages, this also verifies that each subscriber handler gets a copy of the message
+        words.clear();
+        publisher.publish(new CloneableString("one"));
+        sleep(100); // wait for subscribers to work
+        assertThat(words, Matchers.contains("one-s1"));
+
+        // test publish again
+        words.clear();
+        publisher.publish(new CloneableString("two"));
+        sleep(100); // wait for subscribers to work
+        assertThat(words, Matchers.contains("two-s2"));
+
+        // test publish again
+        words.clear();
+        publisher.publish(new CloneableString("three"));
+        sleep(100); // wait for subscribers to work
+        assertThat(words, Matchers.contains("three-s1"));
+
+        // test publish again
+        words.clear();
+        publisher.publish(new CloneableString("four"));
+        sleep(100); // wait for subscribers to work
+        assertThat(words, Matchers.contains("four-s2"));
     }
     
     /**
