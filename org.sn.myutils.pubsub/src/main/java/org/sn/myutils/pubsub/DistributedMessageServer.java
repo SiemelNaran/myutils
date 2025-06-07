@@ -318,7 +318,7 @@ public class DistributedMessageServer extends Shutdowneable {
             }
         }
 
-        private interface QueueAlgorithmImpl {
+        private interface QueueAlgorithmInterface {
             /**
              * Send one message to a subscriber who is subscribed as a queue.
              *
@@ -335,11 +335,11 @@ public class DistributedMessageServer extends Shutdowneable {
 
         private final Map<RetentionPriority, Integer> mostRecentMessagesToKeep;
         private final Map<String /*topic*/, TopicInfo> topicMap = new ConcurrentHashMap<>();
-        private final QueueAlgorithmImpl queueAlgorithmImpl;
+        private final QueueAlgorithmInterface queueAlgorithmInterface;
         
         PublishersAndSubscribers(Map<RetentionPriority, Integer> mostRecentMessagesToKeep, QueueAlgorithm queueAlgorithm) {
             this.mostRecentMessagesToKeep = mostRecentMessagesToKeep;
-            this.queueAlgorithmImpl =  switch (queueAlgorithm) {
+            this.queueAlgorithmInterface =  switch (queueAlgorithm) {
                 case ROUND_ROBIN -> new RoundRobinQueueImpl();
                 case RANDOM -> new RandomQueueImpl();
             };
@@ -614,7 +614,7 @@ public class DistributedMessageServer extends Shutdowneable {
 
                 int numMessagesSent = sendPubSub(info, excludeMachineId, wrapperConsumer, useQueue);
                 if (useQueue) {
-                    numMessagesSent += queueAlgorithmImpl.sendOneMessage(info, excludeMachineId, wrapperConsumer);
+                    numMessagesSent += queueAlgorithmInterface.sendOneMessage(info, excludeMachineId, wrapperConsumer);
                 }
                 LOGGER.log(Level.TRACE, "For topic {0} published {1} messages", info.topic, numMessagesSent);
 
@@ -652,7 +652,7 @@ public class DistributedMessageServer extends Shutdowneable {
             return count;
         }
 
-        private static class RoundRobinQueueImpl implements QueueAlgorithmImpl {
+        private static class RoundRobinQueueImpl implements QueueAlgorithmInterface {
             private final Set<SubscriberEndpoint> subscriberEndpointsSent = new HashSet<>();
 
             @Override
@@ -690,7 +690,7 @@ public class DistributedMessageServer extends Shutdowneable {
             }
         }
 
-        private static class RandomQueueImpl implements QueueAlgorithmImpl {
+        private static class RandomQueueImpl implements QueueAlgorithmInterface {
             @Override
             public int sendOneMessage(TopicInfo info,
                                       @Nullable ClientMachineId excludeMachineId,
